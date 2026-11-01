@@ -105,7 +105,11 @@
       showMessageId: true,
       showMesTimer: true,
       showTokenCount: true,
-      showSwipeCounter: true
+      showSwipeCounter: true,
+      enableQuoteColor: true,
+      enableQuoteBox: true,
+      enableItalicColor: true,
+      enableThemeCustomCss: true
     },
     apiConfig: {
       useExternalPhoneApi: true,
@@ -113,7 +117,9 @@
       customUrl: '',
       customKey: '',
       customModel: '',
-      availableModels: []
+      availableModels: [],
+      activeApiPresetId: '',
+      savedPresets: []
     },
     formatting: {
       reasoningStartTag: '<think>',
@@ -153,7 +159,8 @@
       url: '',
       fit: 'cover',
       blur: 0,
-      opacity: 1
+      opacity: 1,
+      syncWithCard: false
     },
     quickReplies: [
       { id: 'qr_1', label: '观察四周', message: '我仔细观察周围的环境与人物动向。', enabled: true },
@@ -237,7 +244,7 @@
   let activeCardGreetingIdx = 0;
 
   // ===================================================================
-  // === 1. IndexedDB 与 Termux 本地存储同步 (释放浏览器内存) ===
+  // === 1. IndexedDB 与 Termux 本地存储同步 ===
   // ===================================================================
   function openTavernIdb() {
     return new Promise((resolve, reject) => {
@@ -290,7 +297,47 @@
     return 'http://127.0.0.1:8765';
   }
 
+  async function createCompactAvatarThumbnail(fileOrDataUrl, maxSize = 200) {
+    try {
+      let srcUrl = fileOrDataUrl;
+      let revokeAfter = false;
+      if (fileOrDataUrl instanceof Blob) {
+        srcUrl = URL.createObjectURL(fileOrDataUrl);
+        revokeAfter = true;
+      }
+      if (!srcUrl || typeof srcUrl !== 'string') return '';
+      return await new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, maxSize / Math.max(img.width || 1, img.height || 1));
+            canvas.width = Math.max(1, Math.round((img.width || maxSize) * scale));
+            canvas.height = Math.max(1, Math.round((img.height || maxSize) * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const webp = canvas.toDataURL('image/webp', 0.82);
+            if (revokeAfter) URL.revokeObjectURL(srcUrl);
+            resolve(webp);
+          } catch (_) {
+            if (revokeAfter) URL.revokeObjectURL(srcUrl);
+            resolve('');
+          }
+        };
+        img.onerror = () => {
+          if (revokeAfter) URL.revokeObjectURL(srcUrl);
+          resolve('');
+        };
+        img.src = srcUrl;
+      });
+    } catch (_) {
+      return '';
+    }
+  }
+
   async function offloadImageToVault(fileOrDataUrl, filenameHint = 'tavern_asset.png') {
+    const thumbDataUrl = await createCompactAvatarThumbnail(fileOrDataUrl, 220);
     let dataUrl = fileOrDataUrl;
     if (fileOrDataUrl instanceof Blob) {
       dataUrl = await new Promise((resolve, reject) => {
@@ -305,10 +352,17 @@
     if (typeof window.saveStickerToLocalVault === 'function') {
       try {
         const ref = await window.saveStickerToLocalVault(dataUrl, filenameHint);
-        if (ref && typeof ref === 'string') return ref;
+        if (ref && typeof ref === 'string') {
+          if (thumbDataUrl) {
+            if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
+            if (!tavernState.extensionSettings.avatarThumbs) tavernState.extensionSettings.avatarThumbs = {};
+            tavernState.extensionSettings.avatarThumbs[ref] = thumbDataUrl;
+          }
+          return ref;
+        }
       } catch (_) {}
     }
-    return dataUrl;
+    return thumbDataUrl || dataUrl;
   }
 
   let saveTimer = null;
@@ -366,6 +420,7 @@
       tavernState = Object.assign({}, tavernState, loaded);
       tavernState.uiSettings = Object.assign({}, tavernState.uiSettings, loaded.uiSettings || {});
       tavernState.apiConfig = Object.assign({}, tavernState.apiConfig, loaded.apiConfig || {});
+      if (!Array.isArray(tavernState.apiConfig.savedPresets)) tavernState.apiConfig.savedPresets = [];
       tavernState.formatting = Object.assign({}, tavernState.formatting, loaded.formatting || {});
       tavernState.authorNote = Object.assign({}, tavernState.authorNote, loaded.authorNote || {});
       tavernState.memory = Object.assign({}, tavernState.memory, loaded.memory || {});
@@ -402,7 +457,8 @@
           INS_MINIMAL_THEME
         ];
       } else {
-        if (!tavernState.themes.some(t => t.id === 'theme_gousu_default')) {
+        const gousuIdx = tavernState.themes.findIndex(t => t.id === 'theme_gousu_default');
+        if (gousuIdx === -1) {
           tavernState.themes.unshift(Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME));
         }
         if (!tavernState.themes.some(t => t.id === 'theme_ins_minimal')) {
@@ -715,10 +771,54 @@
 
   async function executeTavernSlashCommand(cmdText) {
     if (!cmdText || typeof cmdText !== 'string') return '';
-    const lines = cmdText.split('|').map(s => s.trim()).filter(Boolean);
+    // Split by | only when outside quotes
+    const parts = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < cmdText.length; i++) {
+      const ch = cmdText[i];
+      if (ch === '"' && cmdText[i - 1] !== '\\') inQuotes = !inQuotes;
+      if (ch === '|' && !inQuotes) {
+        if (current.trim()) parts.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim()) parts.push(current.trim());
+
     let lastResult = '';
-    for (const line of lines) {
-      if (line.startsWith('/setvar')) {
+    for (const line of parts) {
+      if (line.startsWith('/setentryfield')) {
+        const fileMatch = line.match(/file="([^"]*)"/i);
+        const uidMatch = line.match(/uid="([^"]*)"/i) || line.match(/uid=([^\s]+)/i);
+        const fieldMatch = line.match(/field="([^"]*)"/i) || line.match(/field=([^\s]+)/i);
+        let valuePart = line
+          .replace(/^\/setentryfield\s+/i, '')
+          .replace(/file="[^"]*"\s*/i, '')
+          .replace(/uid=(?:"[^"]*"|[^\s]+)\s*/i, '')
+          .replace(/field=(?:"[^"]*"|[^\s]+)\s*/i, '')
+          .trim();
+        const fileName = fileMatch ? fileMatch[1] : '';
+        const uidVal = uidMatch ? uidMatch[1] : '';
+        const fieldName = fieldMatch ? fieldMatch[1] : 'content';
+        const card = getActiveCard();
+        let targetWb = (tavernState.worldBooks || []).find(w =>
+          (fileName && (w.name === fileName || w.name.includes(fileName))) ||
+          (card && w.id === card.worldBookId)
+        ) || (tavernState.worldBooks || [])[0];
+        if (targetWb && Array.isArray(targetWb.entries)) {
+          let entry = targetWb.entries.find(e => String(e.uid) === String(uidVal) || String(e.comment) === String(uidVal));
+          if (!entry && uidVal) {
+            entry = normalizeSingleWorldEntry({ uid: uidVal, comment: '自动写入词条 ' + uidVal, constant: true, content: valuePart }, targetWb.entries.length);
+            targetWb.entries.push(entry);
+          } else if (entry) {
+            entry[fieldName] = valuePart;
+          }
+          showTavernToast('已写入世界书词条 ' + (entry?.comment || uidVal));
+        }
+        lastResult = valuePart;
+      } else if (line.startsWith('/setvar')) {
         const m = line.match(/^\/setvar\s+key=([^\s]+)\s+([\s\S]*)$/i) || line.match(/^\/setvar\s+([^\s]+)\s+([\s\S]*)$/i);
         if (m) {
           const vars = getChatVariablesStore();
@@ -735,10 +835,27 @@
         lastResult = msg;
       } else if (line.startsWith('/send')) {
         const msg = line.replace(/^\/send\s+/i, '').trim();
-        const box = document.getElementById('send_textarea');
-        if (box) {
-          box.value = msg;
-          await handleSendUserMessage();
+        if (msg) {
+          const sess = getActiveChatSession();
+          const userMsg = {
+            mesid: sess.messages.length,
+            name: getUserDisplayName(),
+            is_user: true,
+            is_system: false,
+            send_date: Date.now(),
+            mes: msg,
+            swipes: [msg],
+            swipe_id: 0,
+            reasoning: '',
+            gen_time: '',
+            token_count: estimateTokens(msg)
+          };
+          sess.messages.push(userMsg);
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
+          lastResult = msg;
         }
       } else if (line.startsWith('/trigger')) {
         await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
@@ -791,6 +908,19 @@
     window.setExtensionPrompt = setExtensionPrompt;
     window.executeSlashCommands = executeTavernSlashCommand;
     window.executeSlashCommandsWithOptions = executeTavernSlashCommand;
+    window.triggerSlash = executeTavernSlashCommand;
+    window.getVariables = (opts) => {
+      if (opts && opts.type === 'global') return getGlobalVariablesStore();
+      return getChatVariablesStore();
+    };
+    window.insertOrAssignVariables = async (varsObj, opts) => {
+      const target = (opts && opts.type === 'global') ? getGlobalVariablesStore() : getChatVariablesStore();
+      if (varsObj && typeof varsObj === 'object') {
+        Object.assign(target, varsObj);
+        await saveTavernStore();
+      }
+      return target;
+    };
     window.TavernHelper = {
       getChatMessages: () => {
         const sess = getActiveChatSession();
@@ -804,31 +934,31 @@
           renderTavernChatFloors(false);
         }
       },
-      getVariables: (opts) => {
-        if (opts && opts.type === 'global') return getGlobalVariablesStore();
-        return getChatVariablesStore();
-      },
-      insertOrAssignVariables: async (varsObj, opts) => {
-        const target = (opts && opts.type === 'global') ? getGlobalVariablesStore() : getChatVariablesStore();
-        if (varsObj && typeof varsObj === 'object') {
-          Object.assign(target, varsObj);
-          await saveTavernStore();
-        }
-        return target;
-      },
+      getVariables: window.getVariables,
+      insertOrAssignVariables: window.insertOrAssignVariables,
       triggerSlash: executeTavernSlashCommand,
       getWorldbook: (name) => {
-        const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name);
+        const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name || (name && b.name.includes(name)));
         return wb ? wb.entries : [];
       },
       replaceWorldbook: async (name, entries) => {
-        const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name);
+        const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name || (name && b.name.includes(name)));
         if (wb && Array.isArray(entries)) {
           wb.entries = entries.map((e, i) => normalizeSingleWorldEntry(e, i));
           await saveTavernStore();
         }
       }
     };
+    if (!window._tavernIframeMsgBound) {
+      window._tavernIframeMsgBound = true;
+      window.addEventListener('message', async (ev) => {
+        const data = ev && ev.data;
+        if (!data || typeof data !== 'object') return;
+        if (data.type === 'TAVERN_IFRAME_SLASH' && data.command) {
+          await executeTavernSlashCommand(String(data.command));
+        }
+      });
+    }
   }
 
   function generateSecureD100Array(count = 16) {
@@ -1135,16 +1265,43 @@
     let extractedBookId = null;
     const rawCharBook = data.character_book || rawJson.character_book;
     if (rawCharBook && typeof rawCharBook === 'object') {
-      const wb = normalizeWorldBookObject(rawCharBook, cardName + '世界书');
+      const wb = normalizeWorldBookObject(rawCharBook, ext.world || (cardName + '世界书'));
       if (wb && wb.entries.length > 0) {
         wb.enabled = true;
-        tavernState.worldBooks.unshift(wb);
+        const existWbIdx = (tavernState.worldBooks || []).findIndex(b => b.name === wb.name);
+        if (existWbIdx !== -1) {
+          wb.id = tavernState.worldBooks[existWbIdx].id;
+          tavernState.worldBooks[existWbIdx] = wb;
+        } else {
+          tavernState.worldBooks.unshift(wb);
+        }
         extractedBookId = wb.id;
       }
     }
 
     const rawRegexes = ext.regex_scripts || data.regex_scripts || [];
     const normalizedCardRegexes = normalizeRegexList(rawRegexes, 'card');
+
+    // Extract tavern_helper scripts embedded in the character card
+    const helperScripts = [];
+    if (Array.isArray(ext.tavern_helper)) {
+      ext.tavern_helper.forEach(pair => {
+        if (Array.isArray(pair) && pair[0] === 'scripts' && Array.isArray(pair[1])) {
+          pair[1].forEach((sc, idx) => {
+            if (sc && typeof sc === 'object') {
+              helperScripts.push({
+                id: sc.id || ('helper_' + Date.now() + '_' + idx),
+                name: sc.name || ('内嵌脚本 ' + (idx + 1)),
+                content: sc.content || '',
+                info: sc.info || '',
+                enabled: sc.enabled !== false,
+                buttons: Array.isArray(sc.button?.buttons) ? sc.button.buttons : []
+              });
+            }
+          });
+        }
+      });
+    }
 
     const altGreetings = Array.isArray(data.alternate_greetings)
       ? data.alternate_greetings.filter(g => typeof g === 'string' && g.trim().length > 0)
@@ -1174,10 +1331,11 @@
       depth_prompt_depth: Number(depthPromptObj.depth ?? 4),
       depth_prompt_role: depthPromptObj.role || 'system',
       worldBookId: extractedBookId,
-      regexScripts: normalizedCardRegexes
+      regexScripts: normalizedCardRegexes,
+      helperScripts
     };
 
-    const existingIdx = tavernState.cards.findIndex(c => c.name === newCard.name && c.id !== 'card_default_guide');
+    const existingIdx = tavernState.cards.findIndex(c => c.name === newCard.name && c.id !== 'card_default_guide' && c.id !== 'card_default_starter');
     if (existingIdx !== -1) {
       newCard.id = tavernState.cards[existingIdx].id;
       tavernState.cards[existingIdx] = newCard;
@@ -1186,6 +1344,9 @@
     }
 
     tavernState.activeCardId = newCard.id;
+    if (tavernState.background?.syncWithCard && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
+      tavernState.background.url = resolveSafeAvatarUrl(newCard.avatar, false);
+    }
     const initSess = buildInitialSessionForCard(newCard);
     tavernState.chatsByCardId[newCard.id] = initSess;
     tavernState.chatArchivesByCardId[newCard.id] = [initSess];
@@ -1193,7 +1354,8 @@
     return {
       card: newCard,
       worldBookCount: extractedBookId ? 1 : 0,
-      regexCount: normalizedCardRegexes.length,
+      regexCount: normalizedCardRegexes.filter(r => !r.disabled).length,
+      helperCount: helperScripts.length,
       greetingCount: 1 + altGreetings.length
     };
   }
@@ -1444,73 +1606,393 @@
     return output;
   }
 
+  function buildSandboxIframeHtml(rawHtmlDoc) {
+    let cleaned = String(rawHtmlDoc || '')
+      .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
+      .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '');
+
+    const bridgeScript = `<script>
+(function(){
+  window.triggerSlash = function(cmd) {
+    try {
+      if (window.parent && typeof window.parent.triggerSlash === 'function') {
+        return window.parent.triggerSlash(cmd);
+      }
+    } catch (e) {}
+    window.parent.postMessage({ type: 'TAVERN_IFRAME_SLASH', command: cmd }, '*');
+  };
+  try {
+    if (window.parent) {
+      window.SillyTavern = window.parent.SillyTavern;
+      window.TavernHelper = window.parent.TavernHelper;
+      window.getContext = window.parent.getContext;
+      window.getVariables = window.parent.getVariables;
+      window.insertOrAssignVariables = window.parent.insertOrAssignVariables;
+    }
+  } catch (e) {}
+  function syncFrameHeight() {
+    try {
+      if (!window.frameElement) return;
+      var b = document.body;
+      var d = document.documentElement;
+      if (!b || !d) return;
+      var h = Math.max(b.scrollHeight || 0, b.offsetHeight || 0, d.scrollHeight || 0);
+      if (h > 16) {
+        window.frameElement.style.height = (h + 6) + 'px';
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('DOMContentLoaded', function() {
+    syncFrameHeight();
+    setTimeout(syncFrameHeight, 50);
+    setTimeout(syncFrameHeight, 220);
+    setTimeout(syncFrameHeight, 600);
+    if (typeof ResizeObserver !== 'undefined' && document.body) {
+      new ResizeObserver(syncFrameHeight).observe(document.body);
+    }
+  });
+  window.addEventListener('load', syncFrameHeight);
+  document.addEventListener('click', function() { setTimeout(syncFrameHeight, 35); });
+  document.addEventListener('change', function() { setTimeout(syncFrameHeight, 35); });
+  document.addEventListener('input', function() { setTimeout(syncFrameHeight, 35); });
+})();
+<\/script>`;
+
+    if (/<head[^>]*>/i.test(cleaned)) {
+      cleaned = cleaned.replace(/<head([^>]*)>/i, '<head$1>' + bridgeScript);
+    } else if (/<html[^>]*>/i.test(cleaned)) {
+      cleaned = cleaned.replace(/<html([^>]*)>/i, '<html$1><head>' + bridgeScript + '</head>');
+    } else {
+      cleaned = '<!DOCTYPE html><html><head><meta charset="utf-8">' + bridgeScript + '</head><body style="margin:0;padding:0;background:transparent;">' + cleaned + '</body></html>';
+    }
+
+    const escapedSrcDoc = cleaned
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;');
+
+    return `<iframe class="tavern-html-sandbox-frame" scrolling="no" frameborder="0" style="width:100%;min-height:90px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;" srcdoc="${escapedSrcDoc}"></iframe>`;
+  }
+
   function renderTavernMessageHtml(rawText, options = {}) {
     if (!rawText) return '';
     const afterRegex = applyTavernRegexPipeline(rawText, { ...options, isPrompt: false });
 
-    // Extract <style> and HTML blocks so we don't corrupt their internal quotes or newlines
+    // 1. Unwrap markdown code fences (```html ... ``` or ``` ... ```) that wrap HTML documents or UI blocks
+    let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?([\s\S]*?)```/g, (full, inner) => {
+      const trimmed = inner.trim();
+      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b)/i.test(trimmed)) {
+        return trimmed;
+      }
+      return full;
+    });
+
+    // Clean up any stray dangling ```html or ``` fence markers around HTML tags
+    working = working
+      .replace(/```(?:html|HTML)\s*(?=<)/g, '')
+      .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
+
+    // 2. Extract full HTML documents (<!DOCTYPE html>...</html> or <html...>...</html>) into sandboxed iframes
     const protectedBlocks = [];
-    let working = afterRegex.replace(/<style[\s\S]*?<\/style>/gi, match => {
-      const token = '___TAVERN_STYLE_BLOCK_' + protectedBlocks.length + '___';
+    working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*?<\/html>/gi, match => {
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(buildSandboxIframeHtml(match));
+      return '\n' + token + '\n';
+    });
+
+    // 3. Protect standalone <style>...</style> + <script>...</script> blocks
+    working = working.replace(/<style[\s\S]*?<\/style>/gi, match => {
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(match);
+      return token;
+    });
+    working = working.replace(/<script[\s\S]*?<\/script>/gi, match => {
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(match);
       return token;
     });
 
-    // Basic markdown bold/italic outside HTML tags
+    // 4. Collapse newlines inside multi-line HTML opening tags (e.g. <input\n type="radio"\n name="story">)
+    // so line-splitting never tears HTML attributes apart!
+    working = working.replace(/<([a-zA-Z][a-zA-Z0-9-]*)(\s+[^<>]*?)>/g, fullTag => {
+      return fullTag.replace(/\r?\n\s*/g, ' ');
+    });
+
+    // 5. Basic markdown bold/italic outside HTML tags
+    const tagHolders = [];
+    working = working.replace(/<[^>]+>/g, tag => {
+      const t = '___TAVERN_TAG_HOLD_' + tagHolders.length + '___';
+      tagHolders.push(tag);
+      return t;
+    });
+
     working = working
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
 
-    // Wrap dialogue quotes in <q> if enabled and not already inside an HTML attribute or <q> tag
-    if (tavernState.formatting && tavernState.formatting.wrapQuotesInQ) {
-      const tagTokens = [];
-      working = working.replace(/<[^>]+>/g, tag => {
-        const t = '___TAVERN_HTML_TAG_' + tagTokens.length + '___';
-        tagTokens.push(tag);
-        return t;
-      });
-
+    // 6. Wrap dialogue quotes in <q> if enabled
+    if (tavernState.formatting && tavernState.formatting.wrapQuotesInQ && tavernState.uiSettings?.enableQuoteColor !== false) {
       working = working
         .replace(/“([^”\n]+)”/g, '<q>“$1”</q>')
         .replace(/「([^」\n]+)」/g, '<q>「$1」</q>')
         .replace(/『([^』\n]+)』/g, '<q>『$1』</q>');
-
-      working = working.replace(/___TAVERN_HTML_TAG_(\d+)___/g, (_, idx) => tagTokens[Number(idx)] || '');
     }
 
-    // Convert plain text paragraphs while keeping block HTML intact
+    working = working.replace(/___TAVERN_TAG_HOLD_(\d+)___/g, (_, idx) => tagHolders[Number(idx)] || '');
+
+    // 7. Convert plain text paragraphs while keeping HTML tags and protected blocks intact
     const lines = working.split('\n');
     const htmlLines = lines.map(line => {
       const trimmed = line.trim();
       if (!trimmed) return '<div class="tavern-para-spacer"></div>';
-      if (/^<(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|hr|h[1-6]|p|style)/i.test(trimmed)) {
-        return line;
-      }
-      if (/^___TAVERN_STYLE_BLOCK_\d+___$/.test(trimmed)) {
+      if (/^___TAVERN_PROTECTED_BLOCK_\d+___$/.test(trimmed)) {
         return trimmed;
+      }
+      if (/^<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|hr|h[1-6]|p|style|form|input|label|button|select|option|span|nav|main|aside|figure|figcaption|iframe|svg)/i.test(trimmed)) {
+        return line;
       }
       return '<p>' + line + '</p>';
     });
 
     let finalHtml = htmlLines.join('\n');
-    finalHtml = finalHtml.replace(/___TAVERN_STYLE_BLOCK_(\d+)___/g, (_, idx) => protectedBlocks[Number(idx)] || '');
+    finalHtml = finalHtml.replace(/___TAVERN_PROTECTED_BLOCK_(\d+)___/g, (_, idx) => protectedBlocks[Number(idx)] || '');
     return finalHtml;
+  }
+
+  function prefixSelectorListWithStageRoot(selectorGroup) {
+    const parts = [];
+    let cur = '';
+    let parenDepth = 0;
+    for (let i = 0; i < selectorGroup.length; i++) {
+      const ch = selectorGroup[i];
+      if (ch === '(') parenDepth++;
+      else if (ch === ')' && parenDepth > 0) parenDepth--;
+      if (ch === ',' && parenDepth === 0) {
+        parts.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    if (cur.trim()) parts.push(cur.trim());
+
+    return parts.map(sel => {
+      if (!sel) return '';
+      let s = sel
+        .replace(/^:root\b/i, '#tavern-stage-root')
+        .replace(/^html\b/i, '#tavern-stage-root')
+        .replace(/^body\b/i, '#tavern-stage-root');
+      if (s.includes('#tavern-stage-root') || s.includes('#game-hall-screen')) {
+        return s;
+      }
+      if (s.startsWith('::') || s.startsWith(':-')) {
+        return '#tavern-stage-root ' + s + ', #tavern-stage-root *' + s;
+      }
+      return '#tavern-stage-root ' + s;
+    }).filter(Boolean).join(', ');
+  }
+
+  function scopeCssBlockRecursive(cssText) {
+    let out = '';
+    let i = 0;
+    const len = cssText.length;
+
+    while (i < len) {
+      while (i < len && /\s/.test(cssText[i])) {
+        out += cssText[i++];
+      }
+      if (i >= len) break;
+
+      if (cssText[i] === '@' && /^@import\b/i.test(cssText.slice(i))) {
+        const semiIdx = cssText.indexOf(';', i);
+        if (semiIdx === -1) break;
+        i = semiIdx + 1;
+        continue;
+      }
+
+      const openBrace = cssText.indexOf('{', i);
+      if (openBrace === -1) {
+        out += cssText.slice(i);
+        break;
+      }
+
+      const header = cssText.slice(i, openBrace).trim();
+      let depth = 1;
+      let j = openBrace + 1;
+      let inStr = null;
+      while (j < len && depth > 0) {
+        const c = cssText[j];
+        if (inStr) {
+          if (c === inStr && cssText[j - 1] !== '\\') inStr = null;
+        } else {
+          if (c === '"' || c === "'") inStr = c;
+          else if (c === '{') depth++;
+          else if (c === '}') depth--;
+        }
+        j++;
+      }
+
+      const innerBody = cssText.slice(openBrace + 1, j - 1);
+      if (/^@(?:-webkit-)?keyframes\b/i.test(header) || /^@font-face\b/i.test(header)) {
+        out += header + ' {' + innerBody + '}\n';
+      } else if (/^@(?:media|supports|container)\b/i.test(header)) {
+        out += header + ' {\n' + scopeCssBlockRecursive(innerBody) + '\n}\n';
+      } else {
+        const scopedHeader = prefixSelectorListWithStageRoot(header);
+        out += scopedHeader + ' {' + innerBody + '}\n';
+      }
+      i = j;
+    }
+    return out;
   }
 
   function scopeTavernThemeCss(rawCss) {
     if (!rawCss || typeof rawCss !== 'string') return '';
-    return rawCss
-      .replace(/font-family:\s*["']?寒蝉全圆体["']?\s*!important\s*;?/gi, '')
-      .replace(/:root\b/g, '#tavern-stage-root')
-      .replace(/\bhtml\s*,\s*body\b/g, '#tavern-stage-root')
-      .replace(/\bbody\b/g, '#tavern-stage-root')
+    const cleaned = rawCss
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/font-family:\s*["']?寒蝉全圆体["']?\s*(?:!important)?\s*;?/gi, '')
       .replace(/100dvh/g, '100%')
       .replace(/100vh/g, '100%');
+    return scopeCssBlockRecursive(cleaned);
+  }
+
+  function buildTavernThemeOverridePatch(theme, uiCfg) {
+    const rules = [];
+    const isGousuStyle = theme && (theme.id === 'theme_gousu_default' || String(theme.custom_css || '').includes('1ear.png') || String(theme.custom_css || '').includes('--text4'));
+    if (isGousuStyle) {
+      rules.push(`
+        /* Refined Gousu floor spacing, compact metadata capsule, and tight bottom bar */
+        #tavern-stage-root #chat {
+          mask: none !important;
+          -webkit-mask: none !important;
+          padding: 12px var(--tavernPageMargin, 10px) 62px var(--tavernPageMargin, 10px) !important;
+        }
+        #tavern-stage-root .mes {
+          padding: 16px 8px 0 8px !important;
+          margin-bottom: 22px !important;
+        }
+        #tavern-stage-root .mes.last_mes {
+          margin-bottom: 12px !important;
+        }
+        #tavern-stage-root .mes .name_text {
+          max-width: calc(100% - 235px) !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          font-size: 15px !important;
+          padding: 3px 12px !important;
+          top: 17px !important;
+        }
+        #tavern-stage-root .mes[is_user="true"] .ch_name.flex-container.justifySpaceBetween {
+          flex-direction: row !important;
+          justify-content: flex-start !important;
+          padding-left: 92px !important;
+          padding-right: 110px !important;
+        }
+        #tavern-stage-root .mes[is_user="true"] .mes_buttons {
+          margin-left: 0 !important;
+          margin-right: auto !important;
+        }
+        /* Compact metadata capsule under character/user name */
+        #tavern-stage-root .mesIDDisplay,
+        #tavern-stage-root .mes_timer,
+        #tavern-stage-root .tokenCounterDisplay {
+          top: 40px !important;
+          height: 19px !important;
+          width: 44px !important;
+          font-size: 10.5px !important;
+        }
+        #tavern-stage-root .mes[is_user="false"] .mesIDDisplay {
+          left: 112px !important;
+          width: 46px !important;
+        }
+        #tavern-stage-root .mes[is_user="false"] .mes_timer {
+          left: 158px !important;
+          width: 42px !important;
+        }
+        #tavern-stage-root .mes[is_user="false"] .tokenCounterDisplay {
+          left: 200px !important;
+          width: 46px !important;
+        }
+        #tavern-stage-root .mes[is_user="false"] .mes_timer:empty + .tokenCounterDisplay {
+          left: 158px !important;
+        }
+        #tavern-stage-root .mes[is_user="true"] .mesIDDisplay {
+          right: 112px !important;
+          left: auto !important;
+          width: 46px !important;
+        }
+        #tavern-stage-root .mes[is_user="true"] .tokenCounterDisplay {
+          right: 158px !important;
+          left: auto !important;
+          width: 46px !important;
+        }
+        /* Bottom decorative plaid bar & swipe paws & page counter aligned neatly inside .mes_block */
+        #tavern-stage-root .mes::before {
+          width: 56% !important;
+          height: 24px !important;
+          bottom: -8px !important;
+          right: 14px !important;
+        }
+        #tavern-stage-root .mes[is_user="true"]::before {
+          left: 14px !important;
+          right: auto !important;
+        }
+        #tavern-stage-root .swipe_left {
+          left: auto !important;
+          right: calc(56% - 14px) !important;
+          bottom: -7px !important;
+          width: 22px !important;
+          height: 22px !important;
+        }
+        #tavern-stage-root .swipe_right {
+          right: 22px !important;
+          bottom: -7px !important;
+          width: 22px !important;
+          height: 22px !important;
+        }
+        #tavern-stage-root .swipes-counter {
+          top: auto !important;
+          bottom: -6px !important;
+          right: calc(28% - 6px) !important;
+          height: 19px !important;
+          line-height: 17px !important;
+          font-size: 11px !important;
+          padding: 0 7px !important;
+          border-radius: 9px !important;
+          z-index: 31 !important;
+        }
+      `);
+    }
+
+    if (uiCfg.enableQuoteColor === false) {
+      rules.push(`#tavern-stage-root .mes_text q { color: inherit !important; }`);
+    }
+    if (uiCfg.enableQuoteBox === false) {
+      rules.push(`#tavern-stage-root .mes_text q { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }`);
+    }
+    if (uiCfg.enableItalicColor === false) {
+      rules.push(`#tavern-stage-root .mes_text em, #tavern-stage-root .mes_text i { color: inherit !important; }`);
+    }
+    return rules.join('\n');
   }
 
   function applyActiveTavernTheme() {
     const stageRoot = document.getElementById('tavern-stage-root');
-    if (!stageRoot) return;
+    let styleEl = document.getElementById('tavern-custom-theme-style');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'tavern-custom-theme-style';
+      document.head.appendChild(styleEl);
+    }
+
+    const gameScreen = document.getElementById('game-hall-screen');
+    const isTavernVisible = !gameScreen || gameScreen.classList.contains('active');
+    if (!stageRoot || !isTavernVisible) {
+      styleEl.textContent = '';
+      return;
+    }
 
     let theme = tavernState.themes.find(t => t.id === tavernState.activeThemeId);
     if (!theme) theme = tavernState.themes[0] || DEFAULT_GOUSU_THEME;
@@ -1537,13 +2019,11 @@
 
     varPairs.forEach(([k, v]) => stageRoot.style.setProperty(k, v));
 
-    let styleEl = document.getElementById('tavern-custom-theme-style');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = 'tavern-custom-theme-style';
-      document.head.appendChild(styleEl);
+    if (uiCfg.enableThemeCustomCss === false) {
+      styleEl.textContent = buildTavernThemeOverridePatch(null, uiCfg);
+    } else {
+      styleEl.textContent = scopeTavernThemeCss(theme.custom_css || '') + '\n' + buildTavernThemeOverridePatch(theme, uiCfg);
     }
-    styleEl.textContent = scopeTavernThemeCss(theme.custom_css || '');
   }
 
   // ============================================================================
@@ -1955,26 +2435,43 @@
     return filtered;
   }
 
+  function getExternalPhoneApiPresets() {
+    try {
+      if (typeof state !== 'undefined' && state && state.apiConfig && Array.isArray(state.apiConfig.presets)) {
+        return state.apiConfig.presets;
+      }
+    } catch (_) {}
+    return [];
+  }
+
   function resolveTavernApiCredentials() {
     const cfg = tavernState.apiConfig || {};
-    if (cfg.useExternalPhoneApi && typeof state !== 'undefined' && state.apiConfig) {
-      const extUrl = (state.apiConfig.url || '').trim().replace(/\/+$/, '');
-      const extKey = (state.apiConfig.key || '').trim();
-      const extModel = (state.apiConfig.model || '').trim();
-      if (extUrl && extKey) {
-        return { baseUrl: extUrl, apiKey: extKey, model: extModel || 'gpt-4o-mini' };
+    let extUrl = '';
+    let extKey = '';
+    let extModel = '';
+    try {
+      if (typeof state !== 'undefined' && state && state.apiConfig) {
+        extUrl = (state.apiConfig.proxyUrl || state.apiConfig.url || state.apiConfig.apiUrl || '').trim().replace(/\/+$/, '');
+        extKey = (state.apiConfig.apiKey || state.apiConfig.key || '').trim();
+        extModel = (state.apiConfig.model || '').trim();
       }
+    } catch (_) {}
+
+    const domUrl = (document.getElementById('proxy-url')?.value || document.getElementById('api-url')?.value || '').trim().replace(/\/+$/, '');
+    const domKey = (document.getElementById('api-key')?.value || '').trim();
+    const domModel = (document.getElementById('model-input')?.value || document.getElementById('model-select')?.value || document.getElementById('api-model')?.value || '').trim();
+
+    if (cfg.useExternalPhoneApi !== false) {
+      const finalExtUrl = extUrl || domUrl || (cfg.customUrl || '').trim().replace(/\/+$/, '');
+      const finalExtKey = extKey || domKey || (cfg.customKey || '').trim();
+      const finalExtModel = extModel || domModel || (cfg.customModel || '').trim() || 'gpt-4o-mini';
+      return { baseUrl: finalExtUrl, apiKey: finalExtKey, model: finalExtModel };
     }
-    const domUrl = document.getElementById('api-url')?.value?.trim()?.replace(/\/+$/, '') || '';
-    const domKey = document.getElementById('api-key')?.value?.trim() || '';
-    const domModel = document.getElementById('api-model')?.value?.trim() || '';
-    if (cfg.useExternalPhoneApi && domUrl && domKey) {
-      return { baseUrl: domUrl, apiKey: domKey, model: domModel || 'gpt-4o-mini' };
-    }
+
     return {
-      baseUrl: (cfg.customUrl || domUrl || '').replace(/\/+$/, ''),
-      apiKey: cfg.customKey || domKey || '',
-      model: cfg.customModel || domModel || 'gpt-4o-mini'
+      baseUrl: (cfg.customUrl || extUrl || domUrl || '').trim().replace(/\/+$/, ''),
+      apiKey: (cfg.customKey || extKey || domKey || '').trim(),
+      model: (cfg.customModel || extModel || domModel || 'gpt-4o-mini').trim()
     };
   }
 
@@ -2013,7 +2510,7 @@
   async function callTavernAiCompletion(messages, onStreamUpdate = null) {
     const creds = resolveTavernApiCredentials();
     if (!creds.baseUrl || !creds.apiKey) {
-      throw new Error('未检测到有效的API地址与密钥，请点击顶部插头图标配置或同步手机外部API设置');
+      throw new Error('未检测到有效的API地址与密钥，请点击顶栏第二个爪印配置或同步外部API');
     }
 
     const preset = getActivePreset();
@@ -2067,7 +2564,8 @@
         const lines = sseBuffer.split(/\r?\n/);
         sseBuffer = lines.pop() || '';
 
-        let updatedInChunk = false;
+        let deltaContentBatch = '';
+        let updatedReasoning = false;
         for (const rawLine of lines) {
           const line = rawLine.trim();
           if (!line || !line.startsWith('data:')) continue;
@@ -2079,18 +2577,36 @@
             if (!choice) continue;
             const delta = choice.delta || choice.message || {};
             if (delta.content) {
-              rawContentAccum += delta.content;
-              updatedInChunk = true;
+              deltaContentBatch += delta.content;
             }
             const rDelta = delta.reasoning_content || delta.reasoning || '';
             if (rDelta) {
               nativeReasoningAccum += rDelta;
-              updatedInChunk = true;
+              updatedReasoning = true;
             }
           } catch (_) {}
         }
 
-        if (updatedInChunk && typeof onStreamUpdate === 'function') {
+        if (deltaContentBatch.length > 0 && typeof onStreamUpdate === 'function') {
+          // If a proxy batches many characters into one chunk, step through smoothly so the user sees character-by-character output
+          const stepSize = Math.max(2, Math.ceil(deltaContentBatch.length / 6));
+          for (let offset = 0; offset < deltaContentBatch.length; offset += stepSize) {
+            rawContentAccum += deltaContentBatch.slice(offset, offset + stepSize);
+            const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+            const liveParsed = extractReasoningAndCleanReply(rawContentAccum);
+            const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
+            onStreamUpdate({
+              content: liveParsed.cleanReply,
+              reasoning: liveReasoning,
+              genTime: elapsedSec,
+              isStreaming: true
+            });
+            if (deltaContentBatch.length > stepSize) {
+              await new Promise(r => setTimeout(r, 12));
+            }
+          }
+          await new Promise(r => requestAnimationFrame(r));
+        } else if (updatedReasoning && typeof onStreamUpdate === 'function') {
           const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
           const liveParsed = extractReasoningAndCleanReply(rawContentAccum);
           const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
@@ -2100,6 +2616,7 @@
             genTime: elapsedSec,
             isStreaming: true
           });
+          await new Promise(r => requestAnimationFrame(r));
         }
       }
 
@@ -2114,7 +2631,6 @@
     }
 
     const data = await res.json();
-    const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
     const choice = data.choices && data.choices[0];
     const msgObj = choice ? (choice.message || choice.delta || {}) : {};
     const rawContent = msgObj.content || '';
@@ -2123,6 +2639,23 @@
     const parsed = extractReasoningAndCleanReply(rawContent);
     const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
 
+    // If streaming was enabled by the user but the proxy returned a full JSON response, progressive-render character by character
+    if (useStreaming && parsed.cleanReply && typeof onStreamUpdate === 'function') {
+      const fullText = parsed.cleanReply;
+      const step = Math.max(2, Math.ceil(fullText.length / 45));
+      for (let i = step; i < fullText.length; i += step) {
+        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        onStreamUpdate({
+          content: fullText.slice(0, i),
+          reasoning: combinedReasoning,
+          genTime: elapsedSec,
+          isStreaming: true
+        });
+        await new Promise(r => setTimeout(r, 16));
+      }
+    }
+
+    const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
     return {
       content: parsed.cleanReply,
       reasoning: combinedReasoning,
@@ -3079,11 +3612,15 @@
         <!-- Bottom Options & Extensions Popups -->
         ${uiRuntime.showOptionsPopup ? renderBottomOptionsPopup() : ''}
         ${uiRuntime.showExtensionsPopup ? renderBottomExtensionsPopup() : ''}
+        ${uiRuntime.activeHelperScriptId ? renderHelperScriptModal() : ''}
 
         <!-- Native SillyTavern #form_sheld Bottom Bar -->
         <div id="form_sheld">
-          ${qrs.length > 0 ? `
+          ${(qrs.length > 0 || (getActiveCard()?.helperScripts || []).filter(s => s.enabled !== false).length > 0) ? `
             <div id="qr--bar">
+              ${(getActiveCard()?.helperScripts || []).filter(s => s.enabled !== false).map(hs => `
+                <button type="button" class="qr--button" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">${escapeHtmlSimple(stripUiEmojis(hs.name || '互动面板'))}</button>
+              `).join('')}
               ${qrs.map(q => `
                 <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
               `).join('')}
@@ -3122,6 +3659,42 @@
     bindTavernStageEvents();
   }
 
+  function renderHelperScriptModal() {
+    const card = getActiveCard();
+    const scripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
+    const target = scripts.find(s => s.id === uiRuntime.activeHelperScriptId) || scripts[0];
+    if (!target) return '';
+
+    const rawContent = String(target.content || '');
+    let extractedHtml = '';
+    const templateMatch = rawContent.match(/const\s+panelHTML\s*=\s*`([\s\S]*?)`;/);
+    if (templateMatch && templateMatch[1]) {
+      const styleMatches = rawContent.match(/\.append\(`(<style[\s\S]*?<\/style>)`\)/g) || [];
+      const styles = styleMatches.map(m => {
+        const inner = m.match(/`(<style[\s\S]*?<\/style>)`/);
+        return inner ? inner[1] : '';
+      }).join('\n');
+      extractedHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}<style>body{margin:0;padding:10px;background:transparent;font-family:sans-serif;}#adv-codex-panel{position:relative!important;top:auto!important;left:auto!important;transform:none!important;width:100%!important;max-width:100%!important;height:82vh!important;display:flex!important;box-sizing:border-box!important;}#adv-codex-toggle{display:none!important;}</style></head><body>${templateMatch[1]}</body></html>`;
+    } else if (/<!DOCTYPE\s+html/i.test(rawContent) || /<html[\s>]/i.test(rawContent)) {
+      extractedHtml = rawContent;
+    } else {
+      extractedHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:sans-serif;color:#333;background:#faf8f5;}</style></head><body><div id="app">正在加载角色扩展面板...</div><script>${rawContent}<\/script></body></html>`;
+    }
+
+    const srcdocAttr = buildSandboxIframeHtml(extractedHtml);
+    return `
+      <div class="tavern-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:12px;box-sizing:border-box;">
+        <div style="background:#fdfbf7;border-radius:16px;border:1px solid rgba(0,0,0,0.12);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.28);">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f5f2eb;">
+            <span style="font-weight:700;font-size:14px;color:#333;">${escapeHtmlSimple(stripUiEmojis(target.name || '角色专属互动面板'))}</span>
+            <button type="button" class="tavern-btn small" data-action="close-helper-script">关闭面板</button>
+          </div>
+          <iframe class="tavern-html-sandbox-frame" sandbox="allow-scripts allow-same-origin allow-forms" srcdoc="${srcdocAttr}" style="width:100%;flex:1;border:none;background:transparent;"></iframe>
+        </div>
+      </div>
+    `;
+  }
+
   function renderBottomOptionsPopup() {
     return `
       <div id="options" class="tavern-bottom-popup">
@@ -3137,16 +3710,26 @@
   function renderBottomExtensionsPopup() {
     const d100Plugin = (tavernState.plugins || []).find(p => p.builtInType === 'd100_pool');
     const sess = getActiveChatSession();
+    const card = getActiveCard();
+    const helperScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
     const pool = (sess && sess.metadata && Array.isArray(sess.metadata.qr_d100_pool)) ? sess.metadata.qr_d100_pool : [];
     return `
       <div id="extensionsMenu" class="tavern-bottom-popup">
+        ${helperScripts.map(hs => `
+          <div class="tavern-popup-item" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">
+            打开 ${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌面板'))}
+          </div>
+        `).join('')}
+        <div class="tavern-popup-item" data-action="wand-generate-image">生成当前剧情场景插图</div>
+        <div class="tavern-popup-item" data-action="run-memory-summary-now">立即生成剧情记忆摘要</div>
         <div class="tavern-popup-item" data-action="reroll-d100-pool">
           重掷D100暗骰池 ${d100Plugin && d100Plugin.enabled ? '已开启' : '已关闭'}
         </div>
         ${pool.length > 0 ? `<div style="padding:4px 10px;font-size:11px;color:#777;word-break:break-all;">当前骰池: ${pool.slice(0, 8).join(', ')}...</div>` : ''}
-        <div class="tavern-popup-item" data-action="run-memory-summary-now">立即生成剧情记忆摘要</div>
-        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="cubes">打开正则与作者注释面板</div>
+        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="plug">快速切换API接口与预设</div>
+        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="cubes">打开正则与扩展插件面板</div>
         <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="atlas">打开世界书词条管理面板</div>
+        <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="usercog">打开文字配色与美化面板</div>
       </div>
     `;
   }
@@ -3163,6 +3746,16 @@
     return str;
   }
 
+  function resolveAvatarFallbackThumb(rawUrl, isUser = false) {
+    const fallbackSvg = isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG;
+    if (!rawUrl) return fallbackSvg;
+    const thumbs = tavernState.extensionSettings && tavernState.extensionSettings.avatarThumbs;
+    if (thumbs && thumbs[rawUrl]) {
+      return thumbs[rawUrl];
+    }
+    return fallbackSvg;
+  }
+
   function renderTavernChatFloors(keepTopOnSingleFloor = false) {
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
@@ -3174,14 +3767,18 @@
     const fmtCfg = tavernState.formatting || {};
 
     const charAvatar = resolveSafeAvatarUrl(card ? card.avatar : '', false);
-    const userAvatar = resolveSafeAvatarUrl(getUserAvatarUrl(), true);
+    const charFallback = resolveAvatarFallbackThumb(card ? card.avatar : '', false);
+    const userRawAvatar = getUserAvatarUrl();
+    const userAvatar = resolveSafeAvatarUrl(userRawAvatar, true);
+    const userFallback = resolveAvatarFallbackThumb(userRawAvatar, true);
     const userName = getUserDisplayName();
 
     chatEl.innerHTML = messages.map((m, idx) => {
       const isUser = Boolean(m.is_user);
       const isLast = idx === messages.length - 1;
-      const displayName = isUser ? userName : (m.name || card.name || '角色');
+      const displayName = isUser ? userName : ((card && card.name) ? card.name : (m.name || '角色'));
       const avatarSrc = isUser ? userAvatar : charAvatar;
+      const fallbackSrc = isUser ? userFallback : charFallback;
       const swipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
       const swipeIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
       const currentRawText = swipes[swipeIdx] !== undefined ? swipes[swipeIdx] : (m.mes || '');
@@ -3206,7 +3803,7 @@
         <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
           <div class="mesAvatarWrapper">
             <div class="avatar">
-              <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG}';" />
+              <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${fallbackSrc}';" />
             </div>
             <div class="mesIDDisplay">${uiCfg.showMessageId !== false ? '#' + idx : ''}</div>
             <div class="mes_timer">${uiCfg.showMesTimer !== false && m.gen_time ? escapeHtmlSimple(m.gen_time) : ''}</div>
@@ -3404,7 +4001,7 @@
           <input type="checkbox" data-preset-bool="stream_openai" ${preset.stream_openai ? 'checked' : ''} />
           <span>启用真实流式逐字生成</span>
         </label>
-        <div class="tavern-field-hint" style="margin-bottom:8px;">开启后AI回复会一行一行实时蹦出，关闭则等待整段写完后一次性显示</div>
+        <div class="tavern-field-hint" style="margin-bottom:8px;">开启后AI回复会一个字一个字实时显示在画面上，关闭则等待整段写完后一次性显示</div>
 
         <div class="inline-drawer" style="margin-top:6px;margin-bottom:0;">
           <div class="inline-drawer-header" data-action="toggle-adv-samplers">
@@ -3539,50 +4136,87 @@
     `;
   }
 
-  // Drawer 2: fa-plug (API Connection Settings)
+  // Drawer 2: fa-plug (API Connection Settings & Built-in API Presets)
   function renderDrawerPlug() {
     const cfg = tavernState.apiConfig || {};
+    const preset = getActivePreset();
     const resolved = resolveTavernApiCredentials();
     const models = Array.isArray(cfg.availableModels) ? cfg.availableModels : [];
+    const externalPresets = getExternalPhoneApiPresets();
+    const savedBuiltInPresets = Array.isArray(cfg.savedPresets) ? cfg.savedPresets : [];
 
     return `
       <div class="tavern-section-card">
-        <div class="tavern-section-label">主接口连接方式</div>
+        <div class="tavern-section-label">主接口来源与流式开关</div>
         <label class="tavern-check-row">
           <input type="checkbox" data-api-bool="useExternalPhoneApi" ${cfg.useExternalPhoneApi !== false ? 'checked' : ''} />
-          <span>直接复用手机外部API设置与密钥</span>
+          <span>直接复用手机外部API配置与预设</span>
         </label>
-        <div style="font-size:12px;color:#666;margin-top:4px;">
-          当前生效地址: ${escapeHtmlSimple(resolved.baseUrl || '未配置')} | 模型: ${escapeHtmlSimple(resolved.model || '未选择')}
+        <label class="tavern-check-row" style="margin-top:4px;">
+          <input type="checkbox" data-preset-bool="stream_openai" ${preset.stream_openai ? 'checked' : ''} />
+          <span>启用真实流式逐字生成 一个字一个字实时蹦出</span>
+        </label>
+        <div style="font-size:12px;color:#555;margin-top:6px;padding:6px 10px;background:#f4f5f9;border-radius:8px;">
+          当前生效地址: ${escapeHtmlSimple(resolved.baseUrl || '未配置')} | 模型: ${escapeHtmlSimple(resolved.model || '未选择')} | 模式: ${preset.stream_openai ? '流式逐字' : '整段生成'}
         </div>
+        ${cfg.useExternalPhoneApi !== false && externalPresets.length > 0 ? `
+          <div class="tavern-field-group" style="margin-top:8px;margin-bottom:0;">
+            <label>直接切换手机外部已存API预设</label>
+            <select class="tavern-select" data-change="switch-external-api-preset">
+              <option value="">跟随手机当前默认API</option>
+              ${externalPresets.map(ep => `
+                <option value="${escapeHtmlSimple(ep.name)}" ${cfg.selectedExternalPresetName === ep.name ? 'selected' : ''}>${escapeHtmlSimple(ep.name)} · ${escapeHtmlSimple(ep.model || '')}</option>
+              `).join('')}
+            </select>
+          </div>
+        ` : ''}
       </div>
 
       <div class="tavern-section-card">
-        <div class="tavern-section-label">独立反代或自定义API配置</div>
+        <div class="tavern-section-label">
+          <span>酒馆内置独立API预设与配置</span>
+        </div>
+        <div class="tavern-field-group">
+          <label>切换已保存的酒馆内置API预设</label>
+          <select class="tavern-select" data-change="switch-builtin-api-preset">
+            <option value="">当前手动输入配置</option>
+            ${savedBuiltInPresets.map(sp => `
+              <option value="${escapeHtmlSimple(sp.id)}" ${cfg.activeSavedPresetId === sp.id ? 'selected' : ''}>${escapeHtmlSimple(sp.name)} · ${escapeHtmlSimple(sp.model || '')}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div class="tavern-field-group">
+          <label>内置API预设名称 保存新预设时填写</label>
+          <input type="text" class="tavern-input" id="tavern-api-preset-name-input" value="${escapeHtmlSimple((savedBuiltInPresets.find(x => x.id === cfg.activeSavedPresetId)?.name) || '')}" placeholder="例如: DeepSeek主线 或 Claude反代" />
+        </div>
         <div class="tavern-field-group">
           <label>接口反代地址 Base URL</label>
           <input type="text" class="tavern-input" id="tavern-api-url-input" value="${escapeHtmlSimple(cfg.customUrl || resolved.baseUrl || '')}" placeholder="https://api.openai.com/v1" />
         </div>
         <div class="tavern-field-group">
           <label>接口密钥 API Key</label>
-          <input type="password" class="tavern-input" id="tavern-api-key-input" value="${escapeHtmlSimple(cfg.customKey || '')}" placeholder="留空则自动读取手机外部密钥" />
+          <input type="password" class="tavern-input" id="tavern-api-key-input" value="${escapeHtmlSimple(cfg.customKey || '')}" placeholder="填写密钥，留空则自动读取手机外部密钥" />
         </div>
         <div class="tavern-field-group">
           <label>模型名称 Model</label>
-          <input type="text" class="tavern-input" id="tavern-api-model-input" value="${escapeHtmlSimple(cfg.customModel || resolved.model || '')}" placeholder="输入或从下方拉取模型" />
+          <input type="text" class="tavern-input" id="tavern-api-model-input" value="${escapeHtmlSimple(cfg.customModel || resolved.model || '')}" placeholder="手动输入或点击下方拉取模型列表" />
         </div>
         ${models.length > 0 ? `
           <div class="tavern-field-group">
-            <label>从已拉取模型列表中选择</label>
+            <label>从已拉取模型列表中下拉选择</label>
             <select class="tavern-select" id="tavern-api-model-select" data-change="select-fetched-model">
               ${models.map(m => `<option value="${escapeHtmlSimple(m)}" ${m === (cfg.customModel || resolved.model) ? 'selected' : ''}>${escapeHtmlSimple(m)}</option>`).join('')}
             </select>
           </div>
         ` : ''}
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-          <button type="button" class="tavern-btn primary" data-action="save-tavern-api-config">保存接口配置</button>
-          <button type="button" class="tavern-btn" data-action="fetch-tavern-models">拉取模型列表</button>
-          <button type="button" class="tavern-btn" data-action="test-tavern-api">测试连接</button>
+        <div class="tavern-btn-grid cols-3" style="margin-top:8px;">
+          <button type="button" class="tavern-btn small primary" data-action="save-tavern-api-config">保存并启用</button>
+          <button type="button" class="tavern-btn small" data-action="save-as-builtin-api-preset">存为内置预设</button>
+          <button type="button" class="tavern-btn small danger" data-action="delete-builtin-api-preset">删除此预设</button>
+        </div>
+        <div class="tavern-btn-grid" style="margin-top:6px;margin-bottom:0;">
+          <button type="button" class="tavern-btn small" data-action="fetch-tavern-models">拉取模型列表</button>
+          <button type="button" class="tavern-btn small" data-action="test-tavern-api">测试连接</button>
         </div>
       </div>
 
@@ -3852,11 +4486,29 @@
     `;
   }
 
-  // Drawer 5: fa-user-cog (UI Theme & User Settings)
+  function rgbaOrHexToHex6(colorStr, fallback = '#ed8496') {
+    if (!colorStr) return fallback;
+    const s = String(colorStr).trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(s)) return s;
+    const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (m) {
+      const r = Math.min(255, Math.max(0, Number(m[1]))).toString(16).padStart(2, '0');
+      const g = Math.min(255, Math.max(0, Number(m[2]))).toString(16).padStart(2, '0');
+      const b = Math.min(255, Math.max(0, Number(m[3]))).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}`;
+    }
+    return fallback;
+  }
+
+  // Drawer 5: fa-user-cog (UI Theme, Color Palette & User Settings)
   function renderDrawerUserCog() {
     let activeTheme = tavernState.themes.find(t => t.id === tavernState.activeThemeId) || tavernState.themes[0];
     const uiCfg = tavernState.uiSettings || {};
     const qrs = tavernState.quickReplies || [];
+
+    const quoteHex = rgbaOrHexToHex6(activeTheme.quote_text_color, '#ed8496');
+    const italicHex = rgbaOrHexToHex6(activeTheme.italics_text_color, '#999999');
+    const mainHex = rgbaOrHexToHex6(activeTheme.main_text_color, '#474747');
 
     return `
       <div class="tavern-section-card">
@@ -3872,6 +4524,56 @@
             <option value="${t.id}" ${t.id === activeTheme.id ? 'selected' : ''}>${escapeHtmlSimple(t.name)}</option>
           `).join('')}
         </select>
+        <label class="tavern-check-row" style="margin-top:6px;">
+          <input type="checkbox" data-ui-bool="enableThemeCustomCss" ${uiCfg.enableThemeCustomCss !== false ? 'checked' : ''} />
+          <span>启用当前主题附加CSS样式美化</span>
+        </label>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>文字配色板与双引号染色开关</span>
+          <button type="button" class="tavern-btn small" data-action="reset-theme-colors">恢复默认配色</button>
+        </div>
+        <div class="tavern-field-hint" style="margin-bottom:8px;">字体自动继承手机外部所选字体，内部颜色与双引号高亮可在此独立开关或调色</div>
+        <div class="tavern-grid-2">
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="enableQuoteColor" ${uiCfg.enableQuoteColor !== false ? 'checked' : ''} />
+            <span>开启双引号台词变色</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="enableQuoteBox" ${uiCfg.enableQuoteBox !== false ? 'checked' : ''} />
+            <span>开启双引号台词底框</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="enableItalicColor" ${uiCfg.enableItalicColor !== false ? 'checked' : ''} />
+            <span>开启斜体心理旁白变色</span>
+          </label>
+        </div>
+
+        <div class="tavern-grid-3" style="margin-top:8px;">
+          <div class="tavern-field-group">
+            <label>双引号台词颜色</label>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input type="color" value="${quoteHex}" data-color-picker="quote_text_color" style="width:36px;height:34px;border:none;background:none;padding:0;flex-shrink:0;cursor:pointer;" />
+              <input type="text" class="tavern-input" id="theme-quote-color-input" data-color-text="quote_text_color" value="${escapeHtmlSimple(activeTheme.quote_text_color || '#ed8496')}" />
+            </div>
+          </div>
+          <div class="tavern-field-group">
+            <label>斜体心理与动作色</label>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input type="color" value="${italicHex}" data-color-picker="italics_text_color" style="width:36px;height:34px;border:none;background:none;padding:0;flex-shrink:0;cursor:pointer;" />
+              <input type="text" class="tavern-input" id="theme-italic-color-input" data-color-text="italics_text_color" value="${escapeHtmlSimple(activeTheme.italics_text_color || '#999999')}" />
+            </div>
+          </div>
+          <div class="tavern-field-group">
+            <label>正文基础文字颜色</label>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input type="color" value="${mainHex}" data-color-picker="main_text_color" style="width:36px;height:34px;border:none;background:none;padding:0;flex-shrink:0;cursor:pointer;" />
+              <input type="text" class="tavern-input" id="theme-main-color-input" data-color-text="main_text_color" value="${escapeHtmlSimple(activeTheme.main_text_color || '#474747')}" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="tavern-section-card">
@@ -3897,10 +4599,6 @@
             <input type="number" class="tavern-input" data-ui-num="pageMargin" value="${uiCfg.pageMargin ?? 10}" min="0" max="48" step="2" />
             <div class="tavern-field-hint">调小可让气泡变宽使每行容纳更多字数</div>
           </div>
-        </div>
-        <div class="tavern-field-group">
-          <label>对话引语高亮颜色</label>
-          <input type="text" class="tavern-input" id="theme-quote-color-input" value="${escapeHtmlSimple(activeTheme.quote_text_color || 'rgba(255, 168, 187, 1)')}" />
         </div>
         <div class="tavern-grid-2">
           <label class="tavern-check-row">
@@ -3956,11 +4654,16 @@
     const bg = tavernState.background || {};
     return `
       <div class="tavern-section-card">
-        <div class="tavern-section-label">背景图片上传与直链设置</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button type="button" class="tavern-btn primary" data-action="trigger-upload-bg">上传背景图至Termux本地</button>
-          <button type="button" class="tavern-btn danger" data-action="clear-tavern-bg">清除背景</button>
+        <div class="tavern-section-label">背景图片上传与角色卡立绘联动</div>
+        <div class="tavern-btn-grid cols-3" style="margin-bottom:8px;">
+          <button type="button" class="tavern-btn small primary" data-action="trigger-upload-bg">上传背景图</button>
+          <button type="button" class="tavern-btn small" data-action="use-card-avatar-as-bg">用当前角色卡立绘</button>
+          <button type="button" class="tavern-btn small danger" data-action="clear-tavern-bg">清除背景</button>
         </div>
+        <label class="tavern-check-row" style="margin-bottom:8px;">
+          <input type="checkbox" data-bg-bool="syncCardAvatarAsBg" ${bg.syncCardAvatarAsBg ? 'checked' : ''} />
+          <span>切换或导入角色卡时自动将该角色立绘设为聊天背景</span>
+        </label>
         <div class="tavern-field-group">
           <label>或直接输入背景图片URL直链</label>
           <div style="display:flex;gap:6px;">
@@ -4003,6 +4706,7 @@
     const an = tavernState.authorNote || {};
     const mem = tavernState.memory || {};
     const plugins = tavernState.plugins || [];
+    const helperScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
     const sess = getActiveChatSession();
     const pool = (sess && sess.metadata && Array.isArray(sess.metadata.qr_d100_pool)) ? sess.metadata.qr_d100_pool : [];
 
@@ -4016,10 +4720,17 @@
           </div>
           ${uiRuntime.openExtensionAcc.regex ? `
             <div class="inline-drawer-content">
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-                <button type="button" class="tavern-btn small primary" data-action="trigger-import-regexes">多选导入正则JSON</button>
+              <div class="tavern-btn-grid cols-3" style="margin-bottom:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="trigger-import-regexes">多选导入正则</button>
                 <button type="button" class="tavern-btn small" data-action="add-new-regex" data-scope="global">新建全局正则</button>
                 <button type="button" class="tavern-btn small" data-action="add-new-regex" data-scope="card">新建角色正则</button>
+              </div>
+              <div class="tavern-field-group" style="margin-bottom:8px;">
+                <label>或粘贴GitHub与直链URL一键导入正则JSON</label>
+                <div style="display:flex;gap:6px;">
+                  <input type="text" class="tavern-input" id="tavern-regex-url-input" placeholder="粘贴正则JSON直链或GitHub文件链接..." />
+                  <button type="button" class="tavern-btn small primary" data-action="import-regex-from-url">链接导入</button>
+                </div>
               </div>
 
               ${editingRx ? `
@@ -4057,7 +4768,7 @@
               ` : ''}
 
               <div style="max-height:240px;overflow-y:auto;">
-                ${allRegexes.length === 0 ? `<div style="font-size:12px;color:#888;padding:6px 0;">暂无正则脚本，导入角色卡时会自动提取角色卡内嵌正则。</div>` : allRegexes.map(rx => `
+                ${allRegexes.length === 0 ? `<div style="font-size:12px;color:#888;padding:6px 0;">暂无正则脚本，导入角色卡时会自动提取并默认启用角色卡内嵌正则。</div>` : allRegexes.map(rx => `
                   <div class="tavern-list-row">
                     <input type="checkbox" class="tavern-fixed-check" data-action="toggle-regex-script" data-rx-id="${rx.id}" data-scope="${rx._scope}" ${!rx.disabled ? 'checked' : ''} />
                     <div class="tavern-list-row-main">
@@ -4144,23 +4855,45 @@
           ` : ''}
         </div>
 
-        <!-- 4. External JS Plugins & D100 Pool Drawer -->
+        <!-- 4. External JS Plugins, GitHub URL Installer & Card Helper Scripts -->
         <div class="inline-drawer">
           <div class="inline-drawer-header" data-action="toggle-ext-acc" data-acc="plugins">
-            <span>酒馆扩展插件与暗骰随机数池 共${plugins.length}个</span>
+            <span>酒馆扩展插件与角色内嵌脚本 共${plugins.length + helperScripts.length}个</span>
             <span>${uiRuntime.openExtensionAcc.plugins ? '收起' : '展开'}</span>
           </div>
           ${uiRuntime.openExtensionAcc.plugins ? `
             <div class="inline-drawer-content">
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-                <button type="button" class="tavern-btn small primary" data-action="trigger-import-plugins">导入JS或JSON插件</button>
+              <div class="tavern-btn-grid" style="margin-bottom:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="trigger-import-plugins">本地导入JS或JSON插件</button>
                 <button type="button" class="tavern-btn small" data-action="reroll-d100-pool">立即重掷16枚D100</button>
+              </div>
+              <div class="tavern-field-group" style="margin-bottom:8px;">
+                <label>粘贴GitHub仓库链接或脚本直链安装插件</label>
+                <div style="display:flex;gap:6px;">
+                  <input type="text" class="tavern-input" id="tavern-plugin-url-input" placeholder="例如: https://github.com/用户名/插件仓库名" />
+                  <button type="button" class="tavern-btn small primary" data-action="import-plugin-from-url">安装插件</button>
+                </div>
               </div>
               ${pool.length > 0 ? `
                 <div style="padding:8px 10px;border-radius:10px;background:#f2f4f8;font-size:12px;margin-bottom:8px;">
                   本轮预生成D100随机数池: <strong>${pool.join(', ')}</strong>
                 </div>
               ` : ''}
+              ${helperScripts.length > 0 ? `
+                <div style="font-size:12px;font-weight:700;color:#555;margin:6px 0;">当前角色卡内嵌专属脚本</div>
+                ${helperScripts.map(hs => `
+                  <div class="tavern-list-row">
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌脚本'))}</div>
+                      <div class="tavern-list-row-sub">随角色卡自动提取的交互图鉴或辅助脚本</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small primary" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">打开面板</button>
+                    </div>
+                  </div>
+                `).join('')}
+              ` : ''}
+              <div style="font-size:12px;font-weight:700;color:#555;margin:6px 0;">全局扩展插件列表</div>
               ${plugins.map(p => `
                 <div class="tavern-list-row">
                   <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${p.id}" ${p.enabled ? 'checked' : ''} />
@@ -4208,7 +4941,7 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">编辑当前人设: ${escapeHtmlSimple(activeP.name)}</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-          <img src="${resolveSafeAvatarUrl(activeP.avatar, true)}" alt="user" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);flex-shrink:0;" />
+          <img src="${resolveSafeAvatarUrl(activeP.avatar, true)}" alt="user" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);flex-shrink:0;" onerror="this.onerror=null;this.src='${resolveAvatarFallbackThumb(activeP.avatar, true)}';" />
           <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">
             <button type="button" class="tavern-btn small" data-action="trigger-upload-persona-avatar">更换头像并存至Termux本地</button>
             <label class="tavern-check-row">
@@ -4263,7 +4996,7 @@
         <div style="max-height:185px;overflow-y:auto;">
           ${cards.map(c => `
             <div class="tavern-list-row" style="${c.id === activeCard.id ? 'border-color:#555;background:#f0f1f6;' : ''}">
-              <img src="${resolveSafeAvatarUrl(c.avatar, false)}" alt="char" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_SVG}';" />
+              <img src="${resolveSafeAvatarUrl(c.avatar, false)}" alt="char" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${resolveAvatarFallbackThumb(c.avatar, false)}';" />
               <div class="tavern-list-row-main" data-action="switch-active-card" data-card-id="${c.id}" style="cursor:pointer;">
                 <div>${escapeHtmlSimple(c.name)} ${c.id === activeCard.id ? '· 当前游玩' : ''}</div>
                 <div class="tavern-list-row-sub">开场白:${1 + (c.alternate_greetings?.length || 0)}个 | 正则:${(c.regexScripts || []).length}条</div>
@@ -4310,7 +5043,7 @@
         </div>
         <div class="tavern-grid-2">
           <div class="tavern-field-group">
-            <label>角色名称</label>
+            <label>角色名称 修改后对话楼层名字同步更新</label>
             <input type="text" class="tavern-input" id="card-edit-name" value="${escapeHtmlSimple(activeCard.name || '')}" />
           </div>
           <div class="tavern-field-group">
@@ -4408,12 +5141,29 @@
     }
     const textEl = floorEl.querySelector('.mes_text');
     if (textEl) {
-      textEl.innerHTML = renderTavernMessageHtml(msg.mes || '', {
-        isUser: Boolean(msg.is_user),
-        isPrompt: false,
-        depth: sess.messages.length - 1 - mesIndex,
-        card
-      });
+      let rawStreamText = String(msg.mes || '');
+      const hasUnclosedHtmlDoc = (/<!DOCTYPE\s+html/i.test(rawStreamText) || /<html[\s>]/i.test(rawStreamText)) && !/<\/html\s*>/i.test(rawStreamText);
+      if (hasUnclosedHtmlDoc) {
+        const beforeHtml = rawStreamText.split(/```(?:html)?\s*<!DOCTYPE\s+html|<!DOCTYPE\s+html|<html[\s>]/i)[0] || '';
+        const narrativeHtml = beforeHtml.trim() ? renderTavernMessageHtml(beforeHtml, {
+          isUser: Boolean(msg.is_user),
+          isPrompt: false,
+          depth: sess.messages.length - 1 - mesIndex,
+          card
+        }) : '';
+        textEl.innerHTML = `${narrativeHtml}<div style="padding:10px 14px;margin-top:8px;border-radius:10px;background:rgba(240,236,228,0.85);color:#666;font-size:12.5px;">正在实时流式构建互动状态栏面板... 已接收 ${rawStreamText.length} 字符</div>`;
+      } else {
+        textEl.innerHTML = renderTavernMessageHtml(rawStreamText, {
+          isUser: Boolean(msg.is_user),
+          isPrompt: false,
+          depth: sess.messages.length - 1 - mesIndex,
+          card
+        });
+      }
+    }
+    const timerEl = floorEl.querySelector('.mes_timer');
+    if (timerEl && msg.gen_time) {
+      timerEl.textContent = msg.gen_time;
     }
     if (msg.reasoning && String(msg.reasoning).trim()) {
       let detailsEl = floorEl.querySelector('.mes_reasoning_details');
@@ -4630,11 +5380,70 @@
 
       if (action === 'exit-tavern-home') {
         uiRuntime.openDrawerKey = null;
+        uiRuntime.activeHelperScriptId = null;
+        const themeStyle = document.getElementById('tavern-custom-theme-style');
+        if (themeStyle) themeStyle.textContent = '';
         if (typeof showScreen === 'function') {
           showScreen('home-screen');
         } else {
           document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
           document.getElementById('home-screen')?.classList.add('active');
+        }
+        return;
+      }
+
+      if (action === 'open-helper-script') {
+        const sid = actionEl.getAttribute('data-script-id');
+        uiRuntime.activeHelperScriptId = sid;
+        uiRuntime.showExtensionsPopup = false;
+        uiRuntime.showOptionsPopup = false;
+        uiRuntime.openDrawerKey = null;
+        renderTavernShell();
+        return;
+      }
+
+      if (action === 'close-helper-script') {
+        uiRuntime.activeHelperScriptId = null;
+        renderTavernShell();
+        return;
+      }
+
+      if (action === 'wand-generate-image') {
+        uiRuntime.showExtensionsPopup = false;
+        renderTavernShell();
+        const sess = getActiveChatSession();
+        const lastMsg = sess && sess.messages && sess.messages[sess.messages.length - 1];
+        if (!lastMsg) {
+          showTavernToast('暂无对话内容可供生成插图');
+          return;
+        }
+        try {
+          showTavernToast('正在提炼当前画面提示词...');
+          const promptRes = await callTavernAiCompletion([
+            { role: 'system', content: '请将用户提供的最新剧情片段转化为一段精炼的动漫插画画面描述提示词，包含人物外貌、动作、光影与背景环境，只输出英文Tag提示词，逗号分隔。' },
+            { role: 'user', content: String(lastMsg.mes || '').slice(-800) }
+          ]);
+          const tags = String(promptRes.content || 'masterpiece, best quality, anime style').trim();
+          if (typeof window.generateNovelAiImage === 'function') {
+            showTavernToast('正在调用NovelAI生成场景插图...');
+            const imgUrl = await window.generateNovelAiImage(tags);
+            if (imgUrl) {
+              lastMsg.mes += `\n<div style="margin-top:8px;"><img src="${imgUrl}" style="max-width:100%;border-radius:12px;" /></div>`;
+              if (Array.isArray(lastMsg.swipes) && lastMsg.swipes.length > 0) {
+                lastMsg.swipes[lastMsg.swipe_id || 0] = lastMsg.mes;
+              }
+              await saveTavernStore();
+              renderTavernChatFloors(false);
+              showTavernToast('场景插图已生成并插入当前楼层');
+              return;
+            }
+          }
+          if (navigator.clipboard) {
+            await navigator.clipboard.writeText(tags);
+          }
+          showTavernToast('已生成画图Tag并复制: ' + tags.slice(0, 28) + '...');
+        } catch (err) {
+          showTavernToast(err.message || '生成插图提示词失败');
         }
         return;
       }
@@ -5027,14 +5836,68 @@
         return;
       }
 
-      // Drawer 2 (Plug API) Actions
+      // Drawer 2 (Plug API & Built-in API Presets) Actions
       if (action === 'save-tavern-api-config') {
-        tavernState.apiConfig.customUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
-        tavernState.apiConfig.customKey = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
-        tavernState.apiConfig.customModel = document.getElementById('tavern-api-model-input')?.value?.trim() || '';
+        const urlVal = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
+        const keyVal = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
+        const modVal = document.getElementById('tavern-api-model-input')?.value?.trim() || '';
+        tavernState.apiConfig.customUrl = urlVal;
+        tavernState.apiConfig.customKey = keyVal;
+        tavernState.apiConfig.customModel = modVal;
+        if (urlVal && modVal) {
+          tavernState.apiConfig.useExternalPhoneApi = false;
+        }
+        if (tavernState.apiConfig.activeSavedPresetId && Array.isArray(tavernState.apiConfig.savedPresets)) {
+          const sp = tavernState.apiConfig.savedPresets.find(x => x.id === tavernState.apiConfig.activeSavedPresetId);
+          if (sp) {
+            sp.name = document.getElementById('tavern-api-preset-name-input')?.value?.trim() || sp.name;
+            sp.url = urlVal;
+            sp.key = keyVal;
+            sp.model = modVal;
+          }
+        }
         await saveTavernStore();
         refreshOpenDrawerOnly();
-        showTavernToast('接口配置已保存');
+        showTavernToast('接口配置已保存并生效');
+        return;
+      }
+      if (action === 'save-as-builtin-api-preset') {
+        const nameVal = document.getElementById('tavern-api-preset-name-input')?.value?.trim() || ('内置预设 ' + ((tavernState.apiConfig.savedPresets?.length || 0) + 1));
+        const urlVal = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
+        const keyVal = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
+        const modVal = document.getElementById('tavern-api-model-input')?.value?.trim() || '';
+        if (!Array.isArray(tavernState.apiConfig.savedPresets)) {
+          tavernState.apiConfig.savedPresets = [];
+        }
+        const newPreset = {
+          id: 'apipreset_' + Date.now(),
+          name: nameVal,
+          url: urlVal,
+          key: keyVal,
+          model: modVal
+        };
+        tavernState.apiConfig.savedPresets.unshift(newPreset);
+        tavernState.apiConfig.activeSavedPresetId = newPreset.id;
+        tavernState.apiConfig.customUrl = urlVal;
+        tavernState.apiConfig.customKey = keyVal;
+        tavernState.apiConfig.customModel = modVal;
+        tavernState.apiConfig.useExternalPhoneApi = false;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast('已存为内置API预设: ' + nameVal);
+        return;
+      }
+      if (action === 'delete-builtin-api-preset') {
+        const curId = tavernState.apiConfig.activeSavedPresetId;
+        if (!curId) {
+          showTavernToast('请先在下拉框中选择要删除的内置预设');
+          return;
+        }
+        tavernState.apiConfig.savedPresets = (tavernState.apiConfig.savedPresets || []).filter(x => x.id !== curId);
+        tavernState.apiConfig.activeSavedPresetId = '';
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast('已删除该内置API预设');
         return;
       }
       if (action === 'fetch-tavern-models') {
@@ -5227,7 +6090,7 @@
         return;
       }
 
-      // Drawer 5 (UserCog Themes & QR) Actions
+      // Drawer 5 (UserCog Themes, Colors & QR) Actions
       if (action === 'trigger-import-themes') {
         document.getElementById('tavern-file-themes')?.click();
         return;
@@ -5237,14 +6100,32 @@
         if (t) downloadJsonFile((t.name || 'theme') + '.json', t);
         return;
       }
+      if (action === 'reset-theme-colors') {
+        const t = tavernState.themes.find(x => x.id === tavernState.activeThemeId) || tavernState.themes[0];
+        if (t) {
+          t.quote_text_color = DEFAULT_GOUSU_THEME.quote_text_color;
+          t.italics_text_color = DEFAULT_GOUSU_THEME.italics_text_color;
+          t.main_text_color = DEFAULT_GOUSU_THEME.main_text_color;
+          tavernState.uiSettings.enableQuoteColor = true;
+          tavernState.uiSettings.enableQuoteBox = true;
+          tavernState.uiSettings.enableItalicColor = true;
+          await saveTavernStore();
+          applyActiveTavernTheme();
+          refreshOpenDrawerOnly();
+          showTavernToast('已恢复默认文字与引号配色');
+        }
+        return;
+      }
       if (action === 'save-theme-custom-css') {
         const t = tavernState.themes.find(x => x.id === tavernState.activeThemeId) || tavernState.themes[0];
         if (t) {
           t.custom_css = document.getElementById('tavern-theme-css-editor')?.value || '';
           t.quote_text_color = document.getElementById('theme-quote-color-input')?.value || t.quote_text_color;
+          t.italics_text_color = document.getElementById('theme-italic-color-input')?.value || t.italics_text_color;
+          t.main_text_color = document.getElementById('theme-main-color-input')?.value || t.main_text_color;
           await saveTavernStore();
           applyActiveTavernTheme();
-          showTavernToast('已实时应用主题CSS');
+          showTavernToast('已实时应用主题CSS与颜色');
         }
         return;
       }
@@ -5282,6 +6163,17 @@
         document.getElementById('tavern-file-bg')?.click();
         return;
       }
+      if (action === 'use-card-avatar-as-bg') {
+        const card = getActiveCard();
+        if (card && card.avatar) {
+          const resolvedBg = resolveSafeAvatarUrl(card.avatar, false);
+          tavernState.background.url = resolvedBg;
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('已将当前角色卡立绘设为聊天背景');
+        }
+        return;
+      }
       if (action === 'clear-tavern-bg') {
         tavernState.background.url = '';
         await saveTavernStore();
@@ -5295,7 +6187,7 @@
         return;
       }
 
-      // Drawer 7 (Cubes Extensions & Regex) Actions
+      // Drawer 7 (Cubes Extensions & Regex & GitHub URL Importers) Actions
       if (action === 'toggle-ext-acc') {
         const acc = actionEl.getAttribute('data-acc');
         if (acc) {
@@ -5306,6 +6198,24 @@
       }
       if (action === 'trigger-import-regexes') {
         document.getElementById('tavern-file-regexes')?.click();
+        return;
+      }
+      if (action === 'import-regex-from-url') {
+        const rawUrl = document.getElementById('tavern-regex-url-input')?.value?.trim() || '';
+        if (!rawUrl) {
+          showTavernToast('请先粘贴正则JSON链接');
+          return;
+        }
+        await handleImportRegexFromUrl(rawUrl);
+        return;
+      }
+      if (action === 'import-plugin-from-url') {
+        const rawUrl = document.getElementById('tavern-plugin-url-input')?.value?.trim() || '';
+        if (!rawUrl) {
+          showTavernToast('请先粘贴GitHub插件仓库链接或脚本直链');
+          return;
+        }
+        await handleImportPluginFromUrl(rawUrl);
         return;
       }
       if (action === 'add-new-regex') {
@@ -5529,7 +6439,8 @@
           alternate_greetings: [],
           tags: [],
           worldBookId: null,
-          regexScripts: []
+          regexScripts: [],
+          helperScripts: []
         };
         tavernState.cards.unshift(newCard);
         tavernState.activeCardId = newCard.id;
@@ -5542,7 +6453,11 @@
         const cid = actionEl.getAttribute('data-card-id');
         if (cid) {
           tavernState.activeCardId = cid;
-          ensureActiveCardChatInitialized();
+          const nextCard = getActiveCard();
+          ensureActiveCardChatInitialized(nextCard);
+          if (tavernState.background?.syncCardAvatarAsBg && nextCard && nextCard.avatar) {
+            tavernState.background.url = resolveSafeAvatarUrl(nextCard.avatar, false);
+          }
           uiRuntime.openDrawerKey = null;
           await saveTavernStore();
           renderTavernShell();
@@ -5574,16 +6489,23 @@
       if (action === 'save-card-edits') {
         const card = getActiveCard();
         if (card) {
-          card.name = document.getElementById('card-edit-name')?.value?.trim() || card.name;
+          const newName = document.getElementById('card-edit-name')?.value?.trim() || card.name;
+          card.name = newName;
           card.worldBookId = document.getElementById('card-edit-wb')?.value || null;
           card.description = document.getElementById('card-edit-desc')?.value || '';
           card.personality = document.getElementById('card-edit-personality')?.value || '';
           card.scenario = document.getElementById('card-edit-scenario')?.value || '';
           card.first_mes = document.getElementById('card-edit-firstmes')?.value || '';
+          const sess = getActiveChatSession();
+          if (sess && Array.isArray(sess.messages)) {
+            sess.messages.forEach(m => {
+              if (!m.is_user) m.name = newName;
+            });
+          }
           await saveTavernStore();
           refreshOpenDrawerOnly();
           renderTavernChatFloors(false);
-          showTavernToast('角色卡设定已保存');
+          showTavernToast('角色卡设定与对话名称已同步保存');
         }
         return;
       }
@@ -5655,6 +6577,31 @@
         refreshOpenDrawerOnly();
         return;
       }
+      if (changeType === 'switch-external-api-preset') {
+        tavernState.apiConfig.selectedExternalPresetName = target.value;
+        tavernState.apiConfig.useExternalPhoneApi = true;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast(target.value ? ('已切换至外部API预设: ' + target.value) : '已恢复跟随手机默认API');
+        return;
+      }
+      if (changeType === 'switch-builtin-api-preset') {
+        const pid = target.value;
+        tavernState.apiConfig.activeSavedPresetId = pid;
+        if (pid && Array.isArray(tavernState.apiConfig.savedPresets)) {
+          const found = tavernState.apiConfig.savedPresets.find(x => x.id === pid);
+          if (found) {
+            tavernState.apiConfig.customUrl = found.url || '';
+            tavernState.apiConfig.customKey = found.key || '';
+            tavernState.apiConfig.customModel = found.model || '';
+            tavernState.apiConfig.useExternalPhoneApi = false;
+          }
+        }
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast(pid ? '已切换至酒馆内置API预设' : '已切换为手动配置模式');
+        return;
+      }
       if (changeType === 'switch-theme') {
         tavernState.activeThemeId = target.value;
         await saveTavernStore();
@@ -5677,6 +6624,29 @@
         return;
       }
 
+      if (target.hasAttribute('data-color-picker')) {
+        const colorKey = target.getAttribute('data-color-picker');
+        const activeTheme = tavernState.themes.find(x => x.id === tavernState.activeThemeId) || tavernState.themes[0];
+        if (activeTheme && colorKey) {
+          activeTheme[colorKey] = target.value;
+          await saveTavernStore();
+          applyActiveTavernTheme();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (target.hasAttribute('data-color-text')) {
+        const colorKey = target.getAttribute('data-color-text');
+        const activeTheme = tavernState.themes.find(x => x.id === tavernState.activeThemeId) || tavernState.themes[0];
+        if (activeTheme && colorKey) {
+          activeTheme[colorKey] = target.value.trim();
+          await saveTavernStore();
+          applyActiveTavernTheme();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+
       if (target.hasAttribute('data-preset-num')) {
         const k = target.getAttribute('data-preset-num');
         const preset = getActivePreset();
@@ -5690,6 +6660,7 @@
         const preset = getActivePreset();
         preset[k] = Boolean(target.checked);
         await saveTavernStore();
+        refreshOpenDrawerOnly();
         return;
       }
       if (target.hasAttribute('data-memory-num')) {
@@ -5741,7 +6712,21 @@
         const k = target.getAttribute('data-ui-bool');
         tavernState.uiSettings[k] = Boolean(target.checked);
         await saveTavernStore();
+        applyActiveTavernTheme();
         renderTavernChatFloors(false);
+        return;
+      }
+      if (target.hasAttribute('data-bg-bool')) {
+        const k = target.getAttribute('data-bg-bool');
+        tavernState.background[k] = Boolean(target.checked);
+        if (k === 'syncCardAvatarAsBg' && target.checked) {
+          const card = getActiveCard();
+          if (card && card.avatar) {
+            tavernState.background.url = resolveSafeAvatarUrl(card.avatar, false);
+          }
+        }
+        await saveTavernStore();
+        renderTavernShell();
         return;
       }
       if (target.hasAttribute('data-bg-setting')) {
@@ -5791,7 +6776,7 @@
       if (target.id === 'tavern-file-bg' && target.files?.[0]) {
         const url = await offloadImageToVault(target.files[0], 'tavern_bg_' + Date.now() + '.png');
         if (url) {
-          tavernState.background.url = url;
+          tavernState.background.url = resolveSafeAvatarUrl(url, false);
           await saveTavernStore();
           renderTavernShell();
           showTavernToast('背景图已存入Termux本地并应用');
@@ -5848,13 +6833,133 @@
   }
 
   // ============================================================================
-  // 13. Multi-File Batch Importers
+  // 13. Multi-File Batch Importers & GitHub URL Importers
   // ============================================================================
+  function convertGitHubUrlToRaw(inputUrl) {
+    let url = String(inputUrl || '').trim();
+    if (url.includes('github.com') && url.includes('/blob/')) {
+      url = url.replace('https://github.com/', 'https://raw.githubusercontent.com/').replace('/blob/', '/');
+    }
+    return url;
+  }
+
+  async function handleImportRegexFromUrl(rawUrl) {
+    try {
+      showTavernToast('正在从链接下载正则脚本...');
+      const fetchUrl = convertGitHubUrlToRaw(rawUrl);
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const raw = await res.json();
+      const list = Array.isArray(raw) ? raw : (Array.isArray(raw.regex_scripts) ? raw.regex_scripts : [raw]);
+      const normalized = normalizeRegexList(list, 'global');
+      tavernState.globalRegexScripts.unshift(...normalized);
+      await saveTavernStore();
+      refreshOpenDrawerOnly();
+      renderTavernChatFloors(false);
+      showTavernToast('成功从链接导入 ' + normalized.length + ' 条正则脚本');
+    } catch (err) {
+      console.error('URL Regex import error:', err);
+      showTavernToast('链接导入正则失败: ' + (err.message || '请检查是否为有效JSON直链'));
+    }
+  }
+
+  async function handleImportPluginFromUrl(rawUrl) {
+    try {
+      showTavernToast('正在从链接获取插件...');
+      let cleanUrl = String(rawUrl || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '');
+      const ghRepoMatch = cleanUrl.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
+      if (ghRepoMatch) {
+        const owner = ghRepoMatch[1];
+        const repo = ghRepoMatch[2];
+        let branch = 'main';
+        let manifest = null;
+        for (const tryBranch of ['main', 'master']) {
+          const mRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${tryBranch}/manifest.json`);
+          if (mRes.ok) {
+            branch = tryBranch;
+            manifest = await mRes.json();
+            break;
+          }
+        }
+        const jsFile = (manifest && manifest.js) ? manifest.js : 'index.js';
+        const cssFile = (manifest && manifest.css) ? manifest.css : 'style.css';
+        let jsCode = '';
+        let cssCode = '';
+        const jsRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${jsFile}`);
+        if (jsRes.ok) jsCode = await jsRes.text();
+        const cssRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cssFile}`);
+        if (cssRes.ok) cssCode = await cssRes.text();
+
+        if (cssCode) {
+          const injectCss = `try{const s=document.createElement('style');s.textContent=${JSON.stringify(cssCode)};document.head.appendChild(s);}catch(_){}\n`;
+          jsCode = injectCss + jsCode;
+        }
+        const plugin = {
+          id: 'plugin_' + Date.now(),
+          name: (manifest && manifest.display_name) || repo,
+          enabled: true,
+          code: jsCode,
+          description: (manifest && manifest.description) || ('从GitHub安装的扩展: ' + owner + '/' + repo)
+        };
+        tavernState.plugins.push(plugin);
+        if (plugin.code) executeUserPluginScript(plugin);
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast('成功安装GitHub酒馆插件: ' + plugin.name);
+        return;
+      }
+
+      const fetchUrl = convertGitHubUrlToRaw(cleanUrl);
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      if (fetchUrl.toLowerCase().endsWith('.json')) {
+        const raw = JSON.parse(text);
+        if (raw.findRegex || Array.isArray(raw.regex_scripts) || (Array.isArray(raw) && raw[0]?.findRegex)) {
+          const list = Array.isArray(raw) ? raw : (Array.isArray(raw.regex_scripts) ? raw.regex_scripts : [raw]);
+          const normalized = normalizeRegexList(list, 'global');
+          tavernState.globalRegexScripts.unshift(...normalized);
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          showTavernToast('检测到正则JSON，已自动导入 ' + normalized.length + ' 条正则');
+          return;
+        }
+        const plugin = {
+          id: 'plugin_' + Date.now(),
+          name: raw.name || raw.display_name || '链接导入插件',
+          enabled: true,
+          code: raw.code || raw.script || '',
+          description: raw.description || '从URL导入的JSON插件'
+        };
+        tavernState.plugins.push(plugin);
+        if (plugin.code) executeUserPluginScript(plugin);
+      } else {
+        const plugin = {
+          id: 'plugin_' + Date.now(),
+          name: fetchUrl.split('/').pop()?.replace(/\.js$/i, '') || '链接脚本插件',
+          enabled: true,
+          code: text,
+          description: '从URL导入的JS脚本插件'
+        };
+        tavernState.plugins.push(plugin);
+        executeUserPluginScript(plugin);
+      }
+      await saveTavernStore();
+      refreshOpenDrawerOnly();
+      showTavernToast('成功从链接安装酒馆插件');
+    } catch (err) {
+      console.error('URL Plugin import error:', err);
+      showTavernToast('链接安装插件失败: ' + (err.message || '请检查链接是否可访问'));
+    }
+  }
+
   async function handleBatchImportCards(files) {
     let importedCards = 0;
     let totalBooks = 0;
     let totalRegex = 0;
     let totalGreetings = 0;
+    let totalScripts = 0;
 
     for (const file of files) {
       try {
@@ -5863,10 +6968,14 @@
           const rawJson = await extractCharacterJsonFromPngBuffer(buf);
           const avatarUrl = await offloadImageToVault(file, 'char_' + Date.now() + '_' + file.name);
           const summary = importCharacterCardFromRaw(rawJson, avatarUrl);
+          if (tavernState.background?.syncCardAvatarAsBg && avatarUrl) {
+            tavernState.background.url = resolveSafeAvatarUrl(avatarUrl, false);
+          }
           importedCards++;
           totalBooks += summary.worldBookCount;
           totalRegex += summary.regexCount;
           totalGreetings += summary.greetingCount;
+          totalScripts += (summary.helperScriptCount || 0);
         } else {
           const text = await file.text();
           const rawJson = JSON.parse(text);
@@ -5875,6 +6984,7 @@
           totalBooks += summary.worldBookCount;
           totalRegex += summary.regexCount;
           totalGreetings += summary.greetingCount;
+          totalScripts += (summary.helperScriptCount || 0);
         }
       } catch (err) {
         console.error('Character card import error:', file.name, err);
@@ -5886,7 +6996,7 @@
       uiRuntime.openDrawerKey = null;
       await saveTavernStore();
       renderTavernShell();
-      showTavernToast(`成功导入${importedCards}张角色卡 含${totalBooks}本世界书 ${totalRegex}条正则 ${totalGreetings}个开场白`);
+      showTavernToast(`成功导入${importedCards}张角色卡 已默认启用${totalBooks}本世界书 ${totalRegex}条正则 ${totalGreetings}个开场白${totalScripts > 0 ? ' ' + totalScripts + '个互动面板' : ''}`);
     }
   }
 
@@ -6109,9 +7219,20 @@
   // ============================================================================
   // 14. Initialize Tavern App & Hook Desktop Entry
   // ============================================================================
+  function setupTavernScreenVisibilityObserver() {
+    const screenEl = document.getElementById('game-hall-screen');
+    if (!screenEl || screenEl._tavernVisibilityObserved) return;
+    screenEl._tavernVisibilityObserved = true;
+    const obs = new MutationObserver(() => {
+      applyActiveTavernTheme();
+    });
+    obs.observe(screenEl, { attributes: true, attributeFilter: ['class', 'style'] });
+  }
+
   async function initTavernApp() {
     await loadTavernStore();
     setupSillyTavernGlobalBridge();
+    setupTavernScreenVisibilityObserver();
     syncBuiltInD100Pool(false);
     (tavernState.plugins || []).forEach(p => {
       if (p && p.enabled && !p.builtInType && p.code) {
