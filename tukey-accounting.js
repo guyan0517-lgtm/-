@@ -2670,9 +2670,9 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (typeof window.copyVaultStartupCmd === "function") {
         await window.copyVaultStartupCmd("android");
       }
-      this.notify("已复制Termux后台启动面板命令");
+      this.notify("已复制Termux启动面板命令");
       this.updateConnDetail(
-        "已复制新版Termux命令：去Termux粘贴回车后，输入 2 直接在后台启动已有NapCat且不卡死终端，随后可直接输入 3 查看 6099 与 3001 密钥",
+        "已复制新版Termux命令：去Termux粘贴回车后，输入 2 直接执行 proot-distro login napcat -- bash -c 'xvfb-run -a /root/Napcat/opt/QQ/qq --no-sandbox' 启动QQ",
         true,
       );
     },
@@ -2965,51 +2965,111 @@ function createExpenditureLineChart(data, daysInMonth) {
             : null,
         ]);
 
-        const personas = [];
+        const mergedChatsMap = new Map();
         (chats || []).forEach((c) => {
-          if (!c.isGroup) {
+          if (c && c.id !== undefined) mergedChatsMap.set(String(c.id), c);
+        });
+        if (window.state && window.state.chats && typeof window.state.chats === "object") {
+          const stateChatList = Array.isArray(window.state.chats)
+            ? window.state.chats
+            : Object.values(window.state.chats);
+          stateChatList.forEach((c) => {
+            if (c && c.id !== undefined) mergedChatsMap.set(String(c.id), c);
+          });
+        }
+        const allChatsList = Array.from(mergedChatsMap.values());
+
+        const personas = [];
+        const userPersonas = [];
+        allChatsList.forEach((c) => {
+          if (!c || c.isGroup) return;
+          const cName = c.name || "好友 " + c.id;
+          const aiPer =
+            (c.settings && c.settings.aiPersona) ||
+            c.description ||
+            c.personality ||
+            "";
+          const myPer = (c.settings && c.settings.myPersona) || "";
+          if (aiPer) {
             personas.push({
               id: "chat:" + c.id,
-              name: c.name || "角色 " + c.id,
-              prompt:
-                (c.settings && c.settings.aiPersona) ||
-                c.description ||
-                c.personality ||
-                "",
+              name: "好友列表 · " + cName,
+              rawName: cName,
+              prompt: aiPer,
+            });
+            userPersonas.push({
+              id: "chat:" + c.id,
+              name: "好友列表角色人设 · " + cName,
+              rawName: cName,
+              prompt: aiPer,
+            });
+          }
+          if (myPer) {
+            userPersonas.push({
+              id: "mychat:" + c.id,
+              name: "好友列表我方人设 · 与" + cName + "对话",
+              rawName: cName,
+              prompt: myPer,
             });
           }
         });
         (personaPresets || []).forEach((p) => {
-          personas.push({
-            id: "preset:" + p.id,
-            name: p.name || p.title || "预设 " + p.id,
-            prompt: p.content || p.persona || p.prompt || "",
-          });
-        });
-
-        const charCards = [];
-        (chats || []).forEach((c) => {
-          if (!c.isGroup) {
-            charCards.push({
-              id: String(c.id),
-              name: c.name || "角色卡",
-              cocData: c.cocData || (c.settings && c.settings.cocData) || null,
-              persona:
-                (c.settings && c.settings.aiPersona) ||
-                (c.settings && c.settings.myPersona) ||
-                c.description ||
-                "",
+          const pName = p.name || p.title || "预设 " + p.id;
+          const pPrompt = p.content || p.persona || p.prompt || "";
+          if (pPrompt) {
+            personas.push({
+              id: "preset:" + p.id,
+              name: "人设预设 · " + pName,
+              rawName: pName,
+              prompt: pPrompt,
+            });
+            userPersonas.push({
+              id: "preset:" + p.id,
+              name: "人设预设 · " + pName,
+              rawName: pName,
+              prompt: pPrompt,
             });
           }
         });
 
+        const charCards = [];
+        allChatsList.forEach((c) => {
+          if (!c || c.isGroup) return;
+          charCards.push({
+            id: String(c.id),
+            name: c.name || "好友角色",
+            cocData: c.cocData || (c.settings && c.settings.cocData) || null,
+            persona:
+              (c.settings && c.settings.aiPersona) ||
+              (c.settings && c.settings.myPersona) ||
+              c.description ||
+              "",
+            myPersona: (c.settings && c.settings.myPersona) || "",
+          });
+        });
+
+        const mergedStickersMap = new Map();
+        (stickers || []).forEach((s) => {
+          if (s && (s.id || s.name)) {
+            mergedStickersMap.set(String(s.id || s.name), s);
+          }
+        });
+        if (window.state && Array.isArray(window.state.userStickers)) {
+          window.state.userStickers.forEach((s) => {
+            if (s && (s.id || s.name)) {
+              mergedStickersMap.set(String(s.id || s.name), s);
+            }
+          });
+        }
+
         this.cachedResources = {
           personas,
+          userPersonas,
           thoughts: thoughtPresets || [],
           worldbooks: worldBooks || [],
           worldbookCats: worldBookCategories || [],
           stickerCats: stickerCats || [],
-          stickers: stickers || [],
+          stickers: Array.from(mergedStickersMap.values()),
           modules: modules || [],
           moduleChapters: moduleChapters || [],
           moduleImages: moduleImages || [],
@@ -3025,19 +3085,49 @@ function createExpenditureLineChart(data, daysInMonth) {
 
     renderResourceSelects() {
       const g = this.getCurrentGroupConfig();
+      const pCfg = this.getCurrentPrivateConfig();
 
       const personaEl = document.getElementById("qqbot-persona-select");
       if (personaEl) {
         const cur = g ? g.personaId : personaEl.value;
         personaEl.innerHTML =
-          '<option value="">自定义AI人设或选择角色预设导入</option>' +
-          this.cachedResources.personas
+          '<option value="">自定义AI人设或从好友列表选择导入</option>' +
+          (this.cachedResources.personas || [])
             .map(
               (p) =>
                 `<option value="${this.escapeAttr(p.id)}">${this.escapeHtml(p.name)}</option>`,
             )
             .join("");
         if (cur) personaEl.value = cur;
+      }
+
+      const privUserPerSel = document.getElementById("qqbot-priv-user-persona-select");
+      if (privUserPerSel) {
+        const curUserPerId = (pCfg && pCfg.userPersonaId) || privUserPerSel.value || "";
+        const list = this.cachedResources.userPersonas || this.cachedResources.personas || [];
+        privUserPerSel.innerHTML =
+          '<option value="">从好友列表选择这位好友的人设</option>' +
+          list
+            .map(
+              (p) =>
+                `<option value="${this.escapeAttr(p.id)}">${this.escapeHtml(p.name)}</option>`,
+            )
+            .join("");
+        if (curUserPerId) privUserPerSel.value = curUserPerId;
+      }
+
+      const privAiPerSel = document.getElementById("qqbot-priv-ai-persona-select");
+      if (privAiPerSel) {
+        const curAiPerId = (pCfg && pCfg.aiPersonaId) || privAiPerSel.value || "";
+        privAiPerSel.innerHTML =
+          '<option value="">默认复用所选共享群聊的AI人设或从好友列表选择</option>' +
+          (this.cachedResources.personas || [])
+            .map(
+              (p) =>
+                `<option value="${this.escapeAttr(p.id)}">${this.escapeHtml(p.name)}</option>`,
+            )
+            .join("");
+        if (curAiPerId) privAiPerSel.value = curAiPerId;
       }
 
       const thoughtEl = document.getElementById("qqbot-thought-select");
@@ -3126,11 +3216,18 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (cardEl) {
         const cur = cardEl.value;
         cardEl.innerHTML =
-          '<option value="">不绑角色卡仅用下方人设</option>' +
+          '<option value="">从好友列表选择人设或角色卡</option>' +
           this.cachedResources.charCards
             .map(
               (c) =>
-                `<option value="${this.escapeAttr(c.id)}">${this.escapeHtml(c.name)}</option>`,
+                `<option value="${this.escapeAttr(c.id)}">好友列表 · ${this.escapeHtml(c.name)}</option>`,
+            )
+            .join("") +
+          (this.cachedResources.userPersonas || [])
+            .filter((p) => String(p.id).startsWith("mychat:") || String(p.id).startsWith("preset:"))
+            .map(
+              (p) =>
+                `<option value="${this.escapeAttr(p.id)}">${this.escapeHtml(p.name)}</option>`,
             )
             .join("");
         if (cur) cardEl.value = cur;
@@ -5588,16 +5685,43 @@ function createExpenditureLineChart(data, daysInMonth) {
         document.getElementById("qqbot-priv-selected-name");
       const enSel = document.getElementById("qqbot-priv-enabled-select");
       const waitIn = document.getElementById("qqbot-priv-wait-input");
+      const userPerSel = document.getElementById("qqbot-priv-user-persona-select");
+      const aiPerSel = document.getElementById("qqbot-priv-ai-persona-select");
       const userPerIn = document.getElementById("qqbot-priv-user-persona");
       const aiPerIn = document.getElementById("qqbot-priv-ai-persona");
       const memIn = document.getElementById("qqbot-priv-memory-textarea");
       const legacyPerIn = document.getElementById("qqbot-priv-persona-input");
 
+      const userPersonaList =
+        this.cachedResources.userPersonas || this.cachedResources.personas || [];
+      if (userPerSel) {
+        userPerSel.innerHTML =
+          '<option value="">从好友列表选择这位好友的人设</option>' +
+          userPersonaList
+            .map(
+              (item) =>
+                `<option value="${this.escapeAttr(item.id)}">${this.escapeHtml(item.name)}</option>`,
+            )
+            .join("");
+      }
+      if (aiPerSel) {
+        aiPerSel.innerHTML =
+          '<option value="">默认复用所选共享群聊的AI人设或从好友列表选择</option>' +
+          (this.cachedResources.personas || [])
+            .map(
+              (item) =>
+                `<option value="${this.escapeAttr(item.id)}">${this.escapeHtml(item.name)}</option>`,
+            )
+            .join("");
+      }
+
       if (!p) {
         if (nameBadge) nameBadge.textContent = "未选择小窗";
         if (enSel) enSel.value = "true";
-        if (waitIn) waitIn.value = "15";
+        if (waitIn) waitIn.value = "5";
         this.renderPrivateSharedGroupOptions("ALL");
+        if (userPerSel) userPerSel.value = "";
+        if (aiPerSel) aiPerSel.value = "";
         if (userPerIn) userPerIn.value = "";
         if (aiPerIn) aiPerIn.value = "";
         if (memIn) memIn.value = "";
@@ -5609,12 +5733,86 @@ function createExpenditureLineChart(data, daysInMonth) {
         nameBadge.textContent = `${p.remark || p.nickname || p.userId} · ${p.userId}`;
       }
       if (enSel) enSel.value = p.enabled !== false ? "true" : "false";
-      if (waitIn) waitIn.value = String(p.waitSec ?? 15);
+      if (waitIn) waitIn.value = String(p.waitSec ?? 5);
       this.renderPrivateSharedGroupOptions(p.sharedGroupId || "ALL");
+      if (userPerSel) userPerSel.value = p.userPersonaId || "";
+      if (aiPerSel) aiPerSel.value = p.aiPersonaId || "";
       if (userPerIn) userPerIn.value = p.userPersona || p.persona || "";
       if (aiPerIn) aiPerIn.value = p.aiPersona || "";
       if (memIn) memIn.value = p.memorySummary || "";
       if (legacyPerIn) legacyPerIn.value = p.persona || "";
+    },
+
+    onPrivateUserPersonaSelect() {
+      const p = this.getCurrentPrivateConfig();
+      const sel = document.getElementById("qqbot-priv-user-persona-select");
+      const userPerIn = document.getElementById("qqbot-priv-user-persona");
+      const val = sel ? sel.value : "";
+      const list =
+        this.cachedResources.userPersonas || this.cachedResources.personas || [];
+      const found = list.find((item) => String(item.id) === String(val));
+      if (found && userPerIn) {
+        userPerIn.value = found.prompt || "";
+      }
+      if (p) {
+        p.userPersonaId = val;
+        if (found) {
+          p.userPersona = found.prompt || "";
+          p.persona = p.userPersona;
+        }
+      }
+      this.onCurrentPrivateFieldChange();
+      if (found) {
+        this.notify(`已从好友列表载入「${found.rawName || found.name}」人设`);
+      }
+    },
+
+    onPrivateAiPersonaSelect() {
+      const p = this.getCurrentPrivateConfig();
+      const sel = document.getElementById("qqbot-priv-ai-persona-select");
+      const aiPerIn = document.getElementById("qqbot-priv-ai-persona");
+      const val = sel ? sel.value : "";
+      const list = this.cachedResources.personas || [];
+      const found = list.find((item) => String(item.id) === String(val));
+      if (aiPerIn) {
+        aiPerIn.value = found ? found.prompt || "" : "";
+      }
+      if (p) {
+        p.aiPersonaId = val;
+        p.aiPersona = found ? found.prompt || "" : "";
+      }
+      this.onCurrentPrivateFieldChange();
+      if (found) {
+        this.notify(`已将小窗AI人设切换为「${found.rawName || found.name}」`);
+      }
+    },
+
+    onBindCardSelectChange() {
+      const cardSelect = document.getElementById("qqbot-bind-card-select");
+      const personaInput = document.getElementById("qqbot-bind-persona-input");
+      const aliasInput = document.getElementById("qqbot-bind-alias-input");
+      const val = cardSelect ? cardSelect.value : "";
+      if (!val) return;
+      const cardObj = (this.cachedResources.charCards || []).find(
+        (c) => String(c.id) === String(val),
+      );
+      if (cardObj) {
+        if (personaInput && cardObj.persona) {
+          personaInput.value = cardObj.persona;
+        }
+        if (aliasInput && !aliasInput.value.trim() && cardObj.name) {
+          aliasInput.value = cardObj.name;
+        }
+        this.notify(`已从好友列表载入「${cardObj.name}」人设`);
+        return;
+      }
+      const perObj = (this.cachedResources.userPersonas || []).find(
+        (p) => String(p.id) === String(val),
+      );
+      if (perObj && personaInput) {
+        personaInput.value = perObj.prompt || "";
+        this.notify(`已载入「${perObj.rawName || perObj.name}」人设`);
+      }
     },
 
     onCurrentPrivateFieldChange() {
@@ -5625,6 +5823,8 @@ function createExpenditureLineChart(data, daysInMonth) {
       const sharedGrpSel = document.getElementById(
         "qqbot-priv-shared-group-select",
       );
+      const userPerSel = document.getElementById("qqbot-priv-user-persona-select");
+      const aiPerSel = document.getElementById("qqbot-priv-ai-persona-select");
       const userPerIn = document.getElementById("qqbot-priv-user-persona");
       const aiPerIn = document.getElementById("qqbot-priv-ai-persona");
       const memIn = document.getElementById("qqbot-priv-memory-textarea");
@@ -5638,10 +5838,16 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
       }
       if (waitIn) {
-        p.waitSec = Math.max(2, parseInt(waitIn.value, 10) || 15);
+        p.waitSec = Math.max(2, parseInt(waitIn.value, 10) || 5);
       }
       if (sharedGrpSel) {
         p.sharedGroupId = sharedGrpSel.value || "ALL";
+      }
+      if (userPerSel) {
+        p.userPersonaId = userPerSel.value || "";
+      }
+      if (aiPerSel) {
+        p.aiPersonaId = aiPerSel.value || "";
       }
       if (userPerIn) {
         p.userPersona = userPerIn.value.trim();
@@ -5682,12 +5888,16 @@ function createExpenditureLineChart(data, daysInMonth) {
         const reasonText =
           customDirective ||
           "请结合你们的人设关系、共享的群聊剧情与小窗记忆，自然主动地找该好友私聊搭话或推进单人秘密线";
-        const replyList = await this.runMainApiPrivateResponder(
+        const privRes = await this.runMainApiPrivateResponder(
           p,
           messages,
           { shouldReply: true, reason: reasonText },
           [],
         );
+        const replyList = Array.isArray(privRes)
+          ? privRes
+          : privRes.messages || [];
+        const stickerName = !Array.isArray(privRes) ? privRes.stickerName || "" : "";
         for (const text of replyList) {
           const clean = String(text || "").trim();
           if (!clean) continue;
@@ -5706,6 +5916,19 @@ function createExpenditureLineChart(data, daysInMonth) {
             isSelf: true,
             timestamp: Date.now(),
           });
+        }
+        if (stickerName) {
+          const refGroup = this.getCurrentGroupConfig();
+          const stCat = (refGroup && refGroup.stickerCategoryId) || "ALL";
+          const stickerUrl = this.pickMatchedStickerUrl(stCat, stickerName);
+          if (stickerUrl) {
+            await this.sendBotMessage({
+              userId: uid,
+              message: "",
+              imageUrl: stickerUrl,
+              stickerName,
+            });
+          }
         }
         if (inp) inp.value = "";
         this.notify(`已主动向「${dispName}」发送小窗私聊`);
@@ -5731,7 +5954,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       const rem = nameEl ? nameEl.value.trim() : "";
       const waitSec = Math.max(
         2,
-        parseInt(waitEl ? waitEl.value : "30", 10) || 30,
+        parseInt(waitEl ? waitEl.value : "5", 10) || 5,
       );
 
       if (!uid) {
@@ -5751,7 +5974,9 @@ function createExpenditureLineChart(data, daysInMonth) {
         waitSec,
         persona: (existing && existing.persona) || "",
         userPersona: (existing && existing.userPersona) || "",
+        userPersonaId: (existing && existing.userPersonaId) || "",
         aiPersona: (existing && existing.aiPersona) || "",
+        aiPersonaId: (existing && existing.aiPersonaId) || "",
       };
       this.currentPrivateUserId = uid;
       if (qqEl) qqEl.value = "";
@@ -5858,7 +6083,7 @@ function createExpenditureLineChart(data, daysInMonth) {
                     nickname: nick,
                     remark: rem,
                     enabled: true,
-                    waitSec: 30,
+                    waitSec: 5,
                     persona: "",
                   };
                 } else {
@@ -6335,13 +6560,17 @@ function createExpenditureLineChart(data, daysInMonth) {
       if (pCfg) {
         const pWait = document.getElementById("qqbot-priv-wait-input");
         const pEn = document.getElementById("qqbot-priv-enabled-select");
+        const pUserPersonaSel = document.getElementById("qqbot-priv-user-persona-select");
+        const pAiPersonaSel = document.getElementById("qqbot-priv-ai-persona-select");
         const pUserPersona = document.getElementById("qqbot-priv-user-persona");
         const pAiPersona = document.getElementById("qqbot-priv-ai-persona");
         const pLegacyPersona = document.getElementById("qqbot-priv-persona-input");
         if (pWait && pWait.value !== "") {
-          pCfg.waitSec = Math.max(2, Math.min(3600, Number(pWait.value) || 30));
+          pCfg.waitSec = Math.max(2, Math.min(3600, Number(pWait.value) || 5));
         }
         if (pEn) pCfg.enabled = pEn.value === "true";
+        if (pUserPersonaSel) pCfg.userPersonaId = pUserPersonaSel.value || "";
+        if (pAiPersonaSel) pCfg.aiPersonaId = pAiPersonaSel.value || "";
         if (pUserPersona) {
           pCfg.userPersona = pUserPersona.value.trim();
           pCfg.persona = pCfg.userPersona;
@@ -6848,7 +7077,7 @@ function createExpenditureLineChart(data, daysInMonth) {
             nickname: rawRemark || "好友 " + senderId,
             remark: rawRemark || "",
             enabled: true,
-            waitSec: 30,
+            waitSec: 5,
             persona: "",
           };
           this.renderPrivateChatsList();
@@ -7193,7 +7422,7 @@ function createExpenditureLineChart(data, daysInMonth) {
       try {
         const limit = this.getGroupContextLimit(logKey);
         let localArr = this.staticFallbackLogs[logKey] || [];
-        if (localArr.length < limit) {
+        if (localArr.length === 0 && !this.directWsConnected) {
           try {
             const cRes = await fetch(
               `/api/qqbot/group/${encodeURIComponent(logKey)}/context?limit=${limit}`,
@@ -7238,12 +7467,16 @@ function createExpenditureLineChart(data, daysInMonth) {
           reason: "好友小窗私聊跳过副AI直接由主API回复",
         };
 
-        const replyList = await this.runMainApiPrivateResponder(
+        const privRes = await this.runMainApiPrivateResponder(
           pCfg,
           messages,
           judge,
           activeVisionUrls,
         );
+        const replyList = Array.isArray(privRes)
+          ? privRes
+          : privRes.messages || [];
+        const stickerName = !Array.isArray(privRes) ? privRes.stickerName || "" : "";
 
         for (const text of replyList) {
           const clean = String(text || "").trim();
@@ -7263,6 +7496,19 @@ function createExpenditureLineChart(data, daysInMonth) {
             isSelf: true,
             timestamp: Date.now(),
           });
+        }
+        if (stickerName) {
+          const refGroup = this.getCurrentGroupConfig();
+          const stCat = (refGroup && refGroup.stickerCategoryId) || "ALL";
+          const stickerUrl = this.pickMatchedStickerUrl(stCat, stickerName);
+          if (stickerUrl) {
+            await this.sendBotMessage({
+              userId: uid,
+              message: "",
+              imageUrl: stickerUrl,
+              stickerName,
+            });
+          }
         }
         this.updateJudgeStatusUI(
           `已向好友「${dispName}」小窗发送主AI回复，继续监听后续消息`,
@@ -7388,13 +7634,20 @@ function createExpenditureLineChart(data, daysInMonth) {
         )
         .join("\n");
 
+      const stickerCatId = (refGroup && refGroup.stickerCategoryId) || "ALL";
+      const stickerNames = this.resolveAvailableStickerNames(stickerCatId);
+      const stickerHint =
+        stickerNames.length > 0
+          ? `\n【可用表情包名称】\n${stickerNames.join("、")}\n如需发送表情包，可在 JSON 的 stickerName 字段填入对应名称，且正文中不要写表情文字。`
+          : "";
+
       const sysPrompt = `你正在QQ小窗私聊中与好友「${dispName}」对话。
 【你的自身人设】
 ${basePersona}
 
 ${userPersonaText ? `【该好友专属人设与关系设定】\n${userPersonaText}\n` : ""}
 ${privMemoryText ? `【本小窗专属记忆与秘密线总结】\n${privMemoryText}\n` : ""}
-${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态】\n${sharedGroupMemoryText}\n` : ""}
+${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态】\n${sharedGroupMemoryText}\n` : ""}${stickerHint}
 注意：
 1. 如果好友发送了图片或表情包，原图已经直接传给了你，请直接看图并结合画面内容自然回应，绝不要说看不到图片。
 2. 你已经共享了上方关联群聊的记忆与剧情，如果当前是跑团单人线、暗中调查或秘密沟通，请自然衔接群内剧情与该调查员的专属身份；如果是日常闲聊，请像真人在QQ小窗聊天一样自然简短、生活化。
@@ -7404,7 +7657,8 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
   "thinking": "简短思考过程（系统会自动剥离，不会发送到QQ）",
   "messages": [
     "发送给该好友小窗的第1条简短回复"
-  ]
+  ],
+  "stickerName": ""
 }`;
 
       const raw = await this.callBotAI(
@@ -7426,6 +7680,7 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
         collectedThoughts.push(parsed.thinking.trim());
       }
       let outMsgs = [];
+      let extractedSticker = (parsed && parsed.stickerName) ? String(parsed.stickerName).trim() : "";
       if (parsed && Array.isArray(parsed.messages) && parsed.messages.length > 0) {
         outMsgs = parsed.messages;
       } else if (parsed && Array.isArray(parsed.groupMessages)) {
@@ -7434,7 +7689,16 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
         outMsgs = [String(tagStripped.cleaned || raw || "").trim() || "我在呢。"];
       }
       const cleanMsgs = outMsgs
-        .map((m) => this.stripThinkingTags(String(m || "")).cleaned.trim())
+        .map((m) => {
+          let s = this.stripThinkingTags(String(m || "")).cleaned;
+          const stkMatch = s.match(/[\[【](?:表情|sticker)\s*[:：]\s*([^\]】]+)[\]】]/i);
+          if (stkMatch && stkMatch[1] && !extractedSticker) {
+            extractedSticker = stkMatch[1].trim();
+          }
+          return s
+            .replace(/[\[【](?:表情|sticker)\s*[:：][^\]】]*[\]】]/gi, "")
+            .trim();
+        })
         .filter(Boolean);
       const finalThoughtText = collectedThoughts.join("\n\n").trim();
       if (finalThoughtText || raw) {
@@ -7448,7 +7712,10 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
           rawResponse: String(raw || "").slice(0, 10000),
         }).catch(() => {});
       }
-      return cleanMsgs.length > 0 ? cleanMsgs : ["我在呢。"];
+      return {
+        messages: cleanMsgs.length > 0 ? cleanMsgs : (extractedSticker ? [] : ["我在呢。"]),
+        stickerName: extractedSticker,
+      };
     },
 
     appendStaticMessage(gid, msgObj) {
@@ -8081,20 +8348,22 @@ ${sharedGroupMemoryText ? `【共享的群聊记忆总结与近期群内动态�
         };
         let totalStored = 0;
 
-        try {
-          const ctxRes = await fetch(
-            `/api/qqbot/group/${encodeURIComponent(groupId)}/context?limit=${limit}`,
-          );
-          if (ctxRes.ok) {
-            const ctxData = await ctxRes.json();
-            messages = ctxData.messages || [];
-            memory = ctxData.memory || memory;
-            totalStored =
-              ctxData.totalStored || ctxData.totalMessages || messages.length;
-          }
-        } catch (_) {}
-
         const localMsgs = this.staticFallbackLogs[groupId] || [];
+        if (localMsgs.length === 0 || !this.directWsConnected) {
+          try {
+            const ctxRes = await fetch(
+              `/api/qqbot/group/${encodeURIComponent(groupId)}/context?limit=${limit}`,
+            );
+            if (ctxRes.ok) {
+              const ctxData = await ctxRes.json();
+              messages = ctxData.messages || [];
+              memory = ctxData.memory || memory;
+              totalStored =
+                ctxData.totalStored || ctxData.totalMessages || messages.length;
+            }
+          } catch (_) {}
+        }
+
         if (localMsgs.length > 0) {
           const existingIds = new Set(
             messages.map((m) => String(m.messageId || "")),
@@ -9179,6 +9448,74 @@ ${tailBlock}
       };
     },
 
+    async resolveImageToOneBotFile(rawUrl) {
+      let fileVal = String(rawUrl || "").trim();
+      if (!fileVal) return "";
+      if (fileVal.startsWith("base64://")) return fileVal;
+
+      if (
+        (fileVal.startsWith("vault://") || fileVal.startsWith("blob:")) &&
+        typeof window.resolveVaultRefToDataUrl === "function"
+      ) {
+        try {
+          const resolved = await window.resolveVaultRefToDataUrl(fileVal);
+          if (typeof resolved === "string" && resolved.trim()) {
+            fileVal = resolved.trim();
+          }
+        } catch (_) {}
+      }
+
+      if (fileVal.startsWith("data:image/")) {
+        const b64 = fileVal.split(",")[1] || "";
+        return b64 ? "base64://" + b64 : fileVal;
+      }
+
+      if (
+        fileVal.startsWith("blob:") ||
+        fileVal.startsWith("http://127.0.0.1:8765") ||
+        fileVal.startsWith("http://") ||
+        fileVal.startsWith("https://")
+      ) {
+        try {
+          const res = await fetch(fileVal);
+          if (res && res.ok) {
+            const ab = await res.arrayBuffer();
+            const bytes = new Uint8Array(ab);
+            if (bytes.byteLength > 0) {
+              let binary = "";
+              const chunk = 0x8000;
+              for (let i = 0; i < bytes.length; i += chunk) {
+                binary += String.fromCharCode.apply(
+                  null,
+                  bytes.subarray(i, i + chunk),
+                );
+              }
+              return "base64://" + btoa(binary);
+            }
+          }
+        } catch (_) {
+          if (fileVal.startsWith("http://") || fileVal.startsWith("https://")) {
+            try {
+              const proxyRes = await fetch("/api/qqbot/fetch-image", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: fileVal }),
+              });
+              if (proxyRes.ok) {
+                const pData = await proxyRes.json();
+                if (pData && pData.dataUrl && pData.dataUrl.startsWith("data:image/")) {
+                  const b64 = pData.dataUrl.split(",")[1] || "";
+                  if (b64) return "base64://" + b64;
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      return fileVal;
+    },
+
     async sendBotMessage(payload) {
       const rawText = String(payload.message || payload.content || "").trim();
       const targetKey = payload.userId
@@ -9186,6 +9523,13 @@ ${tailBlock}
         : String(payload.groupId || "");
       this.recordBotSentFingerprint(targetKey, rawText);
       let wsSentOk = false;
+      let resolvedOneBotImageFile = "";
+
+      if (payload.imageUrl) {
+        resolvedOneBotImageFile = await this.resolveImageToOneBotFile(
+          payload.imageUrl,
+        );
+      }
 
       if (this.directWsConnected && this.directWs) {
         const segments = [];
@@ -9201,13 +9545,11 @@ ${tailBlock}
             data: { text: rawText.replace(/^\[CQ:reply,id=[^\]]+\]/, "") },
           });
         }
-        if (payload.imageUrl) {
-          let fileVal = String(payload.imageUrl).trim();
-          if (fileVal.startsWith("data:image/")) {
-            const b64 = fileVal.split(",")[1] || "";
-            if (b64) fileVal = "base64://" + b64;
-          }
-          segments.push({ type: "image", data: { file: fileVal } });
+        if (resolvedOneBotImageFile) {
+          segments.push({
+            type: "image",
+            data: { file: resolvedOneBotImageFile },
+          });
         }
         if (segments.length > 0) {
           try {
@@ -9233,6 +9575,10 @@ ${tailBlock}
         }
       }
 
+      const displayImgLabel = payload.stickerName
+        ? `[表情：${payload.stickerName}]`
+        : "[图片]";
+
       if (payload.groupId && !payload.userId && (rawText || payload.imageUrl)) {
         const botMsgObj = {
           seq: Date.now(),
@@ -9240,21 +9586,21 @@ ${tailBlock}
           groupId: String(payload.groupId),
           senderId: "BOT",
           senderName: "群控AI",
-          rawMessage: rawText || "[图片]",
-          content: rawText || "[图片]",
-          imageUrls: payload.imageUrl ? [payload.imageUrl] : [],
+          rawMessage: rawText || displayImgLabel,
+          content: rawText || displayImgLabel,
+          imageUrls: [],
           isSelf: true,
           timestamp: Date.now(),
         };
         this.appendStaticMessage(String(payload.groupId), botMsgObj);
         this.appendDebugLog(
           "AI",
-          `[AI已发群消息] 群${payload.groupId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || "[纯图片]").slice(0, 120)}`,
+          `[AI已发群消息] 群${payload.groupId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || displayImgLabel).slice(0, 120)}`,
         );
       } else if (payload.userId && (rawText || payload.imageUrl)) {
         this.appendDebugLog(
           "AI小窗",
-          `[AI已发小窗] 好友${payload.userId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || "[纯图片]").slice(0, 120)}`,
+          `[AI已发小窗] 好友${payload.userId}${wsSentOk ? " 已送达QQ" : ""}：${(rawText || displayImgLabel).slice(0, 120)}`,
         );
       }
 
@@ -9266,25 +9612,36 @@ ${tailBlock}
           ? Number(groupList[groupList.length - 1].seq) || Date.now()
           : Date.now();
 
-      try {
-        await fetch("/api/qqbot/send", {
+      const backendPayload = {
+        ...payload,
+        imageUrl: wsSentOk
+          ? ""
+          : resolvedOneBotImageFile && resolvedOneBotImageFile.startsWith("base64://")
+            ? "data:image/png;base64," + resolvedOneBotImageFile.slice(9)
+            : payload.imageUrl || "",
+        markProcessedSeq:
+          payload.markProcessedSeq !== undefined
+            ? payload.markProcessedSeq
+            : payload.groupId
+              ? latestGroupSeq
+              : undefined,
+        skipOneBotSend: wsSentOk,
+      };
+
+      if (wsSentOk) {
+        fetch("/api/qqbot/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...payload,
-            markProcessedSeq:
-              payload.markProcessedSeq !== undefined
-                ? payload.markProcessedSeq
-                : payload.groupId
-                  ? latestGroupSeq
-                  : undefined,
-            skipOneBotSend: wsSentOk,
-          }),
-        });
-      } catch (_) {}
-
-      if (String(payload.groupId) === String(this.currentGroupId)) {
-        await this.refreshSandboxLog();
+          body: JSON.stringify(backendPayload),
+        }).catch(() => {});
+      } else {
+        try {
+          await fetch("/api/qqbot/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(backendPayload),
+          });
+        } catch (_) {}
       }
     },
 
@@ -9306,16 +9663,24 @@ ${tailBlock}
     },
 
     async dispatchReplyPack(groupId, gCfg, targetSeq, judgeResult, replyPack) {
+      let inlineStickerName = String(replyPack.stickerName || "").trim();
       const groupMsgs = Array.isArray(replyPack.groupMessages)
         ? replyPack.groupMessages
-            .map((t) =>
-              this.stripThinkingTags(String(t || ""))
-                .cleaned.replace(/\[表情\s*[:：][^\]]*\]/gi, "")
-                .replace(/【表情\s*[:：][^】]*】/gi, "")
-                .trim(),
-            )
+            .map((t) => {
+              let cleanedStr = this.stripThinkingTags(String(t || "")).cleaned;
+              const stkMatch = cleanedStr.match(
+                /[\[【](?:表情|sticker)\s*[:：]\s*([^\]】]+)[\]】]/i,
+              );
+              if (stkMatch && stkMatch[1] && !inlineStickerName) {
+                inlineStickerName = stkMatch[1].trim();
+              }
+              return cleanedStr
+                .replace(/[\[【](?:表情|sticker)\s*[:：][^\]】]*[\]】]/gi, "")
+                .trim();
+            })
             .filter(Boolean)
         : [];
+      replyPack.stickerName = inlineStickerName;
       const rawQuoteId =
         replyPack.quoteMessageId || judgeResult.replyToMessageId || "";
       const quoteId = this.shouldAllowQuoteReply(groupId, rawQuoteId);
@@ -9516,17 +9881,12 @@ ${tailBlock}
         }
       }
 
-      // 3. 发送匹配的表情包：带团模式绝不发，日常模式大幅降低频率且绝不带文字
+      // 3. 发送匹配的表情包：只要AI输出了stickerName且未禁用表情包，立即解析并发送至QQ
       this.turnsSinceLastStickerByGroup[groupId] =
         (this.turnsSinceLastStickerByGroup[groupId] || 0) + 1;
       const isSeriousTrpg = gCfg.mode === "trpg";
-      const lastStickerAt = this.lastStickerSentAtByGroup[groupId] || 0;
-      const turnsSince = this.turnsSinceLastStickerByGroup[groupId] || 1;
       const canSendStickerNow =
-        !isSeriousTrpg &&
-        gCfg.stickerCategoryId !== "NONE" &&
-        turnsSince >= 3 &&
-        Date.now() - lastStickerAt >= 180 * 1000;
+        !isSeriousTrpg && gCfg.stickerCategoryId !== "NONE";
 
       if (replyPack.stickerName && canSendStickerNow) {
         const stickerUrl = this.pickMatchedStickerUrl(
@@ -9540,6 +9900,7 @@ ${tailBlock}
             groupId,
             message: "",
             imageUrl: stickerUrl,
+            stickerName: replyPack.stickerName,
           });
         }
       }
@@ -9556,16 +9917,16 @@ ${tailBlock}
             (img.title === replyPack.moduleImageTitle ||
               (img.title && img.title.includes(replyPack.moduleImageTitle))),
         );
-        if (modImg && modImg.dataUrl) {
+        if (modImg && (modImg.dataUrl || modImg.url)) {
           await this.sendBotMessage({
             groupId,
             message: "",
-            imageUrl: modImg.dataUrl,
+            imageUrl: modImg.dataUrl || modImg.url,
           });
         }
       }
 
-      // 5. 同回合调用 NovelAI 生图，并将主AI发出的真实生图代码一五一十回显在面板中
+      // 5. 异步并行调用 NovelAI 生图，确保文字和表情包零延迟立即送达，生图完成后第一时间补发到QQ
       const naiMode =
         gCfg.naiMode ||
         (gCfg.autoNaiImage === false ? "off" : "trpg_every_round");
@@ -9600,24 +9961,26 @@ ${tailBlock}
 
         if (typeof window.callNovelAiDirect === "function") {
           this.updateJudgeStatusUI(
-            "主AI正文已发送，正在按末尾生图代码调用NovelAI生成现场插图...",
+            "主AI正文已送达QQ，后台正在调用NovelAI极速生成现场插图...",
           );
-          try {
-            const imgDataUrl = await window.callNovelAiDirect(finalNaiTags);
-            if (imgDataUrl) {
-              await this.sendBotMessage({
-                groupId,
-                message: "",
-                imageUrl: imgDataUrl,
-              });
-              this.updateJudgeStatusUI(
-                "本轮回复与NovelAI现场生图已全部发送完毕",
-              );
-            }
-          } catch (naiErr) {
-            console.warn("群控同回合NovelAI生图失败:", naiErr);
-            this.updateJudgeStatusUI("正文已发送，NovelAI生图接口未响应");
-          }
+          window
+            .callNovelAiDirect(finalNaiTags)
+            .then(async (imgDataUrl) => {
+              if (imgDataUrl) {
+                await this.sendBotMessage({
+                  groupId,
+                  message: "",
+                  imageUrl: imgDataUrl,
+                });
+                this.updateJudgeStatusUI(
+                  "本轮回复与NovelAI现场生图已全部发送完毕",
+                );
+              }
+            })
+            .catch((naiErr) => {
+              console.warn("群控同回合NovelAI生图失败:", naiErr);
+              this.updateJudgeStatusUI("正文已发送，NovelAI生图接口未响应");
+            });
         }
       } else {
         this.updateJudgeStatusUI(
@@ -10431,20 +10794,31 @@ ${tailBlock}
           ? [...customList]
           : [...customList, ...(this.cachedResources.stickers || [])];
       if (catId && catId !== "ALL" && catId !== "CUSTOM") {
-        list = list.filter(
+        const filtered = list.filter(
           (s) =>
             String(s.categoryId) === String(catId) ||
             String(s.categoryId) === "CUSTOM",
         );
+        if (filtered.length > 0) list = filtered;
       }
       if (list.length === 0) return "";
-      const kw = String(keyword || "").trim();
+      const kw = String(keyword || "")
+        .replace(/^[\[【](?:表情|sticker)\s*[:：]\s*/i, "")
+        .replace(/[\]】]$/, "")
+        .replace(/\.(png|jpg|jpeg|gif|webp)$/i, "")
+        .trim()
+        .toLowerCase();
       const matched =
-        list.find(
-          (s) =>
-            (s.name && s.name.includes(kw)) ||
-            (s.meaning && s.meaning.includes(kw)),
-        ) || list[0];
+        (kw &&
+          list.find((s) => {
+            const sName = String(s.name || "").toLowerCase();
+            const sMean = String(s.meaning || "").toLowerCase();
+            return (
+              (sName && (sName.includes(kw) || kw.includes(sName))) ||
+              (sMean && (sMean.includes(kw) || kw.includes(sMean)))
+            );
+          })) ||
+        list[Math.floor(Math.random() * list.length)];
       return matched ? matched.dataUrl || matched.url || "" : "";
     },
 
