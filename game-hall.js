@@ -98,6 +98,9 @@
     themeEnabled: true,
     uiSettings: {
       fontScale: 1.0,
+      letterSpacing: 0,
+      lineHeight: 1.72,
+      pageMargin: 10,
       avatarStyle: 'circle',
       showMessageId: true,
       showMesTimer: true,
@@ -693,6 +696,58 @@
     };
   }
 
+  function getChatVariablesStore() {
+    const sess = getActiveChatSession();
+    if (!sess.metadata) sess.metadata = {};
+    if (!sess.metadata.variables || typeof sess.metadata.variables !== 'object') {
+      sess.metadata.variables = {};
+    }
+    return sess.metadata.variables;
+  }
+
+  function getGlobalVariablesStore() {
+    if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
+    if (!tavernState.extensionSettings.globalVariables || typeof tavernState.extensionSettings.globalVariables !== 'object') {
+      tavernState.extensionSettings.globalVariables = {};
+    }
+    return tavernState.extensionSettings.globalVariables;
+  }
+
+  async function executeTavernSlashCommand(cmdText) {
+    if (!cmdText || typeof cmdText !== 'string') return '';
+    const lines = cmdText.split('|').map(s => s.trim()).filter(Boolean);
+    let lastResult = '';
+    for (const line of lines) {
+      if (line.startsWith('/setvar')) {
+        const m = line.match(/^\/setvar\s+key=([^\s]+)\s+([\s\S]*)$/i) || line.match(/^\/setvar\s+([^\s]+)\s+([\s\S]*)$/i);
+        if (m) {
+          const vars = getChatVariablesStore();
+          vars[m[1]] = m[2];
+          lastResult = m[2];
+        }
+      } else if (line.startsWith('/getvar')) {
+        const key = line.replace(/^\/getvar\s+/i, '').trim();
+        const vars = getChatVariablesStore();
+        lastResult = vars[key] !== undefined ? String(vars[key]) : '';
+      } else if (line.startsWith('/echo')) {
+        const msg = line.replace(/^\/echo\s+/i, '').trim();
+        showTavernToast(msg);
+        lastResult = msg;
+      } else if (line.startsWith('/send')) {
+        const msg = line.replace(/^\/send\s+/i, '').trim();
+        const box = document.getElementById('send_textarea');
+        if (box) {
+          box.value = msg;
+          await handleSendUserMessage();
+        }
+      } else if (line.startsWith('/trigger')) {
+        await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+      }
+    }
+    await saveTavernStore();
+    return lastResult;
+  }
+
   function buildSillyTavernContextObject() {
     const sess = getActiveChatSession();
     const card = getActiveCard();
@@ -704,10 +759,19 @@
       name2: card ? card.name : '角色',
       chatMetadata: sess ? (sess.metadata || (sess.metadata = {})) : {},
       extensionSettings: tavernState.extensionSettings,
+      variables: {
+        local: getChatVariablesStore(),
+        global: getGlobalVariablesStore(),
+        get: key => getChatVariablesStore()[key],
+        set: (key, val) => { getChatVariablesStore()[key] = val; saveTavernStore(); }
+      },
+      worldInfo: tavernState.worldBooks,
       eventSource: tavernEventSource,
       event_types: TAVERN_EVENT_TYPES,
       extension_prompt_types: TAVERN_EXT_PROMPT_TYPES,
       setExtensionPrompt,
+      executeSlashCommands: executeTavernSlashCommand,
+      executeSlashCommandsWithOptions: executeTavernSlashCommand,
       saveMetadataDebounced: () => saveTavernStore(),
       saveSettingsDebounced: () => saveTavernStore(),
       reloadCurrentChat: async () => {
@@ -725,6 +789,46 @@
     window.event_types = TAVERN_EVENT_TYPES;
     window.extension_prompt_types = TAVERN_EXT_PROMPT_TYPES;
     window.setExtensionPrompt = setExtensionPrompt;
+    window.executeSlashCommands = executeTavernSlashCommand;
+    window.executeSlashCommandsWithOptions = executeTavernSlashCommand;
+    window.TavernHelper = {
+      getChatMessages: () => {
+        const sess = getActiveChatSession();
+        return sess ? sess.messages : [];
+      },
+      setChatMessages: async (msgs) => {
+        const sess = getActiveChatSession();
+        if (sess && Array.isArray(msgs)) {
+          sess.messages = msgs;
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+        }
+      },
+      getVariables: (opts) => {
+        if (opts && opts.type === 'global') return getGlobalVariablesStore();
+        return getChatVariablesStore();
+      },
+      insertOrAssignVariables: async (varsObj, opts) => {
+        const target = (opts && opts.type === 'global') ? getGlobalVariablesStore() : getChatVariablesStore();
+        if (varsObj && typeof varsObj === 'object') {
+          Object.assign(target, varsObj);
+          await saveTavernStore();
+        }
+        return target;
+      },
+      triggerSlash: executeTavernSlashCommand,
+      getWorldbook: (name) => {
+        const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name);
+        return wb ? wb.entries : [];
+      },
+      replaceWorldbook: async (name, entries) => {
+        const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name);
+        if (wb && Array.isArray(entries)) {
+          wb.entries = entries.map((e, i) => normalizeSingleWorldEntry(e, i));
+          await saveTavernStore();
+        }
+      }
+    };
   }
 
   function generateSecureD100Array(count = 16) {
@@ -1188,9 +1292,43 @@
     const userName = getUserDisplayName();
     const charName = card ? card.name : '角色';
     const persona = getActivePersona();
+    const sess = getActiveChatSession();
+    const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+    const lastMsg = msgs.length > 0 ? (msgs[msgs.length - 1].mes || '') : '';
+    const lastUserMsgObj = [...msgs].reverse().find(m => m && m.is_user);
+    const lastCharMsgObj = [...msgs].reverse().find(m => m && !m.is_user);
+    const localVars = getChatVariablesStore();
+    const globalVars = getGlobalVariablesStore();
     const now = new Date();
 
     return String(rawText)
+      .replace(/\{\{setvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
+        localVars[k.trim()] = v;
+        return '';
+      })
+      .replace(/\{\{addvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
+        const key = k.trim();
+        const cur = Number(localVars[key]);
+        const delta = Number(v);
+        if (!Number.isNaN(cur) && !Number.isNaN(delta)) {
+          localVars[key] = cur + delta;
+        } else {
+          localVars[key] = String(localVars[key] || '') + v;
+        }
+        return '';
+      })
+      .replace(/\{\{getvar::([^}]+)\}\}/gi, (_, k) => {
+        const val = localVars[k.trim()];
+        return val !== undefined && val !== null ? String(val) : '';
+      })
+      .replace(/\{\{setglobalvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
+        globalVars[k.trim()] = v;
+        return '';
+      })
+      .replace(/\{\{getglobalvar::([^}]+)\}\}/gi, (_, k) => {
+        const val = globalVars[k.trim()];
+        return val !== undefined && val !== null ? String(val) : '';
+      })
       .replace(/\{\{user\}\}/gi, userName)
       .replace(/\{\{char\}\}/gi, charName)
       .replace(/<USER>/g, userName)
@@ -1202,6 +1340,12 @@
       .replace(/\{\{mesExamples\}\}/gi, card ? (card.mes_example || '') : '')
       .replace(/\{\{charPrompt\}\}/gi, card ? (card.system_prompt || '') : '')
       .replace(/\{\{charInstruction\}\}/gi, card ? (card.post_history_instructions || '') : '')
+      .replace(/\{\{lastMessage\}\}/gi, lastMsg)
+      .replace(/\{\{lastMessageId\}\}/gi, String(Math.max(0, msgs.length - 1)))
+      .replace(/\{\{lastUserMessage\}\}/gi, lastUserMsgObj ? (lastUserMsgObj.mes || '') : '')
+      .replace(/\{\{lastCharMessage\}\}/gi, lastCharMsgObj ? (lastCharMsgObj.mes || '') : '')
+      .replace(/\{\{newline\}\}/gi, '\n')
+      .replace(/\{\{trim\}\}/gi, '')
       .replace(/\{\{time\}\}/gi, now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       .replace(/\{\{date\}\}/gi, now.toLocaleDateString())
       .replace(/\{\{weekday\}\}/gi, ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()])
@@ -1212,7 +1356,7 @@
         for (let i = 0; i < c; i++) sum += Math.floor(Math.random() * s) + 1;
         return String(sum);
       })
-      .replace(/\{\{random:([^}]+)\}\}/gi, (_, listStr) => {
+      .replace(/\{\{(?:random|pick):([^}]+)\}\}/gi, (_, listStr) => {
         const parts = listStr.split(',').map(s => s.trim()).filter(Boolean);
         return parts.length > 0 ? parts[Math.floor(Math.random() * parts.length)] : '';
       });
@@ -1356,6 +1500,7 @@
   function scopeTavernThemeCss(rawCss) {
     if (!rawCss || typeof rawCss !== 'string') return '';
     return rawCss
+      .replace(/font-family:\s*["']?寒蝉全圆体["']?\s*!important\s*;?/gi, '')
       .replace(/:root\b/g, '#tavern-stage-root')
       .replace(/\bhtml\s*,\s*body\b/g, '#tavern-stage-root')
       .replace(/\bbody\b/g, '#tavern-stage-root')
@@ -1370,6 +1515,7 @@
     let theme = tavernState.themes.find(t => t.id === tavernState.activeThemeId);
     if (!theme) theme = tavernState.themes[0] || DEFAULT_GOUSU_THEME;
 
+    const uiCfg = tavernState.uiSettings || {};
     const varPairs = [
       ['--SmartThemeBodyColor', theme.main_text_color || 'rgba(55, 55, 55, 1)'],
       ['--SmartThemeEmColor', theme.italics_text_color || 'rgba(153, 153, 153, 1)'],
@@ -1383,7 +1529,10 @@
       ['--SmartThemeBorderColor', theme.border_color || 'rgba(255, 255, 255, 1)'],
       ['--blurStrength', (theme.blur_strength ?? 10) + 'px'],
       ['--shadowWidth', (theme.shadow_width ?? 2) + 'px'],
-      ['--fontScale', String(tavernState.uiSettings?.fontScale ?? theme.font_scale ?? 1)]
+      ['--fontScale', String(uiCfg.fontScale ?? theme.font_scale ?? 1)],
+      ['--tavernLetterSpacing', (uiCfg.letterSpacing ?? 0) + 'px'],
+      ['--tavernLineHeight', String(uiCfg.lineHeight ?? 1.72)],
+      ['--tavernPageMargin', (uiCfg.pageMargin ?? 10) + 'px']
     ];
 
     varPairs.forEach(([k, v]) => stageRoot.style.setProperty(k, v));
@@ -1861,13 +2010,14 @@
     };
   }
 
-  async function callTavernAiCompletion(messages) {
+  async function callTavernAiCompletion(messages, onStreamUpdate = null) {
     const creds = resolveTavernApiCredentials();
     if (!creds.baseUrl || !creds.apiKey) {
       throw new Error('未检测到有效的API地址与密钥，请点击顶部插头图标配置或同步手机外部API设置');
     }
 
     const preset = getActivePreset();
+    const useStreaming = Boolean(preset.stream_openai) && typeof onStreamUpdate === 'function';
     const endpoint = creds.baseUrl.endsWith('/chat/completions')
       ? creds.baseUrl
       : (creds.baseUrl.endsWith('/v1') ? creds.baseUrl + '/chat/completions' : creds.baseUrl + '/v1/chat/completions');
@@ -1880,7 +2030,7 @@
       max_tokens: Number(preset.openai_max_tokens ?? 4096),
       frequency_penalty: Number(preset.frequency_penalty ?? 0),
       presence_penalty: Number(preset.presence_penalty ?? 0),
-      stream: false
+      stream: useStreaming
     };
 
     if (Array.isArray(tavernState.formatting?.customStoppingStrings) && tavernState.formatting.customStoppingStrings.length > 0) {
@@ -1900,6 +2050,67 @@
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       throw new Error('API请求失败 ' + res.status + ': ' + (errText.slice(0, 160) || res.statusText));
+    }
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (useStreaming && res.body && !contentType.includes('application/json')) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let sseBuffer = '';
+      let rawContentAccum = '';
+      let nativeReasoningAccum = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split(/\r?\n/);
+        sseBuffer = lines.pop() || '';
+
+        let updatedInChunk = false;
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line || !line.startsWith('data:')) continue;
+          const dataStr = line.slice(5).trim();
+          if (dataStr === '[DONE]') continue;
+          try {
+            const parsedChunk = JSON.parse(dataStr);
+            const choice = parsedChunk.choices && parsedChunk.choices[0];
+            if (!choice) continue;
+            const delta = choice.delta || choice.message || {};
+            if (delta.content) {
+              rawContentAccum += delta.content;
+              updatedInChunk = true;
+            }
+            const rDelta = delta.reasoning_content || delta.reasoning || '';
+            if (rDelta) {
+              nativeReasoningAccum += rDelta;
+              updatedInChunk = true;
+            }
+          } catch (_) {}
+        }
+
+        if (updatedInChunk && typeof onStreamUpdate === 'function') {
+          const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+          const liveParsed = extractReasoningAndCleanReply(rawContentAccum);
+          const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
+          onStreamUpdate({
+            content: liveParsed.cleanReply,
+            reasoning: liveReasoning,
+            genTime: elapsedSec,
+            isStreaming: true
+          });
+        }
+      }
+
+      const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+      const finalParsed = extractReasoningAndCleanReply(rawContentAccum);
+      const finalReasoning = [nativeReasoningAccum, finalParsed.reasoning].filter(Boolean).join('\n\n');
+      return {
+        content: finalParsed.cleanReply,
+        reasoning: finalReasoning,
+        genTime: elapsedSec
+      };
     }
 
     const data = await res.json();
@@ -1963,6 +2174,7 @@
   // ============================================================================
   const uiRuntime = {
     openDrawerKey: null,
+    showAdvancedSamplers: false,
     editingPromptId: null,
     activeWorldBookEditId: null,
     editingWorldEntryUid: null,
@@ -2020,9 +2232,13 @@
         overflow: hidden;
         background: var(--SmartThemeChatTintColor, #f6f6f6);
         color: var(--SmartThemeBodyColor, #373737);
-        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        font-family: inherit !important;
         font-size: calc(14px * var(--fontScale, 1));
+        letter-spacing: var(--tavernLetterSpacing, 0px);
         user-select: text;
+      }
+      #tavern-stage-root *:not(.fa-solid):not(.fa-regular):not(.fa):not(.fas):not(.far) {
+        font-family: inherit !important;
       }
       #tavern-bg-layer {
         position: absolute;
@@ -2122,7 +2338,7 @@
         width: 100%;
         overflow-y: auto;
         overflow-x: hidden;
-        padding: 28px 10px 18px 10px !important;
+        padding: 28px var(--tavernPageMargin, 10px) 18px var(--tavernPageMargin, 10px) !important;
         box-sizing: border-box;
         scroll-behavior: auto;
       }
@@ -2207,10 +2423,13 @@
       .mes_text {
         word-break: break-word;
         overflow-wrap: anywhere;
-        line-height: 1.72;
+        line-height: var(--tavernLineHeight, 1.72) !important;
+        letter-spacing: var(--tavernLetterSpacing, 0px) !important;
       }
       .mes_text p {
         margin: 0 0 0.55em 0;
+        line-height: var(--tavernLineHeight, 1.72) !important;
+        letter-spacing: var(--tavernLetterSpacing, 0px) !important;
       }
       .mes_text p:last-child {
         margin-bottom: 0;
@@ -2412,67 +2631,112 @@
         letter-spacing: 0.3px;
       }
       .tavern-section-card {
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.92);
         border: 1px solid rgba(224, 224, 230, 0.85);
         border-radius: 16px;
         padding: 12px;
         margin-bottom: 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        box-sizing: border-box;
+        width: 100%;
+        overflow: hidden;
       }
       .tavern-section-label {
-        font-size: 12.5px;
+        font-size: 13px;
         font-weight: 700;
-        color: #48484a;
+        color: #3a3a3c;
         margin-bottom: 8px;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .tavern-btn-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+      }
+      .tavern-btn-grid.cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
       .tavern-grid-2 {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
       }
       .tavern-grid-3 {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
       }
       .tavern-grid-4 {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 6px;
+        width: 100%;
+        box-sizing: border-box;
       }
       .tavern-field-group {
         display: flex;
         flex-direction: column;
         gap: 4px;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+        min-width: 0;
       }
       .tavern-field-group label {
-        font-size: 11.5px;
+        font-size: 12px;
         font-weight: 600;
-        color: #636366;
+        color: #48484a;
+        line-height: 1.35;
       }
-      .tavern-input,
-      .tavern-textarea {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 8px 10px;
-        border-radius: 11px;
-        border: 1px solid rgba(206, 206, 214, 0.9);
-        background: #ffffff;
-        color: #2c2c2e;
-        font-size: 13px;
-        line-height: 1.45;
-        outline: none;
+      .tavern-field-hint {
+        font-size: 11px;
+        color: #8e8e93;
+        line-height: 1.35;
+        margin-top: 2px;
       }
-      .tavern-select {
-        width: 100%;
+      #tavern-stage-root .drawer-content .tavern-input {
+        width: 100% !important;
         min-height: 38px !important;
         height: 38px !important;
-        line-height: 1.35 !important;
-        padding: 4px 28px 4px 10px !important;
+        box-sizing: border-box !important;
+        padding: 6px 10px !important;
+        border-radius: 11px !important;
+        border: 1px solid rgba(206, 206, 214, 0.9) !important;
+        background: #ffffff !important;
+        color: #2c2c2e !important;
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+        outline: none !important;
+        margin: 0 !important;
+      }
+      #tavern-stage-root .drawer-content .tavern-textarea {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 8px 10px !important;
+        border-radius: 11px !important;
+        border: 1px solid rgba(206, 206, 214, 0.9) !important;
+        background: #ffffff !important;
+        color: #2c2c2e !important;
+        font-size: 13px !important;
+        line-height: 1.5 !important;
+        outline: none !important;
+        margin: 0 !important;
+      }
+      #tavern-stage-root .drawer-content .tavern-select {
+        width: 100% !important;
+        min-height: 38px !important;
+        height: 38px !important;
+        line-height: 24px !important;
+        padding: 6px 26px 6px 10px !important;
         border-radius: 11px !important;
         border: 1px solid rgba(206, 206, 214, 0.9) !important;
         background-color: #ffffff !important;
@@ -2481,6 +2745,7 @@
         box-sizing: border-box !important;
         text-align: left !important;
         overflow: visible !important;
+        margin: 0 !important;
       }
       .tavern-check-row {
         display: flex !important;
@@ -2514,6 +2779,7 @@
         border: 1px solid rgba(224, 224, 232, 0.85);
         margin-bottom: 6px;
         box-sizing: border-box;
+        width: 100%;
       }
       .tavern-list-row-main {
         flex: 1 1 auto;
@@ -2539,42 +2805,47 @@
         gap: 5px !important;
         flex-shrink: 0 !important;
       }
-      .tavern-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+      #tavern-stage-root .tavern-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
         gap: 4px;
-        min-height: 34px;
-        padding: 6px 12px;
-        border-radius: 11px;
-        border: 1px solid rgba(204, 204, 212, 0.9);
-        background: #ffffff;
-        color: #3a3a3c;
-        font-size: 12.5px;
-        font-weight: 600;
+        min-height: 36px !important;
+        padding: 6px 10px !important;
+        border-radius: 11px !important;
+        border: 1px solid rgba(204, 204, 212, 0.9) !important;
+        background: #ffffff !important;
+        color: #3a3a3c !important;
+        font-size: 12.5px !important;
+        line-height: 1.25 !important;
+        font-weight: 600 !important;
         cursor: pointer;
-        flex-shrink: 0;
-        box-sizing: border-box;
+        box-sizing: border-box !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
         transition: all 0.14s ease;
       }
-      .tavern-btn:active {
+      #tavern-stage-root .tavern-btn:active {
         transform: scale(0.97);
       }
-      .tavern-btn.primary {
-        background: #48484a;
-        color: #ffffff;
-        border-color: #48484a;
+      #tavern-stage-root .tavern-btn.primary {
+        background: #48484a !important;
+        color: #ffffff !important;
+        border-color: #48484a !important;
       }
-      .tavern-btn.danger {
-        background: #fff5f5;
-        color: #c93b3b;
-        border-color: #f1c6c6;
+      #tavern-stage-root .tavern-btn.danger {
+        background: #fff5f5 !important;
+        color: #c93b3b !important;
+        border-color: #f1c6c6 !important;
       }
-      .tavern-btn.small {
-        min-height: 28px;
-        padding: 3px 9px;
-        font-size: 11.5px;
-        border-radius: 9px;
+      #tavern-stage-root .tavern-btn.small {
+        min-height: 32px !important;
+        padding: 4px 10px !important;
+        font-size: 12px !important;
+        border-radius: 10px !important;
       }
 
       /* Extension Accordion inside #rm_extensions_block */
@@ -2733,7 +3004,6 @@
         <div class="tavern-popup-item" data-action="chat-continue-last">继续续写最后一层回复</div>
         <div class="tavern-popup-item" data-action="chat-impersonate">帮写玩家下一句回复</div>
         <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="address">切换或导入角色存档</div>
-        <div class="tavern-popup-item" data-action="exit-tavern-home">返回手机主屏幕</div>
       </div>
     `;
   }
@@ -2872,6 +3142,24 @@
     }
   }
 
+  function executeInlineMessageScripts(containerEl) {
+    if (!containerEl) return;
+    const scripts = containerEl.querySelectorAll('script');
+    scripts.forEach(oldScript => {
+      if (oldScript._tavernExecuted) return;
+      oldScript._tavernExecuted = true;
+      try {
+        const code = oldScript.textContent || '';
+        if (code.trim()) {
+          const fn = new Function('SillyTavern', 'TavernHelper', 'getContext', code);
+          fn(window.SillyTavern, window.TavernHelper, buildSillyTavernContextObject);
+        }
+      } catch (err) {
+        console.warn('Floor inline script warning:', err);
+      }
+    });
+  }
+
   // ============================================================================
   // 11. Render All 9 Full-Screen SillyTavern Dropdown Drawers
   // ============================================================================
@@ -2892,10 +3180,6 @@
       <div class="drawer-content openDrawer" data-active-drawer="${drawerKey}">
         <div class="tavern-drawer-header">
           <div class="tavern-drawer-title">${meta.title}</div>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small" data-action="exit-tavern-home">返回桌面</button>
-            <button type="button" class="tavern-btn small primary" data-action="close-drawer">收起面板</button>
-          </div>
         </div>
         ${bodyHtml}
       </div>
@@ -2912,79 +3196,114 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>预设配置管理</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small" data-action="trigger-import-presets">导入预设</button>
-            <button type="button" class="tavern-btn small" data-action="export-active-preset">导出</button>
-            <button type="button" class="tavern-btn small danger" data-action="delete-active-preset">删除</button>
-          </div>
+        </div>
+        <div class="tavern-btn-grid cols-3">
+          <button type="button" class="tavern-btn small primary" data-action="trigger-import-presets">导入预设</button>
+          <button type="button" class="tavern-btn small" data-action="export-active-preset">导出预设</button>
+          <button type="button" class="tavern-btn small danger" data-action="delete-active-preset">删除预设</button>
         </div>
         <select class="tavern-select" data-change="switch-preset">
           ${tavernState.presets.map(p => `
             <option value="${p.id}" ${p.id === preset.id ? 'selected' : ''}>${escapeHtmlSimple(p.name)}</option>
           `).join('')}
         </select>
+        <div class="tavern-field-hint">支持多选导入酒馆OpenAI预设JSON，所有导入预设均可随时下拉切换生效</div>
       </div>
 
       <div class="tavern-section-card">
-        <div class="tavern-section-label">核心采样与上下文参数</div>
+        <div class="tavern-section-label">核心上下文与生成方式</div>
         <div class="tavern-grid-2">
           <div class="tavern-field-group">
             <label>最大上下文Token: ${preset.openai_max_context}</label>
             <input type="number" class="tavern-input" data-preset-num="openai_max_context" value="${preset.openai_max_context}" min="2048" max="200000" step="1024" />
+            <div class="tavern-field-hint">单次发送给AI的总字数容量上限</div>
           </div>
           <div class="tavern-field-group">
             <label>单次最大回复Token: ${preset.openai_max_tokens}</label>
             <input type="number" class="tavern-input" data-preset-num="openai_max_tokens" value="${preset.openai_max_tokens}" min="128" max="32768" step="128" />
+            <div class="tavern-field-hint">AI每次最多能写多长的内容</div>
           </div>
           <div class="tavern-field-group">
             <label>携带记忆楼层数: ${tavernState.memory?.contextFloors || 40}</label>
             <input type="number" class="tavern-input" data-memory-num="contextFloors" value="${tavernState.memory?.contextFloors || 40}" min="2" max="500" />
+            <div class="tavern-field-hint">每次对话自动带上最近多少层聊天记录</div>
           </div>
           <div class="tavern-field-group">
             <label>温度 Temperature: ${preset.temperature}</label>
             <input type="number" class="tavern-input" data-preset-num="temperature" value="${preset.temperature}" min="0" max="2.5" step="0.05" />
-          </div>
-          <div class="tavern-field-group">
-            <label>核采样 Top P: ${preset.top_p}</label>
-            <input type="number" class="tavern-input" data-preset-num="top_p" value="${preset.top_p}" min="0" max="1" step="0.05" />
-          </div>
-          <div class="tavern-field-group">
-            <label>候选词 Top K: ${preset.top_k}</label>
-            <input type="number" class="tavern-input" data-preset-num="top_k" value="${preset.top_k}" min="0" max="200" step="1" />
-          </div>
-          <div class="tavern-field-group">
-            <label>频率惩罚 Frequency: ${preset.frequency_penalty}</label>
-            <input type="number" class="tavern-input" data-preset-num="frequency_penalty" value="${preset.frequency_penalty}" min="-2" max="2" step="0.05" />
-          </div>
-          <div class="tavern-field-group">
-            <label>存在惩罚 Presence: ${preset.presence_penalty}</label>
-            <input type="number" class="tavern-input" data-preset-num="presence_penalty" value="${preset.presence_penalty}" min="-2" max="2" step="0.05" />
-          </div>
-          <div class="tavern-field-group">
-            <label>重复惩罚 Repetition: ${preset.repetition_penalty}</label>
-            <input type="number" class="tavern-input" data-preset-num="repetition_penalty" value="${preset.repetition_penalty}" min="0.5" max="2" step="0.05" />
-          </div>
-          <div class="tavern-field-group">
-            <label>随机种子 Seed: ${preset.seed}</label>
-            <input type="number" class="tavern-input" data-preset-num="seed" value="${preset.seed}" step="1" />
+            <div class="tavern-field-hint">控制AI脑洞大小，越高文风越发散灵动，越低越稳重守规矩</div>
           </div>
         </div>
-        <div class="tavern-grid-2" style="margin-top:6px;">
-          <label class="tavern-check-row">
-            <input type="checkbox" data-preset-bool="squash_system_messages" ${preset.squash_system_messages ? 'checked' : ''} />
-            <span>合并连续系统消息</span>
-          </label>
-          <label class="tavern-check-row">
-            <input type="checkbox" data-preset-bool="stream_openai" ${preset.stream_openai ? 'checked' : ''} />
-            <span>启用流式生成标记</span>
-          </label>
+
+        <label class="tavern-check-row" style="margin-top:4px;">
+          <input type="checkbox" data-preset-bool="stream_openai" ${preset.stream_openai ? 'checked' : ''} />
+          <span>启用真实流式逐字生成</span>
+        </label>
+        <div class="tavern-field-hint" style="margin-bottom:8px;">开启后AI回复会一行一行实时蹦出，关闭则等待整段写完后一次性显示</div>
+
+        <div class="inline-drawer" style="margin-top:6px;margin-bottom:0;">
+          <div class="inline-drawer-header" data-action="toggle-adv-samplers">
+            <span>高级采样与惩罚参数</span>
+            <span>${uiRuntime.showAdvancedSamplers ? '收起' : '展开'}</span>
+          </div>
+          ${uiRuntime.showAdvancedSamplers ? `
+            <div class="inline-drawer-content">
+              <div class="tavern-grid-2">
+                <div class="tavern-field-group">
+                  <label>核采样 Top P: ${preset.top_p}</label>
+                  <input type="number" class="tavern-input" data-preset-num="top_p" value="${preset.top_p}" min="0" max="1" step="0.05" />
+                  <div class="tavern-field-hint">控制选词范围，0.9到1之间最自然，调低会让用词更保守</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>候选词 Top K: ${preset.top_k ?? 0}</label>
+                  <input type="number" class="tavern-input" data-preset-num="top_k" value="${preset.top_k ?? 0}" min="0" max="200" step="1" />
+                  <div class="tavern-field-hint">每次只从概率最高的前几个词里选，填0代表不限制</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>最小概率阈值 Min P: ${preset.min_p ?? 0}</label>
+                  <input type="number" class="tavern-input" data-preset-num="min_p" value="${preset.min_p ?? 0}" min="0" max="1" step="0.01" />
+                  <div class="tavern-field-hint">过滤掉极低概率的生僻怪词，填0.05可防止高温度下胡言乱语</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>典型采样 Typical P: ${preset.typical_p ?? 1}</label>
+                  <input type="number" class="tavern-input" data-preset-num="typical_p" value="${preset.typical_p ?? 1}" min="0" max="1" step="0.05" />
+                  <div class="tavern-field-hint">保持语句节奏均匀度，默认填1即可无需改动</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>频率惩罚 Frequency: ${preset.frequency_penalty}</label>
+                  <input type="number" class="tavern-input" data-preset-num="frequency_penalty" value="${preset.frequency_penalty}" min="-2" max="2" step="0.05" />
+                  <div class="tavern-field-hint">防止同一个词反复出现，调高会让AI少说车轱辘话</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>存在惩罚 Presence: ${preset.presence_penalty}</label>
+                  <input type="number" class="tavern-input" data-preset-num="presence_penalty" value="${preset.presence_penalty}" min="-2" max="2" step="0.05" />
+                  <div class="tavern-field-hint">鼓励AI主动聊新话题和新细节，调高能减少剧情原地踏步</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>重复惩罚 Repetition: ${preset.repetition_penalty ?? 1}</label>
+                  <input type="number" class="tavern-input" data-preset-num="repetition_penalty" value="${preset.repetition_penalty ?? 1}" min="0.5" max="2" step="0.05" />
+                  <div class="tavern-field-hint">压制句式复读机现象，默认填1代表不额外惩罚</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>随机种子 Seed: ${preset.seed ?? -1}</label>
+                  <input type="number" class="tavern-input" data-preset-num="seed" value="${preset.seed ?? -1}" step="1" />
+                  <div class="tavern-field-hint">填负一代表每次完全随机，填固定数字可复现相同回复</div>
+                </div>
+              </div>
+              <label class="tavern-check-row" style="margin-top:4px;">
+                <input type="checkbox" data-preset-bool="squash_system_messages" ${preset.squash_system_messages ? 'checked' : ''} />
+                <span>合并连续系统消息</span>
+              </label>
+              <div class="tavern-field-hint">将多条相邻的系统设定合成为一条发送，部分反代接口兼容性更好</div>
+            </div>
+          ` : ''}
         </div>
       </div>
 
       <div id="completion_prompt_manager" class="tavern-section-card">
         <div class="tavern-section-label">
           <span>提示词排序与开关列表 共${prompts.length}项</span>
-          <button type="button" class="tavern-btn small" data-action="add-custom-prompt-item">新增条目</button>
+          <button type="button" class="tavern-btn small primary" data-action="add-custom-prompt-item">新增条目</button>
         </div>
 
         ${editingItem ? `
@@ -3188,10 +3507,10 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>世界书书库 共${books.length}本</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small primary" data-action="trigger-import-worldbooks">多选导入世界书</button>
-            <button type="button" class="tavern-btn small" data-action="create-new-worldbook">新建</button>
-          </div>
+        </div>
+        <div class="tavern-btn-grid">
+          <button type="button" class="tavern-btn small primary" data-action="trigger-import-worldbooks">多选导入世界书</button>
+          <button type="button" class="tavern-btn small" data-action="create-new-worldbook">新建世界书</button>
         </div>
 
         ${books.length === 0 ? `<div style="font-size:12.5px;color:#888;padding:8px 0;">暂无世界书，导入角色卡时会自动提取内嵌世界书，或点击上方多选导入JSON世界书。</div>` : `
@@ -3354,10 +3673,10 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>酒馆美化主题切换</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small primary" data-action="trigger-import-themes">导入美化JSON或CSS</button>
-            <button type="button" class="tavern-btn small" data-action="export-active-theme">导出</button>
-          </div>
+        </div>
+        <div class="tavern-btn-grid">
+          <button type="button" class="tavern-btn small primary" data-action="trigger-import-themes">导入美化JSON或CSS</button>
+          <button type="button" class="tavern-btn small" data-action="export-active-theme">导出当前主题</button>
         </div>
         <select class="tavern-select" data-change="switch-theme">
           ${tavernState.themes.map(t => `
@@ -3367,16 +3686,32 @@
       </div>
 
       <div class="tavern-section-card">
-        <div class="tavern-section-label">界面字号与楼层信息显示</div>
+        <div class="tavern-section-label">正文排版与页面边距调节</div>
         <div class="tavern-grid-2">
           <div class="tavern-field-group">
             <label>全局字号缩放: ${uiCfg.fontScale ?? 1.0}</label>
-            <input type="number" class="tavern-input" data-ui-num="fontScale" value="${uiCfg.fontScale ?? 1.0}" min="0.75" max="1.4" step="0.05" />
+            <input type="number" class="tavern-input" data-ui-num="fontScale" value="${uiCfg.fontScale ?? 1.0}" min="0.7" max="1.6" step="0.05" />
+            <div class="tavern-field-hint">调节酒馆气泡文字整体大小，默认1.0</div>
           </div>
           <div class="tavern-field-group">
-            <label>引语高亮颜色</label>
-            <input type="text" class="tavern-input" id="theme-quote-color-input" value="${escapeHtmlSimple(activeTheme.quote_text_color || 'rgba(255, 168, 187, 1)')}" />
+            <label>文字字间距: ${uiCfg.letterSpacing ?? 0}px</label>
+            <input type="number" class="tavern-input" data-ui-num="letterSpacing" value="${uiCfg.letterSpacing ?? 0}" min="-1" max="6" step="0.5" />
+            <div class="tavern-field-hint">调节每个汉字之间的疏密距离，默认0</div>
           </div>
+          <div class="tavern-field-group">
+            <label>段落行高倍数: ${uiCfg.lineHeight ?? 1.72}</label>
+            <input type="number" class="tavern-input" data-ui-num="lineHeight" value="${uiCfg.lineHeight ?? 1.72}" min="1.2" max="2.6" step="0.05" />
+            <div class="tavern-field-hint">调节上下两行文字之间的行距，默认1.72</div>
+          </div>
+          <div class="tavern-field-group">
+            <label>页面左右边距: ${uiCfg.pageMargin ?? 10}px</label>
+            <input type="number" class="tavern-input" data-ui-num="pageMargin" value="${uiCfg.pageMargin ?? 10}" min="0" max="48" step="2" />
+            <div class="tavern-field-hint">调小可让气泡变宽使每行容纳更多字数</div>
+          </div>
+        </div>
+        <div class="tavern-field-group">
+          <label>对话引语高亮颜色</label>
+          <input type="text" class="tavern-input" id="theme-quote-color-input" value="${escapeHtmlSimple(activeTheme.quote_text_color || 'rgba(255, 168, 187, 1)')}" />
         </div>
         <div class="tavern-grid-2">
           <label class="tavern-check-row">
@@ -3669,10 +4004,10 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>玩家人设面具列表 共${personas.length}个</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small" data-action="sync-persona-from-phone">同步手机人设</button>
-            <button type="button" class="tavern-btn small primary" data-action="create-new-persona">新建人设</button>
-          </div>
+        </div>
+        <div class="tavern-btn-grid">
+          <button type="button" class="tavern-btn small" data-action="sync-persona-from-phone">同步手机人设</button>
+          <button type="button" class="tavern-btn small primary" data-action="create-new-persona">新建人设</button>
         </div>
         <select class="tavern-select" data-change="switch-persona">
           ${personas.map(p => `
@@ -3684,8 +4019,8 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">编辑当前人设: ${escapeHtmlSimple(activeP.name)}</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-          <img src="${resolveSafeAvatarUrl(activeP.avatar, true)}" alt="user" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);" />
-          <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+          <img src="${resolveSafeAvatarUrl(activeP.avatar, true)}" alt="user" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);flex-shrink:0;" />
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">
             <button type="button" class="tavern-btn small" data-action="trigger-upload-persona-avatar">更换头像并存至Termux本地</button>
             <label class="tavern-check-row">
               <input type="checkbox" id="persona-lock-card-check" ${isLockedToCard ? 'checked' : ''} />
@@ -3710,9 +4045,9 @@
           <label>玩家人设详细描述 Persona Description</label>
           <textarea class="tavern-textarea" id="persona-desc-input" rows="4" placeholder="填写你的身份背景、外貌性格与随身物品...">${escapeHtmlSimple(activeP.description || '')}</textarea>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:8px;">
+        <div class="tavern-btn-grid" style="margin-top:8px;margin-bottom:0;">
           <button type="button" class="tavern-btn small danger" data-action="delete-active-persona">删除此人设</button>
-          <button type="button" class="tavern-btn primary" data-action="save-active-persona">保存人设修改</button>
+          <button type="button" class="tavern-btn small primary" data-action="save-active-persona">保存人设修改</button>
         </div>
       </div>
     `;
@@ -3730,13 +4065,13 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>角色卡档案库 共${cards.length}名角色</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small primary" data-action="trigger-import-cards">导入PNG或JSON角色卡</button>
-            <button type="button" class="tavern-btn small" data-action="create-blank-card">新建角色</button>
-          </div>
+        </div>
+        <div class="tavern-btn-grid">
+          <button type="button" class="tavern-btn small primary" data-action="trigger-import-cards">导入PNG或JSON角色卡</button>
+          <button type="button" class="tavern-btn small" data-action="create-blank-card">新建角色</button>
         </div>
 
-        <div style="max-height:175px;overflow-y:auto;">
+        <div style="max-height:185px;overflow-y:auto;">
           ${cards.map(c => `
             <div class="tavern-list-row" style="${c.id === activeCard.id ? 'border-color:#555;background:#f0f1f6;' : ''}">
               <img src="${resolveSafeAvatarUrl(c.avatar, false)}" alt="char" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_SVG}';" />
@@ -3757,13 +4092,13 @@
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>当前角色聊天存档分支 共${archives.length}个</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small primary" data-action="chat-new-session">新建存档</button>
-            <button type="button" class="tavern-btn small" data-action="trigger-import-chats">导入聊天</button>
-            <button type="button" class="tavern-btn small" data-action="export-current-chat">导出聊天</button>
-          </div>
         </div>
-        <div style="max-height:130px;overflow-y:auto;">
+        <div class="tavern-btn-grid cols-3">
+          <button type="button" class="tavern-btn small primary" data-action="chat-new-session">新建存档</button>
+          <button type="button" class="tavern-btn small" data-action="trigger-import-chats">导入聊天</button>
+          <button type="button" class="tavern-btn small" data-action="export-current-chat">导出聊天</button>
+        </div>
+        <div style="max-height:135px;overflow-y:auto;">
           ${archives.map(arch => `
             <div class="tavern-list-row">
               <div class="tavern-list-row-main">
@@ -3781,8 +4116,8 @@
 
       <div class="tavern-section-card">
         <div class="tavern-section-label">
-          <span>角色卡参数与多开场白编辑: ${escapeHtmlSimple(activeCard.name)}</span>
-          <button type="button" class="tavern-btn small" data-action="trigger-upload-card-avatar">更换角色头像</button>
+          <span>角色卡参数编辑: ${escapeHtmlSimple(activeCard.name)}</span>
+          <button type="button" class="tavern-btn small" data-action="trigger-upload-card-avatar">更换头像</button>
         </div>
         <div class="tavern-grid-2">
           <div class="tavern-field-group">
@@ -3817,10 +4152,10 @@
           <label>默认主开场白 First Message</label>
           <textarea class="tavern-textarea" id="card-edit-firstmes" rows="4">${escapeHtmlSimple(activeCard.first_mes || '')}</textarea>
         </div>
-        <div class="tavern-field-group">
+        <div class="tavern-field-group" style="margin-bottom:0;">
           <label>额外多开场白数量: ${altGreetings.length}个 可在0层左右翻页切换</label>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small" data-action="sync-card-greetings-to-floor0">同步全部开场白至第0层</button>
+          <div class="tavern-btn-grid" style="margin-top:4px;margin-bottom:0;">
+            <button type="button" class="tavern-btn small" data-action="sync-card-greetings-to-floor0">同步开场白至0层</button>
             <button type="button" class="tavern-btn small primary" data-action="save-card-edits">保存角色卡修改</button>
           </div>
         </div>
@@ -3837,6 +4172,12 @@
     const rawInput = textarea.value.trim();
     if (!rawInput) {
       await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+      return;
+    }
+
+    if (rawInput.startsWith('/')) {
+      textarea.value = '';
+      await executeTavernSlashCommand(rawInput);
       return;
     }
 
@@ -3864,6 +4205,44 @@
     await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
   }
 
+  function updateStreamingFloorDom(mesIndex) {
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) return;
+    const sess = getActiveChatSession();
+    const card = getActiveCard();
+    const msg = sess && sess.messages[mesIndex];
+    if (!msg) return;
+    const floorEl = chatEl.querySelector(`.mes[mesid="${mesIndex}"]`);
+    if (!floorEl) {
+      renderTavernChatFloors(false);
+      return;
+    }
+    const textEl = floorEl.querySelector('.mes_text');
+    if (textEl) {
+      textEl.innerHTML = renderTavernMessageHtml(msg.mes || '', {
+        isUser: Boolean(msg.is_user),
+        isPrompt: false,
+        depth: sess.messages.length - 1 - mesIndex,
+        card
+      });
+    }
+    if (msg.reasoning && String(msg.reasoning).trim()) {
+      let detailsEl = floorEl.querySelector('.mes_reasoning_details');
+      if (!detailsEl && textEl) {
+        detailsEl = document.createElement('details');
+        detailsEl.className = 'mes_reasoning_details';
+        if (tavernState.formatting?.autoCollapseReasoning === false) {
+          detailsEl.setAttribute('open', '');
+        }
+        detailsEl.innerHTML = `<summary class="mes_reasoning_summary">思维链推理过程</summary><div class="mes_reasoning_content"></div>`;
+        textEl.parentNode.insertBefore(detailsEl, textEl);
+      }
+      const rContent = detailsEl && detailsEl.querySelector('.mes_reasoning_content');
+      if (rContent) rContent.textContent = msg.reasoning;
+    }
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
   async function triggerCharacterReplyGeneration(options = {}) {
     if (uiRuntime.isGenerating) return;
     const {
@@ -3876,61 +4255,106 @@
     uiRuntime.isGenerating = true;
     const card = getActiveCard();
     const sess = getActiveChatSession();
+    const preset = getActivePreset();
     showTavernToast(isImpersonate ? '正在帮写玩家回复...' : '正在思考并生成回复...');
 
     try {
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_STARTED);
       const apiMessages = buildTavernApiMessages({ isImpersonate, isContinue, isSwipeRegen });
-      const result = await callTavernAiCompletion(apiMessages);
 
       if (isImpersonate) {
         const textarea = document.getElementById('send_textarea');
+        const result = await callTavernAiCompletion(apiMessages, preset.stream_openai ? (partial) => {
+          if (textarea) textarea.value = partial.content;
+        } : null);
         if (textarea) textarea.value = result.content;
         showTavernToast('已填入帮写草稿');
       } else if (isContinue && sess.messages.length > 0) {
-        const lastMsg = sess.messages[sess.messages.length - 1];
+        const lastIdx = sess.messages.length - 1;
+        const lastMsg = sess.messages[lastIdx];
         const curSwipe = Number(lastMsg.swipe_id || 0);
         if (!Array.isArray(lastMsg.swipes) || lastMsg.swipes.length === 0) {
           lastMsg.swipes = [lastMsg.mes || ''];
         }
-        const combined = (lastMsg.swipes[curSwipe] || '') + result.content;
+        const baseText = lastMsg.swipes[curSwipe] || '';
+        const result = await callTavernAiCompletion(apiMessages, preset.stream_openai ? (partial) => {
+          const combined = baseText + partial.content;
+          lastMsg.swipes[curSwipe] = combined;
+          lastMsg.mes = combined;
+          lastMsg.gen_time = partial.genTime;
+          updateStreamingFloorDom(lastIdx);
+        } : null);
+        const combined = baseText + result.content;
         lastMsg.swipes[curSwipe] = combined;
         lastMsg.mes = combined;
         lastMsg.token_count = estimateTokens(combined);
         lastMsg.gen_time = result.genTime;
         await saveTavernStore();
         renderTavernChatFloors(false);
+        executeInlineMessageScripts(document.getElementById('chat'));
       } else if (isSwipeRegen && targetMesIndex !== null && sess.messages[targetMesIndex]) {
         const targetMsg = sess.messages[targetMesIndex];
         if (!Array.isArray(targetMsg.swipes)) targetMsg.swipes = [targetMsg.mes || ''];
-        targetMsg.swipes.push(result.content);
-        targetMsg.swipe_id = targetMsg.swipes.length - 1;
+        targetMsg.swipes.push('');
+        const newSwipeIdx = targetMsg.swipes.length - 1;
+        targetMsg.swipe_id = newSwipeIdx;
+        targetMsg.mes = '';
+        targetMsg.reasoning = '';
+        renderTavernChatFloors(false);
+
+        const result = await callTavernAiCompletion(apiMessages, preset.stream_openai ? (partial) => {
+          targetMsg.swipes[newSwipeIdx] = partial.content;
+          targetMsg.mes = partial.content;
+          targetMsg.reasoning = partial.reasoning || '';
+          targetMsg.gen_time = partial.genTime;
+          updateStreamingFloorDom(targetMesIndex);
+        } : null);
+
+        targetMsg.swipes[newSwipeIdx] = result.content;
         targetMsg.mes = result.content;
         targetMsg.reasoning = result.reasoning || '';
         targetMsg.gen_time = result.genTime;
         targetMsg.token_count = estimateTokens(result.content);
         await saveTavernStore();
         renderTavernChatFloors(false);
+        executeInlineMessageScripts(document.getElementById('chat'));
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
       } else {
+        const newFloorIdx = sess.messages.length;
         const botMsg = {
-          mesid: sess.messages.length,
+          mesid: newFloorIdx,
           name: card.name || '角色',
           is_user: false,
           is_system: false,
           send_date: Date.now(),
-          mes: result.content,
-          swipes: [result.content],
+          mes: '',
+          swipes: [''],
           swipe_id: 0,
-          reasoning: result.reasoning || '',
-          gen_time: result.genTime,
-          token_count: estimateTokens(result.content)
+          reasoning: '',
+          gen_time: '',
+          token_count: 1
         };
         sess.messages.push(botMsg);
+        renderTavernChatFloors(false);
+
+        const result = await callTavernAiCompletion(apiMessages, preset.stream_openai ? (partial) => {
+          botMsg.mes = partial.content;
+          botMsg.swipes[0] = partial.content;
+          botMsg.reasoning = partial.reasoning || '';
+          botMsg.gen_time = partial.genTime;
+          updateStreamingFloorDom(newFloorIdx);
+        } : null);
+
+        botMsg.mes = result.content;
+        botMsg.swipes[0] = result.content;
+        botMsg.reasoning = result.reasoning || '';
+        botMsg.gen_time = result.genTime;
+        botMsg.token_count = estimateTokens(result.content);
         await saveTavernStore();
         renderTavernChatFloors(false);
-        await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, sess.messages.length - 1);
-        await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, sess.messages.length - 1);
+        executeInlineMessageScripts(document.getElementById('chat'));
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, newFloorIdx);
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, newFloorIdx);
       }
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_ENDED);
     } catch (err) {
@@ -4279,6 +4703,11 @@
       }
 
       // Drawer 1 (Sliders & Prompt Order) Actions
+      if (action === 'toggle-adv-samplers') {
+        uiRuntime.showAdvancedSamplers = !uiRuntime.showAdvancedSamplers;
+        refreshOpenDrawerOnly();
+        return;
+      }
       if (action === 'trigger-import-presets') {
         document.getElementById('tavern-file-presets')?.click();
         return;
