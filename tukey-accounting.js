@@ -2277,7 +2277,20 @@ function createExpenditureLineChart(data, daysInMonth) {
               : {},
           naiPresets: Array.isArray(cfg.naiPresets) ? cfg.naiPresets : [],
           customStickers: Array.isArray(cfg.customStickers)
-            ? cfg.customStickers
+            ? cfg.customStickers.map((s) => {
+                if (!s || typeof s !== "object") return s;
+                const refUrl = s.url || s.dataUrl || "";
+                if (refUrl.startsWith("vault://") || refUrl.startsWith("http") || refUrl.startsWith("/api/")) {
+                  return {
+                    id: s.id,
+                    name: s.name,
+                    meaning: s.meaning || s.name,
+                    url: refUrl,
+                    categoryId: s.categoryId || "CUSTOM",
+                  };
+                }
+                return s;
+              })
             : [],
           visionCache:
             cfg.visionCache && typeof cfg.visionCache === "object"
@@ -3254,45 +3267,61 @@ function createExpenditureLineChart(data, daysInMonth) {
       let added = 0;
       for (const file of files) {
         try {
-          const dataUrl = await new Promise((resolve) => {
+          let dataUrl = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result || ""));
             reader.onerror = () => resolve("");
             reader.readAsDataURL(file);
           });
           if (!dataUrl) continue;
+          let storedUrl = dataUrl;
+          if (typeof window.saveStickerToLocalVault === "function") {
+            storedUrl = await window.saveStickerToLocalVault(dataUrl);
+          }
+          dataUrl = null;
           const rawName = String(file.name || "表情")
             .replace(/\.[^/.]+$/, "")
             .trim();
           const cleanName = rawName || "表情" + (added + 1);
+          const stickerId = "cstk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
           const item = {
-            id: "cstk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+            id: stickerId,
             name: cleanName,
             meaning: cleanName,
-            dataUrl,
+            url: storedUrl,
             categoryId: "CUSTOM",
           };
           this.serverState.config.customStickers.push(item);
           if (window.db && window.db.userStickers) {
             try {
-              await window.db.userStickers.add({
+              const dbSticker = {
+                id: stickerId,
                 name: cleanName,
                 meaning: cleanName,
-                url: dataUrl,
-                dataUrl,
-                categoryId: "CUSTOM",
-              });
+                url: storedUrl,
+                categoryId: null,
+              };
+              await window.db.userStickers.put(dbSticker);
+              if (window.state && Array.isArray(window.state.userStickers)) {
+                window.state.userStickers.push(dbSticker);
+              }
             } catch (_) {}
           }
           added++;
-        } catch (_) {}
+        } catch (err) {
+          this.notify((err && err.message) || "写入本地目录失败，请确认 Termux 服务已开启");
+          break;
+        }
       }
 
       if (added > 0) {
         await this.refreshLocalResources();
         this.renderCustomStickersList();
+        if (typeof window.hydrateDomVaultImages === "function") {
+          window.hydrateDomVaultImages();
+        }
         await this.saveAllSettings(false);
-        this.notify(`已上传并保存 ${added} 张表情包`);
+        this.notify(`已存入本地并保存 ${added} 张表情包`);
       }
     },
 
@@ -3326,16 +3355,27 @@ function createExpenditureLineChart(data, daysInMonth) {
       }
       box.style.display = "flex";
       box.innerHTML = customList
-        .map(
-          (s) => `
+        .map((s) => {
+          const rawUrl = String(s.url || s.dataUrl || "");
+          const isVault = rawUrl.startsWith("vault://");
+          const cachedBlob =
+            isVault && typeof window.getCachedVaultBlobUrl === "function"
+              ? window.getCachedVaultBlobUrl(rawUrl)
+              : null;
+          const imgSrc = cachedBlob || rawUrl;
+          const vaultAttr = isVault ? ` data-vault-ref="${this.escapeAttr(rawUrl)}"` : "";
+          return `
           <div style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color); max-width: 100%;">
-            <img src="${this.escapeAttr(s.dataUrl || s.url || "")}" alt="" style="width: 26px; height: 26px; object-fit: cover; border-radius: 4px; flex-shrink: 0;" />
+            <img src="${this.escapeAttr(imgSrc)}"${vaultAttr} alt="" style="width: 26px; height: 26px; object-fit: cover; border-radius: 4px; flex-shrink: 0;" />
             <span style="font-size: 11px; color: var(--text-primary); max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(s.name || "表情")}</span>
             <button type="button" class="mod-capsule-btn" onclick="if(window.QQBotConsole){window.QQBotConsole.deleteCustomSticker('${this.escapeAttr(s.id)}');}" style="height: 22px; padding: 0 6px; font-size: 10px; flex-shrink: 0;">删除</button>
           </div>
-        `,
-        )
+        `;
+        })
         .join("");
+      if (typeof window.hydrateDomVaultImages === "function") {
+        window.hydrateDomVaultImages();
+      }
     },
 
     renderModuleChaptersSelect(moduleId, selectedChapterId) {

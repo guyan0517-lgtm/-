@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v7.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v7.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -25181,7 +25181,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           studio: "lrq小剧场",
         };
         const STICKER_REGEX =
-          /^(data:image\/)|(https?:\/\/.*?\.(?:png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff))|(https?:\/\/.*(?:catbox|postimg|imgbb|sinaimg|telegraph|wx[1-4])\..*)/i;
+          /^(vault:\/\/)|^(\/api\/local-vault\/media\/)|^(data:image\/)|(https?:\/\/.*?\.(?:png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff))|(https?:\/\/.*(?:catbox|postimg|imgbb|sinaimg|telegraph|wx[1-4])\..*)/i;
         const MESSAGE_RENDER_WINDOW = 50;
         let currentRenderedCount = 0;
         let lastKnownBatteryLevel = 1;
@@ -38556,7 +38556,7 @@ ${wbCognition}
               btnEl.textContent = "上传中";
             }
             if (statusEl) {
-              statusEl.textContent = "正在上传图床生成链接...";
+              statusEl.textContent = "正在存入Termux本地目录生成链接...";
             }
             const generatedUrls = [];
             const appendedLines = [];
@@ -38565,7 +38565,7 @@ ${wbCognition}
                 const file = files[i];
                 const rawName = file.name.replace(/\.[^/.]+$/, "").trim() || ("表情" + (i + 1));
                 if (statusEl) {
-                  statusEl.textContent = "正在上传第 " + (i + 1) + " 张，共 " + files.length + " 张...";
+                  statusEl.textContent = "正在存入第 " + (i + 1) + " 张，共 " + files.length + " 张...";
                 }
                 let base64Url = await new Promise((resolve) => {
                   const reader = new FileReader();
@@ -38581,9 +38581,26 @@ ${wbCognition}
                     }
                   } catch (_) {}
                 }
-                const remoteUrl = await window.uploadImageToBed(base64Url, file.name);
-                generatedUrls.push(remoteUrl);
-                appendedLines.push(rawName + " " + remoteUrl);
+                let savedUrl = "";
+                if (typeof window.saveStickerToLocalVault === "function") {
+                  try {
+                    const vaultRef = await window.saveStickerToLocalVault(base64Url);
+                    if (vaultRef && !vaultRef.startsWith("data:")) {
+                      savedUrl = vaultRef;
+                    }
+                  } catch (_) {}
+                }
+                if (!savedUrl && typeof window.uploadImageToBed === "function") {
+                  try {
+                    savedUrl = await window.uploadImageToBed(base64Url, file.name);
+                  } catch (_) {}
+                }
+                base64Url = null;
+                if (!savedUrl) {
+                  throw new Error("请先开启Termux本地存储服务");
+                }
+                generatedUrls.push(savedUrl);
+                appendedLines.push(rawName + " " + savedUrl);
               }
               if (promptInput && appendedLines.length > 0) {
                 const existing = promptInput.value.trim();
@@ -38595,7 +38612,7 @@ ${wbCognition}
                 await window.copyTextToClipboard(generatedUrls.join("\n"));
               }
               if (statusEl) {
-                statusEl.textContent = "已生成 " + generatedUrls.length + " 条链接并自动复制";
+                statusEl.textContent = "已存入本地目录 " + generatedUrls.length + " 张并自动填入";
               }
             } catch (err) {
               if (statusEl) {
@@ -39829,7 +39846,13 @@ ${wbCognition}
 
               const imageEl = document.createElement("div");
               imageEl.className = "sticker-image";
-              imageEl.style.backgroundImage = `url(${sticker.url})`;
+              if (typeof sticker.url === "string" && sticker.url.startsWith("vault://")) {
+                imageEl.setAttribute("data-vault-bg-ref", sticker.url);
+                const cachedFast = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(sticker.url) : null;
+                imageEl.style.backgroundImage = `url(${cachedFast || sticker.url})`;
+              } else {
+                imageEl.style.backgroundImage = `url(${sticker.url})`;
+              }
 
               const nameEl = document.createElement("span");
               nameEl.className = "sticker-name";
@@ -39904,8 +39927,11 @@ ${wbCognition}
             });
           }
 
-          // 每次渲染表情列表后，都更新一次分类页签栏
+          // 每次渲染表情列表后，都更新一次分类页签栏并解析本地Vault表情图片
           renderStickerCategories();
+          if (typeof window.hydrateDomVaultImages === "function") {
+            window.hydrateDomVaultImages();
+          }
         }
 
         /**
@@ -67198,19 +67224,25 @@ ${stickerContext || "无"}
           let successCount = 0;
           let errorLines = [];
 
-          lines.forEach((line, index) => {
-            line = line.trim();
-            if (!line) return;
+          for (let index = 0; index < lines.length; index++) {
+            let line = lines[index].trim();
+            if (!line) continue;
 
             let name = "";
             let url = "";
             let splitIndex = -1;
 
             // 1. 查找 URL 的起始位置
+            const vaultIndex = line.indexOf("vault://");
+            const apiVaultIndex = line.indexOf("/api/local-vault/");
             const httpIndex = line.indexOf("http");
             const dataIndex = line.indexOf("data:image");
 
-            if (httpIndex > -1) {
+            if (vaultIndex > -1) {
+              splitIndex = vaultIndex;
+            } else if (apiVaultIndex > -1) {
+              splitIndex = apiVaultIndex;
+            } else if (httpIndex > -1) {
               splitIndex = httpIndex;
             } else if (dataIndex > -1) {
               splitIndex = dataIndex;
@@ -67218,35 +67250,43 @@ ${stickerContext || "无"}
 
             // 2. 如果找到了 URL 的起始位置
             if (splitIndex > 0) {
-              // URL 之前的所有内容都属于名称
               name = line.substring(0, splitIndex).trim();
-              // 从 URL 起始位置到末尾的所有内容都属于 URL
               url = line.substring(splitIndex).trim();
 
-              // 3. 清理名称末尾可能存在的分隔符
               if (name.endsWith(":") || name.endsWith("：")) {
                 name = name.slice(0, -1).trim();
               }
             } else {
-              // 如果找不到 URL，说明格式有问题
               errorLines.push(index + 1);
-              return; // 跳过此行
+              continue;
             }
 
             if (
               name &&
-              (url.startsWith("http") || url.startsWith("data:image"))
+              (url.startsWith("vault://") ||
+                url.startsWith("/api/local-vault/") ||
+                url.startsWith("http") ||
+                url.startsWith("data:image"))
             ) {
+              if (url.startsWith("data:image") && typeof window.saveStickerToLocalVault === "function") {
+                try {
+                  url = await window.saveStickerToLocalVault(url);
+                } catch (_) {}
+              }
               newStickers.push({
                 id: "sticker_" + (Date.now() + index),
                 url: url,
                 name: name,
+                categoryId:
+                  activeStickerCategoryId && activeStickerCategoryId !== "uncategorized"
+                    ? activeStickerCategoryId
+                    : undefined,
               });
               successCount++;
             } else {
               errorLines.push(index + 1);
             }
-          });
+          }
 
           if (newStickers.length > 0) {
             await db.userStickers.bulkAdd(newStickers);
@@ -71475,7 +71515,13 @@ ${stickerContext || "无"}
           stickersWithIndex.forEach((sticker) => {
             const item = document.createElement("div");
             item.className = "sticker-item";
-            item.style.backgroundImage = `url(${sticker.url})`;
+            if (typeof sticker.url === "string" && sticker.url.startsWith("vault://")) {
+              item.setAttribute("data-vault-bg-ref", sticker.url);
+              const cachedFast = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(sticker.url) : null;
+              item.style.backgroundImage = `url(${cachedFast || sticker.url})`;
+            } else {
+              item.style.backgroundImage = `url(${sticker.url})`;
+            }
             item.title = sticker.name;
 
             // 我们使用 URL 作为唯一标识符，因为它在两种库中都是唯一的
@@ -71534,6 +71580,9 @@ ${stickerContext || "无"}
             }
             grid.appendChild(item);
           });
+          if (typeof window.hydrateDomVaultImages === "function") {
+            window.hydrateDomVaultImages();
+          }
         }
 
         /**
@@ -71611,16 +71660,22 @@ ${stickerContext || "无"}
           const newStickers = [];
           let successCount = 0;
 
-          lines.forEach((line, index) => {
-            line = line.trim();
-            if (!line) return;
+          for (let index = 0; index < lines.length; index++) {
+            let line = lines[index].trim();
+            if (!line) continue;
 
             let name = "";
             let url = "";
             let splitIndex = -1;
+            const vaultIndex = line.indexOf("vault://");
+            const apiVaultIndex = line.indexOf("/api/local-vault/");
             const httpIndex = line.indexOf("http");
             const dataIndex = line.indexOf("data:image");
-            if (httpIndex > -1) {
+            if (vaultIndex > -1) {
+              splitIndex = vaultIndex;
+            } else if (apiVaultIndex > -1) {
+              splitIndex = apiVaultIndex;
+            } else if (httpIndex > -1) {
               splitIndex = httpIndex;
             } else if (dataIndex > -1) {
               splitIndex = dataIndex;
@@ -71636,8 +71691,16 @@ ${stickerContext || "无"}
 
             if (
               name &&
-              (url.startsWith("http") || url.startsWith("data:image"))
+              (url.startsWith("vault://") ||
+                url.startsWith("/api/local-vault/") ||
+                url.startsWith("http") ||
+                url.startsWith("data:image"))
             ) {
+              if (url.startsWith("data:image") && typeof window.saveStickerToLocalVault === "function") {
+                try {
+                  url = await window.saveStickerToLocalVault(url);
+                } catch (_) {}
+              }
               const stickerData = { url, name };
               if (type !== "exclusive") {
                 stickerData.id = "char_sticker_" + (Date.now() + index);
@@ -71645,7 +71708,7 @@ ${stickerContext || "无"}
               newStickers.push(stickerData);
               successCount++;
             }
-          });
+          }
 
           if (newStickers.length > 0) {
             if (type === "exclusive") {
@@ -71673,7 +71736,6 @@ ${stickerContext || "无"}
             if (!files.length) return;
 
             const stickersToAdd = []; // 先收集所有要添加的表情
-            const copiedUrls = [];
 
             for (const file of files) {
               const name = await showCustomPrompt(
@@ -71699,15 +71761,15 @@ ${stickerContext || "无"}
                 }
 
                 let finalStickerUrl = base64Url;
-                if (typeof window.uploadImageToBed === "function") {
+                if (typeof window.saveStickerToLocalVault === "function") {
                   try {
-                    const remoteUrl = await window.uploadImageToBed(base64Url, file.name);
-                    if (remoteUrl && remoteUrl.startsWith("http")) {
-                      finalStickerUrl = remoteUrl;
-                      copiedUrls.push(remoteUrl);
+                    const vaultRef = await window.saveStickerToLocalVault(base64Url);
+                    if (vaultRef && !vaultRef.startsWith("data:")) {
+                      finalStickerUrl = vaultRef;
                     }
                   } catch (_) {}
                 }
+                base64Url = null;
 
                 const stickerData = { name: name.trim(), url: finalStickerUrl };
                 if (type !== "exclusive") {
@@ -71726,12 +71788,7 @@ ${stickerContext || "无"}
                 await db.charStickers.bulkAdd(stickersToAdd);
               }
               await renderCharStickers(type); // 在数据库操作后，统一重新渲染
-              if (copiedUrls.length > 0 && typeof window.copyTextToClipboard === "function") {
-                await window.copyTextToClipboard(copiedUrls.join("\n"));
-                alert(`已成功上传 ${stickersToAdd.length} 个表情，图床链接已自动复制！`);
-              } else {
-                alert(`已成功上传 ${stickersToAdd.length} 个表情！`);
-              }
+              alert(`已成功上传 ${stickersToAdd.length} 个表情并存入本地目录！`);
             }
 
             event.target.value = null;
@@ -99352,20 +99409,24 @@ ${specificRules}`;
                   }
 
                   let finalStickerUrl = base64Url;
-                  if (typeof window.uploadImageToBed === "function") {
+                  if (typeof window.saveStickerToLocalVault === "function") {
                     try {
-                      const remoteUrl = await window.uploadImageToBed(base64Url, file.name);
-                      if (remoteUrl && remoteUrl.startsWith("http")) {
-                        finalStickerUrl = remoteUrl;
-                        copiedUrls.push(remoteUrl);
+                      const vaultRef = await window.saveStickerToLocalVault(base64Url);
+                      if (vaultRef && !vaultRef.startsWith("data:")) {
+                        finalStickerUrl = vaultRef;
                       }
                     } catch (_) {}
                   }
+                  base64Url = null;
 
                   newStickers.push({
                     id: "sticker_" + (Date.now() + newStickers.length),
                     url: finalStickerUrl,
                     name: name.trim(),
+                    categoryId:
+                      activeStickerCategoryId && activeStickerCategoryId !== "uncategorized"
+                        ? activeStickerCategoryId
+                        : undefined,
                   });
                 } else if (name === null) {
                   // 如果用户点击了“取消”
@@ -99386,18 +99447,10 @@ ${specificRules}`;
                 await db.userStickers.bulkAdd(newStickers);
                 state.userStickers.push(...newStickers);
                 renderStickerPanel();
-                if (copiedUrls.length > 0 && typeof window.copyTextToClipboard === "function") {
-                  await window.copyTextToClipboard(copiedUrls.join("\n"));
-                  await showCustomAlert(
-                    "上传成功",
-                    `已成功添加 ${newStickers.length} 个新表情，图床链接已自动复制！`,
-                  );
-                } else {
-                  await showCustomAlert(
-                    "上传成功",
-                    `已成功添加 ${newStickers.length} 个新表情！`,
-                  );
-                }
+                await showCustomAlert(
+                  "上传成功",
+                  `已成功添加 ${newStickers.length} 个新表情并存入本地目录！`,
+                );
               }
 
               // 清空文件选择器的值，以便下次能选择相同的文件
@@ -110270,12 +110323,50 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
+          const MAX_BLOB_CACHE_ITEMS = 60;
           function setVaultBlobCache(fileName, objUrl) {
             if (!fileName || !objUrl) return;
             const cleanName = fileName.startsWith("vault://") ? fileName.slice("vault://".length) : fileName;
+            if (blobUrlMemoryCache.has(cleanName)) {
+              const prevUrl = blobUrlMemoryCache.get(cleanName);
+              if (prevUrl && prevUrl !== objUrl) {
+                blobUrlMemoryCache.delete(cleanName);
+              }
+            }
             blobUrlMemoryCache.set(cleanName, objUrl);
             blobUrlToVaultRefMap.set(objUrl, "vault://" + cleanName);
             liveSessionBlobUrls.add(objUrl);
+            if (blobUrlMemoryCache.size > MAX_BLOB_CACHE_ITEMS) {
+              const oldestKey = blobUrlMemoryCache.keys().next().value;
+              if (oldestKey && oldestKey !== cleanName) {
+                const oldUrl = blobUrlMemoryCache.get(oldestKey);
+                blobUrlMemoryCache.delete(oldestKey);
+                if (oldUrl) {
+                  let inUse = false;
+                  try {
+                    const activeEls = document.querySelectorAll('img[data-vault-hydrated-src], [style*="blob:"]');
+                    for (let i = 0; i < activeEls.length; i++) {
+                      const el = activeEls[i];
+                      if (
+                        el.getAttribute("src") === oldUrl ||
+                        el.getAttribute("data-vault-hydrated-src") === oldUrl ||
+                        (el.getAttribute("style") || "").includes(oldUrl)
+                      ) {
+                        inUse = true;
+                        break;
+                      }
+                    }
+                  } catch (_) {}
+                  if (!inUse) {
+                    try {
+                      URL.revokeObjectURL(oldUrl);
+                      liveSessionBlobUrls.delete(oldUrl);
+                      blobUrlToVaultRefMap.delete(oldUrl);
+                    } catch (_) {}
+                  }
+                }
+              }
+            }
           }
 
           window.getCachedVaultBlobUrl = function (vaultRef) {
@@ -110501,7 +110592,7 @@ ${specificRules}`;
               }
             } catch (_) {}
             return {
-              mode: "folder",
+              mode: "server",
               url: "http://127.0.0.1:8765",
               username: "",
               password: "",
@@ -110941,6 +111032,9 @@ ${specificRules}`;
                 }
                 setTimeout(() => {
                   purgeBrowserOpfsMediaCacheIfExternalActive().catch(() => {});
+                  if (typeof autoOffloadAllStickersToVault === "function") {
+                    autoOffloadAllStickersToVault().catch(() => {});
+                  }
                 }, 400);
               }
               inflightTermuxPingPromise = null;
@@ -111450,9 +111544,9 @@ ${specificRules}`;
             }
           }
 
-          async function storeImageInVault(fileName, parts, cfg, sharedMediaDir = null) {
+          async function storeImageInVault(fileName, parts, cfg, sharedMediaDir = null, skipBlobCache = false) {
             if (writtenVaultFiles.has(fileName)) {
-              if (!blobUrlMemoryCache.has(fileName)) {
+              if (!skipBlobCache && !blobUrlMemoryCache.has(fileName)) {
                 const bytes = base64ToUint8Array(parts.b64);
                 setVaultBlobCache(fileName, URL.createObjectURL(new Blob([bytes], { type: parts.mime })));
               }
@@ -111507,28 +111601,33 @@ ${specificRules}`;
               }
 
               // 3. 仅在存在内置后端服务时同步至后端磁盘目录
-              if (!termuxSaved && !isStaticPagesHost() && _builtInServerAvailable === true) {
-                for (let sAttempt = 0; sAttempt < 2; sAttempt++) {
-                  try {
-                    const sRes = await fetch("/api/local-vault/media", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        fileName,
-                        contentBase64: parts.b64,
-                        contentType: parts.mime,
-                      }),
-                    });
-                    if (sRes && sRes.ok) {
-                      storedAny = true;
-                      break;
-                    }
-                  } catch (_) {}
+              if (!termuxSaved && !isStaticPagesHost()) {
+                if (_builtInServerAvailable === null) {
+                  await checkBuiltInVaultServer();
+                }
+                if (_builtInServerAvailable === true) {
+                  for (let sAttempt = 0; sAttempt < 2; sAttempt++) {
+                    try {
+                      const sRes = await fetch("/api/local-vault/media", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          fileName,
+                          contentBase64: parts.b64,
+                          contentType: parts.mime,
+                        }),
+                      });
+                      if (sRes && sRes.ok) {
+                        storedAny = true;
+                        break;
+                      }
+                    } catch (_) {}
+                  }
                 }
               }
 
-              // 4. 严禁在 server (Termux) 模式下往浏览器 OPFS 塞副本！仅在用户明确未选择 server 模式且无任何外部目录时才回退
-              if (!termuxSaved && !externalFolderSaved && mode !== "server") {
+              // 4. 严禁在 server (Termux) 模式下往浏览器 OPFS 塞副本！仅在用户明确选择 folder 模式且授权外部目录不可用时才回退
+              if (!termuxSaved && !externalFolderSaved && !storedAny && mode !== "server") {
                 try {
                   const opfsRoot = await getAutoOpfsDirectoryHandle();
                   if (opfsRoot) {
@@ -111544,8 +111643,10 @@ ${specificRules}`;
 
               if (!storedAny) throw new Error("写入本地目录失败，请确认 Termux 服务已开启");
               writtenVaultFiles.add(fileName);
-              const blob = new Blob([bytes], { type: parts.mime });
-              setVaultBlobCache(fileName, URL.createObjectURL(blob));
+              if (!skipBlobCache) {
+                const blob = new Blob([bytes], { type: parts.mime });
+                setVaultBlobCache(fileName, URL.createObjectURL(blob));
+              }
               return "vault://" + fileName;
             } else if (mode === "webdav") {
               const baseUrl = cfg.url.replace(/\/+$/, "");
@@ -111891,8 +111992,12 @@ ${specificRules}`;
           window.resolveAllVaultUrlsDeepForBackup = resolveAllVaultUrlsDeepForBackup;
 
           function isOffloadableStringValue(val, propKey = "") {
-            if (typeof val !== "string" || val.length < 4096 || val.startsWith("vault://")) return false;
-            if (val.startsWith("data:image/") || val.startsWith("data:audio/")) return true;
+            if (typeof val !== "string" || val.startsWith("vault://")) return false;
+            if (val.startsWith("data:image/")) {
+              return val.length >= 512 && !val.startsWith("data:image/gif;base64,R0lGODlhAQAB");
+            }
+            if (val.length < 4096) return false;
+            if (val.startsWith("data:audio/")) return true;
             if (
               (propKey === "audioHex" || propKey === "quoteAudioHex" || propKey === "audioData" || propKey === "quoteAudioData") &&
               /^[0-9a-fA-F\s]+$/.test(val)
@@ -111902,6 +112007,116 @@ ${specificRules}`;
             return false;
           }
 
+          async function saveStickerToLocalVault(dataUrl, skipBlobCache = false) {
+            if (!dataUrl || typeof dataUrl !== "string") return dataUrl;
+            if (dataUrl.startsWith("vault://") || dataUrl.startsWith("http") || dataUrl.startsWith("/api/")) {
+              return dataUrl;
+            }
+            if (dataUrl.startsWith("blob:")) {
+              const mapped = blobUrlToVaultRefMap.get(dataUrl);
+              if (mapped) return mapped;
+            }
+            if (!dataUrl.startsWith("data:image/")) return dataUrl;
+            const parts = parseDataUrlToParts(dataUrl, "url");
+            if (!parts) return dataUrl;
+            const cfg = loadVaultConfig();
+            const prefix = parts.prefix || "img_";
+            const fileName = prefix + hashDataUrl(dataUrl) + "." + parts.ext;
+            const ref = await storeImageInVault(fileName, parts, cfg, null, skipBlobCache);
+            return ref || dataUrl;
+          }
+          window.saveStickerToLocalVault = saveStickerToLocalVault;
+
+          let _isAutoOffloadingStickers = false;
+          async function autoOffloadAllStickersToVault() {
+            if (_isAutoOffloadingStickers) return 0;
+            _isAutoOffloadingStickers = true;
+            let movedCount = 0;
+            try {
+              const cfg = loadVaultConfig();
+              const counter = { count: 0, savedBytes: 0 };
+              if (typeof db !== "undefined") {
+                const stickerTables = [
+                  { table: db.userStickers, stateKey: "userStickers" },
+                  { table: db.charStickers, stateKey: "charStickers" },
+                ];
+                for (const item of stickerTables) {
+                  if (!item.table) continue;
+                  const rows = await item.table.toArray();
+                  let anyTableChanged = false;
+                  for (const row of rows) {
+                    if (!row || typeof row !== "object") continue;
+                    let rowChanged = false;
+                    if (typeof row.url === "string" && row.url.startsWith("data:image/")) {
+                      try {
+                        const vaultRef = await saveStickerToLocalVault(row.url, true);
+                        if (vaultRef && vaultRef.startsWith("vault://")) {
+                          row.url = vaultRef;
+                          rowChanged = true;
+                          movedCount++;
+                        }
+                      } catch (_) {}
+                    }
+                    if (typeof row.dataUrl === "string" && row.dataUrl.startsWith("data:image/")) {
+                      if (typeof row.url === "string" && row.url.startsWith("vault://")) {
+                        delete row.dataUrl;
+                        rowChanged = true;
+                      } else {
+                        try {
+                          const vaultRef = await saveStickerToLocalVault(row.dataUrl, true);
+                          if (vaultRef && vaultRef.startsWith("vault://")) {
+                            row.url = vaultRef;
+                            delete row.dataUrl;
+                            rowChanged = true;
+                            movedCount++;
+                          }
+                        } catch (_) {}
+                      }
+                    }
+                    if (rowChanged) {
+                      anyTableChanged = true;
+                      await item.table.put(row);
+                    }
+                  }
+                  if (anyTableChanged && typeof state !== "undefined" && Array.isArray(state[item.stateKey])) {
+                    state[item.stateKey] = await item.table.toArray();
+                  }
+                }
+                if (db.chats && typeof state !== "undefined" && state.chats) {
+                  for (const chatId of Object.keys(state.chats)) {
+                    const chat = state.chats[chatId];
+                    if (chat && chat.settings && Array.isArray(chat.settings.stickerLibrary)) {
+                      let libChanged = false;
+                      for (const stk of chat.settings.stickerLibrary) {
+                        if (stk && typeof stk.url === "string" && stk.url.startsWith("data:image/")) {
+                          try {
+                            const vRef = await saveStickerToLocalVault(stk.url, true);
+                            if (vRef && vRef.startsWith("vault://")) {
+                              stk.url = vRef;
+                              libChanged = true;
+                              movedCount++;
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                      if (libChanged) {
+                        await db.chats.put(chat);
+                      }
+                    }
+                  }
+                }
+              }
+              if (movedCount > 0) {
+                hydrateDomVaultImages();
+              }
+            } catch (_) {
+            } finally {
+              _isAutoOffloadingStickers = false;
+            }
+            return movedCount;
+          }
+          window.autoOffloadAllStickersToVault = autoOffloadAllStickersToVault;
+
           async function offloadDataUrlString(str, cfg, counter, sharedMediaDir = null, propKey = "") {
             if (!isOffloadableStringValue(str, propKey)) {
               return str;
@@ -111910,7 +112125,7 @@ ${specificRules}`;
             if (!parts) return str;
             const prefix = parts.prefix || "img_";
             const fileName = prefix + hashDataUrl(str) + "." + parts.ext;
-            const ref = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
+            const ref = await storeImageInVault(fileName, parts, cfg, sharedMediaDir, true);
             if (ref) {
               counter.count++;
               counter.savedBytes += str.length;
@@ -111943,7 +112158,7 @@ ${specificRules}`;
             }
           }
 
-          async function offloadObjectImagesDeep(obj, cfg, counter, sharedMediaDir = null) {
+          async function offloadObjectImagesDeep(obj, cfg, counter, sharedMediaDir = null, skipBlobCache = false) {
             restoreVaultRefsInObjectDeep(obj);
             const tasks = [];
             collectImageTasksFromObject(obj, tasks);
@@ -111959,7 +112174,7 @@ ${specificRules}`;
                     if (!parts) return;
                     const prefix = parts.prefix || "img_";
                     const fileName = prefix + hashDataUrl(t.val) + "." + parts.ext;
-                    const nextVal = await storeImageInVault(fileName, parts, cfg, sharedMediaDir);
+                    const nextVal = await storeImageInVault(fileName, parts, cfg, sharedMediaDir, skipBlobCache);
                     if (nextVal && nextVal !== t.val) {
                       t.holder[t.key] = nextVal;
                       counter.count++;
@@ -112001,10 +112216,12 @@ ${specificRules}`;
                   if (!table || table.name === "apiConfig") continue;
                   try {
                     const rows = await table.toArray();
+                    let tableModified = false;
                     for (let idx = 0; idx < rows.length; idx++) {
                       const row = rows[idx];
-                      const changed = await offloadObjectImagesDeep(row, cfg, counter, sharedMediaDir);
+                      const changed = await offloadObjectImagesDeep(row, cfg, counter, sharedMediaDir, true);
                       if (changed) {
+                        tableModified = true;
                         await table.put(row);
                         if (table.name === "chats" && typeof state !== "undefined" && state.chats && row.id !== undefined) {
                           state.chats[row.id] = row;
@@ -112014,6 +112231,13 @@ ${specificRules}`;
                           Object.assign(state.globalSettings, row);
                         }
                         setVaultInfoText("正在全表高速分离图片与音频 · 已转移 " + counter.count + " 项...");
+                      }
+                    }
+                    if (tableModified && typeof state !== "undefined") {
+                      if (table.name === "userStickers") {
+                        state.userStickers = await table.toArray();
+                      } else if (table.name === "charStickers") {
+                        state.charStickers = await table.toArray();
                       }
                     }
                   } catch (_) {}
@@ -112348,19 +112572,38 @@ ${specificRules}`;
                 }
               });
             });
-            const bgEls = document.querySelectorAll('[style*="vault://"]');
+            const bgEls = document.querySelectorAll('[style*="vault://"], [data-vault-bg-ref]');
             bgEls.forEach((el) => {
               const st = el.getAttribute("style") || "";
               const m = /vault:\/\/[a-zA-Z0-9._-]+/.exec(st);
-              if (!m) return;
-              const ref = m[0];
+              const ref = (m && m[0]) || el.getAttribute("data-vault-bg-ref");
+              if (!ref || !ref.startsWith("vault://")) return;
+              if (el.getAttribute("data-vault-bg-ref") !== ref) {
+                el.setAttribute("data-vault-bg-ref", ref);
+              }
+              const cachedFast = window.getCachedVaultBlobUrl ? window.getCachedVaultBlobUrl(ref) : null;
+              if (cachedFast) {
+                if (st.includes(ref)) {
+                  el.setAttribute("style", st.split(ref).join(cachedFast));
+                } else if (!st.includes(cachedFast)) {
+                  el.style.backgroundImage = `url(${cachedFast})`;
+                }
+                return;
+              }
+              if (el._vaultBgResolvingRef === ref) return;
+              el._vaultBgResolvingRef = ref;
               resolveVaultRefToUrl(ref).then((resolved) => {
-                if (resolved && resolved !== ref) {
+                el._vaultBgResolvingRef = null;
+                if (resolved && resolved !== ref && !resolved.startsWith("vault://")) {
                   const curSt = el.getAttribute("style") || "";
                   if (curSt.includes(ref)) {
                     el.setAttribute("style", curSt.split(ref).join(resolved));
+                  } else {
+                    el.style.backgroundImage = `url(${resolved})`;
                   }
                 }
+              }).catch(() => {
+                el._vaultBgResolvingRef = null;
               });
             });
             const styleTags = document.querySelectorAll("style");
@@ -112428,6 +112671,10 @@ ${specificRules}`;
                 img._vaultRetryCount = 0;
                 img._vaultRetryScheduled = false;
                 img._vaultResolvingRef = null;
+              });
+              const bgEls = document.querySelectorAll('[style*="vault://"], [data-vault-bg-ref]');
+              bgEls.forEach((el) => {
+                el._vaultBgResolvingRef = null;
               });
               hydrateDomVaultImages();
             } catch (_) {}
@@ -112616,6 +112863,8 @@ ${specificRules}`;
           };
 
           window.LocalVaultManager = {
+            saveStickerToLocalVault,
+            autoOffloadAllStickersToVault,
             maybeAutoOffloadSingleMessage: async function (msg) {
               const cfg = loadVaultConfig();
               if (!cfg.auto || !msg) return;
@@ -112662,6 +112911,26 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   return origAdd(rowObj, ...rest);
+                };
+              }
+              if (typeof table.bulkAdd === "function") {
+                const origBulkAdd = table.bulkAdd.bind(table);
+                table.bulkAdd = async function (rows, ...rest) {
+                  try {
+                    if (Array.isArray(rows)) {
+                      const cfg = loadVaultConfig();
+                      for (const r of rows) {
+                        if (r && typeof r === "object") {
+                          restoreVaultRefsInObjectDeep(r);
+                          if (cfg.auto) {
+                            const counter = { count: 0, savedBytes: 0 };
+                            await offloadObjectImagesDeep(r, cfg, counter);
+                          }
+                        }
+                      }
+                    }
+                  } catch (_) {}
+                  return origBulkAdd(rows, ...rest);
                 };
               }
               if (typeof table.bulkPut === "function") {
