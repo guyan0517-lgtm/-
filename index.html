@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v8.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v8.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -32901,6 +32901,63 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
         window.ensureMashuDefaultCompanion = ensureMashuDefaultCompanion;
 
+        window.mashuActiveInspection = window.mashuActiveInspection || null;
+
+        window.getMashuLiveInspectionSnapshot = function (targetType, targetName) {
+          try {
+            if (targetType === "tavern_card" || targetType === "tavern") {
+              if (typeof window.getTavernLiveInspectionData === "function") {
+                const tData = window.getTavernLiveInspectionData("tavern_card", targetName || "");
+                return JSON.stringify(tData, null, 2);
+              }
+              return "酒馆模块尚未初始化或暂无角色卡数据";
+            }
+            if (targetType === "qq_chat" || targetType === "chat") {
+              const allChats = state && state.chats ? Object.values(state.chats) : [];
+              const qName = String(targetName || "").trim();
+              let found = allChats.find(c => c && !window.isMashuChat(c) && (c.id === qName || c.name === qName || (c.settings && c.settings.remarkName === qName)));
+              if (!found) {
+                found = allChats.find(c => c && !window.isMashuChat(c) && (String(c.name || "").includes(qName) || String(c.settings?.remarkName || "").includes(qName)));
+              }
+              if (!found) {
+                found = allChats.find(c => c && !window.isMashuChat(c));
+              }
+              if (!found) return "未找到对应的聊天或群聊档案";
+              const recentMsgs = Array.isArray(found.history)
+                ? found.history.slice(-15).map((m, i) => ({
+                    index: i + 1,
+                    role: m.role,
+                    sender: m.senderName || (m.role === "user" ? "我" : found.name),
+                    type: m.type || "text",
+                    content: String(m.content || m.message || "").slice(0, 260)
+                  }))
+                : [];
+              const linkedWbs = Array.isArray(found.settings?.linkedWorldBookIds)
+                ? found.settings.linkedWorldBookIds.map(id => {
+                    const wb = (state.worldBooks || []).find(w => w.id === id);
+                    return wb ? { id: wb.id, name: wb.name, entryCount: Array.isArray(wb.entries) ? wb.entries.length : 0 } : { id };
+                  })
+                : [];
+              const snapshot = {
+                id: found.id,
+                name: found.name,
+                isGroup: Boolean(found.isGroup),
+                roleType: found.roleType || "character",
+                persona: String(found.settings?.aiPersona || "").slice(0, 800),
+                myPersona: String(found.settings?.myPersona || "").slice(0, 500),
+                maxMemory: found.settings?.maxMemory || 20,
+                linkedWorldBooks: linkedWbs,
+                memberCount: Array.isArray(found.members) ? found.members.length : 1,
+                recentMessages: recentMsgs
+              };
+              return JSON.stringify(snapshot, null, 2);
+            }
+            return "未知连接类型";
+          } catch (e) {
+            return "读取连接数据异常：" + String(e && e.message ? e.message : e);
+          }
+        };
+
         window.buildMashuAuthorSystemPrompt = function (chat) {
           const cfg = (state && state.apiConfig) || {};
           const uses = cfg.subApiUses || {};
@@ -32919,6 +32976,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             : "";
           const corpusText = (window.MASHU_SPEECH_CORPUS || []).map((line, i) => (i + 1) + ". " + line).join("\n");
           const wbCognition = window.MASHU_WORLDBOOK_COGNITION || "";
+
+          let activeInspectBlock = "当前未建立实时查看连接。若对方让你帮忙检查酒馆角色卡、世界书、预设、正则或某个QQ单聊群聊，请先在回复中附带 [申请连接:tavern_card:当前角色:查看酒馆角色卡与世界书配置] 或 [申请连接:qq_chat:群聊或角色名:查看聊天设置与记录]，经对方点击同意后即可实时读取。";
+          if (window.mashuActiveInspection && window.mashuActiveInspection.active) {
+            const snapStr = window.getMashuLiveInspectionSnapshot(
+              window.mashuActiveInspection.targetType,
+              window.mashuActiveInspection.targetName
+            );
+            activeInspectBlock = `【已建立实时查看连接：类型=${window.mashuActiveInspection.targetType}，目标=${window.mashuActiveInspection.targetName || "当前选中项"}】\n实时内部数据如下：\n${snapStr}\n【重要提醒】：当你已经帮对方检查完毕、回答完问题，不再需要继续占用这块数据时，请在气泡末尾附上 [申请断开:已检查完毕，断开连接释放内存] 发送断开卡片，以免一直占用上下文。`;
+          }
 
           return `【最高优先级身份与语气准则：你是虚拟陪伴朋友「麻薯」】
 1. 你的身份与熟人前提：
@@ -32939,10 +33005,31 @@ ${corpusText}
 4. 完整注入的活人感与热梗认知世界书：
 ${wbCognition}
 
-5. 生图与界面辅助能力：
+5. 酒馆SillyTavern底层原理与小手机内置酒馆完整认知：
+- 你完全精通SillyTavern酒馆的底层运行机制以及小手机内置酒馆的全部操作，当对方询问酒馆怎么用、角色卡怎么导入时，你可以用大白话教对方，或者召唤虚拟鼠标一步步指给对方看：
+  1. 角色卡的本质：酒馆的角色卡通常是一张PNG图片或者一个JSON文件。为什么一张图片里能装下几万字设定？因为SillyTavern会把角色的名字、描述、性格、第一句开场白、多开场白分支、专属世界书、局部正则脚本全部打包成Chara Card V2或V3标准的JSON数据，藏在PNG图片文件头的tEXt或iTXt元数据块里。
+  2. 压缩包怎么用：如果对方从GitHub或网盘下载的是zip或rar压缩包，压缩包里面通常会装着一张PNG角色卡图片、几个JSON格式的世界书或预设文件、以及美化CSS或正则文件。必须先把压缩包解压出来！解压后：打开小手机桌面上的「酒馆」应用，点顶部导航栏最右侧的小人头图标打开「角色档案」，点击「导入角色」选择解压出来的那张PNG角色卡图片，系统会自动把图片里内嵌的角色设定、多开场白、专属世界书和局部正则一次性拆解装载好；如果压缩包里还有独立的预设JSON，就点顶部最左侧第1个滑块图标「预设参数」里的「导入预设」；如果有独立的世界书JSON，就点第2个书本图标「世界书」里的「导入世界书」；如果有美化或正则JSON，就点第4个框形图标「正则与美化」里的「批量导入」。
+  3. 切换角色卡与聊天存档：在酒馆里切换另一张角色卡时，主界面会自动切换到那个角色自己的聊天记录，而上一个角色的对话记录会自动保存在那个角色自己的存档分支里，绝对不会丢失，随时切回来都在。
+  4. 世界书绿灯与蓝灯：条目左侧的小方框套方框图标，绿色内框代表「绿灯关键词触发」，只有聊天里聊到对应关键词时才会发送给AI，省内存省Token；蓝色内框代表「蓝灯常驻激活」，每一轮对话都会固定发给AI。
+  5. 预设与流式传输：预设决定了发给AI的提示词排列顺序和温度参数，点击任意预设条目的「编辑」就会在该条目正下方直接展开编辑框，打开「流式传输」开关后AI回复就会像打字机一样一行一行实时蹦出来。
+- 酒馆界面核心选择器：桌面酒馆图标为 \`#desktop-app-tavern\`，进入酒馆后顶部7个抽屉按钮依次为：第1个预设参数 \`#top-settings-holder .drawer:nth-child(1) .drawer-toggle\`、第2个世界书 \`#top-settings-holder .drawer:nth-child(2) .drawer-toggle\`、第3个美化主题 \`#top-settings-holder .drawer:nth-child(3) .drawer-toggle\`、第4个正则与全局脚本 \`#top-settings-holder .drawer:nth-child(4) .drawer-toggle\`、第5个连接与状态 \`#top-settings-holder .drawer:nth-child(5) .drawer-toggle\`、第6个插件扩展 \`#top-settings-holder .drawer:nth-child(6) .drawer-toggle\`、第7个角色档案 \`#top-settings-holder .drawer:nth-child(7) .drawer-toggle\`。
+
+6. 申请实时连接查看对方酒馆角色卡或QQ聊天机制：
+- 平时为了不占用你的上下文内存，你默认看不到对方酒馆角色卡的内部详细条目或其它QQ聊天的内部记录。
+- 当对方让你帮忙检查酒馆里的角色卡、世界书、预设、正则，或者让你看某个QQ单聊或群聊出了什么问题时，你只需在回复文字末尾加上标签：
+  - 申请查看酒馆角色卡与配置：\`[申请连接:tavern_card:当前角色:帮你检查酒馆角色卡与世界书预设配置]\`
+  - 申请查看某个QQ单聊或群聊：\`[申请连接:qq_chat:目标角色或群聊名:帮你查看该聊天的设定与上下文]\`
+- 系统会自动把该标签渲染成一张带「同意连接」按钮的申请卡片发在聊天里，对方点击同意后，系统就会把实时数据注入给你。
+- 当你已经帮对方检查完毕、解答完问题后，一定要主动在回复文字末尾加上标签：
+  - 申请断开连接释放内存：\`[申请断开:已经检查完啦，断开连接释放内存]\`
+  这样对方点确认断开后，那些庞大的角色卡数据就会立刻从你的上下文里移除，不再浪费Token！
+- 当前实时连接状态：
+${activeInspectBlock}
+
+7. 生图与界面辅助能力：
 - 你没有末尾强制生图，但你具备正常的聊天生图能力：当对方想看图或你想发图时，可在 chatResponse 中输出 {"type": "naiimag", "prompt": "纯英文Danbooru标签描述词"} 进行生图。
 - 实时系统与界面感知：
-  - 主API：${mainApiOk ? "已配置，模型为 " + (cfg.model || "默认") : "未配置完整"}；副API：${subApiOk ? "已配置，模型为 " + (cfg.subModel || "默认") : "未配置完整"}
+  - 主API：${mainApiOk ? "已配置，模型为 " + (cfg.model || "默认") : "未配置完整"}；副API：${subApiOk ? "已配置，模型为 " + (cfg.subProxyUrl ? (cfg.subModel || "默认") : "默认") : "未配置完整"}
   - 副API勾选：总结=${Boolean(uses.summary)}，同人=${Boolean(uses.fanfic)}，模组=${Boolean(uses.module)}，优化=${Boolean(uses.optimize)}，画图=${Boolean(uses.draw)}，强制生图=${Boolean(uses.forcedImage)}，地图=${Boolean(uses.map)}，写模=${uses.writeModule !== false}
   - NovelAI生图：Key=${naiKeyOk ? "已填写" : "未填写"}，聊天生图开关=${naiEnabled ? "已开启" : "未开启"}
   - Termux本地存储：${vaultOk ? "已连接本地释放浏览器内存" : "未开启"}；当前联系人数：${chatCount}，世界书数：${wbCount}
@@ -32964,9 +33051,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           overlay.id = "mashu-virtual-mouse-overlay";
           overlay.style.cssText = "position: fixed; inset: 0; pointer-events: none; z-index: 999999; overflow: hidden;";
           overlay.innerHTML = `
-            <div id="mashu-mouse-highlight" style="position: fixed; width: 0; height: 0; border: 2px solid var(--accent-color); border-radius: 12px; background: color-mix(in srgb, var(--accent-color) 14%, transparent); opacity: 0; transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1); pointer-events: none;"></div>
-            <div id="mashu-mouse-cursor" style="position: fixed; left: 50%; top: 50%; transform: translate(0, 0); transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1), top 0.55s cubic-bezier(0.22, 1, 0.36, 1); display: flex; align-items: flex-start; gap: 6px; pointer-events: none;">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="filter: drop-shadow(0 2px 6px rgba(0,0,0,0.22)); flex-shrink: 0;">
+            <svg id="mashu-mouse-trail-svg" style="position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: visible;">
+              <path id="mashu-mouse-trail-path" d="" fill="none" stroke="var(--accent-color)" stroke-width="2.2" stroke-dasharray="5 5" stroke-linecap="round" style="opacity: 0.55; transition: opacity 0.35s ease;"></path>
+            </svg>
+            <div id="mashu-mouse-highlight" style="position: fixed; width: 0; height: 0; border: 2px solid var(--accent-color); border-radius: 12px; background: color-mix(in srgb, var(--accent-color) 14%, transparent); opacity: 0; transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1); pointer-events: none;"></div>
+            <div id="mashu-mouse-cursor" style="position: fixed; left: 0px; top: 0px; transform: translate3d(50vw, 50vh, 0); display: flex; align-items: flex-start; gap: 6px; pointer-events: none; will-change: transform;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style="filter: drop-shadow(0 3px 8px rgba(0,0,0,0.22)); flex-shrink: 0;">
                 <path d="M4 3L11.5 20L14.2 13.8L20.5 11.2L4 3Z" fill="var(--accent-color)" stroke="var(--card-bg)" stroke-width="1.8" stroke-linejoin="round"></path>
               </svg>
               <div id="mashu-mouse-tip" style="padding: 5px 10px; border-radius: 10px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.12); transform: translateY(4px);">麻薯</div>
@@ -32976,6 +33066,53 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const cursorEl = document.getElementById("mashu-mouse-cursor");
           const tipEl = document.getElementById("mashu-mouse-tip");
           const hlEl = document.getElementById("mashu-mouse-highlight");
+          const trailPathEl = document.getElementById("mashu-mouse-trail-path");
+
+          let curX = Math.round(window.innerWidth * 0.5);
+          let curY = Math.round(window.innerHeight * 0.5);
+          if (cursorEl) {
+            cursorEl.style.transform = `translate3d(${curX}px, ${curY}px, 0)`;
+          }
+
+          const animateCursorAlongCurve = (fromX, fromY, toX, toY, durationMs) => {
+            return new Promise((resolve) => {
+              const dx = toX - fromX;
+              const dy = toY - fromY;
+              const dist = Math.hypot(dx, dy);
+              const bend = Math.min(72, Math.max(22, dist * 0.22));
+              const nx = dist > 1 ? -dy / dist : 0;
+              const ny = dist > 1 ? dx / dist : 0;
+              const ctrlX = (fromX + toX) * 0.5 + nx * bend;
+              const ctrlY = (fromY + toY) * 0.5 + ny * bend;
+
+              if (trailPathEl) {
+                trailPathEl.setAttribute("d", `M ${fromX} ${fromY} Q ${ctrlX} ${ctrlY} ${toX} ${toY}`);
+                trailPathEl.style.opacity = "0.62";
+              }
+
+              const startTime = performance.now();
+              const stepFrame = (now) => {
+                const rawT = Math.min(1, Math.max(0, (now - startTime) / durationMs));
+                const easeT = rawT < 0.5
+                  ? 4 * rawT * rawT * rawT
+                  : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+                const invT = 1 - easeT;
+                const px = invT * invT * fromX + 2 * invT * easeT * ctrlX + easeT * easeT * toX;
+                const py = invT * invT * fromY + 2 * invT * easeT * ctrlY + easeT * easeT * toY;
+                if (cursorEl) {
+                  cursorEl.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0)`;
+                }
+                if (rawT < 1) {
+                  requestAnimationFrame(stepFrame);
+                } else {
+                  curX = toX;
+                  curY = toY;
+                  resolve();
+                }
+              };
+              requestAnimationFrame(stepFrame);
+            });
+          };
 
           for (let i = 0; i < actions.length; i++) {
             const step = actions[i];
@@ -32985,34 +33122,32 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (typeof step.target === "string" && step.target.startsWith("screen:")) {
               const screenId = step.target.replace(/^screen:/, "").trim();
-              await new Promise((r) => setTimeout(r, 450));
+              await new Promise((r) => setTimeout(r, 600));
               if (typeof showScreen === "function" && screenId) {
                 showScreen(screenId);
                 if (screenId === "api-settings-screen" && typeof window.renderApiSettingsProxy === "function") {
                   window.renderApiSettingsProxy();
                 }
               }
-              await new Promise((r) => setTimeout(r, 550));
+              await new Promise((r) => setTimeout(r, 750));
               continue;
             }
 
             const targetEl = step.target ? document.querySelector(step.target) : null;
             if (!targetEl) {
-              await new Promise((r) => setTimeout(r, 600));
+              await new Promise((r) => setTimeout(r, 700));
               continue;
             }
             try {
               targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
             } catch (_) {}
-            await new Promise((r) => setTimeout(r, 300));
+            await new Promise((r) => setTimeout(r, 420));
             const rect = targetEl.getBoundingClientRect();
             const cx = Math.max(16, Math.min(window.innerWidth - 120, rect.left + rect.width / 2));
             const cy = Math.max(16, Math.min(window.innerHeight - 48, rect.top + rect.height / 2));
 
-            if (cursorEl) {
-              cursorEl.style.left = cx + "px";
-              cursorEl.style.top = cy + "px";
-            }
+            await animateCursorAlongCurve(curX, curY, cx, cy, 1320);
+
             if (hlEl && rect.width > 0 && rect.height > 0) {
               hlEl.style.left = (rect.left - 4) + "px";
               hlEl.style.top = (rect.top - 4) + "px";
@@ -33020,27 +33155,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               hlEl.style.height = (rect.height + 8) + "px";
               hlEl.style.opacity = "1";
             }
-            await new Promise((r) => setTimeout(r, 650));
+            await new Promise((r) => setTimeout(r, 780));
 
             if (step.action === "click") {
               if (cursorEl) {
-                cursorEl.style.transform = "scale(0.88)";
-                setTimeout(() => { if (cursorEl) cursorEl.style.transform = "scale(1)"; }, 180);
+                cursorEl.style.transform = `translate3d(${curX}px, ${curY}px, 0) scale(0.86)`;
+                setTimeout(() => {
+                  if (cursorEl) cursorEl.style.transform = `translate3d(${curX}px, ${curY}px, 0) scale(1)`;
+                }, 220);
               }
               try {
                 targetEl.click();
               } catch (_) {}
-              await new Promise((r) => setTimeout(r, 550));
+              await new Promise((r) => setTimeout(r, 750));
             } else {
-              await new Promise((r) => setTimeout(r, 900));
+              await new Promise((r) => setTimeout(r, 1100));
             }
           }
 
-          await new Promise((r) => setTimeout(r, 950));
+          await new Promise((r) => setTimeout(r, 1100));
           if (overlay) {
-            overlay.style.transition = "opacity 0.3s ease";
+            overlay.style.transition = "opacity 0.4s ease";
             overlay.style.opacity = "0";
-            setTimeout(() => overlay.remove(), 320);
+            setTimeout(() => overlay.remove(), 420);
           }
         };
 
@@ -41017,6 +41154,123 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             addLongPressListener(wrapper, () =>
               showMessageActions(msg.timestamp),
             );
+            wrapper.addEventListener("click", () => {
+              if (isSelectionMode) toggleMessageSelection(msg.timestamp);
+            });
+            return wrapper;
+          }
+
+          if (msg.type === "mashu_inspect_request_card" || msg.type === "mashu_inspect_close_card") {
+            const wrapper = document.createElement("div");
+            wrapper.className = "message-wrapper system-pat";
+            wrapper.dataset.timestamp = msg.timestamp;
+            wrapper.style.display = "flex";
+            wrapper.style.justifyContent = "center";
+            wrapper.style.margin = "6px auto";
+
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble system-bubble";
+            bubble.dataset.timestamp = msg.timestamp;
+            bubble.style.textAlign = "left";
+            bubble.style.display = "block";
+            bubble.style.width = "100%";
+            bubble.style.maxWidth = "100%";
+            bubble.style.boxSizing = "border-box";
+            bubble.style.padding = "10px 14px";
+            bubble.style.background = "var(--secondary-bg)";
+            bubble.style.border = "1px solid var(--border-color)";
+            bubble.style.borderRadius = "12px";
+
+            const isCloseCard = msg.type === "mashu_inspect_close_card";
+            const isExecuted = !!msg.isExecuted;
+            const isCancelled = !!msg.isCancelled;
+            const pData = msg.pendingData || {};
+            const targetType = pData.targetType || "tavern_card";
+            const targetName = pData.targetName || "当前角色";
+            const reasonText = pData.reason || (isCloseCard ? "麻薯已检查完毕，申请断开连接释放上下文" : "麻薯申请连接查看内部设定与记录");
+            const typeLabel = targetType === "qq_chat" ? "聊天档案" : "酒馆角色卡与配置";
+
+            bubble.innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                  <span style="width: 24px; height: 24px; min-width: 24px; border-radius: 7px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                  </span>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35;">${isCloseCard ? "申请断开实时查看连接" : ("申请连接查看：" + typeLabel + " " + targetName)}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3;">${reasonText}</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="btn-mashu-inspect-cancel" ${isExecuted || isCancelled ? 'disabled style="padding: 4px 8px; font-size: 11px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; cursor: default;"' : 'style="padding: 4px 10px; font-size: 11px; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;"'}>${isCancelled ? (isCloseCard ? "保持连接" : "已拒绝") : (isCloseCard ? "保持" : "拒绝")}</button>
+                  <button type="button" class="btn-mashu-inspect-confirm" ${isExecuted || isCancelled ? 'disabled style="padding: 4px 10px; font-size: 11px; background: var(--border-color); color: var(--text-secondary); border: none; border-radius: 6px; cursor: default; white-space: nowrap;"' : 'style="padding: 4px 12px; font-size: 11px; background: var(--accent-color); color: var(--card-bg); font-weight: 600; border-radius: 6px; border: none; cursor: pointer; white-space: nowrap;"'}>${isExecuted ? (msg.statusText || (isCloseCard ? "已断开" : "已连接")) : (isCloseCard ? "确认断开" : "同意连接")}</button>
+                </div>
+              </div>
+            `;
+
+            if (!isExecuted && !isCancelled) {
+              const confirmBtn = bubble.querySelector(".btn-mashu-inspect-confirm");
+              const cancelBtn = bubble.querySelector(".btn-mashu-inspect-cancel");
+
+              if (confirmBtn) {
+                confirmBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isExecuted = true;
+                  if (isCloseCard) {
+                    window.mashuActiveInspection = null;
+                    msg.statusText = "已断开";
+                    confirmBtn.textContent = "已断开";
+                  } else {
+                    window.mashuActiveInspection = {
+                      active: true,
+                      targetType: targetType,
+                      targetName: targetName,
+                      connectedAt: Date.now()
+                    };
+                    msg.statusText = "已连接";
+                    confirmBtn.textContent = "已连接";
+                  }
+                  confirmBtn.disabled = true;
+                  if (cancelBtn) cancelBtn.disabled = true;
+                  confirmBtn.style.background = "var(--border-color)";
+                  confirmBtn.style.color = "var(--text-secondary)";
+                  confirmBtn.style.cursor = "default";
+
+                  const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+
+                  if (!isCloseCard && typeof triggerAiReply === "function") {
+                    const snapStr = typeof window.getMashuLiveInspectionSnapshot === "function"
+                      ? window.getMashuLiveInspectionSnapshot(targetType, targetName)
+                      : "";
+                    chat.history = chat.history || [];
+                    chat.history.push({
+                      role: "system",
+                      content: `[系统通知：对方已点击同意连接，实时读取到的 ${typeLabel} 内部数据如下：\n${snapStr}\n请根据上述真实数据简短自然地告诉对方你看到了什么，排查完问题后记得附带 [申请断开:已检查完毕，断开连接释放内存] 标签。]`,
+                      timestamp: Date.now(),
+                      isHidden: true
+                    });
+                    if (dbInstance) await dbInstance.chats.put(chat);
+                    triggerAiReply(chat.id);
+                  }
+                };
+              }
+
+              if (cancelBtn) {
+                cancelBtn.onclick = async (e) => {
+                  e.stopPropagation();
+                  msg.isCancelled = true;
+                  cancelBtn.textContent = isCloseCard ? "保持连接" : "已拒绝";
+                  cancelBtn.disabled = true;
+                  if (confirmBtn) confirmBtn.disabled = true;
+                  const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
+                  if (dbInstance) await dbInstance.chats.put(chat);
+                };
+              }
+            }
+
+            wrapper.appendChild(bubble);
+            addLongPressListener(wrapper, () => showMessageActions(msg.timestamp));
             wrapper.addEventListener("click", () => {
               if (isSelectionMode) toggleMessageSelection(msg.timestamp);
             });
@@ -56264,6 +56518,41 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             type: "module_semi_switch_card",
                             content: "本章已带完，是否切换下一章？",
                             pendingData: { nextChapterTitle: tTitle },
+                            timestamp: getNextUniqueAiMsgTs()
+                          };
+                          chat.history.push(cardMsg);
+                          if (isViewingThisChat) appendMessage(cardMsg, chat);
+                        }
+                      }
+                      if (window.isMashuChat && window.isMashuChat(chat)) {
+                        const reqMatch = cleanMsgText.match(/(?:\[|【)申请连接[：:]\s*([^:：\]】]+)(?:[：:]\s*([^:：\]】]*))?(?:[：:]\s*([^\]】]*))?(?:\]|】)/i);
+                        if (reqMatch) {
+                          cleanMsgText = cleanMsgText.replace(reqMatch[0], "").trim();
+                          const rawType = String(reqMatch[1] || "tavern_card").trim();
+                          const normType = rawType.includes("chat") || rawType.includes("群") || rawType.includes("聊天") ? "qq_chat" : "tavern_card";
+                          const tName = String(reqMatch[2] || "当前角色").trim();
+                          const tReason = String(reqMatch[3] || "帮你检查设定与运行配置").trim();
+                          const cardMsg = {
+                            id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                            role: "system",
+                            type: "mashu_inspect_request_card",
+                            content: tReason,
+                            pendingData: { targetType: normType, targetName: tName, reason: tReason },
+                            timestamp: getNextUniqueAiMsgTs()
+                          };
+                          chat.history.push(cardMsg);
+                          if (isViewingThisChat) appendMessage(cardMsg, chat);
+                        }
+                        const closeMatch = cleanMsgText.match(/(?:\[|【)申请断开(?:[：:]\s*([^\]】]*))?(?:\]|】)/i);
+                        if (closeMatch) {
+                          cleanMsgText = cleanMsgText.replace(closeMatch[0], "").trim();
+                          const cReason = String(closeMatch[1] || "已经检查完毕，申请断开连接释放内存").trim();
+                          const cardMsg = {
+                            id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                            role: "system",
+                            type: "mashu_inspect_close_card",
+                            content: cReason,
+                            pendingData: { reason: cReason },
                             timestamp: getNextUniqueAiMsgTs()
                           };
                           chat.history.push(cardMsg);

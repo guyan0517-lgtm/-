@@ -2175,6 +2175,7 @@
   const uiRuntime = {
     openDrawerKey: null,
     showAdvancedSamplers: false,
+    showAdvancedWorldBookSettings: false,
     editingPromptId: null,
     activeWorldBookEditId: null,
     editingWorldEntryUid: null,
@@ -2188,12 +2189,20 @@
       plugins: false
     },
     editingFloorMesId: null,
+    editingFloorReasoning: false,
     openExtraMenuMesId: null,
     showOptionsPopup: false,
     showExtensionsPopup: false,
     isGenerating: false,
     toastTimer: null
   };
+
+  function stripUiEmojis(str) {
+    return String(str || '')
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
 
   function showTavernToast(msg) {
     let el = document.getElementById('tavern-toast-banner');
@@ -2203,7 +2212,7 @@
       const root = document.getElementById('tavern-stage-root') || document.body;
       root.appendChild(el);
     }
-    el.textContent = String(msg || '').replace(/[()（）]/g, ' ');
+    el.textContent = stripUiEmojis(String(msg || '').replace(/[()（）]/g, ' '));
     el.classList.add('visible');
     if (uiRuntime.toastTimer) clearTimeout(uiRuntime.toastTimer);
     uiRuntime.toastTimer = setTimeout(() => {
@@ -2338,7 +2347,7 @@
         width: 100%;
         overflow-y: auto;
         overflow-x: hidden;
-        padding: 28px var(--tavernPageMargin, 10px) 18px var(--tavernPageMargin, 10px) !important;
+        padding: 22px var(--tavernPageMargin, 10px) 84px var(--tavernPageMargin, 10px) !important;
         box-sizing: border-box;
         scroll-behavior: auto;
       }
@@ -2395,7 +2404,7 @@
         flex-direction: row !important;
         align-items: center !important;
         justify-content: flex-end !important;
-        gap: 6px !important;
+        gap: 5px !important;
         margin-left: auto !important;
         flex-shrink: 0 !important;
       }
@@ -2408,6 +2417,64 @@
         height: 24px;
         cursor: pointer;
         flex-shrink: 0 !important;
+      }
+      /* Native SillyTavern inline extra buttons & edit icon buttons (1:1 with 043615) */
+      .extraMesButtons {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 5px !important;
+        padding: 3px 6px !important;
+        border-radius: 14px !important;
+        background: rgba(235, 235, 240, 0.78) !important;
+        border: 1px solid rgba(190, 190, 198, 0.7) !important;
+      }
+      .tavern-mes-icon-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+        border-radius: 8px !important;
+        border: 1px solid #b5b5bc !important;
+        background: #f4f4f6 !important;
+        color: #555558 !important;
+        cursor: pointer;
+        padding: 0 !important;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+        box-shadow: inset 0 1px 0 #ffffff !important;
+        transition: transform 0.14s ease, background 0.14s ease;
+      }
+      .tavern-mes-icon-btn:active {
+        transform: scale(0.93);
+      }
+      .tavern-mes-icon-btn svg {
+        width: 15px !important;
+        height: 15px !important;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        pointer-events: none;
+      }
+      .edit_textarea {
+        width: 100% !important;
+        min-height: 160px !important;
+        box-sizing: border-box !important;
+        border: none !important;
+        background: transparent !important;
+        color: inherit !important;
+        font-size: inherit !important;
+        line-height: var(--tavernLineHeight, 1.72) !important;
+        letter-spacing: var(--tavernLetterSpacing, 0px) !important;
+        resize: vertical !important;
+        outline: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
       }
 
       /* Prevent double quotation marks inside <q> */
@@ -2462,22 +2529,13 @@
       }
 
       /* Swipe Footer Navigation */
-      .tavern-swipe-bar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 8px;
-        padding: 4px 10px;
-        min-height: 28px;
-        box-sizing: border-box;
-      }
       .swipe_left,
       .swipe_right {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        width: 24px;
+        height: 24px;
         cursor: pointer;
         user-select: none;
         flex-shrink: 0;
@@ -2486,39 +2544,29 @@
         font-size: 11px;
         color: #777;
         font-weight: 600;
-        margin: 0 6px;
+        padding: 0 5px;
       }
 
-      /* Extra Floor Actions Popover */
-      .tavern-floor-popover {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin: 6px 0 8px auto;
-        padding: 8px;
-        background: rgba(255, 255, 255, 0.96);
-        border: 1px solid rgba(210, 210, 218, 0.85);
-        border-radius: 14px;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-        justify-content: flex-end;
-      }
-
-      /* Bottom Send Form Area */
+      /* Bottom Send Form Area (1:1 SillyTavern mobile bottom overlay) */
       #form_sheld {
-        position: relative;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
         z-index: 1200;
         width: 100%;
-        padding: 4px 8px 8px 8px;
+        padding: 0;
         box-sizing: border-box;
-        flex-shrink: 0;
+        pointer-events: none;
       }
       #qr--bar {
         display: flex;
         align-items: center;
         gap: 6px;
         overflow-x: auto;
-        padding: 2px 4px 6px 4px;
+        padding: 2px 12px 6px 12px;
         scrollbar-width: none;
+        pointer-events: auto;
       }
       #qr--bar::-webkit-scrollbar {
         display: none;
@@ -2539,13 +2587,26 @@
         transform: scale(0.96);
       }
       #send_form {
+        pointer-events: auto;
+        position: relative !important;
+        bottom: auto !important;
+        left: auto !important;
+        right: auto !important;
+        margin: 0 10px 8px 10px !important;
         display: flex;
         align-items: center;
         gap: 6px;
-        width: 100%;
-        min-height: 46px;
+        width: auto !important;
+        min-height: 44px;
         padding: 4px 8px;
         box-sizing: border-box;
+      }
+      #nonQRFormItems {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 6px;
+        position: relative !important;
       }
       #leftSendForm,
       #rightSendForm {
@@ -2560,8 +2621,8 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 30px;
+        height: 30px;
         cursor: pointer;
         flex-shrink: 0;
       }
@@ -2571,9 +2632,9 @@
         min-height: 34px;
         max-height: 110px;
         padding: 6px 10px;
-        border-radius: 18px;
+        border-radius: 20px;
         border: 1px solid rgba(210, 210, 216, 0.7);
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.95);
         color: #333;
         font-size: 13.5px;
         line-height: 1.45;
@@ -2613,6 +2674,69 @@
       .tavern-popup-item:hover,
       .tavern-popup-item:active {
         background: rgba(235, 235, 242, 0.85);
+      }
+
+      /* Square-in-square WorldBook Green/Blue Light Indicator */
+      .tavern-light-box {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        min-height: 20px !important;
+        border-radius: 5px !important;
+        border: 1.5px solid #c7c7cc !important;
+        background: #ffffff !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+        cursor: pointer;
+        box-sizing: border-box !important;
+        transition: transform 0.12s ease;
+      }
+      .tavern-light-box:active {
+        transform: scale(0.92);
+      }
+      .tavern-light-box-inner {
+        width: 10px;
+        height: 10px;
+        border-radius: 2.5px;
+        display: block;
+      }
+      .tavern-light-box.is-blue {
+        border-color: #90caf9 !important;
+        background: #f0f7ff !important;
+      }
+      .tavern-light-box.is-blue .tavern-light-box-inner {
+        background: #2196f3;
+      }
+      .tavern-light-box.is-green {
+        border-color: #a5d6a7 !important;
+        background: #f2fbf3 !important;
+      }
+      .tavern-light-box.is-green .tavern-light-box-inner {
+        background: #4caf50;
+      }
+      .tavern-vec-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        color: #6c6c70;
+        margin-right: 4px;
+        vertical-align: -2px;
+      }
+      .tavern-vec-badge svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
       /* Anti-clipping Form Controls & Drawer Internal Components */
@@ -2736,12 +2860,12 @@
         min-height: 38px !important;
         height: 38px !important;
         line-height: 24px !important;
-        padding: 6px 26px 6px 10px !important;
+        padding: 6px 22px 6px 8px !important;
         border-radius: 11px !important;
         border: 1px solid rgba(206, 206, 214, 0.9) !important;
         background-color: #ffffff !important;
         color: #2c2c2e !important;
-        font-size: 13px !important;
+        font-size: 12.5px !important;
         box-sizing: border-box !important;
         text-align: left !important;
         overflow: visible !important;
@@ -2961,18 +3085,20 @@
           ${qrs.length > 0 ? `
             <div id="qr--bar">
               ${qrs.map(q => `
-                <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(q.label)}</button>
+                <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
               `).join('')}
             </div>
           ` : ''}
           <form id="send_form" onsubmit="return false;">
-            <div id="leftSendForm">
-              <div id="options_button" data-action="toggle-options-popup" title="对话操作菜单"></div>
-              <div id="extensionsMenuButton" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
-            </div>
-            <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
-            <div id="rightSendForm">
-              <div id="send_but" data-action="send-message" title="发送"></div>
+            <div id="nonQRFormItems">
+              <div id="leftSendForm">
+                <div id="options_button" data-action="toggle-options-popup" title="对话操作菜单"></div>
+                <div id="extensionsMenuButton" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
+              </div>
+              <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
+              <div id="rightSendForm">
+                <div id="send_but" data-action="send-message" title="发送"></div>
+              </div>
             </div>
           </form>
         </div>
@@ -3029,7 +3155,12 @@
     if (!rawUrl || String(rawUrl).includes('P5gL5z2g') || String(rawUrl).includes('postimg.cc/P5gL5z2g')) {
       return isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG;
     }
-    return rawUrl;
+    const str = String(rawUrl).trim();
+    if (str.startsWith('vault://')) {
+      const fileKey = str.replace(/^vault:\/\/+/, '');
+      return getTermuxBaseUrl() + '/vault/' + encodeURIComponent(fileKey);
+    }
+    return str;
   }
 
   function renderTavernChatFloors(keepTopOnSingleFloor = false) {
@@ -3055,7 +3186,6 @@
       const swipeIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
       const currentRawText = swipes[swipeIdx] !== undefined ? swipes[swipeIdx] : (m.mes || '');
       const tokenNum = m.token_count || estimateTokens(currentRawText);
-      const timeStr = m.send_date ? new Date(m.send_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
       const isEditingThis = uiRuntime.editingFloorMesId === idx;
       const isExtraOpen = uiRuntime.openExtraMenuMesId === idx;
@@ -3079,65 +3209,101 @@
               <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG}';" />
             </div>
             <div class="mesIDDisplay">${uiCfg.showMessageId !== false ? '#' + idx : ''}</div>
-            ${uiCfg.showMesTimer !== false && m.gen_time ? `<div class="mes_timer">${escapeHtmlSimple(m.gen_time)}</div>` : ''}
-            ${uiCfg.showTokenCount !== false ? `<div class="tokenCounterDisplay">${tokenNum}t</div>` : ''}
+            <div class="mes_timer">${uiCfg.showMesTimer !== false && m.gen_time ? escapeHtmlSimple(m.gen_time) : ''}</div>
+            ${uiCfg.showTokenCount !== false ? `<div class="tokenCounterDisplay">${tokenNum}t</div>` : '<div class="tokenCounterDisplay"></div>'}
           </div>
 
           <div class="mes_block">
             <div class="ch_name flex-container justifySpaceBetween">
               <span class="name_text">${escapeHtmlSimple(displayName)}</span>
-              <div class="mes_buttons mes_edit_buttons">
-                <span class="timestamp" style="font-size:10px;opacity:0.55;margin-right:4px;">${timeStr}</span>
-                <div class="mes_button mes_edit fa-solid fa-pencil" data-action="floor-edit" data-mesid="${idx}" title="编辑本层"></div>
-                <div class="extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="更多楼层操作"></div>
-              </div>
+              ${isEditingThis ? `
+                <div class="mes_buttons mes_edit_buttons">
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-save" data-mesid="${idx}" title="确认保存修改">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制本层原文">
+                    <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-toggle-reasoning-edit" data-mesid="${idx}" title="编辑思维链">
+                    <svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-del-one" data-mesid="${idx}" title="删除本层">
+                    <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-move-up" data-mesid="${idx}" title="上移本层">
+                    <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-move-down" data-mesid="${idx}" title="下移本层">
+                    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-cancel" title="取消编辑">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              ` : `
+                <div class="mes_buttons mes_edit_buttons">
+                  ${isExtraOpen ? `
+                    <div class="extraMesButtons">
+                      <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制原文">
+                        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
+                      <button type="button" class="tavern-mes-icon-btn" data-action="floor-regen" data-mesid="${idx}" title="重新生成本层">
+                        <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                      </button>
+                      <button type="button" class="tavern-mes-icon-btn" data-action="floor-add-swipe" data-mesid="${idx}" title="新增空白回复页">
+                        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="tavern-mes-icon-btn" data-action="floor-fork" data-mesid="${idx}" title="从本层新建分支存档">
+                        <svg viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+                      </button>
+                      <button type="button" class="tavern-mes-icon-btn" data-action="floor-del-one" data-mesid="${idx}" title="删除本层">
+                        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+                      </button>
+                    </div>
+                  ` : ''}
+                  <div class="extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="展开更多操作"></div>
+                  <div class="mes_button mes_edit fa-solid fa-pencil" data-action="floor-edit" data-mesid="${idx}" title="编辑本层"></div>
+                </div>
+              `}
             </div>
-
-            ${isExtraOpen ? `
-              <div class="tavern-floor-popover">
-                <button type="button" class="tavern-btn small" data-action="floor-copy" data-mesid="${idx}">复制</button>
-                <button type="button" class="tavern-btn small" data-action="floor-regen" data-mesid="${idx}">重成</button>
-                <button type="button" class="tavern-btn small" data-action="floor-add-swipe" data-mesid="${idx}">新页</button>
-                <button type="button" class="tavern-btn small" data-action="floor-fork" data-mesid="${idx}">分叉</button>
-                <button type="button" class="tavern-btn small danger" data-action="floor-del-one" data-mesid="${idx}">删单</button>
-                <button type="button" class="tavern-btn small danger" data-action="floor-del-below" data-mesid="${idx}">删后</button>
-              </div>
-            ` : ''}
 
             ${hasReasoning ? `
               <details class="mes_reasoning_details" ${openReasoningAttr}>
-                <summary class="mes_reasoning_summary">思维链推理过程</summary>
-                <div class="mes_reasoning_content">${escapeHtmlSimple(m.reasoning)}</div>
+                <summary class="mes_reasoning_summary flex-container">
+                  <div class="mes_reasoning_header flex-container">
+                    <span class="mes_reasoning_header_title">思维链推理过程</span>
+                  </div>
+                </summary>
+                <div class="mes_reasoning mes_reasoning_content">${escapeHtmlSimple(m.reasoning)}</div>
               </details>
             ` : ''}
 
-            ${isEditingThis ? `
+            ${isEditingThis && uiRuntime.editingFloorReasoning ? `
               <div style="margin-top:8px;">
-                <textarea id="tavern-floor-edit-box-${idx}" class="tavern-textarea" rows="6">${escapeHtmlSimple(currentRawText)}</textarea>
-                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
-                  <button type="button" class="tavern-btn small" data-action="floor-edit-cancel">取消</button>
-                  <button type="button" class="tavern-btn small primary" data-action="floor-edit-save" data-mesid="${idx}">保存修改</button>
-                </div>
-              </div>
-            ` : `
-              <div class="mes_text">${renderedHtml}</div>
-            `}
-
-            ${(isLast || swipes.length > 1) ? `
-              <div class="tavern-swipe-bar">
-                <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
-                ${uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : ''}
-                <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
+                <textarea id="tavern-floor-reasoning-box-${idx}" class="tavern-textarea" rows="3" placeholder="在此编辑本层思维链内容...">${escapeHtmlSimple(m.reasoning || '')}</textarea>
               </div>
             ` : ''}
+
+            <div class="mes_text">
+              ${isEditingThis ? `
+                <textarea id="tavern-floor-edit-box-${idx}" class="edit_textarea" rows="8">${escapeHtmlSimple(currentRawText)}</textarea>
+              ` : renderedHtml}
+            </div>
+
+            ${(isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
           </div>
+
+          ${(isLast || swipes.length > 1) ? `
+            <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
+            <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
+          ` : ''}
         </div>
       `;
     }).join('');
 
     if (keepTopOnSingleFloor && messages.length <= 1) {
       chatEl.scrollTop = 0;
-    } else if (messages.length > 1) {
+    } else if (messages.length > 1 && uiRuntime.editingFloorMesId === null && uiRuntime.openExtraMenuMesId === null) {
       chatEl.scrollTop = chatEl.scrollHeight;
     }
   }
@@ -3190,7 +3356,6 @@
   function renderDrawerSliders() {
     const preset = getActivePreset();
     const prompts = Array.isArray(preset.prompts) ? preset.prompts : [];
-    const editingItem = prompts.find(p => p.identifier === uiRuntime.editingPromptId) || null;
 
     return `
       <div class="tavern-section-card">
@@ -3204,7 +3369,7 @@
         </div>
         <select class="tavern-select" data-change="switch-preset">
           ${tavernState.presets.map(p => `
-            <option value="${p.id}" ${p.id === preset.id ? 'selected' : ''}>${escapeHtmlSimple(p.name)}</option>
+            <option value="${p.id}" ${p.id === preset.id ? 'selected' : ''}>${escapeHtmlSimple(stripUiEmojis(p.name))}</option>
           `).join('')}
         </select>
         <div class="tavern-field-hint">支持多选导入酒馆OpenAI预设JSON，所有导入预设均可随时下拉切换生效</div>
@@ -3306,62 +3471,69 @@
           <button type="button" class="tavern-btn small primary" data-action="add-custom-prompt-item">新增条目</button>
         </div>
 
-        ${editingItem ? `
-          <div class="tavern-section-card" style="background:#f8f9fc;border-color:#d4d8e8;">
-            <div class="tavern-section-label">
-              <span>编辑提示词块: ${escapeHtmlSimple(editingItem.name)}</span>
-              <button type="button" class="tavern-btn small" data-action="close-prompt-item-editor">完成</button>
-            </div>
-            <div class="tavern-grid-2">
-              <div class="tavern-field-group">
-                <label>条目名称</label>
-                <input type="text" class="tavern-input" id="edit-prompt-name" value="${escapeHtmlSimple(editingItem.name)}" />
-              </div>
-              <div class="tavern-field-group">
-                <label>发送角色 Role</label>
-                <select class="tavern-select" id="edit-prompt-role">
-                  <option value="system" ${editingItem.role === 'system' ? 'selected' : ''}>System 系统</option>
-                  <option value="user" ${editingItem.role === 'user' ? 'selected' : ''}>User 用户</option>
-                  <option value="assistant" ${editingItem.role === 'assistant' ? 'selected' : ''}>Assistant 助手</option>
-                </select>
-              </div>
-              <div class="tavern-field-group">
-                <label>注入位置模式</label>
-                <select class="tavern-select" id="edit-prompt-pos">
-                  <option value="0" ${Number(editingItem.injection_position) === 0 ? 'selected' : ''}>按列表顺序排列</option>
-                  <option value="1" ${Number(editingItem.injection_position) === 1 ? 'selected' : ''}>按聊天深度插入</option>
-                </select>
-              </div>
-              <div class="tavern-field-group">
-                <label>注入深度 Depth</label>
-                <input type="number" class="tavern-input" id="edit-prompt-depth" value="${Number(editingItem.injection_depth ?? 4)}" min="0" max="200" />
-              </div>
-            </div>
-            <div class="tavern-field-group">
-              <label>提示词内容 支持宏变量</label>
-              <textarea class="tavern-textarea" id="edit-prompt-content" rows="5">${escapeHtmlSimple(editingItem.content || '')}</textarea>
-            </div>
-            <div style="display:flex;justify-content:flex-end;gap:8px;">
-              <button type="button" class="tavern-btn small primary" data-action="save-prompt-item-editor" data-prompt-id="${editingItem.identifier}">保存此条目</button>
-            </div>
-          </div>
-        ` : ''}
-
         <div id="completion_prompt_manager_list">
-          ${prompts.map((item, idx) => `
-            <div class="tavern-list-row">
-              <input type="checkbox" class="tavern-fixed-check" data-action="toggle-prompt-item" data-prompt-id="${item.identifier}" ${item.enabled ? 'checked' : ''} />
-              <div class="tavern-list-row-main">
-                <div>${escapeHtmlSimple(item.name || item.identifier)}</div>
-                <div class="tavern-list-row-sub">角色: ${item.role || 'system'} ${Number(item.injection_position) === 1 ? '深度:' + item.injection_depth : '顺序排列'}</div>
+          ${prompts.map((item, idx) => {
+            const isEditingThis = uiRuntime.editingPromptId === item.identifier;
+            const cleanTitle = stripUiEmojis(item.name || item.identifier) || item.identifier;
+            return `
+              <div class="tavern-prompt-item-wrap" data-prompt-wrap="${item.identifier}">
+                <div class="tavern-list-row" style="${isEditingThis ? 'border-color:#6b6b75;background:#eff1f8;' : ''}">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-prompt-item" data-prompt-id="${item.identifier}" ${item.enabled ? 'checked' : ''} />
+                  <div class="tavern-list-row-main">
+                    <div>
+                      <span class="tavern-vec-badge"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span>${escapeHtmlSimple(cleanTitle)}
+                    </div>
+                    <div class="tavern-list-row-sub">角色: ${item.role || 'system'} | ${Number(item.injection_position) === 1 ? '深度:' + item.injection_depth : '顺序排列'}</div>
+                  </div>
+                  <div class="tavern-list-row-actions">
+                    <button type="button" class="tavern-btn small" data-action="move-prompt-up" data-idx="${idx}">上移</button>
+                    <button type="button" class="tavern-btn small" data-action="move-prompt-down" data-idx="${idx}">下移</button>
+                    ${!item.marker ? `<button type="button" class="tavern-btn small ${isEditingThis ? 'primary' : ''}" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">${isEditingThis ? '收起' : '编辑'}</button>` : ''}
+                  </div>
+                </div>
+                ${isEditingThis ? `
+                  <div class="tavern-section-card" style="background:#f8f9fc;border-color:#cfd5e6;margin:4px 0 10px 0;">
+                    <div class="tavern-section-label">
+                      <span>编辑条目: ${escapeHtmlSimple(cleanTitle)}</span>
+                      <button type="button" class="tavern-btn small" data-action="close-prompt-item-editor">收起</button>
+                    </div>
+                    <div class="tavern-grid-2">
+                      <div class="tavern-field-group">
+                        <label>条目名称</label>
+                        <input type="text" class="tavern-input" id="edit-prompt-name" value="${escapeHtmlSimple(cleanTitle)}" />
+                      </div>
+                      <div class="tavern-field-group">
+                        <label>发送角色</label>
+                        <select class="tavern-select" id="edit-prompt-role">
+                          <option value="system" ${item.role === 'system' ? 'selected' : ''}>系统 System</option>
+                          <option value="user" ${item.role === 'user' ? 'selected' : ''}>用户 User</option>
+                          <option value="assistant" ${item.role === 'assistant' ? 'selected' : ''}>助手 Assistant</option>
+                        </select>
+                      </div>
+                      <div class="tavern-field-group">
+                        <label>注入位置</label>
+                        <select class="tavern-select" id="edit-prompt-pos">
+                          <option value="0" ${Number(item.injection_position) === 0 ? 'selected' : ''}>按顺序排列</option>
+                          <option value="1" ${Number(item.injection_position) === 1 ? 'selected' : ''}>按深度插入</option>
+                        </select>
+                      </div>
+                      <div class="tavern-field-group">
+                        <label>注入深度</label>
+                        <input type="number" class="tavern-input" id="edit-prompt-depth" value="${Number(item.injection_depth ?? 4)}" min="0" max="200" />
+                      </div>
+                    </div>
+                    <div class="tavern-field-group">
+                      <label>提示词内容 支持宏变量</label>
+                      <textarea class="tavern-textarea" id="edit-prompt-content" rows="5">${escapeHtmlSimple(item.content || '')}</textarea>
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;">
+                      <button type="button" class="tavern-btn small primary" data-action="save-prompt-item-editor" data-prompt-id="${item.identifier}">保存此条目</button>
+                    </div>
+                  </div>
+                ` : ''}
               </div>
-              <div class="tavern-list-row-actions">
-                <button type="button" class="tavern-btn small" data-action="move-prompt-up" data-idx="${idx}">上移</button>
-                <button type="button" class="tavern-btn small" data-action="move-prompt-down" data-idx="${idx}">下移</button>
-                ${!item.marker ? `<button type="button" class="tavern-btn small" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">编辑</button>` : ''}
-              </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -3499,10 +3671,6 @@
         )
       : entries;
 
-    const editingEntry = activeBook && uiRuntime.editingWorldEntryUid !== null
-      ? entries.find(e => String(e.uid) === String(uiRuntime.editingWorldEntryUid))
-      : null;
-
     return `
       <div class="tavern-section-card">
         <div class="tavern-section-label">
@@ -3519,8 +3687,8 @@
               <div class="tavern-list-row">
                 <input type="checkbox" class="tavern-fixed-check" data-action="toggle-worldbook-enabled" data-wb-id="${b.id}" ${b.enabled ? 'checked' : ''} />
                 <div class="tavern-list-row-main" data-action="select-worldbook-edit" data-wb-id="${b.id}" style="cursor:pointer;">
-                  <div>${escapeHtmlSimple(b.name)} ${b.id === (activeBook && activeBook.id) ? '· 当前编辑' : ''}</div>
-                  <div class="tavern-list-row-sub">词条数: ${(b.entries || []).length} | 扫描深度: ${b.scanDepth || 4} | 预算: ${b.tokenBudget || 4096}</div>
+                  <div>${escapeHtmlSimple(stripUiEmojis(b.name))} ${b.id === (activeBook && activeBook.id) ? '· 当前编辑' : ''}</div>
+                  <div class="tavern-list-row-sub">词条数: ${(b.entries || []).length} | 扫描深度: ${b.scanDepth || 4}</div>
                 </div>
                 <div class="tavern-list-row-actions">
                   <button type="button" class="tavern-btn small" data-action="select-worldbook-edit" data-wb-id="${b.id}">展开</button>
@@ -3535,52 +3703,73 @@
 
       ${activeBook ? `
         <div class="tavern-section-card">
-          <div class="tavern-section-label">当前世界书全局扫描设置: ${escapeHtmlSimple(activeBook.name)}</div>
-          <div class="tavern-grid-3">
-            <div class="tavern-field-group">
-              <label>扫描深度</label>
-              <input type="number" class="tavern-input" data-wb-setting="scanDepth" data-wb-id="${activeBook.id}" value="${activeBook.scanDepth ?? 4}" min="1" max="100" />
+          <div class="tavern-section-label">
+            <span>词条管理: ${escapeHtmlSimple(stripUiEmojis(activeBook.name))}</span>
+          </div>
+
+          <div class="inline-drawer" style="margin-bottom:8px;">
+            <div class="inline-drawer-header" data-action="toggle-adv-wb-settings">
+              <span>世界书高级扫描参数</span>
+              <span>${uiRuntime.showAdvancedWorldBookSettings ? '收起' : '展开'}</span>
             </div>
-            <div class="tavern-field-group">
-              <label>Token预算上限</label>
-              <input type="number" class="tavern-input" data-wb-setting="tokenBudget" data-wb-id="${activeBook.id}" value="${activeBook.tokenBudget ?? 4096}" min="256" max="64000" step="256" />
-            </div>
-            <div class="tavern-field-group">
-              <label>递归连锁扫描</label>
-              <select class="tavern-select" data-wb-setting="recursiveScanning" data-wb-id="${activeBook.id}">
-                <option value="true" ${activeBook.recursiveScanning !== false ? 'selected' : ''}>开启递归</option>
-                <option value="false" ${activeBook.recursiveScanning === false ? 'selected' : ''}>关闭递归</option>
-              </select>
-            </div>
+            ${uiRuntime.showAdvancedWorldBookSettings ? `
+              <div class="inline-drawer-content">
+                <div class="tavern-grid-3">
+                  <div class="tavern-field-group">
+                    <label>扫描深度</label>
+                    <input type="number" class="tavern-input" data-wb-setting="scanDepth" data-wb-id="${activeBook.id}" value="${activeBook.scanDepth ?? 4}" min="1" max="100" />
+                    <div class="tavern-field-hint">往前检查最近几层对话里有没有出现触发词</div>
+                  </div>
+                  <div class="tavern-field-group">
+                    <label>预算上限</label>
+                    <input type="number" class="tavern-input" data-wb-setting="tokenBudget" data-wb-id="${activeBook.id}" value="${activeBook.tokenBudget ?? 4096}" min="256" max="64000" step="256" />
+                    <div class="tavern-field-hint">世界书设定最多可占用的总字数容量</div>
+                  </div>
+                  <div class="tavern-field-group">
+                    <label>递归扫描</label>
+                    <select class="tavern-select" data-wb-setting="recursiveScanning" data-wb-id="${activeBook.id}">
+                      <option value="true" ${activeBook.recursiveScanning !== false ? 'selected' : ''}>开启递归</option>
+                      <option value="false" ${activeBook.recursiveScanning === false ? 'selected' : ''}>关闭递归</option>
+                    </select>
+                    <div class="tavern-field-hint">开启后词条内容也能顺带激活其他关联词条</div>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
           </div>
 
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
             <input type="text" class="tavern-input" style="flex:1 1 140px;" id="wb-entry-search-input" value="${escapeHtmlSimple(uiRuntime.worldEntrySearch)}" placeholder="搜索词条标题或关键词..." />
-            <button type="button" class="tavern-btn small primary" data-action="wb-add-entry" data-wb-id="${activeBook.id}">新增词条</button>
-            <button type="button" class="tavern-btn small" data-action="wb-batch-enable" data-wb-id="${activeBook.id}">全启用</button>
-            <button type="button" class="tavern-btn small" data-action="wb-batch-constant" data-wb-id="${activeBook.id}">全蓝灯</button>
-            <button type="button" class="tavern-btn small" data-action="wb-batch-green" data-wb-id="${activeBook.id}">全绿灯</button>
+            <button type="button" class="tavern-btn small primary" data-action="wb-add-entry" data-wb-id="${activeBook.id}">新增</button>
+            <button type="button" class="tavern-btn small" data-action="wb-batch-enable" data-wb-id="${activeBook.id}">全启</button>
+            <button type="button" class="tavern-btn small" data-action="wb-batch-constant" data-wb-id="${activeBook.id}">全蓝</button>
+            <button type="button" class="tavern-btn small" data-action="wb-batch-green" data-wb-id="${activeBook.id}">全绿</button>
           </div>
 
-          ${editingEntry ? renderWorldEntryInlineEditor(activeBook, editingEntry) : ''}
-
-          <div style="max-height:300px;overflow-y:auto;margin-top:8px;">
-            ${filteredEntries.map(entry => `
-              <div class="tavern-list-row">
-                <input type="checkbox" class="tavern-fixed-check" data-action="wb-toggle-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}" ${!entry.disable ? 'checked' : ''} />
-                <button type="button" class="tavern-btn small" data-action="wb-cycle-light" data-wb-id="${activeBook.id}" data-uid="${entry.uid}" style="${entry.constant ? 'background:#e3f2fd;color:#1565c0;border-color:#90caf9;' : 'background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;'}">
-                  ${entry.constant ? '蓝灯常驻' : '绿灯关键'}
-                </button>
-                <div class="tavern-list-row-main">
-                  <div>${escapeHtmlSimple(entry.comment || ('词条 #' + entry.uid))}</div>
-                  <div class="tavern-list-row-sub">关键词: ${escapeHtmlSimple((entry.keys || []).join(', ') || '无')} | 顺序:${entry.order ?? 100} | 深度:${entry.depth ?? 4}</div>
+          <div style="margin-top:8px;">
+            ${filteredEntries.map(entry => {
+              const isEditingEntry = String(uiRuntime.editingWorldEntryUid) === String(entry.uid);
+              const cleanComment = stripUiEmojis(entry.comment || ('词条 #' + entry.uid)) || ('词条 #' + entry.uid);
+              return `
+                <div class="tavern-wb-entry-wrap" data-wb-uid="${entry.uid}">
+                  <div class="tavern-list-row" style="${isEditingEntry ? 'border-color:#6b6b75;background:#eff1f8;' : ''}">
+                    <input type="checkbox" class="tavern-fixed-check" data-action="wb-toggle-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}" ${!entry.disable ? 'checked' : ''} />
+                    <button type="button" class="tavern-light-box ${entry.constant ? 'is-blue' : 'is-green'}" data-action="wb-cycle-light" data-wb-id="${activeBook.id}" data-uid="${entry.uid}" title="${entry.constant ? '蓝灯常驻激活 点击切换为绿灯' : '绿灯关键词触发 点击切换为蓝灯'}">
+                      <span class="tavern-light-box-inner"></span>
+                    </button>
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(cleanComment)}</div>
+                      <div class="tavern-list-row-sub">${entry.constant ? '蓝灯常驻' : '绿灯关键: ' + escapeHtmlSimple((entry.keys || []).join(', ') || '无')} | 顺序:${entry.order ?? 100}</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small ${isEditingEntry ? 'primary' : ''}" data-action="wb-edit-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}">${isEditingEntry ? '收起' : '编辑'}</button>
+                      <button type="button" class="tavern-btn small danger" data-action="wb-del-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}">删</button>
+                    </div>
+                  </div>
+                  ${isEditingEntry ? renderWorldEntryInlineEditor(activeBook, entry) : ''}
                 </div>
-                <div class="tavern-list-row-actions">
-                  <button type="button" class="tavern-btn small" data-action="wb-edit-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}">编辑</button>
-                  <button type="button" class="tavern-btn small danger" data-action="wb-del-entry" data-wb-id="${activeBook.id}" data-uid="${entry.uid}">删</button>
-                </div>
-              </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>
       ` : ''}
@@ -3589,65 +3778,65 @@
 
   function renderWorldEntryInlineEditor(book, entry) {
     return `
-      <div class="tavern-section-card" style="background:#f7f8fc;border-color:#cfd6ea;margin-top:8px;">
+      <div class="tavern-section-card" style="background:#f7f8fc;border-color:#cfd6ea;margin:4px 0 10px 0;">
         <div class="tavern-section-label">
-          <span>编辑世界书词条: ${escapeHtmlSimple(entry.comment)}</span>
+          <span>编辑词条: ${escapeHtmlSimple(stripUiEmojis(entry.comment))}</span>
           <button type="button" class="tavern-btn small" data-action="wb-close-entry-editor">收起</button>
         </div>
         <div class="tavern-grid-2">
           <div class="tavern-field-group">
             <label>词条备注标题</label>
-            <input type="text" class="tavern-input" id="wb-edit-comment" value="${escapeHtmlSimple(entry.comment || '')}" />
+            <input type="text" class="tavern-input" id="wb-edit-comment" value="${escapeHtmlSimple(stripUiEmojis(entry.comment || ''))}" />
           </div>
           <div class="tavern-field-group">
             <label>触发模式</label>
             <select class="tavern-select" id="wb-edit-constant">
-              <option value="false" ${!entry.constant ? 'selected' : ''}>绿灯 关键词匹配触发</option>
-              <option value="true" ${entry.constant ? 'selected' : ''}>蓝灯 始终常驻激活</option>
+              <option value="false" ${!entry.constant ? 'selected' : ''}>绿灯 关键词触发</option>
+              <option value="true" ${entry.constant ? 'selected' : ''}>蓝灯 始终常驻</option>
             </select>
           </div>
           <div class="tavern-field-group">
-            <label>主关键词 逗号分隔 支持正则</label>
+            <label>主关键词 逗号分隔</label>
             <input type="text" class="tavern-input" id="wb-edit-keys" value="${escapeHtmlSimple((entry.keys || []).join(', '))}" />
           </div>
           <div class="tavern-field-group">
-            <label>次要过滤关键词 逗号分隔</label>
+            <label>次要过滤词 逗号分隔</label>
             <input type="text" class="tavern-input" id="wb-edit-seckeys" value="${escapeHtmlSimple((entry.secondaryKeys || []).join(', '))}" />
           </div>
           <div class="tavern-field-group">
-            <label>次要关键词匹配逻辑</label>
+            <label>次要词匹配逻辑</label>
             <select class="tavern-select" id="wb-edit-logic">
-              <option value="0" ${Number(entry.selectiveLogic) === 0 ? 'selected' : ''}>包含任意一个 AND ANY</option>
-              <option value="1" ${Number(entry.selectiveLogic) === 1 ? 'selected' : ''}>非全部包含 NOT ALL</option>
-              <option value="2" ${Number(entry.selectiveLogic) === 2 ? 'selected' : ''}>完全不包含 NOT ANY</option>
-              <option value="3" ${Number(entry.selectiveLogic) === 3 ? 'selected' : ''}>必须全部包含 AND ALL</option>
+              <option value="0" ${Number(entry.selectiveLogic) === 0 ? 'selected' : ''}>包含任意一个</option>
+              <option value="1" ${Number(entry.selectiveLogic) === 1 ? 'selected' : ''}>非全部包含</option>
+              <option value="2" ${Number(entry.selectiveLogic) === 2 ? 'selected' : ''}>完全不包含</option>
+              <option value="3" ${Number(entry.selectiveLogic) === 3 ? 'selected' : ''}>必须全部包含</option>
             </select>
           </div>
           <div class="tavern-field-group">
-            <label>插入位置 Position</label>
+            <label>插入位置</label>
             <select class="tavern-select" id="wb-edit-pos">
-              <option value="0" ${Number(entry.position) === 0 ? 'selected' : ''}>角色定义之前</option>
-              <option value="1" ${Number(entry.position) === 1 ? 'selected' : ''}>角色定义之后</option>
+              <option value="0" ${Number(entry.position) === 0 ? 'selected' : ''}>角色设定之前</option>
+              <option value="1" ${Number(entry.position) === 1 ? 'selected' : ''}>角色设定之后</option>
               <option value="2" ${Number(entry.position) === 2 ? 'selected' : ''}>对话示例之前</option>
               <option value="3" ${Number(entry.position) === 3 ? 'selected' : ''}>对话示例之后</option>
-              <option value="4" ${Number(entry.position) === 4 ? 'selected' : ''}>按指定聊天深度插入</option>
+              <option value="4" ${Number(entry.position) === 4 ? 'selected' : ''}>按聊天深度插入</option>
             </select>
           </div>
           <div class="tavern-field-group">
-            <label>插入深度 Depth 与顺序 Order</label>
+            <label>深度与顺序</label>
             <div style="display:flex;gap:6px;">
               <input type="number" class="tavern-input" id="wb-edit-depth" value="${entry.depth ?? 4}" placeholder="深度" />
               <input type="number" class="tavern-input" id="wb-edit-order" value="${entry.order ?? 100}" placeholder="顺序" />
             </div>
           </div>
           <div class="tavern-field-group">
-            <label>触发概率百分比 与 角色Role</label>
+            <label>触发概率与发送身份</label>
             <div style="display:flex;gap:6px;">
               <input type="number" class="tavern-input" id="wb-edit-prob" value="${entry.probability ?? 100}" min="0" max="100" />
               <select class="tavern-select" id="wb-edit-role">
-                <option value="0" ${Number(entry.role) === 0 ? 'selected' : ''}>System</option>
-                <option value="1" ${Number(entry.role) === 1 ? 'selected' : ''}>User</option>
-                <option value="2" ${Number(entry.role) === 2 ? 'selected' : ''}>Assistant</option>
+                <option value="0" ${Number(entry.role) === 0 ? 'selected' : ''}>系统</option>
+                <option value="1" ${Number(entry.role) === 1 ? 'selected' : ''}>用户</option>
+                <option value="2" ${Number(entry.role) === 2 ? 'selected' : ''}>助手</option>
               </select>
             </div>
           </div>
@@ -4368,12 +4557,20 @@
   function refreshOpenDrawerOnly() {
     const host = document.getElementById('tavern-drawer-host');
     if (!host) return;
+    const prevDrawerEl = host.querySelector('.drawer-content.openDrawer');
+    const prevScrollTop = prevDrawerEl ? prevDrawerEl.scrollTop : 0;
+    const prevDrawerAttr = prevDrawerEl ? prevDrawerEl.getAttribute('data-active-drawer') : null;
+
     if (!uiRuntime.openDrawerKey) {
       host.classList.remove('active');
       host.innerHTML = '';
     } else {
       host.classList.add('active');
       host.innerHTML = renderOpenDrawerHtml(uiRuntime.openDrawerKey);
+      const nextDrawerEl = host.querySelector('.drawer-content.openDrawer');
+      if (nextDrawerEl && prevDrawerAttr === uiRuntime.openDrawerKey) {
+        nextDrawerEl.scrollTop = prevScrollTop;
+      }
     }
     const topBar = document.getElementById('top-settings-holder');
     if (topBar) {
@@ -4520,13 +4717,38 @@
       if (action === 'floor-edit') {
         const idx = Number(actionEl.getAttribute('data-mesid'));
         uiRuntime.editingFloorMesId = uiRuntime.editingFloorMesId === idx ? null : idx;
+        uiRuntime.editingFloorReasoning = false;
         uiRuntime.openExtraMenuMesId = null;
         renderTavernChatFloors(false);
         return;
       }
 
+      if (action === 'floor-toggle-reasoning-edit') {
+        uiRuntime.editingFloorReasoning = !uiRuntime.editingFloorReasoning;
+        renderTavernChatFloors(false);
+        return;
+      }
+
+      if (action === 'floor-move-up' || action === 'floor-move-down') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const sess = getActiveChatSession();
+        if (sess && Array.isArray(sess.messages)) {
+          const targetIdx = action === 'floor-move-up' ? idx - 1 : idx + 1;
+          if (targetIdx >= 0 && targetIdx < sess.messages.length) {
+            const tmp = sess.messages[idx];
+            sess.messages[idx] = sess.messages[targetIdx];
+            sess.messages[targetIdx] = tmp;
+            uiRuntime.editingFloorMesId = targetIdx;
+            await saveTavernStore();
+            renderTavernChatFloors(false);
+          }
+        }
+        return;
+      }
+
       if (action === 'floor-edit-cancel') {
         uiRuntime.editingFloorMesId = null;
+        uiRuntime.editingFloorReasoning = false;
         renderTavernChatFloors(false);
         return;
       }
@@ -4534,6 +4756,7 @@
       if (action === 'floor-edit-save') {
         const idx = Number(actionEl.getAttribute('data-mesid'));
         const box = document.getElementById('tavern-floor-edit-box-' + idx);
+        const rBox = document.getElementById('tavern-floor-reasoning-box-' + idx);
         const sess = getActiveChatSession();
         const msg = sess && sess.messages[idx];
         if (box && msg) {
@@ -4543,7 +4766,11 @@
           msg.swipes[sId] = newVal;
           msg.mes = newVal;
           msg.token_count = estimateTokens(newVal);
+          if (rBox) {
+            msg.reasoning = rBox.value;
+          }
           uiRuntime.editingFloorMesId = null;
+          uiRuntime.editingFloorReasoning = false;
           await saveTavernStore();
           renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
           showTavernToast('已保存本层内容');
@@ -4753,7 +4980,8 @@
         return;
       }
       if (action === 'edit-prompt-item') {
-        uiRuntime.editingPromptId = actionEl.getAttribute('data-prompt-id');
+        const clickedId = actionEl.getAttribute('data-prompt-id');
+        uiRuntime.editingPromptId = uiRuntime.editingPromptId === clickedId ? null : clickedId;
         refreshOpenDrawerOnly();
         return;
       }
@@ -4947,8 +5175,14 @@
         }
         return;
       }
+      if (action === 'toggle-adv-wb-settings') {
+        uiRuntime.showAdvancedWorldBookSettings = !uiRuntime.showAdvancedWorldBookSettings;
+        refreshOpenDrawerOnly();
+        return;
+      }
       if (action === 'wb-edit-entry') {
-        uiRuntime.editingWorldEntryUid = actionEl.getAttribute('data-uid');
+        const clickedUid = actionEl.getAttribute('data-uid');
+        uiRuntime.editingWorldEntryUid = String(uiRuntime.editingWorldEntryUid) === String(clickedUid) ? null : clickedUid;
         refreshOpenDrawerOnly();
         return;
       }
@@ -5896,6 +6130,85 @@
       document.getElementById('game-hall-screen')?.classList.add('active');
     }
     renderTavernShell();
+  };
+
+  window.getTavernLiveInspectionData = function (targetType, targetIdOrName) {
+    const activeCard = getActiveCard();
+    const activePreset = getActivePreset();
+    const activeSess = getActiveChatSession();
+    const cardsSummary = (tavernState.cards || []).map(c => ({
+      id: c.id,
+      name: c.name,
+      isActive: c.id === activeCard?.id,
+      greetingCount: 1 + (c.alternate_greetings?.length || 0),
+      regexCount: (c.regexScripts || []).length,
+      worldBookId: c.worldBookId || ''
+    }));
+    const presetsSummary = (tavernState.presets || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      isActive: p.id === activePreset?.id,
+      promptCount: (p.prompts || []).length,
+      stream: Boolean(p.stream_openai)
+    }));
+    const worldBooksSummary = (tavernState.worldBooks || []).map(wb => ({
+      id: wb.id,
+      name: wb.name,
+      enabled: Boolean(wb.enabled),
+      entryCount: (wb.entries || []).length
+    }));
+
+    let detailText = '';
+    if (targetType === 'tavern_card') {
+      const card = (tavernState.cards || []).find(c => c.id === targetIdOrName || c.name === targetIdOrName) || activeCard;
+      if (card) {
+        const wb = (tavernState.worldBooks || []).find(b => b.id === card.worldBookId);
+        detailText = [
+          `【已授权读取的酒馆角色卡: ${card.name}】`,
+          `- 角色描述: ${(card.description || '无').slice(0, 1200)}`,
+          `- 性格特征: ${(card.personality || '无').slice(0, 400)}`,
+          `- 场景设定: ${(card.scenario || '无').slice(0, 500)}`,
+          `- 作者注释与说明: ${(card.creator_notes || '无').slice(0, 600)}`,
+          `- 主开场白摘要: ${(card.first_mes || '无').slice(0, 800)}`,
+          `- 额外多开场白数: ${(card.alternate_greetings || []).length}个`,
+          `- 专属正则脚本: ${(card.regexScripts || []).map(r => r.scriptName + (r.disabled ? '[已关]' : '[已开]')).join('、') || '无'}`,
+          `- 绑定世界书: ${wb ? `${wb.name} 共${(wb.entries || []).length}条词条` : '未单独绑定'}`,
+          `- 当前聊天记录层数: ${(activeSess?.messages || []).length}层`
+        ].join('\n');
+      }
+    } else if (targetType === 'tavern_preset') {
+      const p = (tavernState.presets || []).find(x => x.id === targetIdOrName || x.name === targetIdOrName) || activePreset;
+      if (p) {
+        const enabledItems = (p.prompts || []).filter(i => i.enabled).map(i => stripUiEmojis(i.name || i.identifier));
+        const disabledItems = (p.prompts || []).filter(i => !i.enabled).map(i => stripUiEmojis(i.name || i.identifier));
+        detailText = [
+          `【已授权读取的酒馆预设: ${p.name}】`,
+          `- 流式输出: ${p.stream_openai ? '已开启' : '未开启'} | 温度:${p.temperature} | 最大上下文:${p.openai_max_context} | 最大回复:${p.openai_max_tokens}`,
+          `- 已启用条目(${enabledItems.length}项): ${enabledItems.slice(0, 35).join('、')}`,
+          `- 未启用条目(${disabledItems.length}项): ${disabledItems.slice(0, 25).join('、')}`
+        ].join('\n');
+      }
+    } else if (targetType === 'tavern_worldbook') {
+      const wb = (tavernState.worldBooks || []).find(x => x.id === targetIdOrName || x.name === targetIdOrName) || (tavernState.worldBooks || [])[0];
+      if (wb) {
+        const entryLines = (wb.entries || []).slice(0, 40).map(e => `${stripUiEmojis(e.comment || e.uid)}[${e.disable ? '关' : (e.constant ? '蓝灯常驻' : '绿灯关键:' + (e.keys || []).slice(0, 3).join(','))}]`);
+        detailText = [
+          `【已授权读取的酒馆世界书: ${wb.name}】`,
+          `- 状态: ${wb.enabled ? '全局启用' : '未全局启用'} | 扫描深度:${wb.scanDepth || 4} | 词条总数:${(wb.entries || []).length}`,
+          `- 词条列表摘要: ${entryLines.join('；')}`
+        ].join('\n');
+      }
+    }
+
+    return {
+      activeDrawerKey: uiRuntime.openDrawerKey,
+      activeCardName: activeCard ? activeCard.name : '未选择',
+      activePresetName: activePreset ? activePreset.name : '标准酒馆预设',
+      cardsSummary,
+      presetsSummary,
+      worldBooksSummary,
+      detailText
+    };
   };
 
   if (document.readyState === 'loading') {
