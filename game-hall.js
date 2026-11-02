@@ -7090,16 +7090,28 @@ code, pre {
     if (!Array.isArray(uiRuntime.debugConsoleLogs)) {
       uiRuntime.debugConsoleLogs = [];
     }
-    const formattedPrompt = Array.isArray(entry.apiMessages)
-      ? entry.apiMessages.map((m, idx) => `[#${idx + 1} ${m.role || 'system'}]\n${String(m.content || '')}`).join('\n\n')
+    const hasApiMsgs = Array.isArray(entry.apiMessages);
+    const formattedPrompt = hasApiMsgs
+      ? entry.apiMessages.map((m, idx) => {
+          const itemText = String(m?.content || '');
+          const itemTokens = estimateTokens(itemText);
+          return `[#${idx + 1} ${m?.role || 'system'} · ${itemTokens} Tokens]\n${itemText}`;
+        }).join('\n\n')
       : String(entry.sentPromptText || '');
+    const sentTokens = hasApiMsgs
+      ? entry.apiMessages.reduce((sum, m) => sum + estimateTokens(String(m?.content || '')), 0)
+      : estimateTokens(formattedPrompt);
+    const rawReplyStr = String(entry.rawReplyText || '');
+    const replyTokens = estimateTokens(rawReplyStr);
     const logItem = {
       id: 'dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       time: new Date().toLocaleTimeString(),
       floorIdx: entry.floorIdx !== undefined && entry.floorIdx !== null ? entry.floorIdx : 0,
       cardName: String(entry.cardName || getActiveCard()?.name || '角色'),
       sentPromptText: formattedPrompt,
-      rawReplyText: String(entry.rawReplyText || '')
+      rawReplyText: rawReplyStr,
+      sentTokens,
+      replyTokens
     };
     uiRuntime.debugConsoleLogs.unshift(logItem);
     if (uiRuntime.debugConsoleLogs.length > 5) {
@@ -9782,13 +9794,16 @@ code, pre {
         const sIdx = Math.min(rawSwipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
         const rawText = rawSwipes[sIdx] !== undefined ? rawSwipes[sIdx] : (m.mes || '');
         const fullReply = (m.reasoning ? `[思考过程]\n${m.reasoning}\n\n` : '') + String(rawText || '');
+        const sentText = String(prevUserMsg || '');
         fallbackList.push({
           id: 'hist_' + i,
           time: m.gen_time || '历史楼层',
           floorIdx: i,
           cardName: activeCard?.name || m.name || '角色',
-          sentPromptText: String(prevUserMsg || '本层无单独发送文本记录，新生成回复后将在此显示完整上下文提示词'),
-          rawReplyText: fullReply
+          sentPromptText: sentText || '本层无单独发送文本记录，新生成回复后将在此显示完整上下文提示词',
+          rawReplyText: fullReply,
+          sentTokens: sentText ? estimateTokens(sentText) : 0,
+          replyTokens: estimateTokens(fullReply)
         });
       }
       consoleEntries = fallbackList.slice(0, 5);
@@ -9878,20 +9893,22 @@ code, pre {
               <div style="font-size:12px;color:#777;padding:6px 0;">暂无最近楼层调试记录，发送消息或生成回复后会自动记录最近5层内容。</div>
             ` : consoleEntries.map(log => {
               const isMashu = /麻薯|mashu/i.test(String(log.cardName || activeCard?.name || ''));
+              const sentTok = typeof log.sentTokens === 'number' ? log.sentTokens : estimateTokens(log.sentPromptText || '');
+              const replyTok = typeof log.replyTokens === 'number' ? log.replyTokens : estimateTokens(log.rawReplyText || '');
               return `
                 <div style="border:1px solid rgba(205,205,215,0.85);border-radius:10px;padding:8px 10px;background:#fafafc;">
-                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:700;color:#444;margin-bottom:6px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:700;color:#444;margin-bottom:6px;gap:6px;flex-wrap:wrap;">
                     <span>楼层 #${escapeHtmlSimple(String(log.floorIdx))} · ${escapeHtmlSimple(stripUiEmojis(log.cardName || '角色'))}</span>
-                    <span style="font-weight:400;color:#888;">${escapeHtmlSimple(String(log.time || ''))}</span>
+                    <span style="font-weight:500;color:#666;font-size:11px;">${!isMashu ? `发送 ${sentTok} Tokens · ` : ''}回复 ${replyTok} Tokens · ${escapeHtmlSimple(String(log.time || ''))}</span>
                   </div>
                   ${!isMashu ? `
                     <details style="margin-bottom:6px;">
-                      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">发送完整内容 点击展开</summary>
+                      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">发送完整内容 · 共 ${sentTok} Tokens 点击展开</summary>
                       <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#f1f2f6;padding:8px;border-radius:8px;max-height:180px;overflow-y:auto;margin:4px 0 0 0;color:#333;">${escapeHtmlSimple(log.sentPromptText || '')}</pre>
                     </details>
                   ` : ''}
                   <details open>
-                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">回复完整内容 点击展开或收起</summary>
+                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">回复完整内容 · 共 ${replyTok} Tokens 点击展开或收起</summary>
                     <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#f1f2f6;padding:8px;border-radius:8px;max-height:200px;overflow-y:auto;margin:4px 0 0 0;color:#333;">${escapeHtmlSimple(log.rawReplyText || '')}</pre>
                   </details>
                 </div>
