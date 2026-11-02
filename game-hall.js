@@ -27,6 +27,136 @@
 
   const DEFAULT_GOUSU_THEME = {"name":"一键狗塑","blur_strength":10,"main_text_color":"rgba(48, 48, 49, 1)","italics_text_color":"rgba(212, 208, 210, 1)","underline_text_color":"rgba(255, 205, 223, 1)","quote_text_color":"rgba(255, 205, 223, 1)","blur_tint_color":"rgba(251, 251, 251, 1)","chat_tint_color":"rgba(242, 242, 242, 0)","user_mes_blur_tint_color":"rgba(255, 255, 255, 1)","bot_mes_blur_tint_color":"rgba(196, 196, 196, 1)","shadow_color":"rgba(255, 255, 255, 1)","shadow_width":0,"border_color":"rgba(111, 112, 116, 0.89)","font_scale":1.05,"fast_ui_mode":true,"waifuMode":false,"avatar_style":0,"chat_display":1,"toastr_position":"toast-top-left","noShadows":true,"chat_width":52,"timer_enabled":true,"timestamps_enabled":false,"timestamp_model_icon":false,"mesIDDisplay_enabled":true,"hideChatAvatars_enabled":false,"message_token_count_enabled":true,"expand_message_actions":false,"enableZenSliders":false,"enableLabMode":false,"hotswap_enabled":true,"custom_css":"/*\n\n一键狗塑 @Mayonnaise\n非常感谢导航楼内各位老师的分享，所使用代码已在以下标注作者❤︎\n\n*/\n\n@import url(\"https://fontsapi.zeoseven.com/3/main/result.css\");\n\n/* ===== 1. 基础设置与变量 ===== */\nbody {\n    font-family: \"寒蝉全圆体\";\n    font-weight: normal;\n}\n\n:root {\n    --text1: 'ฅ૮₍ ´• ˕ •` ₎აฅ 𝒑𝒖𝒑𝒑𝒚 𝒊𝒔 𝒕𝒉𝒊𝒏𝒌𝒊𝒏𝒈...₊˚⊹♡';/* 思维链文本 */\n    --text2: '-`♡´-𝒑𝒖𝒑𝒑𝒚 𝒊𝒔 𝒕𝒚𝒑𝒊𝒏𝒈…₊˚⊹ 𐂯';/* 输入框文本 */\n    --text3: '·ᴥ·';/* 名字后跟颜文字 不想要可删除内容 */\n    --text4: '# わんちゃん♡';/* char的tag文本 */\n    --text5: '# 飼い主❤︎';/* user的tag文本 */\n\n    --bg1: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/%E6%8F%92%E7%94%BB5.png');\n    --bg2: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/%E6%8F%92%E7%94%BB4.png');\n    --logo1: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/PhBoneDuotone.svg');\n    --logo2: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/PhDogFill.svg');\n    --logo3: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/PhPawPrintFill.svg');\n    --logo4: url('https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/MynauiHeartXSolid.svg');\n}\n\n/* ===== 2. 聊天区域主样式 ===== */\n#chat {\n    background: transparent;\n    backdrop-filter: none !important;\n    border: none !important;\n    margin-top: 4px !important;\n    mask: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);\n}\n\n.mes {\n    display: flex !important;\n    position: relative !important;\n    flex-direction: column !important;\n    padding: 30px 10px 0 10px !important;\n    margin-bottom: 50px !important;\n    overflow: visible !important;\n    background: transparent !important;\n    border: none !important;\n}\n\n.mes_block {\n    position: static !important;\n    overflow: hidden !important;\n    --msg-bg-color: #e6e6e6;\n    background: radial-gradient(circle at 44px 30px, transparent 53px, var(--msg-bg-color) 54px) !important;\n    border: none !important;\n    border-radius: 15px !important;\n    border-top-left-radius: 0 !important;\n    padding: 60px 15px 15px 15px !important;\n    min-height: 60px;\n}\n\n.mes_text {\n    overflow: visible !important;\n    padding: 15px;\n    margin-top: 10px;\n    background: #FFF !important;\n    border-radius: 10px !important;\n    border: 2px solid #D8D8D8 !important;\n}\n\n.mes.last_mes {\n    margin-bottom: 80px !important;\n}\n\n/* --- 头像与名字 --- */\n.mes[is_system=\"false\"] .mesAvatarWrapper .avatar::before {\n    content: \"\";\n    z-index: 10 !important;\n    position: absolute !important;\n    background-image: url(\"https://pub-222b3a4a8d2e47bc9c31cc9e1733ed9a.r2.dev/%E5%B0%8F%E7%8B%97%E7%B3%BB%E5%88%97/1ear.png\");\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    width: 110px;\n    height: 110px;\n    top: -40px;\n    left: -8px;\n}\n\n.mesAvatarWrapper {\n    position: absolute !important;\n    top: 14px !important;\n    left: 8px !important;\n    margin: 0 !important;\n    order: unset !important;\n    width: 93px !important;\n    height: 93px !important;\n}\n\n.mes .avatar {\n    width: 93px !important;\n    height: 93px !important;\n}\n\n.mes .avatar img {\n    border: 3px solid #eee;\n    width: 100%;\n    height: 100%;\n    box-shadow: none;\n}\n\n.mes .name_text {\n    position: absolute !important;\n    top: 20px !important;\n    left: 120px !important;\n    display: flex !important;\n    gap: 10px;\n    white-space: nowrap;\n    background-color: #555 !important;\n    color: #fff !important;\n    padding: 4px 15px !important;\n    border-radius: 12px !important;\n    font-size: 17px !important;\n    font-weight: bold;\n    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);\n}\n\n.mes .name_text::after {\n    content: var(--text3);\n}\n\n/* ===== 3. 思维链 (Reasoning) ===== */\n.mes_reasoning_summary.flex-container {\n    flex-direction: column;\n    align-items: center;\n    gap: 5px;\n}\n\n.mes_reasoning_actions {\n    position: relative !important;\n    background: #fff;\n    border: 1px solid #ddd;\n    border-radius: 20px;\n    padding: 2px 10px !important;\n}\n\n.mes_reasoning {\n    margin-top: 5px;\n    padding: 15px;\n    border: 1px dashed #555;\n    background-color: #FBFBFB;\n    border-radius: 8px;\n    color: #555;\n    font-family: \"寒蝉全圆体\";\n    font-size: 15px;\n}\n\n.mes_reasoning_header {\n    display: flex !important;\n    order: -1;\n    background-image: var(--bg2);\n    background-size: cover;\n    border: 1px solid #555;\n    border-radius: 25px;\n    padding: 6px 9px;\n}\n\n.mes_reasoning_header_title {\n    font-family: \"寒蝉全圆体\";\n    font-weight: bold;\n    font-size: 0;\n}\n\n.mes_reasoning_header_title::before {\n    content: var(--text1);\n    font-size: 14px;\n}\n\n.mes_reasoning_arrow {\n    display: none;\n}\n\n.mes_reasoning_details[open] .mes_reasoning_header.flex-container {\n    background: #fff !important;\n}\n\n.mes_reasoning_header.flex-container {\n    transition: background 0.8s ease-in-out;\n}\n\n/* ===== 4. 顶栏样式 ===== */\n#top-bar {\n    box-shadow: inset 0 0 2px 2px #ffffff !important;\n    border: 1px solid #656874 !important;\n    border-radius: 15px !important;\n    margin-top: 3px;\n    background-image: var(--bg1) !important;\n    background-position: center center;\n    background-size: cover;\n}\n\n/* 顶栏图标替换by 墨千尾老师 */\n#top-settings-holder .drawer-icon::before {\n    content: '' !important;\n    visibility: hidden;\n}\n\n#top-settings-holder .drawer {\n    flex: 1;\n}\n\n#top-settings-holder .drawer-icon {\n    display: block;\n    margin-top: 5px;\n    background-color: #fff;\n    border-radius: 15px !important;\n    background-size: contain;\n    background-position: center;\n    background-repeat: no-repeat;\n    transition: all 0.3s ease-in-out;\n    width: 28px;\n    height: 28px;\n    opacity: 1 !important;\n}\n\n.drawer-icon.fa-fw:hover {\n    transform: scale(1.2);\n}\n\n.drawer-icon.fa-sliders,\n.drawer-icon.fa-cubes {\n    background-image: var(--logo1);\n}\n\n.drawer-icon.fa-font,\n.drawer-icon.fa-address-card {\n    background-image: var(--logo2);\n}\n\n.drawer-icon.fa-plug,\n.drawer-icon.fa-plug-circle-exclamation,\n.drawer-icon.fa-book-atlas,\n.drawer-icon.fa-panorama,\n.drawer-icon.fa-face-smile {\n    background-image: var(--logo3);\n}\n\n.drawer-icon.fa-user-cog {\n    background-image: var(--logo4);\n}\n\n/* ===== 5. 底栏与输入框 ===== */\n#sheld {\n    background: transparent !important;\n    border: none !important;\n    box-shadow: none !important;\n}\n\n#send_form {\n    position: absolute;\n    bottom: 20px;\n    left: 40px;\n    right: 40px;\n    width: auto;\n    background-image: var(--bg1) !important;\n    background-position: center center;\n    background-size: cover;\n    box-shadow: inset 0 0 2px 2px #ffffff !important;\n    border-radius: 25px;\n    padding: 3px 3px;\n    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);\n    transition: all 0.5s ease;\n    border: 1px solid #656874 !important;\n}\n\n#send_form:hover {\n    background-color: rgba(255, 255, 255, 0.6) !important;\n    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);\n    transform: translateY(-2px);\n}\n\n#send_textarea {\n    background: #FFF;\n    color: #333 !important;\n    border-radius: 25px;\n    border: 2px solid #DDD !important;\n    font-family: \"寒蝉全圆体\";\n    margin-bottom: 2px;\n}\n\n/* 底栏图标替换by 墨千尾老师 */\n#options_button::before,\n#extensionsMenuButton::before,\n#send_but::before,\n#quick-reply-rocket-button > i {\n    display: none !important;\n}\n\n#options_button,\n#extensionsMenuButton,\n#send_but,\n#quick-reply-rocket-button {\n    width: 28px !important;\n    height: 28px !important;\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: #FFF;\n    border-radius: 15px !important;\n    opacity: 1 !important;\n}\n\n#options_button { background-image: var(--logo1); }\n#extensionsMenuButton { background-image: var(--logo4); }\n#send_but { background-image: var(--logo3); }\n#quick-reply-rocket-button { background-image: var(--logo2); }\n\n/* 输入框文字by hgu老师 */\n#send_textarea::placeholder {\n    color: transparent !important;\n    opacity: 0 !important;\n}\n\n#nonQRFormItems {\n    position: relative !important;\n}\n\n#nonQRFormItems:has(#send_textarea:placeholder-shown)::after {\n    content: var(--text2);\n    font-size: 14px;\n    white-space: nowrap;\n    opacity: 0.5;\n    position: absolute;\n    z-index: 10;\n    pointer-events: none;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -50%);\n}\n\n/* 隐藏QR栏二改by 12老师 */\n#qr--bar {\n    max-height: 0 !important;\n    opacity: 0 !important;\n    pointer-events: none;\n    transition: all 1.1s !important;\n    cubic-bezier(0.175, 0.885, 0.32, 1.275)\n}\n\n#send_form:focus-within #qr--bar {\n    max-height: 120px !important;\n    opacity: 1 !important;\n    pointer-events: auto;\n}\n\n/* ===== 6. 通用 UI 组件 ===== */\n#rm_extensions_block .inline-drawer-toggle.inline-drawer-header,\n#user-settings-block h4,\n.standoutHeader {\n    background-image: var(--bg2) !important;\n    background-size: cover;\n    box-shadow: inset 0 0 5px 1px #fff !important;\n}\n\n.text_pole,\nselect,\ninput[type=\"text\"],\ninput[type=\"number\"],\ninput[type=\"search\"],\n#settingsSearch,\n.popup textarea,\n#description_textarea,\n#firstmessage_textarea,\n.edit_textarea.mdHotkeys,\n.reasoning_edit_textarea,\n.select2-container--default .select2-selection--single,\n.select2-container--default .select2-selection--multiple {\n    background-color: #eee !important;\n    padding: 3px !important;\n    border-radius: 10px !important;\n    font-family: \"寒蝉全圆体\";\n}\n\ncode, pre {\n    font-family: \"寒蝉全圆体\";\n    color: #000;\n    background-color: #eee;\n    border: 1px solid #000;\n    border-radius: 2px;\n}\n\n.mes_text q {\n    display: inline;\n    -webkit-box-decoration-break: clone;\n    box-decoration-break: clone;\n    background-color: #fff;\n    border: 1px solid var(--SmartThemeQuoteColor) !important;\n    border-radius: 10px !important;\n    box-shadow: 1px 1px 3px #dddddd80;\n    padding: 3px;\n    line-height: 1.7;\n}\n\n.avatar-container.interactable.selected {\n    background-image: var(--bg2) !important;\n    background-size: cover;\n    border-radius: 15px;\n}\n\n.menu_button, .right_menu_button {\n    box-shadow: none;\n    background-color: #fff !important;\n    border: 1px solid #aaa !important;\n    border-radius: 10px !important;\n    transition: background-color 0.3s ease, transform 0.2s ease !important;\n}\n\n.menu_button:hover, .right_menu_button:hover {\n    background-color: var(--SmartThemeQuoteColor) !important;\n    transform: scale(1.05);\n}\n\n.select2-selection__choice__display,\n.select2-selection__choice__remove {\n    background: none !important;\n}\n\n.select2-selection__choice {\n    background-color: #EBEBEB !important;\n    color: #aaa !important;\n}\n\n.completion_prompt_manager_prompt .fa-asterisk,\n.completion_prompt_manager_prompt .fa-square-poll-horizontal,\n.completion_prompt_manager_prompt .fa-syringe,\n.completion_prompt_manager_prompt .fa-thumb-tack,\n.fa-xs.fa-solid.fa-robot/* 类名by hy老师 */ {\n    color: var(--SmartThemeQuoteColor) !important;\n}\n\n#completion_prompt_manager .completion_prompt_manager_header_advanced span, \n#completion_prompt_manager .completion_prompt_manager_header div, .prompt_manager_prompt_controls span/* 类名byMDMA老师 */ {\n    filter: none !important;\n}\n\n#completion_prompt_manager_list {\n    background: none !important;\n    border: none;\n}\n\n#completion_prompt_manager .completion_prompt_manager_prompt {\n    border-radius: 20px;\n    border: 1px solid #aaa !important;\n    padding: 7px !important;\n}\n\n.completion_prompt_manager_prompt_disabled {\n    background: #eee !important;\n}\n\n.completion_prompt_manager_prompt_disabled .prompt-manager-inspect-action {\n    color: #aaa !important;\n}\n\n#completion_prompt_manager .completion_prompt_manager_header_advanced span,\n#completion_prompt_manager .completion_prompt_manager_header div {\n    filter: none !important;\n    color: #555 !important;\n}\n\ndialog.popup,\n#select_chat_popup,\nselect,\n.list-group,\n.select2-dropdown,\n#options,\n#options-content,\n#extensionsMenu {\n    box-shadow: none !important;\n}\n\n.reverse_proxy_warning {\n    color: var(--SmartThemeQuoteColor) !important;\n}\n\n::selection {\n    background: var(--SmartThemeQuoteColor);\n    color: #fff;\n}\n\n/* --- 滚动条 --- */\n::-webkit-scrollbar {\n    width: 10px;\n}\n\n::-webkit-scrollbar-track {\n    background-color: transparent;\n}\n\n::-webkit-scrollbar { width: 5px; }\n::-webkit-scrollbar-thumb { background-color: #eee !important; border-radius: 15px !important; border: none !important; }\n::-webkit-scrollbar-track { background: transparent; }\n\n/* ===== 7. 表单控件 (复选框与滑块) ===== */\n/* 复选框图标替换by 食南瓜者老师 */\ninput[type=\"checkbox\"] {\n    background: #fff;\n    border-radius: 10px;\n}\n\ninput[type=\"checkbox\"]::before {\n    display: none !important;\n}\n\ninput[type=\"checkbox\"]:checked {\n    background-image: var(--logo3) !important;\n    background-size: 16px !important;\n    background-position: center !important;\n    border-radius: 10px;\n}\n\n/* 滑动条by 墨千尾老师 */\ninput[type=\"range\"] { filter: none !important; }\ninput[type=\"range\"]::-webkit-slider-runnable-track {\n    height: 10px;\n    background: #D8D8D8;\n    border-radius: 5px;\n    border: 1px solid #555;\n}\n\ninput[type=\"range\"]::-webkit-slider-thumb {\n    -webkit-appearance: none;\n    appearance: none;\n    margin-top: -7px;\n    height: 20px;\n    width: 20px;\n    background-image: var(--logo1);\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    background-color: transparent;\n    border: none;\n    border-radius: 0;\n    box-shadow: none;\n    transition: transform 0.2s ease;\n}\n\ninput[type=\"range\"]:hover::-webkit-slider-thumb { transform: scale(1.1); }\n\n/* ===== 8. 交互反馈与消息功能 ===== */\n/* 通知美化by serein老师 */\n.toast {\n    background-color: #ddd !important;\n    color: #555 !important;\n    border: 1px dashed #555;\n    box-shadow: none !important;\n}\n\n#toast-container > .toast {\n    background-image: var(--logo3) !important;\n    background-size: 28px 28px !important;\n    background-position: 15px center !important;\n}\n\n#toast-container > .toast:before {\n    display: none;\n}\n\n.fa-circle-chevron-down,\n.inline-drawer-icon.fa-circle-chevron-down {\n    background-image: var(--logo4) !important;\n    background-size: 21px !important;\n    background-position: center !important;\n    color: transparent !important;\n    transition: transform 0.3s ease-in-out !important;\n    transform: scaleY(1) !important;\n}\n\n.fa-circle-chevron-up,\n.inline-drawer-icon.fa-circle-chevron-up {\n    background-image: var(--logo4) !important;\n    background-size: 21px !important;\n    background-position: center !important;\n    color: transparent !important;\n    transform: scaleY(-1) !important;\n    transition: transform 0.3s ease-in-out !important;\n}\n\n/* --- 消息选择与删除 --- */\n.mes .for_checkbox {\n    display: none !important;\n    width: 0 !important;\n    min-width: 0 !important;\n    flex-basis: 0 !important;\n    margin: 0 !important;\n    padding: 0 !important;\n}\n\n.mes .del_checkbox {\n    position: absolute !important;\n    left: 50% !important;\n    transform: translateX(-50%) !important;\n    top: 0 !important;\n    z-index: 100 !important;\n    margin: 0 !important;\n    width: 20px !important;\n    height: 20px !important;\n    cursor: pointer;\n    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);\n}\n\n.mes.selected::after {\n    content: \"\";\n    position: absolute;\n    top: 0;\n    left: 0;\n    width: 100%;\n    height: 100%;\n    background-color: #ffffff95;\n    border-radius: 10px;\n    pointer-events: none;\n    box-sizing: border-box;\n    z-index: 22;\n}\n\n/* --- 消息翻页 --- */\n/* 翻页图标替换二改by 眠N勿扰老师 */\n.swipe_left::before, .swipe_right::before { content: '' !important; }\n\n.swipe_left, .swipe_right {\n    background-color: #fff;\n    border-radius: 15px !important;\n    position: absolute !important;\n    bottom: -3px !important;\n    opacity: 1 !important;\n    background-size: contain;\n    background-repeat: no-repeat;\n    background-position: center;\n    transition: transform 0.2s ease !important;\n    background-image: var(--logo3);\n    width: 24px;\n    height: 24px;\n    z-index: 30 !important;\n}\n\n.swipe_left {\n    left: calc(29% + 10px) !important;\n    transform: rotate(-90deg);\n}\n\n.swipe_right {\n    right: calc(10% + 10px) !important;\n    transform: rotate(90deg);\n}\n\n.swipe_left:hover, .swipe_right:hover { transform: scale(1); }\n\n/* --- 消息编辑按钮 --- */\n.mes_edit_buttons {\n    transform: scale(0.9);\n    filter: none !important;\n}\n\n.mes_edit, .extraMesButtonsHint {\n    background: #eee;\n    border-radius: 15px;\n    border: 1px solid #aaa;\n    box-shadow: inset 0 0 5px 1px #fff !important;\n    filter: none !important;\n    color: transparent !important;\n    width: 24px !important;\n    height: 24px !important;\n    background-size: contain;\n    background-repeat: no-repeat;\n    opacity: 1;\n    transition: transform 0.2s ease;\n    margin: 5px;\n}\n\n.mes_edit { background-image: var(--logo4) !important; }\n.extraMesButtonsHint { background-image: var(--logo2) !important; }\n.mes_edit:hover, .extraMesButtonsHint:hover { transform: scale(1.1); }\n\n.mes_edit_buttons {\n    transform: scale(0.9);\n}\n\n/* --- 消息元数据组件 --- */\n.swipes-counter {\n    z-index: 10 !important;\n    opacity: 1 !important;\n    top: -18px;\n    right: 35px;\n    position: absolute !important;\n    font-weight: bold !important;\n    font-size: 14px !important;\n    background: #fff !important;\n    border: 1px solid #6F7074 !important;\n    border-radius: 6px !important;\n    color: #aaa !important;\n    font-family: \"寒蝉全圆体\";\n}\n\n.swipes-counter:empty { display: none !important; }\n\n.mes_ghost.fa-solid.fa-ghost { z-index: 1 !important; }\n.mes[is_user=\"true\"] .mes_ghost.fa-solid.fa-ghost {\n    position: absolute !important;\n    right: 25px;\n}\n\n.mesIDDisplay,\n.mes_timer,\n.tokenCounterDisplay {\n    position: absolute;\n    top: 40px;\n    height: 22px;\n    width: 60px;\n    display: inline-flex !important;\n    align-items: center;\n    justify-content: center;\n    background-color: #fff;\n    border: 1px solid #aaa;\n    color: #aaa;\n    font-family: \"寒蝉全圆体\";\n    font-size: 11px;\n    margin: 0 !important;\n    padding: 0 !important;\n    box-sizing: border-box;\n    pointer-events: none;\n}\n\n.mesIDDisplay {\n    left: 112px !important;\n    border-radius: 10px 0 0 10px !important;\n    border-right: none !important;\n}\n\n.mes_timer {\n    left: 172px !important;\n    border-radius: 0 !important;\n    border-left: none !important;\n    border-right: none !important;\n}\n\n.tokenCounterDisplay {\n    left: 232px !important;\n    border-radius: 0 10px 10px 0 !important;\n    border-left: none !important;\n}\n\n.mes_timer:empty { display: none !important; }\n.mes_timer:empty + .tokenCounterDisplay { left: 172px !important; }\n\n.mes[is_user=\"false\"] .mesIDDisplay::before {\n    content: \"\";\n    width: 17px;\n    height: 17px;\n    background-image: var(--logo1);\n    background-size: contain;\n    background-repeat: no-repeat;\n    margin-right: 3px;\n}\n\n.mes[is_user=\"true\"] .mesIDDisplay::after {\n    content: \"\";\n    width: 17px;\n    height: 17px;\n    background-image: var(--logo1);\n    background-size: contain;\n    background-repeat: no-repeat;\n    margin-left: 3px;\n    transform: scaleX(-1);\n}\n\n/* ===== 9. 用户消息 (User) 适配与镜像逻辑 ===== */\n.mes[is_user=\"true\"] .mes_block {\n    background: radial-gradient(circle at calc(100% - 44px) 30px, transparent 53px, var(--msg-bg-color) 54px) !important;\n    border-top-left-radius: 15px !important;\n    border-top-right-radius: 0 !important;\n}\n\n.mes[is_user=\"true\"] .mesAvatarWrapper {\n    left: auto !important;\n    right: 8px !important;\n}\n\n.mes[is_user=\"true\"] .mesAvatarWrapper .avatar::before {\n    left: auto !important;\n    right: -8px !important;\n}\n\n.mes[is_user=\"true\"] .name_text {\n    left: auto !important;\n    right: 120px !important;\n}\n\n.mes[is_user=\"true\"] .mesIDDisplay,\n.mes[is_user=\"true\"] .mes_timer,\n.mes[is_user=\"true\"] .tokenCounterDisplay {\n    left: auto !important;\n}\n\n.mes[is_user=\"true\"] .mesIDDisplay {\n    right: 112px !important;\n    border-radius: 0 10px 10px 0 !important;\n    border-right: 1px solid #aaa !important;\n    border-left: none !important;\n}\n\n.mes[is_user=\"true\"] .mes_timer {\n    right: 172px !important;\n}\n\n.mes[is_user=\"true\"] .tokenCounterDisplay {\n    right: 232px !important;\n    border-radius: 10px 0 0 10px !important;\n    border-left: 1px solid #aaa !important;\n    border-right: none !important;\n}\n\n.mes[is_user=\"true\"] .mes_timer:empty + .tokenCounterDisplay {\n    right: 172px !important;\n}\n\n.mes[is_user=\"true\"]::before {\n    right: auto !important;\n    left: 7px !important;\n    border-radius: 4px 15px 15px 15px !important;\n}\n\n.mes[is_user=\"true\"] .ch_name.flex-container.justifySpaceBetween {\n    flex-direction: row-reverse !important;\n}\n\n/* ===== 10. 装饰层装饰逻辑 (Before/After) ===== */\n.mes::before {\n    z-index: 2 !important;\n    content: \"\";\n    position: absolute !important;\n    background-image: var(--bg1) !important;\n    background-size: cover;\n    background-position: center;\n    box-shadow: inset 0 0 5px 1px #fff !important;\n    width: 70%;\n    height: 28px;\n    bottom: -6px;\n    border-radius: 15px 4px 15px 15px;\n    border: 1px solid #aaa;\n    right: 7px;\n}\n\n.mes_block::before {\n    content: \"\";\n    position: absolute !important;\n    top: 30px !important;\n    left: 10px !important;\n    right: 10px !important;\n    bottom: 0 !important;\n    border-radius: 15px !important;\n    border-top-left-radius: 0 !important;\n    pointer-events: none;\n    box-shadow: inset 0 0 15px #fff !important;\n    border: 1px solid #ccc !important;\n    -webkit-mask-image: radial-gradient(circle at 44px 30px, transparent 53px, black 54px) !important;\n    mask-image: radial-gradient(circle at 44px 30px, transparent 53px, black 54px) !important;\n}\n\n.mes[is_user=\"true\"] .mes_block::before {\n    border-top-left-radius: 15px !important;\n    border-top-right-radius: 0 !important;\n    -webkit-mask-image: radial-gradient(circle at calc(100% - 44px) 30px, transparent 53px, black 54px) !important;\n    mask-image: radial-gradient(circle at calc(100% - 44px) 30px, transparent 53px, black 54px) !important;\n}\n\n.mes_block::after {\n    content: var(--text4);\n    position: absolute !important;\n    top: 22px !important;\n    right: 20px !important;\n    background-color: #ffffff !important;\n    border: 1px solid #ccc !important;\n    color: #555555 !important;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;\n    font-family: \"寒蝉全圆体\";\n    font-size: 11px !important;\n    font-weight: bold;\n    padding: 2px 8px !important;\n    border-radius: 6px !important;\n    white-space: nowrap;\n    pointer-events: none;\n}\n\n.mes[is_user=\"true\"] .mes_block::after {\n    content: var(--text5);\n    left: 20px !important;\n    right: auto !important;\n}\n\n/* 加载图标修改by serein老师 */\n#load-spinner {\n  --spinner-size: 50px;\n  transition: all var(--animation-duration-2x) ease-out;\n  opacity: 1;\n  top: calc(50% - var(--spinner-size) / 2);\n  left: calc(50% - var(--spinner-size) / 2);\n  position: absolute;\n  width: var(--spinner-size);\n  height: var(--spinner-size);\n  background-image: var(--logo3);\n  background-size: contain;\n  background-repeat: no-repeat;\n  background-position: center;\n}\n\n#load-spinner::before {\n  display: none !important;\n}","bogus_folders":true,"zoomed_avatar_magnification":false,"reduced_motion":true,"compact_input_area":true,"show_swipe_num_all_messages":true,"click_to_edit":false,"media_display":"list","extensions":{"puppybot":{"uid":"MTQ0NjkwNTg0OTU1NjYzMTgwNA==","ts":1793557946},"regex_scripts":[{"id":"MTQ0NjkwNTg0OTU1NjYzMTgwNDoxNzkzNTU3OTQ2","scriptName":"格式优化","findRegex":"\\s{2,}","replaceString":" ","trimStrings":[],"placement":[1],"disabled":true,"markdownOnly":false,"promptOnly":false,"runOnEdit":false,"substituteRegex":false,"minDepth":0,"maxDepth":0}],"depth_prompt":{"prompts":[{"prompt":"​​‌​​‌‌​‌​‌​‌​‌​​​‌​‌​​​‌​​‌‌​​​​​‌​​‌‌‌​​‌‌​‌​‌​​‌‌​‌​‌‌​‌‌‌​‌‌‌​‌​​‌‌‌​​‌​‌​‌​​​‌‌​​‌‌‌​​‌‌​​​​​‌​​‌‌‌‌​‌​‌​‌​​​‌​‌​‌​‌​​‌‌​​​‌​‌​​‌‌‌​​‌‌​‌​‌​​‌​‌‌​​‌​‌‌‌‌​‌​​‌​​‌‌​‌​‌​‌​‌​​​‌‌​​‌‌‌​‌‌‌​‌‌‌​‌​​‌‌‌​​‌​​​‌​​​‌‌​‌‌‌‌​‌‌‌‌​​​​‌​​‌‌‌​​‌‌‌‌​‌​​‌‌​‌​‌‌​‌‌‌‌​‌​​‌​​‌‌‌​​‌​‌​‌​​​‌​‌​‌​‌​​‌‌​​‌‌​‌​​‌‌‌‌​‌​‌​‌​​​‌​‌​​​‌​​‌‌​​‌​​","depth":4,"role":"system"}]},"talkativeness":0.5001},"character_version":"1.0.MTQ0NjkwNTg0OTU1NjYz.MTgwNDoxNzkzNTU3OTQ2","tags":["fmt-opt","fmt-MTQ0","fmt-Njkw","fmt-NTg0","fmt-OTU1","fmt-NjYz","fmt-MTgw","fmt-NDox","fmt-Nzkz","fmt-NTU3","fmt-OTQ2"],"_wm":{"uid":"MTQ0NjkwNTg0OTU1NjYzMTgwNA==","ts":1793557946}};
 
+  const NIGHT_GOUSU_THEME = Object.assign({}, DEFAULT_GOUSU_THEME, {
+    id: 'theme_gousu_night',
+    name: '夜间狗塑',
+    builtin: true,
+    main_text_color: 'rgba(226, 224, 218, 1)',
+    italics_text_color: 'rgba(162, 158, 152, 1)',
+    underline_text_color: 'rgba(218, 166, 180, 1)',
+    quote_text_color: 'rgba(226, 174, 188, 1)',
+    blur_tint_color: 'rgba(34, 36, 43, 0.96)',
+    chat_tint_color: 'rgba(26, 28, 34, 1)',
+    user_mes_blur_tint_color: 'rgba(42, 45, 54, 1)',
+    bot_mes_blur_tint_color: 'rgba(36, 39, 47, 1)',
+    shadow_color: 'rgba(12, 13, 18, 0.45)',
+    border_color: 'rgba(76, 80, 92, 0.88)',
+    custom_css: DEFAULT_GOUSU_THEME.custom_css + `\n
+/* ===== 夜间狗塑 护眼暗色适配 ===== */
+#tavern-stage-root {
+    --gousu-meta-border: #454856;
+    background-color: #1a1c22 !important;
+    color: #e2e0da !important;
+}
+.mes_block {
+    --msg-bg-color: #282b34 !important;
+}
+.mes_block::before {
+    box-shadow: inset 0 0 14px rgba(16, 18, 22, 0.65) !important;
+    border: 1px solid #3e4250 !important;
+}
+.mes_block::after {
+    background-color: #2e313c !important;
+    border: 1px solid #484c5c !important;
+    color: #b8b5ad !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+.mes_text {
+    background: #20222a !important;
+    color: #e2e0da !important;
+    border: 1.5px solid #383c48 !important;
+}
+.mes_text q {
+    background-color: rgba(226, 174, 188, 0.13) !important;
+    color: #ebbcc9 !important;
+    border: 1px solid rgba(226, 174, 188, 0.42) !important;
+    box-shadow: none !important;
+}
+.mes .avatar img {
+    border: 3px solid #3d414f !important;
+    filter: brightness(0.92);
+}
+.mes[is_system="false"] .mesAvatarWrapper .avatar::before {
+    filter: brightness(0.8) contrast(0.95);
+}
+.mes .name_text {
+    background-color: #363a46 !important;
+    color: #e8e6e0 !important;
+    border: 1px solid #4d5262 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+}
+.mesIDDisplay,
+.mes_timer,
+.tokenCounterDisplay,
+.swipes-counter {
+    background-color: #262932 !important;
+    border-color: #454856 !important;
+    color: #9e9b93 !important;
+}
+.mes[is_user="false"] .mesIDDisplay::before,
+.mes[is_user="true"] .mesIDDisplay::after {
+    filter: invert(0.78) sepia(0.08) !important;
+}
+#top-bar,
+#send_form,
+.mes::before {
+    background-color: rgba(42, 45, 55, 0.85) !important;
+    background-blend-mode: multiply !important;
+    box-shadow: inset 0 0 2px 1px rgba(255, 255, 255, 0.07), 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+    border: 1px solid #464a58 !important;
+}
+#top-settings-holder .drawer-icon,
+#options_button,
+#extensionsMenuButton,
+#send_but,
+#quick-reply-rocket-button,
+.swipe_left,
+.swipe_right,
+.mes_edit,
+.extraMesButtonsHint {
+    background-color: #c2bfb8 !important;
+    border: 1px solid #4a4e5c !important;
+    box-shadow: none !important;
+}
+#send_textarea {
+    background: #22252e !important;
+    color: #e2e0da !important;
+    border: 1.5px solid #414554 !important;
+}
+#nonQRFormItems:has(#send_textarea:placeholder-shown)::after {
+    color: #9e9b93 !important;
+    opacity: 0.72 !important;
+}
+details.mes_reasoning_details {
+    background: rgba(34, 37, 45, 0.92) !important;
+    border: 1px dashed #484c5c !important;
+    color: #aba8a0 !important;
+}
+.mes_reasoning_header {
+    background-color: rgba(48, 52, 62, 0.84) !important;
+    background-blend-mode: multiply !important;
+    border: 1px solid #4c5060 !important;
+    color: #dcd9d2 !important;
+}
+.mes_reasoning_details[open] .mes_reasoning_header.flex-container {
+    background: #2c2f3a !important;
+}
+.mes_reasoning {
+    background-color: #1d1f26 !important;
+    border: 1px dashed #454958 !important;
+    color: #b8b5ad !important;
+}
+code, pre {
+    color: #dcd9d2 !important;
+    background-color: #262932 !important;
+    border: 1px solid #454856 !important;
+}
+::-webkit-scrollbar-thumb {
+    background-color: #3d414f !important;
+}
+`
+  });
+
   const INS_MINIMAL_THEME = {
     id: 'theme_ins_minimal',
     name: '奶油极简',
@@ -212,6 +342,7 @@
     ],
     themes: [
       Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME),
+      NIGHT_GOUSU_THEME,
       INS_MINIMAL_THEME
     ],
     plugins: [],
@@ -582,6 +713,7 @@
       if (!Array.isArray(tavernState.themes) || tavernState.themes.length === 0) {
         tavernState.themes = [
           Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME),
+          NIGHT_GOUSU_THEME,
           INS_MINIMAL_THEME
         ];
       } else {
@@ -590,6 +722,12 @@
           tavernState.themes.unshift(Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME));
         } else {
           tavernState.themes[gousuIdx].custom_css = DEFAULT_GOUSU_THEME.custom_css;
+        }
+        const nightIdx = tavernState.themes.findIndex(t => t.id === 'theme_gousu_night');
+        if (nightIdx === -1) {
+          tavernState.themes.splice(1, 0, NIGHT_GOUSU_THEME);
+        } else {
+          tavernState.themes[nightIdx] = Object.assign({}, NIGHT_GOUSU_THEME, { id: 'theme_gousu_night', builtin: true });
         }
         if (!tavernState.themes.some(t => t.id === 'theme_ins_minimal')) {
           tavernState.themes.push(INS_MINIMAL_THEME);
@@ -1636,8 +1774,9 @@
             events.forEach(ev => {
               const baseEv = ev.split('.')[0];
               if (!el._tavernEvtMap[ev]) el._tavernEvtMap[ev] = [];
-              el._tavernEvtMap[ev].push({ baseEv, handler });
-              el?.addEventListener?.(baseEv, handler);
+              const listenerOpts = (baseEv === 'touchstart' || baseEv === 'touchmove') ? { passive: false } : false;
+              el._tavernEvtMap[ev].push({ baseEv, handler, listenerOpts });
+              el?.addEventListener?.(baseEv, handler, listenerOpts);
             });
           });
           return api;
@@ -2726,16 +2865,19 @@
         } catch (_) {}
         return false;
       }
-      // Pause any other currently playing audio instances so BGM never plays twice in parallel
-      window.__tavernActiveAudioSet.forEach(other => {
-        if (other && other !== audioEl) {
-          try {
-            if (!other.paused) {
-              other.pause();
-            }
-          } catch (_) {}
-        }
-      });
+      // Pause any other currently playing audio instances only if the new audioEl actually has a valid media source
+      const hasValidSrc = Boolean((audioEl.src && String(audioEl.src).trim()) || (audioEl.currentSrc && String(audioEl.currentSrc).trim()));
+      if (hasValidSrc) {
+        window.__tavernActiveAudioSet.forEach(other => {
+          if (other && other !== audioEl) {
+            try {
+              if (!other.paused) {
+                other.pause();
+              }
+            } catch (_) {}
+          }
+        });
+      }
       return true;
     };
 
@@ -2781,7 +2923,15 @@
         const wrapMsg = (m, idx) => {
           const swipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
           const sIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
-          const text = swipes[sIdx] !== undefined ? swipes[sIdx] : (m.mes || '');
+          let text = swipes[sIdx] !== undefined ? swipes[sIdx] : (m.mes || '');
+          if (!String(text || '').trim() && swipes.length > 1) {
+            for (let k = sIdx - 1; k >= 0; k--) {
+              if (String(swipes[k] || '').trim()) {
+                text = swipes[k];
+                break;
+              }
+            }
+          }
           return Object.assign({}, m, {
             message_id: m.mesid !== undefined ? m.mesid : idx,
             message: text,
@@ -3070,7 +3220,12 @@
       .replace(/^\s*import\s+['"][^'"]+['"]\s*;?/gm, '')
       .replace(/^\s*export\s+default\s+/gm, '')
       .replace(/^\s*export\s+\{[^}]*\}\s*;?/gm, '')
-      .replace(/^\s*export\s+/gm, '');
+      .replace(/^\s*export\s+/gm, '')
+      // Prevent helper scripts (such as Gourmet handbook) from auto-pausing playing music when opening the panel or scanning floors without a new STATUS tag
+      .replace(
+        /if\s*\(\s*!target\s*\)\s*\{\s*if\s*\(\s*!audio\.paused\s*\)\s*audio\.pause\(\)\s*;\s*statusMusicUrl\s*=\s*['"]['"]\s*;\s*statusMusicMessageId\s*=\s*null\s*;\s*statusMusicInitialized\s*=\s*true\s*;\s*return\s*;\s*\}/g,
+        'if (!target) { statusMusicInitialized = true; updateMusicSettingsUI(); return; }'
+      );
   }
 
   function extractEmbeddedHtmlFromPluginCode(codeStr) {
@@ -3566,13 +3721,140 @@
     };
   }
 
+  function enhanceFloatingHelperWidgets() {
+    const ballIds = ['gourmet-fixed-ball-ui', 'adv-codex-toggle'];
+    ballIds.forEach(id => {
+      const ballEl = document.getElementById(id);
+      if (!ballEl) return;
+      ballEl.style.touchAction = 'none';
+      ballEl.style.userSelect = 'none';
+      ballEl.style.webkitUserSelect = 'none';
+      ballEl.querySelectorAll('img').forEach(img => {
+        img.style.pointerEvents = 'none';
+        img.style.userSelect = 'none';
+        img.style.webkitUserDrag = 'none';
+        img.setAttribute('draggable', 'false');
+      });
+    });
+
+    const panelIds = ['gourmet-fixed-panel-ui', 'adv-codex-panel'];
+    panelIds.forEach(id => {
+      const panelEl = document.getElementById(id);
+      if (!panelEl || panelEl._tavernDragEnhanced) return;
+      panelEl._tavernDragEnhanced = true;
+
+      let isDragging = false;
+      let hasMoved = false;
+      let activePointerId = null;
+      let startX = 0;
+      let startY = 0;
+      let startCenterX = 0;
+      let startTopY = 0;
+      let useTransformCenter = true;
+
+      const canStartPanelDrag = (target) => {
+        if (!target || !target.closest) return false;
+        if (target.closest('#gourmet-main-close-btn, input, select, textarea, button, #gourmet-scale-minus, #gourmet-scale-plus, #gourmet-theme-toggle, .gourmet-settings-row.clickable, .achieve-item')) {
+          return false;
+        }
+        return Boolean(
+          target.closest('.gourmet-tabs-bar') ||
+          target.closest('.gourmet-bottom-bar') ||
+          target.classList.contains('gourmet-main-frame') ||
+          target.classList.contains('gourmet-panel-container') ||
+          target === panelEl
+        );
+      };
+
+      const beginDrag = (clientX, clientY) => {
+        const rect = panelEl.getBoundingClientRect();
+        const tf = String(panelEl.style.transform || getComputedStyle(panelEl).transform || '');
+        useTransformCenter = tf.includes('translateX(-50%)') || panelEl.style.left === '50%';
+        startX = clientX;
+        startY = clientY;
+        startCenterX = useTransformCenter ? (rect.left + rect.width / 2) : rect.left;
+        startTopY = rect.top;
+        isDragging = true;
+        hasMoved = false;
+      };
+
+      const moveDrag = (clientX, clientY, ev) => {
+        if (!isDragging) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        if (!hasMoved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        hasMoved = true;
+        if (ev && ev.cancelable) ev.preventDefault();
+        const vw = window.innerWidth || 360;
+        const vh = window.innerHeight || 640;
+        const nextX = Math.max(24, Math.min(vw - 24, startCenterX + dx));
+        const nextY = Math.max(12, Math.min(vh - 60, startTopY + dy));
+        panelEl.style.left = nextX + 'px';
+        panelEl.style.top = nextY + 'px';
+      };
+
+      const endDrag = () => {
+        if (hasMoved) {
+          panelEl._suppressNextClickTs = Date.now();
+        }
+        isDragging = false;
+        activePointerId = null;
+      };
+
+      panelEl.addEventListener('click', (e) => {
+        if (panelEl._suppressNextClickTs && (Date.now() - panelEl._suppressNextClickTs) < 280) {
+          e.stopPropagation();
+          e.preventDefault();
+          panelEl._suppressNextClickTs = 0;
+        }
+      }, true);
+
+      panelEl.addEventListener('touchstart', (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        if (!canStartPanelDrag(e.target)) return;
+        beginDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+
+      panelEl.addEventListener('touchmove', (e) => {
+        if (!isDragging || !e.touches || e.touches.length !== 1) return;
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
+      }, { passive: false });
+
+      panelEl.addEventListener('touchend', endDrag, { passive: true });
+      panelEl.addEventListener('touchcancel', endDrag, { passive: true });
+
+      panelEl.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch' || e.button !== 0) return;
+        if (!canStartPanelDrag(e.target)) return;
+        activePointerId = e.pointerId;
+        beginDrag(e.clientX, e.clientY);
+        try { panelEl.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+
+      panelEl.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'touch' || !isDragging || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+        moveDrag(e.clientX, e.clientY, e);
+      });
+
+      panelEl.addEventListener('pointerup', (e) => {
+        if (e.pointerType === 'touch') return;
+        endDrag();
+      });
+
+      panelEl.addEventListener('pointercancel', (e) => {
+        if (e.pointerType === 'touch') return;
+        endDrag();
+      });
+    });
+  }
+
   let lastExecutedHelperCardId = null;
   function executeCardHelperScripts(cardObj, forceRun = false) {
     const card = cardObj || getActiveCard();
     if (!card) return;
-    const stageRoot = document.getElementById('tavern-stage-root');
-    const ballInStage = stageRoot ? stageRoot.querySelector('#gourmet-fixed-ball-ui') : document.getElementById('gourmet-fixed-ball-ui');
-    if (!forceRun && lastExecutedHelperCardId === card.id && ballInStage) {
+    const ballInDom = document.getElementById('gourmet-fixed-ball-ui') || document.getElementById('adv-codex-toggle');
+    if (!forceRun && lastExecutedHelperCardId === card.id && ballInDom) {
+      enhanceFloatingHelperWidgets();
       return;
     }
     // Remove floating widgets from previously active cards when switching cards
@@ -3590,6 +3872,8 @@
         });
       }
     });
+    setTimeout(enhanceFloatingHelperWidgets, 30);
+    setTimeout(enhanceFloatingHelperWidgets, 180);
   }
 
   let gourmetBackfillInFlight = false;
@@ -4608,7 +4892,8 @@
 
   function buildTavernThemeOverridePatch(theme, uiCfg) {
     const rules = [];
-    const isGousuStyle = theme && (theme.id === 'theme_gousu_default' || String(theme.custom_css || '').includes('1ear.png') || String(theme.custom_css || '').includes('--text4'));
+    const isGousuStyle = theme && (theme.id === 'theme_gousu_default' || theme.id === 'theme_gousu_night' || String(theme.custom_css || '').includes('1ear.png') || String(theme.custom_css || '').includes('--text4'));
+    const isGousuNight = Boolean(theme && theme.id === 'theme_gousu_night');
     if (isGousuStyle) {
       rules.push(`
         /* Refined Gousu floor spacing, smaller non-overlapping avatar, connected metadata capsule, and two-row bottom bar */
@@ -4761,7 +5046,7 @@
           left: auto !important;
           width: 48px !important;
           border-radius: 0 10px 10px 0 !important;
-          border-right: 1px solid #aaa !important;
+          border-right: 1px solid var(--gousu-meta-border, #aaa) !important;
           border-left: none !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mes_timer {
@@ -4777,7 +5062,7 @@
           left: auto !important;
           width: 50px !important;
           border-radius: 10px 0 0 10px !important;
-          border-left: 1px solid #aaa !important;
+          border-left: 1px solid var(--gousu-meta-border, #aaa) !important;
           border-right: none !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mes_timer:empty + .tokenCounterDisplay {
@@ -4785,7 +5070,7 @@
           left: auto !important;
           width: 50px !important;
           border-radius: 10px 0 0 10px !important;
-          border-left: 1px solid #aaa !important;
+          border-left: 1px solid var(--gousu-meta-border, #aaa) !important;
           border-right: none !important;
         }
         /* Bottom decorative plaid bar & swipe paws & page counter aligned neatly inside .mes_block */
@@ -4841,6 +5126,100 @@
           box-sizing: border-box !important;
         }
       `);
+      if (isGousuNight) {
+        rules.push(`
+          #game-hall-screen,
+          #tavern-app-shell,
+          #tavern-stage-root {
+            background-color: #1a1c22 !important;
+            color: #e2e0da !important;
+          }
+          #tavern-stage-root .mes .extraMesButtons {
+            background: rgba(36, 39, 48, 0.94) !important;
+            border: 1px solid #484c5c !important;
+          }
+          #tavern-stage-root .mes .tavern-mes-icon-btn {
+            background: #2b2e39 !important;
+            color: #d0cdc4 !important;
+            border: 1px solid #484c5c !important;
+            box-shadow: none !important;
+          }
+          #tavern-stage-root #qr--bar .qr--button {
+            background: rgba(40, 43, 52, 0.94) !important;
+            color: #dcd9d2 !important;
+            border: 1px solid #4a4e5e !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+          }
+          #tavern-stage-root .tavern-stop-gen-btn {
+            background: rgba(68, 42, 46, 0.95) !important;
+            color: #f0b8c0 !important;
+            border: 1px solid rgba(180, 100, 112, 0.65) !important;
+          }
+          #tavern-stage-root #tavern-drawer-host {
+            background: rgba(24, 26, 32, 0.97) !important;
+            border-bottom: 1px solid #3c404e !important;
+          }
+          #tavern-stage-root .tavern-drawer-header {
+            border-bottom: 1px solid #383c4a !important;
+          }
+          #tavern-stage-root .tavern-drawer-title,
+          #tavern-stage-root .tavern-section-label,
+          #tavern-stage-root .tavern-list-row-main,
+          #tavern-stage-root .inline-drawer-header {
+            color: #e2e0da !important;
+          }
+          #tavern-stage-root .tavern-section-card,
+          #tavern-stage-root .inline-drawer {
+            background: rgba(34, 37, 45, 0.95) !important;
+            border: 1px solid #3e4250 !important;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;
+          }
+          #tavern-stage-root .tavern-list-row {
+            background: rgba(42, 45, 55, 0.92) !important;
+            border: 1px solid #464a58 !important;
+          }
+          #tavern-stage-root .tavern-field-group label,
+          #tavern-stage-root .tavern-field-hint,
+          #tavern-stage-root .tavern-list-row-sub {
+            color: #9e9b93 !important;
+          }
+          #tavern-stage-root .drawer-content .tavern-input,
+          #tavern-stage-root .drawer-content .tavern-textarea,
+          #tavern-stage-root .drawer-content .tavern-select {
+            background-color: #22252e !important;
+            color: #e2e0da !important;
+            border: 1px solid #454958 !important;
+          }
+          #tavern-stage-root .tavern-btn {
+            background: #2e313c !important;
+            color: #dcd9d2 !important;
+            border: 1px solid #484c5c !important;
+          }
+          #tavern-stage-root .tavern-btn.primary {
+            background: #4a5062 !important;
+            color: #f2f0ec !important;
+            border-color: #5c6378 !important;
+          }
+          #tavern-stage-root .tavern-btn.danger {
+            background: rgba(74, 38, 42, 0.9) !important;
+            color: #f0a8b0 !important;
+            border-color: rgba(168, 86, 94, 0.6) !important;
+          }
+          #tavern-stage-root .tavern-bottom-popup {
+            background: rgba(32, 35, 43, 0.98) !important;
+            border: 1px solid #454958 !important;
+            color: #e2e0da !important;
+          }
+          #tavern-stage-root .tavern-popup-item,
+          #tavern-stage-root #extensionsMenu > * {
+            color: #dcd9d2 !important;
+          }
+          #tavern-stage-root .tavern-popup-item:hover,
+          #tavern-stage-root #extensionsMenu > *:hover {
+            background: rgba(255, 255, 255, 0.06) !important;
+          }
+        `);
+      }
     }
 
     // Universal compatibility guards for all SillyTavern themes
@@ -7095,8 +7474,9 @@
     const activeHelperScripts = (getActiveCard()?.helperScripts || []).filter(s => s && s.enabled !== false);
     const uiPlugins = (tavernState.plugins || []).filter(p => p && p.enabled && !p.builtInType && p.uiHtml && !isBaiBaiPlugin(p));
 
-    // Preserve third-party plugin menu items mounted inside #extensionsMenu and #top-settings-holder
+    // Preserve third-party plugin menu items mounted inside #extensionsMenu and #top-settings-holder, plus active card floating widgets
     const prevExtMenuNodes = Array.from(document.querySelectorAll('#extensionsMenu > .extension_container'));
+    const prevFloatingWidgetNodes = Array.from(document.querySelectorAll('#tavern-stage-root > [id^="gourmet-fixed-"], #tavern-stage-root > #adv-codex-panel, #tavern-stage-root > #adv-codex-toggle'));
 
     shell.innerHTML = `
       <div id="tavern-stage-root">
@@ -7185,6 +7565,15 @@
           newExtMenu.insertBefore(node, newExtMenu.firstChild);
         } else if (!innerId) {
           newExtMenu.insertBefore(node, newExtMenu.firstChild);
+        }
+      });
+    }
+
+    const newStageRoot = document.getElementById('tavern-stage-root');
+    if (newStageRoot && prevFloatingWidgetNodes.length > 0) {
+      prevFloatingWidgetNodes.forEach(node => {
+        if (node && (!node.id || !document.getElementById(node.id))) {
+          newStageRoot.appendChild(node);
         }
       });
     }
