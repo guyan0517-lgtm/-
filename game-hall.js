@@ -293,47 +293,78 @@
     return 'http://127.0.0.1:8765';
   }
 
-  async function createCompactAvatarThumbnail(fileOrDataUrl, maxSize = 200) {
+  const resolvedVaultBlobMap = new Map();
+  const pendingVaultResolutionSet = new Set();
+
+  function refreshLiveDomWithResolvedVaultUrl(vaultRef, blobUrl) {
+    if (!vaultRef || !blobUrl) return;
     try {
-      let srcUrl = fileOrDataUrl;
-      let revokeAfter = false;
-      if (fileOrDataUrl instanceof Blob) {
-        srcUrl = URL.createObjectURL(fileOrDataUrl);
-        revokeAfter = true;
-      }
-      if (!srcUrl || typeof srcUrl !== 'string') return '';
-      return await new Promise(resolve => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            const scale = Math.min(1, maxSize / Math.max(img.width || 1, img.height || 1));
-            canvas.width = Math.max(1, Math.round((img.width || maxSize) * scale));
-            canvas.height = Math.max(1, Math.round((img.height || maxSize) * scale));
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            const webp = canvas.toDataURL('image/webp', 0.82);
-            if (revokeAfter) URL.revokeObjectURL(srcUrl);
-            resolve(webp);
-          } catch (_) {
-            if (revokeAfter) URL.revokeObjectURL(srcUrl);
-            resolve('');
-          }
-        };
-        img.onerror = () => {
-          if (revokeAfter) URL.revokeObjectURL(srcUrl);
-          resolve('');
-        };
-        img.src = srcUrl;
+      document.querySelectorAll('img[data-vault-ref]').forEach(img => {
+        if (img.getAttribute('data-vault-ref') === vaultRef) {
+          img.src = blobUrl;
+        }
       });
-    } catch (_) {
-      return '';
-    }
+      const userRaw = getUserAvatarUrl();
+      if (userRaw === vaultRef) {
+        document.querySelectorAll('#chat .mes[is_user="true"] .avatar img').forEach(img => {
+          img.src = blobUrl;
+        });
+      }
+      const card = getActiveCard();
+      if (card && card.avatar === vaultRef) {
+        document.querySelectorAll('#chat .mes[is_user="false"] .avatar img').forEach(img => {
+          img.src = blobUrl;
+        });
+      }
+      if (tavernState.background && tavernState.background.url === vaultRef) {
+        const bgEl = document.getElementById('tavern-bg-layer');
+        if (bgEl) bgEl.style.backgroundImage = `url('${blobUrl}')`;
+      }
+      document.querySelectorAll('iframe.tavern-html-sandbox-frame').forEach(frame => {
+        try {
+          const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+          if (!doc) return;
+          if (userRaw === vaultRef) {
+            doc.documentElement.style.setProperty('--tavern-user-avatar-bg', `url("${blobUrl}")`);
+            doc.querySelectorAll('.user-avatar, .user_avatar').forEach(el => {
+              el.style.backgroundImage = `url("${blobUrl}")`;
+            });
+          }
+          if (card && card.avatar === vaultRef) {
+            doc.documentElement.style.setProperty('--tavern-char-avatar-bg', `url("${blobUrl}")`);
+            doc.querySelectorAll('.char-avatar, .char_avatar').forEach(el => {
+              el.style.backgroundImage = `url("${blobUrl}")`;
+            });
+          }
+          doc.querySelectorAll('img').forEach(img => {
+            if (img.getAttribute('data-vault-ref') === vaultRef || img.getAttribute('src') === vaultRef) {
+              img.src = blobUrl;
+            }
+          });
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
+  function triggerAsyncVaultResolution(vaultRef) {
+    if (!vaultRef || !String(vaultRef).startsWith('vault://')) return;
+    if (resolvedVaultBlobMap.has(vaultRef) || pendingVaultResolutionSet.has(vaultRef)) return;
+    if (typeof window.resolveVaultRefToUrl !== 'function') return;
+    pendingVaultResolutionSet.add(vaultRef);
+    window.resolveVaultRefToUrl(vaultRef)
+      .then(resolved => {
+        pendingVaultResolutionSet.delete(vaultRef);
+        if (resolved && typeof resolved === 'string' && resolved !== vaultRef && !resolved.startsWith('vault://')) {
+          resolvedVaultBlobMap.set(vaultRef, resolved);
+          refreshLiveDomWithResolvedVaultUrl(vaultRef, resolved);
+        }
+      })
+      .catch(() => {
+        pendingVaultResolutionSet.delete(vaultRef);
+      });
   }
 
   async function offloadImageToVault(fileOrDataUrl, filenameHint = 'tavern_asset.png') {
-    const thumbDataUrl = await createCompactAvatarThumbnail(fileOrDataUrl, 220);
     let dataUrl = fileOrDataUrl;
     if (fileOrDataUrl instanceof Blob) {
       dataUrl = await new Promise((resolve, reject) => {
@@ -347,18 +378,20 @@
     if (dataUrl.startsWith('vault://') || dataUrl.startsWith('http') || dataUrl.startsWith('data:image/svg')) return dataUrl;
     if (typeof window.saveStickerToLocalVault === 'function') {
       try {
-        const ref = await window.saveStickerToLocalVault(dataUrl, filenameHint);
+        const ref = await window.saveStickerToLocalVault(dataUrl, false);
         if (ref && typeof ref === 'string') {
-          if (thumbDataUrl) {
-            if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
-            if (!tavernState.extensionSettings.avatarThumbs) tavernState.extensionSettings.avatarThumbs = {};
-            tavernState.extensionSettings.avatarThumbs[ref] = thumbDataUrl;
+          if (ref.startsWith('vault://')) {
+            triggerAsyncVaultResolution(ref);
+            // Release any old duplicate browser thumbnail cache to keep browser memory clean
+            if (tavernState.extensionSettings && tavernState.extensionSettings.avatarThumbs) {
+              delete tavernState.extensionSettings.avatarThumbs;
+            }
           }
           return ref;
         }
       } catch (_) {}
     }
-    return thumbDataUrl || dataUrl;
+    return dataUrl;
   }
 
   let saveTimer = null;
@@ -659,12 +692,20 @@
 
   function getUserAvatarUrl() {
     const p = getActivePersona();
-    if (p && p.avatar && !String(p.avatar).includes('P5gL5z2g')) return p.avatar;
+    if (p && p.avatar && !String(p.avatar).includes('P5gL5z2g') && p.avatar !== DEFAULT_USER_AVATAR_SVG) {
+      return p.avatar;
+    }
     try {
-      if (typeof state !== 'undefined' && state.chats) {
-        const firstChat = Object.values(state.chats)[0];
-        if (firstChat && firstChat.settings && firstChat.settings.myAvatar) {
-          return firstChat.settings.myAvatar;
+      if (typeof state !== 'undefined' && state) {
+        if (state.chats) {
+          for (const chat of Object.values(state.chats)) {
+            if (chat && chat.settings && chat.settings.myAvatar && !String(chat.settings.myAvatar).includes('P5gL5z2g')) {
+              return chat.settings.myAvatar;
+            }
+          }
+        }
+        if (state.qzoneSettings && state.qzoneSettings.avatar && !String(state.qzoneSettings.avatar).includes('P5gL5z2g')) {
+          return state.qzoneSettings.avatar;
         }
       }
     } catch (_) {}
@@ -1107,13 +1148,15 @@
         }
         uiRuntime.isGenerating = false;
         await saveTavernStore();
-        renderTavernChatFloors(false);
+        if (sentUserMessageInBatch) {
+          const sess = getActiveChatSession();
+          appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: true });
+        }
         await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
       } else if (/^\/continue\b/i.test(line)) {
         triggeredGenerationInBatch = true;
         uiRuntime.isGenerating = false;
         await saveTavernStore();
-        renderTavernChatFloors(false);
         await triggerCharacterReplyGeneration({ isContinue: true, isSwipeRegen: false });
       } else if (/^\/impersonate\b/i.test(line)) {
         triggeredGenerationInBatch = true;
@@ -1127,6 +1170,7 @@
         uiRuntime.isGenerating = false;
         if (sess && sess.messages.length > 1) {
           sess.messages.splice(Math.max(1, sess.messages.length - delCount));
+          sess.messages.forEach((m, i) => { m.mesid = i; });
           renderTavernChatFloors(false);
         }
       }
@@ -1136,7 +1180,7 @@
 
     if (sentUserMessageInBatch) {
       const sess = getActiveChatSession();
-      renderTavernChatFloors(false, { scrollToBottom: true });
+      appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: true });
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
 
@@ -1176,6 +1220,12 @@
         const trimmed = sel.trim();
         if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
           return parseHtmlNodes(trimmed);
+        }
+        if (trimmed === 'body') {
+          return [document.getElementById('tavern-stage-root') || document.body];
+        }
+        if (trimmed === 'head') {
+          return [document.head];
         }
         if (trimmed === '#extensions_settings') {
           return [document.getElementById('extensions_settings') || persistentExtSettingsEl];
@@ -1253,6 +1303,16 @@
           });
           return api;
         },
+        appendTo(target) {
+          const targets = resolveSelectorElements(target);
+          targets.forEach(t => {
+            if (!t || !t.appendChild) return;
+            arr.forEach(el => {
+              if (el instanceof Node) t.appendChild(el);
+            });
+          });
+          return api;
+        },
         prepend(...items) {
           arr.forEach(el => {
             if (!el) return;
@@ -1314,11 +1374,29 @@
           return api;
         },
         addClass(cls) {
+          if (typeof cls === 'function') {
+            arr.forEach((el, i) => {
+              const res = cls.call(el, i, el?.className || '');
+              String(res || '').split(/\s+/).filter(Boolean).forEach(c => el?.classList?.add(c));
+            });
+            return api;
+          }
           const list = String(cls || '').split(/\s+/).filter(Boolean);
           arr.forEach(el => list.forEach(c => el?.classList?.add(c)));
           return api;
         },
         removeClass(cls) {
+          if (typeof cls === 'function') {
+            arr.forEach((el, i) => {
+              const res = cls.call(el, i, el?.className || '');
+              String(res || '').split(/\s+/).filter(Boolean).forEach(c => el?.classList?.remove(c));
+            });
+            return api;
+          }
+          if (cls === undefined) {
+            arr.forEach(el => { if (el) el.className = ''; });
+            return api;
+          }
           const list = String(cls || '').split(/\s+/).filter(Boolean);
           arr.forEach(el => list.forEach(c => el?.classList?.remove(c)));
           return api;
@@ -1330,33 +1408,97 @@
         hasClass(cls) {
           return Boolean(arr[0]?.classList?.contains(cls));
         },
+        is(sel) {
+          const el = arr[0];
+          if (!el) return false;
+          if (sel === ':visible') {
+            return Boolean(el.style?.display !== 'none' && getComputedStyle(el).display !== 'none');
+          }
+          if (sel === ':hidden') {
+            return Boolean(el.style?.display === 'none' || getComputedStyle(el).display === 'none');
+          }
+          return Boolean(el.matches && el.matches(sel));
+        },
         css(prop, val) {
           if (typeof prop === 'string' && val === undefined) {
+            if (prop.startsWith('--')) {
+              return arr[0] ? getComputedStyle(arr[0]).getPropertyValue(prop) : '';
+            }
             return arr[0] ? getComputedStyle(arr[0])[prop] : '';
           }
           arr.forEach(el => {
             if (!el || !el.style) return;
+            const setOne = (k, v) => {
+              if (String(k).startsWith('--')) {
+                el.style.setProperty(k, String(v ?? ''));
+              } else {
+                if (k === 'display' && v && v !== 'none') {
+                  el._tavernDisplayMode = v;
+                }
+                el.style[k] = v;
+              }
+            };
             if (typeof prop === 'object' && prop) {
-              Object.entries(prop).forEach(([k, v]) => { el.style[k] = v; });
+              Object.entries(prop).forEach(([k, v]) => setOne(k, v));
             } else if (typeof prop === 'string') {
-              el.style[prop] = val;
+              setOne(prop, val);
             }
           });
           return api;
         },
         show() {
-          arr.forEach(el => { if (el && el.style) el.style.display = ''; });
+          arr.forEach(el => {
+            if (!el || !el.style) return;
+            const restore = el._tavernDisplayMode || '';
+            el.style.display = restore;
+            if (getComputedStyle(el).display === 'none') {
+              el.style.display = (el.id && el.id.includes('panel')) ? 'flex' : 'block';
+            }
+          });
           return api;
         },
         hide() {
-          arr.forEach(el => { if (el && el.style) el.style.display = 'none'; });
+          arr.forEach(el => {
+            if (!el || !el.style) return;
+            if (el.style.display && el.style.display !== 'none') {
+              el._tavernDisplayMode = el.style.display;
+            }
+            el.style.display = 'none';
+          });
+          return api;
+        },
+        fadeIn(dur, cb) {
+          api.show();
+          arr.forEach(el => { if (el && el.style) el.style.opacity = '1'; });
+          const fn = typeof dur === 'function' ? dur : cb;
+          if (typeof fn === 'function') setTimeout(fn, 20);
+          return api;
+        },
+        fadeOut(dur, cb) {
+          api.hide();
+          const fn = typeof dur === 'function' ? dur : cb;
+          if (typeof fn === 'function') setTimeout(fn, 20);
+          return api;
+        },
+        animate(props, dur, cb) {
+          if (props && typeof props === 'object') api.css(props);
+          const fn = typeof dur === 'function' ? dur : cb;
+          if (typeof fn === 'function') setTimeout(fn, 20);
           return api;
         },
         toggle(showState) {
           arr.forEach(el => {
             if (!el || !el.style) return;
-            const hideIt = showState !== undefined ? !showState : el.style.display !== 'none';
-            el.style.display = hideIt ? 'none' : '';
+            const hideIt = showState !== undefined ? !showState : (el.style.display !== 'none' && getComputedStyle(el).display !== 'none');
+            if (hideIt) {
+              if (el.style.display && el.style.display !== 'none') el._tavernDisplayMode = el.style.display;
+              el.style.display = 'none';
+            } else {
+              el.style.display = el._tavernDisplayMode || '';
+              if (getComputedStyle(el).display === 'none') {
+                el.style.display = (el.id && el.id.includes('panel')) ? 'flex' : 'block';
+              }
+            }
           });
           return api;
         },
@@ -1369,14 +1511,29 @@
           } : selectorOrFn;
           if (typeof handler !== 'function') return api;
           arr.forEach(el => {
-            events.forEach(ev => el?.addEventListener?.(ev, handler));
+            if (!el._tavernEvtMap) el._tavernEvtMap = {};
+            events.forEach(ev => {
+              const baseEv = ev.split('.')[0];
+              if (!el._tavernEvtMap[ev]) el._tavernEvtMap[ev] = [];
+              el._tavernEvtMap[ev].push({ baseEv, handler });
+              el?.addEventListener?.(baseEv, handler);
+            });
           });
           return api;
         },
-        off(evtNames, handler) {
+        off(evtNames, selectorOrFn, maybeFn) {
           const events = String(evtNames || '').split(/\s+/).filter(Boolean);
+          const fn = typeof selectorOrFn === 'function' ? selectorOrFn : maybeFn;
           arr.forEach(el => {
-            events.forEach(ev => el?.removeEventListener?.(ev, handler));
+            events.forEach(ev => {
+              const baseEv = ev.split('.')[0];
+              if (fn) {
+                el?.removeEventListener?.(baseEv, fn);
+              } else if (el && el._tavernEvtMap && el._tavernEvtMap[ev]) {
+                el._tavernEvtMap[ev].forEach(item => el.removeEventListener(item.baseEv, item.handler));
+                delete el._tavernEvtMap[ev];
+              }
+            });
           });
           return api;
         },
@@ -1438,6 +1595,7 @@
                 const ghText = await ghRes.text();
                 if (!isHostAppHtmlFallback(ghText)) {
                   if (!p.htmlTemplates) p.htmlTemplates = {};
+                  p.htmlTemplates[cleanPath] = ghText;
                   p.htmlTemplates[fileNameOnly] = ghText;
                   if (typeof cb === 'function') cb(ghText);
                   return ghText;
@@ -1776,22 +1934,71 @@
     };
     window.eventEmit = (evt, ...args) => tavernEventSource.emit(evt, ...args);
     window.eventRemoveListener = (evt, cb) => tavernEventSource.off(evt, cb);
+    window.tavern_events = TAVERN_EVENT_TYPES;
+
+    window.injectPrompts = (promptList) => {
+      if (!Array.isArray(promptList)) return;
+      promptList.forEach(item => {
+        if (!item || !item.id) return;
+        const pos = item.position === 'in_chat' ? 1 : 0;
+        const roleNum = item.role === 'user' ? 1 : (item.role === 'assistant' ? 2 : 0);
+        setExtensionPrompt(item.id, item.content || '', pos, Number(item.depth ?? 1), false, roleNum);
+      });
+    };
+    window.uninjectPrompts = (ids) => {
+      if (!Array.isArray(ids)) return;
+      ids.forEach(id => {
+        if (id) setExtensionPrompt(id, '');
+      });
+    };
+
+    window.__getTavernUserAvatarUrl = () => resolveSafeAvatarUrl(getUserAvatarUrl(), true);
+    window.__getTavernCharAvatarUrl = () => {
+      const c = getActiveCard();
+      return resolveSafeAvatarUrl(c ? c.avatar : '', false);
+    };
 
     window.TavernHelper = {
       getChatMessages: (rangeOrId) => {
         const sess = getActiveChatSession();
-        const msgs = sess ? sess.messages : [];
+        const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+        const wrapMsg = (m, idx) => {
+          const swipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
+          const sIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
+          const text = swipes[sIdx] !== undefined ? swipes[sIdx] : (m.mes || '');
+          return Object.assign({}, m, {
+            message_id: m.mesid !== undefined ? m.mesid : idx,
+            message: text,
+            mes: text
+          });
+        };
         if (typeof rangeOrId === 'number') {
           const idx = rangeOrId < 0 ? msgs.length + rangeOrId : rangeOrId;
-          return msgs[idx] ? [msgs[idx]] : [];
+          return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
         }
-        return msgs;
+        return msgs.map((m, idx) => wrapMsg(m, idx));
       },
-      setChatMessages: async (msgs) => {
+      setChatMessages: async (msgs, opts = {}) => {
         const sess = getActiveChatSession();
-        if (sess && Array.isArray(msgs)) {
+        if (!sess || !Array.isArray(msgs)) return;
+        const isPartialUpdate = msgs.every(m => m && m.message_id !== undefined && m.is_user === undefined && m.swipes === undefined);
+        if (isPartialUpdate) {
+          msgs.forEach(u => {
+            const target = sess.messages[u.message_id];
+            if (target && u.message !== undefined) {
+              target.mes = u.message;
+              if (Array.isArray(target.swipes) && target.swipes.length > 0) {
+                target.swipes[target.swipe_id || 0] = u.message;
+              } else {
+                target.swipes = [u.message];
+              }
+            }
+          });
+        } else {
           sess.messages = msgs;
-          await saveTavernStore();
+        }
+        await saveTavernStore();
+        if (!opts || opts.refresh !== 'none') {
           renderTavernChatFloors(false);
         }
       },
@@ -1841,6 +2048,8 @@
       getScriptButtons: window.getScriptButtons,
       replaceScriptButtons: window.replaceScriptButtons,
       appendInexistentScriptButtons: window.appendInexistentScriptButtons,
+      injectPrompts: window.injectPrompts,
+      uninjectPrompts: window.uninjectPrompts,
       triggerSlash: executeTavernSlashCommand,
       triggerSlashWithOptions: executeTavernSlashCommand,
       eventOn: window.eventOn,
@@ -1866,6 +2075,9 @@
         }
       }
     };
+    window.getChatMessages = window.TavernHelper.getChatMessages;
+    window.setChatMessages = window.TavernHelper.setChatMessages;
+    window.createChatMessages = window.TavernHelper.createChatMessages;
 
     window.__ST_BRIDGE__ = new Proxy({}, {
       get(_, prop) {
@@ -2289,25 +2501,37 @@
     const rawRegexes = ext.regex_scripts || data.regex_scripts || [];
     const normalizedCardRegexes = normalizeRegexList(rawRegexes, 'card');
 
-    // Extract tavern_helper scripts embedded in the character card
+    // Extract tavern_helper scripts embedded in the character card (supports both Array pair format and Object { scripts: [...] } format)
     const helperScripts = [];
+    const pushRawHelperScript = (sc, idx) => {
+      if (sc && typeof sc === 'object' && (sc.content || sc.code || sc.script)) {
+        helperScripts.push({
+          id: sc.id || ('helper_' + Date.now() + '_' + idx),
+          name: String(sc.name || ('内嵌脚本 ' + (idx + 1))).trim(),
+          content: sc.content || sc.code || sc.script || '',
+          info: sc.info || '',
+          enabled: sc.enabled !== false,
+          buttons: Array.isArray(sc.button?.buttons)
+            ? sc.button.buttons
+            : (Array.isArray(sc.buttons) ? sc.buttons : [])
+        });
+      }
+    };
     if (Array.isArray(ext.tavern_helper)) {
       ext.tavern_helper.forEach(pair => {
         if (Array.isArray(pair) && pair[0] === 'scripts' && Array.isArray(pair[1])) {
-          pair[1].forEach((sc, idx) => {
-            if (sc && typeof sc === 'object') {
-              helperScripts.push({
-                id: sc.id || ('helper_' + Date.now() + '_' + idx),
-                name: sc.name || ('内嵌脚本 ' + (idx + 1)),
-                content: sc.content || '',
-                info: sc.info || '',
-                enabled: sc.enabled !== false,
-                buttons: Array.isArray(sc.button?.buttons) ? sc.button.buttons : []
-              });
-            }
-          });
+          pair[1].forEach((sc, idx) => pushRawHelperScript(sc, idx));
         }
       });
+    } else if (ext.tavern_helper && typeof ext.tavern_helper === 'object') {
+      if (Array.isArray(ext.tavern_helper.scripts)) {
+        ext.tavern_helper.scripts.forEach((sc, idx) => pushRawHelperScript(sc, idx));
+      } else if (ext.tavern_helper.scripts && typeof ext.tavern_helper.scripts === 'object') {
+        Object.values(ext.tavern_helper.scripts).forEach((sc, idx) => pushRawHelperScript(sc, idx));
+      }
+    }
+    if (Array.isArray(data.tavern_helper_scripts)) {
+      data.tavern_helper_scripts.forEach((sc, idx) => pushRawHelperScript(sc, idx));
     }
 
     const altGreetings = Array.isArray(data.alternate_greetings)
@@ -2368,8 +2592,79 @@
       worldBookCount: extractedBookId ? 1 : 0,
       regexCount: normalizedCardRegexes.filter(r => !r.disabled).length,
       helperCount: helperScripts.length,
+      helperScriptCount: helperScripts.length,
       greetingCount: 1 + altGreetings.length
     };
+  }
+
+  let lastExecutedHelperCardId = null;
+  function executeCardHelperScripts(cardObj, forceRun = false) {
+    const card = cardObj || getActiveCard();
+    if (!card) return;
+    if (!forceRun && lastExecutedHelperCardId === card.id && document.getElementById('gourmet-fixed-ball-ui')) {
+      return;
+    }
+    // Remove floating widgets from previously active cards when switching cards
+    if (lastExecutedHelperCardId && lastExecutedHelperCardId !== card.id) {
+      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+    }
+    lastExecutedHelperCardId = card.id;
+    const scripts = Array.isArray(card.helperScripts) ? card.helperScripts : [];
+    scripts.forEach(hs => {
+      if (hs && hs.enabled !== false && (hs.content || hs.code)) {
+        executeUserPluginScript({
+          id: hs.id || ('card_helper_' + card.id),
+          name: hs.name || '角色内嵌脚本',
+          enabled: true,
+          code: hs.content || hs.code,
+          buttons: hs.buttons || []
+        });
+      }
+    });
+  }
+
+  let gourmetBackfillInFlight = false;
+  async function ensureCardEmbeddedScriptsLoaded(cardObj) {
+    const card = cardObj || getActiveCard();
+    if (!card || gourmetBackfillInFlight) return;
+    if (Array.isArray(card.helperScripts) && card.helperScripts.length > 0) return;
+    const isGourmetCard = String(card.name || '').includes('美食物语') ||
+      (Array.isArray(card.regexScripts) && card.regexScripts.some(r => String(r.findRegex || '').includes('gourmet_journal')));
+    if (!isGourmetCard) return;
+    gourmetBackfillInFlight = true;
+    try {
+      const res = await fetch('/assets/aistudio/2_1_cb1723ff.png');
+      if (!res.ok) return;
+      const buf = await res.arrayBuffer();
+      const rawJson = await extractCharacterJsonFromPngBuffer(buf);
+      const data = (rawJson && rawJson.data && typeof rawJson.data === 'object') ? rawJson.data : rawJson;
+      const ext = (data && data.extensions) || (rawJson && rawJson.extensions) || {};
+      const th = ext.tavern_helper;
+      const extracted = [];
+      if (th && typeof th === 'object' && Array.isArray(th.scripts)) {
+        th.scripts.forEach((sc, idx) => {
+          if (sc && sc.content) {
+            extracted.push({
+              id: sc.id || ('helper_gourmet_' + idx),
+              name: String(sc.name || '冒险与美食图鉴').trim(),
+              content: sc.content,
+              info: sc.info || '',
+              enabled: sc.enabled !== false,
+              buttons: Array.isArray(sc.button?.buttons) ? sc.button.buttons : []
+            });
+          }
+        });
+      }
+      if (extracted.length > 0) {
+        card.helperScripts = extracted;
+        await saveTavernStore();
+        executeCardHelperScripts(card, true);
+        renderTavernShell();
+      }
+    } catch (_) {
+    } finally {
+      gourmetBackfillInFlight = false;
+    }
   }
 
   function extractPresetRegexScripts(rawJson) {
@@ -2777,8 +3072,8 @@
         padding: 0;
         height: auto !important;
         min-height: 0 !important;
-        overflow-x: hidden;
-        overflow-y: auto;
+        overflow-x: hidden !important;
+        overflow-y: ${isFullModal ? 'auto' : 'hidden'} !important;
         box-sizing: border-box;
         -webkit-user-select: none !important;
         user-select: none !important;
@@ -2793,6 +3088,16 @@
         -webkit-user-select: text !important;
         user-select: text !important;
       }
+      .user-avatar, .user_avatar {
+        background-image: var(--tavern-user-avatar-bg) !important;
+        background-size: cover !important;
+        background-position: center !important;
+      }
+      .char-avatar, .char_avatar {
+        background-image: var(--tavern-char-avatar-bg) !important;
+        background-size: cover !important;
+        background-position: center !important;
+      }
     </style>`;
 
     const bridgeScript = `<script>
@@ -2803,6 +3108,34 @@
       e.preventDefault();
     }
   }, false);
+  function syncAvatarCssVars() {
+    try {
+      if (!window.parent) return;
+      var uUrl = typeof window.parent.__getTavernUserAvatarUrl === 'function' ? window.parent.__getTavernUserAvatarUrl() : '';
+      var cUrl = typeof window.parent.__getTavernCharAvatarUrl === 'function' ? window.parent.__getTavernCharAvatarUrl() : '';
+      if (uUrl) {
+        document.documentElement.style.setProperty('--tavern-user-avatar-bg', 'url("' + uUrl.replace(/"/g, '%22') + '")');
+      }
+      if (cUrl) {
+        document.documentElement.style.setProperty('--tavern-char-avatar-bg', 'url("' + cUrl.replace(/"/g, '%22') + '")');
+      }
+      var imgs = document.querySelectorAll('img');
+      for (var i = 0; i < imgs.length; i++) {
+        var im = imgs[i];
+        var rawSrc = im.getAttribute('src') || '';
+        if (uUrl && (/User%20Avatars|User Avatars|user-avatar|{{user}}/i.test(rawSrc))) {
+          im.src = uUrl;
+        } else if (rawSrc.indexOf('vault://') === 0 && typeof window.parent.resolveVaultRefToUrl === 'function') {
+          (function(imgEl, vRef) {
+            window.parent.resolveVaultRefToUrl(vRef).then(function(bUrl) {
+              if (bUrl) imgEl.src = bUrl;
+            });
+          })(im, rawSrc);
+        }
+      }
+    } catch (e) {}
+  }
+  syncAvatarCssVars();
   var pendingInputText = '';
   window.triggerSlash = function(cmd) {
     try {
@@ -2913,6 +3246,7 @@
       window.$ = wrapJQueryInstance(window.$);
       window.jQuery = window.$;
     }
+    syncAvatarCssVars();
     if (isModalFrame) return;
     try {
       var frame = window.frameElement;
@@ -2921,27 +3255,34 @@
       var d = document.documentElement;
       if (!b || !d) return;
       var contentH = 0;
-      var children = b.children;
-      if (children && children.length > 0) {
-        var maxBottom = 0;
-        var bRect = b.getBoundingClientRect();
-        for (var i = 0; i < children.length; i++) {
-          var ch = children[i];
-          if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') continue;
-          var r = ch.getBoundingClientRect();
-          var bot = (r.bottom - bRect.top) + (parseFloat(window.getComputedStyle(ch).marginBottom) || 0);
-          if (bot > maxBottom) maxBottom = bot;
+      var bRect = b.getBoundingClientRect();
+      var rootCard = document.getElementById('statusRoot') || document.getElementById('outerContainer') || document.querySelector('.gourmet-main-frame');
+      if (rootCard) {
+        var rcRect = rootCard.getBoundingClientRect();
+        contentH = Math.ceil(rcRect.bottom - bRect.top) + 6;
+      } else {
+        var children = b.children;
+        if (children && children.length > 0) {
+          var maxBottom = 0;
+          for (var i = 0; i < children.length; i++) {
+            var ch = children[i];
+            if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') continue;
+            var r = ch.getBoundingClientRect();
+            var bot = (r.bottom - bRect.top) + (parseFloat(window.getComputedStyle(ch).marginBottom) || 0);
+            if (bot > maxBottom) maxBottom = bot;
+          }
+          contentH = Math.ceil(maxBottom) + 6;
         }
-        contentH = Math.ceil(maxBottom) + 8;
       }
-      if (contentH < 40) {
+      if (contentH < 36) {
         contentH = Math.max(b.scrollHeight || 0, b.offsetHeight || 0);
       }
-      var maxAllowed = 460;
-      var targetH = Math.min(maxAllowed, Math.max(76, contentH));
-      if (Math.abs(targetH - lastAppliedH) > 2) {
+      var maxAllowed = 1200;
+      var targetH = Math.min(maxAllowed, Math.max(56, contentH));
+      if (Math.abs(targetH - lastAppliedH) > 1) {
         lastAppliedH = targetH;
         frame.style.height = targetH + 'px';
+        frame.style.maxHeight = maxAllowed + 'px';
       }
     } catch (e) {}
   }
@@ -2953,6 +3294,22 @@
     syncFrameHeight();
     setTimeout(syncFrameHeight, 60);
     setTimeout(syncFrameHeight, 240);
+    try {
+      if (typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(function() { syncFrameHeight(); });
+        if (document.body) ro.observe(document.body);
+        var sr = document.getElementById('statusRoot') || document.getElementById('outerContainer');
+        if (sr) ro.observe(sr);
+      }
+      if (typeof MutationObserver !== 'undefined' && document.body) {
+        var mo = new MutationObserver(function() {
+          syncFrameHeight();
+          setTimeout(syncFrameHeight, 120);
+          setTimeout(syncFrameHeight, 360);
+        });
+        mo.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['style', 'class'] });
+      }
+    } catch (e) {}
   });
   window.addEventListener('load', function() {
     if (window.$ && !window.$._tavernWrapped) {
@@ -2966,11 +3323,15 @@
       window.$ = wrapJQueryInstance(window.$);
       window.jQuery = window.$;
     }
-    setTimeout(syncFrameHeight, 50);
-    setTimeout(syncFrameHeight, 220);
-  });
-  document.addEventListener('change', function() { setTimeout(syncFrameHeight, 50); });
-  document.addEventListener('input', function() { setTimeout(syncFrameHeight, 50); });
+    setTimeout(syncFrameHeight, 40);
+    setTimeout(syncFrameHeight, 180);
+    setTimeout(syncFrameHeight, 380);
+  }, true);
+  document.addEventListener('transitionend', function() {
+    syncFrameHeight();
+  }, true);
+  document.addEventListener('change', function() { setTimeout(syncFrameHeight, 50); }, true);
+  document.addEventListener('input', function() { setTimeout(syncFrameHeight, 50); }, true);
 })();
 <\/script>`;
 
@@ -2992,7 +3353,7 @@
       return escapedSrcDoc;
     }
 
-    return `<iframe class="tavern-html-sandbox-frame" scrolling="yes" frameborder="0" style="width:100%;height:320px;min-height:76px;max-height:460px;border:none;display:block;background:transparent;overflow-y:auto;overflow-x:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
+    return `<iframe class="tavern-html-sandbox-frame" scrolling="no" frameborder="0" style="width:100%;height:320px;min-height:56px;max-height:1200px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
   }
 
   function renderTavernMessageHtml(rawText, options = {}) {
@@ -5636,6 +5997,11 @@
         executeUserPluginScript(p);
       }
     });
+    const activeCard = getActiveCard();
+    if (activeCard) {
+      executeCardHelperScripts(activeCard);
+      ensureCardEmbeddedScriptsLoaded(activeCard);
+    }
   }
 
   function refreshBottomPopupsOnly() {
@@ -5794,6 +6160,8 @@
   function renderBottomOptionsPopup() {
     return `
       <div id="options" class="tavern-bottom-popup ${uiRuntime.showOptionsPopup ? '' : 'tavern-popup-hidden'}">
+        <div class="tavern-popup-item" data-action="chat-scroll-top">回到顶部</div>
+        <div class="tavern-popup-item" data-action="chat-scroll-bottom">回到底部</div>
         <div class="tavern-popup-item" data-action="chat-new-session">重开当前角色新对话</div>
         <div class="tavern-popup-item" data-action="chat-regenerate-last">重新生成最后一层回复</div>
         <div class="tavern-popup-item" data-action="chat-continue-last">继续续写最后一层回复</div>
@@ -5837,20 +6205,17 @@
     }
     const str = String(rawUrl).trim();
     if (str.startsWith('vault://')) {
-      const fileKey = str.replace(/^vault:\/\/+/, '');
-      return getTermuxBaseUrl() + '/vault/' + encodeURIComponent(fileKey);
+      if (resolvedVaultBlobMap.has(str)) {
+        return resolvedVaultBlobMap.get(str);
+      }
+      triggerAsyncVaultResolution(str);
+      return isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG;
     }
     return str;
   }
 
   function resolveAvatarFallbackThumb(rawUrl, isUser = false) {
-    const fallbackSvg = isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG;
-    if (!rawUrl) return fallbackSvg;
-    const thumbs = tavernState.extensionSettings && tavernState.extensionSettings.avatarThumbs;
-    if (thumbs && thumbs[rawUrl]) {
-      return thumbs[rawUrl];
-    }
-    return fallbackSvg;
+    return isUser ? DEFAULT_USER_AVATAR_SVG : DEFAULT_AVATAR_SVG;
   }
 
   function syncSwipeInfoToMessage(msg, swipeIdx) {
@@ -5926,7 +6291,7 @@
       <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
         <div class="mesAvatarWrapper">
           <div class="avatar">
-            <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${fallbackSrc}';" />
+            <img src="${avatarSrc}" ${String(isUser ? userRawAvatar : (card ? card.avatar : '')).startsWith('vault://') ? `data-vault-ref="${escapeHtmlSimple(isUser ? userRawAvatar : card.avatar)}"` : ''} alt="avatar" onerror="this.onerror=null;this.src='${fallbackSrc}';" />
           </div>
           <div class="mesIDDisplay">${uiCfg.showMessageId !== false ? '#' + idx : ''}</div>
           <div class="mes_timer">${uiCfg.showMesTimer !== false && effectiveGenTime ? escapeHtmlSimple(effectiveGenTime) : ''}</div>
@@ -7551,11 +7916,19 @@
 
       if (isImpersonate) {
         const textarea = document.getElementById('send_textarea');
-        const result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
-          if (textarea) textarea.value = partial.content;
-        } : null);
-        if (textarea) textarea.value = result.content;
-        showTavernToast('已填入帮写草稿');
+        const prevDraft = textarea ? textarea.value : '';
+        try {
+          const result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
+            if (textarea) textarea.value = partial.content;
+          } : null);
+          if (textarea) textarea.value = result.content;
+          showTavernToast('已填入帮写草稿');
+        } catch (impErr) {
+          if (textarea && !textarea.value.trim() && prevDraft) {
+            textarea.value = prevDraft;
+          }
+          throw impErr;
+        }
       } else if (isContinue && sess.messages.length > 0) {
         const lastIdx = sess.messages.length - 1;
         const lastMsg = sess.messages[lastIdx];
@@ -7873,10 +8246,26 @@
 
       if (action === 'open-helper-script') {
         const sid = actionEl.getAttribute('data-script-id');
-        uiRuntime.activeHelperScriptId = sid;
-        uiRuntime.activePluginModalId = null;
         uiRuntime.showExtensionsPopup = false;
         uiRuntime.showOptionsPopup = false;
+        refreshBottomPopupsOnly();
+        const card = getActiveCard();
+        const hs = (card && Array.isArray(card.helperScripts)) ? card.helperScripts.find(s => s.id === sid) || card.helperScripts[0] : null;
+        if (hs) {
+          executeCardHelperScripts(card);
+          const gourmetPanel = document.getElementById('gourmet-fixed-panel-ui');
+          if (gourmetPanel) {
+            const firstBtn = Array.isArray(hs.buttons) && hs.buttons[0] ? hs.buttons[0].name : '';
+            if (firstBtn) {
+              await tavernEventSource.emit(firstBtn);
+            } else {
+              window.$(gourmetPanel).toggle();
+            }
+            return;
+          }
+        }
+        uiRuntime.activeHelperScriptId = sid;
+        uiRuntime.activePluginModalId = null;
         uiRuntime.openDrawerKey = null;
         renderTavernShell();
         return;
@@ -8122,6 +8511,7 @@
             const tmp = sess.messages[idx];
             sess.messages[idx] = sess.messages[targetIdx];
             sess.messages[targetIdx] = tmp;
+            sess.messages.forEach((m, i) => { m.mesid = i; });
             uiRuntime.editingFloorMesId = targetIdx;
             await saveTavernStore();
             renderTavernChatFloors(false);
@@ -8295,6 +8685,7 @@
             const rebuilt = buildInitialSessionForCard(getActiveCard());
             sess.messages = rebuilt.messages;
           }
+          sess.messages.forEach((m, i) => { m.mesid = i; });
           uiRuntime.openExtraMenuMesId = null;
           await saveTavernStore();
           renderTavernChatFloors(sess.messages.length <= 1);
@@ -8304,6 +8695,26 @@
       }
 
       // Bottom Popup Actions
+      if (action === 'chat-scroll-top') {
+        uiRuntime.showOptionsPopup = false;
+        refreshBottomPopupsOnly();
+        const chatEl = document.getElementById('chat');
+        if (chatEl) {
+          chatEl.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return;
+      }
+
+      if (action === 'chat-scroll-bottom') {
+        uiRuntime.showOptionsPopup = false;
+        refreshBottomPopupsOnly();
+        const chatEl = document.getElementById('chat');
+        if (chatEl) {
+          chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
+        }
+        return;
+      }
+
       if (action === 'chat-new-session') {
         const card = getActiveCard();
         const newSess = buildInitialSessionForCard(card);
