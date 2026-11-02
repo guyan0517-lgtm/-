@@ -395,23 +395,57 @@
   }
 
   let saveTimer = null;
+  let hasLoadedTavernStoreOnce = false;
+  let hasLoadedFromExternalOrIdb = false;
+  let inflightTavernLoadPromise = null;
+
+  function isDefaultStarterOnlyState(st) {
+    if (!st || typeof st !== 'object') return true;
+    const cards = Array.isArray(st.cards) ? st.cards : [];
+    if (cards.length > 1) return false;
+    if (cards.length === 1 && cards[0].id !== 'card_default_starter') return false;
+    const wbs = Array.isArray(st.worldBooks) ? st.worldBooks : [];
+    if (wbs.length > 0) return false;
+    const chats = st.chatsByCardId && typeof st.chatsByCardId === 'object' ? st.chatsByCardId : {};
+    const starterSess = chats['card_default_starter'];
+    if (starterSess && Array.isArray(starterSess.messages) && starterSess.messages.length > 1) return false;
+    return true;
+  }
+
   async function performTavernStoreSaveNow() {
     try {
+      if (inflightTavernLoadPromise) {
+        await inflightTavernLoadPromise;
+      }
+      const baseUrl = getTermuxBaseUrl();
+      // Guard against overwriting an existing Termux tavern_store.json with a blank starter state
+      if (!hasLoadedFromExternalOrIdb && isDefaultStarterOnlyState(tavernState)) {
+        try {
+          const checkRes = await fetch(baseUrl + '/tavern_store.json', { method: 'GET', cache: 'no-store' });
+          if (checkRes && checkRes.ok) {
+            const checkText = await checkRes.text();
+            if (checkText && checkText.trim().startsWith('{')) {
+              const existingDisk = JSON.parse(checkText);
+              if (existingDisk && !isDefaultStarterOnlyState(existingDisk)) {
+                await loadTavernStore();
+                if (isTavernActive()) renderTavernShell();
+                return;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       const copy = Object.assign({}, tavernState);
       delete copy.activeDrawerId;
       const serialized = JSON.stringify(copy);
-      const baseUrl = getTermuxBaseUrl();
       let savedToTermux = false;
       try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 1200);
         const res = await fetch(baseUrl + '/tavern_store.json', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json; charset=utf-8' },
-          body: serialized,
-          signal: ctrl.signal
+          body: serialized
         });
-        clearTimeout(tid);
         if (res && res.ok) {
           savedToTermux = true;
         }
@@ -444,8 +478,6 @@
   }
   const saveTavernState = saveTavernStore;
 
-  let hasLoadedTavernStoreOnce = false;
-
   function isHostAppHtmlFallback(str) {
     if (!str || typeof str !== 'string') return false;
     return (
@@ -458,41 +490,61 @@
   }
 
   async function loadTavernStore() {
-    const prevChatsByCardId = Object.assign({}, tavernState.chatsByCardId || {});
-    const prevArchivesByCardId = Object.assign({}, tavernState.chatArchivesByCardId || {});
-
-    let loaded = null;
-    const baseUrl = getTermuxBaseUrl();
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 850);
-      const res = await fetch(baseUrl + '/tavern_store.json', {
-        method: 'GET',
-        signal: ctrl.signal
-      });
-      clearTimeout(tid);
-      if (res && res.ok) {
-        const text = await res.text();
-        if (text && text.trim().startsWith('{')) {
-          loaded = JSON.parse(text);
-        }
-      }
-    } catch (_) {}
-
-    if (!loaded) {
-      let rawIdb = await idbGet(TAVERN_STORE_KEY);
-      if (!rawIdb) rawIdb = await idbGet('tavern_state_v1');
-      if (rawIdb && typeof rawIdb === 'string') {
-        try { loaded = JSON.parse(rawIdb); } catch (_) {}
-      } else if (rawIdb && typeof rawIdb === 'object') {
-        loaded = rawIdb;
-      }
+    if (inflightTavernLoadPromise) {
+      return inflightTavernLoadPromise;
     }
+    inflightTavernLoadPromise = (async () => {
+      try {
+        const prevChatsByCardId = Object.assign({}, tavernState.chatsByCardId || {});
+        const prevArchivesByCardId = Object.assign({}, tavernState.chatArchivesByCardId || {});
 
-    if (loaded && typeof loaded === 'object') {
-      tavernState = Object.assign({}, tavernState, loaded);
-      tavernState.uiSettings = Object.assign({}, tavernState.uiSettings, loaded.uiSettings || {});
-      tavernState.apiConfig = Object.assign({}, tavernState.apiConfig, loaded.apiConfig || {});
+        let loaded = null;
+        const baseUrl = getTermuxBaseUrl();
+        const candidateUrls = [baseUrl + '/tavern_store.json'];
+        if (baseUrl.includes('127.0.0.1')) {
+          candidateUrls.push(baseUrl.replace('127.0.0.1', 'localhost') + '/tavern_store.json');
+        } else if (baseUrl.includes('localhost')) {
+          candidateUrls.push(baseUrl.replace('localhost', '127.0.0.1') + '/tavern_store.json');
+        }
+
+        for (const tUrl of candidateUrls) {
+          try {
+            const res = await fetch(tUrl, {
+              method: 'GET',
+              cache: 'no-store'
+            });
+            if (res && res.ok) {
+              const text = await res.text();
+              if (text && text.trim().startsWith('{')) {
+                const parsed = JSON.parse(text);
+                if (parsed && typeof parsed === 'object') {
+                  loaded = parsed;
+                  hasLoadedFromExternalOrIdb = true;
+                  break;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!loaded) {
+          let rawIdb = await idbGet(TAVERN_STORE_KEY);
+          if (!rawIdb) rawIdb = await idbGet('tavern_state_v1');
+          if (rawIdb && typeof rawIdb === 'string') {
+            try {
+              loaded = JSON.parse(rawIdb);
+              if (loaded && typeof loaded === 'object') hasLoadedFromExternalOrIdb = true;
+            } catch (_) {}
+          } else if (rawIdb && typeof rawIdb === 'object') {
+            loaded = rawIdb;
+            hasLoadedFromExternalOrIdb = true;
+          }
+        }
+
+        if (loaded && typeof loaded === 'object') {
+          tavernState = Object.assign({}, tavernState, loaded);
+          tavernState.uiSettings = Object.assign({}, tavernState.uiSettings, loaded.uiSettings || {});
+          tavernState.apiConfig = Object.assign({}, tavernState.apiConfig, loaded.apiConfig || {});
       if (!Array.isArray(tavernState.apiConfig.savedPresets)) tavernState.apiConfig.savedPresets = [];
       if (!tavernState.apiConfig.activeSavedPresetId && tavernState.apiConfig.activeApiPresetId) {
         tavernState.apiConfig.activeSavedPresetId = tavernState.apiConfig.activeApiPresetId;
@@ -638,8 +690,13 @@
       }
     }
 
-    hasLoadedTavernStoreOnce = true;
-    ensureActiveCardChatInitialized();
+        hasLoadedTavernStoreOnce = true;
+        ensureActiveCardChatInitialized();
+      } finally {
+        inflightTavernLoadPromise = null;
+      }
+    })();
+    return inflightTavernLoadPromise;
   }
   const loadTavernState = loadTavernStore;
 
@@ -11839,7 +11896,13 @@
         stopAllTavernAudioAndMedia();
       } else if (!hasRenderedTavernOnOpen) {
         hasRenderedTavernOnOpen = true;
-        renderTavernShell();
+        if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState)) {
+          loadTavernStore().then(() => {
+            if (isTavernActive()) renderTavernShell();
+          });
+        } else {
+          renderTavernShell();
+        }
       }
     });
     obs.observe(screenEl, { attributes: true, attributeFilter: ['class', 'style'] });
@@ -11915,9 +11978,9 @@
   };
 
   async function initTavernApp() {
-    await loadTavernStore();
     setupSillyTavernGlobalBridge();
     setupTavernScreenVisibilityObserver();
+    await loadTavernStore();
     syncBuiltInD100Pool(false);
     // Do NOT render Tavern floors, iframes, or card helper scripts until the user actually opens the Tavern screen
     if (isTavernActive()) {
@@ -11927,13 +11990,16 @@
     }
   }
 
-  window.openTavernApp = function () {
+  window.openTavernApp = async function () {
     hasRenderedTavernOnOpen = true;
     if (typeof window.showScreen === 'function') {
       window.showScreen('game-hall-screen');
     } else {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById('game-hall-screen')?.classList.add('active');
+    }
+    if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState) || inflightTavernLoadPromise) {
+      await loadTavernStore();
     }
     renderTavernShell();
     tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
