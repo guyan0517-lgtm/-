@@ -262,6 +262,10 @@ code, pre {
     formatting: {
       reasoningStartTag: '<think>',
       reasoningEndTag: '</think>',
+      reasoningTagPairs: [
+        { start: '<think>', end: '</think>' },
+        { start: '<thinking>', end: '</thinking>' }
+      ],
       autoCollapseReasoning: true,
       wrapQuotesInQ: true,
       collapseNewlines: false,
@@ -2014,30 +2018,118 @@ code, pre {
     });
   }
 
+  async function runTavernCheckWorldInfo(scanInput, maxContext, isDryRun) {
+    const card = getActiveCard();
+    const lines = Array.isArray(scanInput) ? scanInput.map(x => String(x || '')) : [String(scanInput || '')];
+    const mockMsgs = lines.map(m => ({ mes: m }));
+    const buckets = collectTriggeredWorldBookEntries(card, mockMsgs);
+    const activeBooks = (tavernState.worldBooks || []).filter(b => b && b.enabled);
+    const baseScanText = lines.join('\n');
+    const activatedSet = new Set();
+    activeBooks.forEach(book => {
+      (book.entries || []).forEach(entry => {
+        if (entry && !entry.disable && (entry.content || '').trim()) {
+          if (evaluateWorldEntryMatch(entry, baseScanText, false)) {
+            activatedSet.add(Object.assign({}, entry, { world: book.name || book.id || 'default' }));
+          }
+        }
+      });
+    });
+    const wiBefore = (buckets.beforeChar || []).join('\n\n');
+    const wiAfter = (buckets.afterChar || []).join('\n\n');
+    const wiDepth = (buckets.atDepth || []).map(d => d.content).join('\n\n');
+    const allStr = [wiBefore, wiAfter, wiDepth].filter(Boolean).join('\n\n');
+    return {
+      worldInfoString: allStr,
+      worldInfoBefore: wiBefore,
+      worldInfoAfter: wiAfter,
+      worldInfoDepth: buckets.atDepth || [],
+      anBefore: buckets.beforeAN || [],
+      anAfter: buckets.afterAN || [],
+      allActivatedEntries: activatedSet
+    };
+  }
+
   function buildSillyTavernContextObject() {
     const sess = getActiveChatSession();
     const card = getActiveCard();
     const cardIdx = Array.isArray(tavernState.cards) ? tavernState.cards.findIndex(c => c && card && c.id === card.id) : 0;
     try {
+      if (!tavernState.extensionSettings || typeof tavernState.extensionSettings !== 'object') {
+        tavernState.extensionSettings = {};
+      }
       const extNai = resolveExternalNovelAiConfig();
-      const bbi = tavernState.extensionSettings && (tavernState.extensionSettings['st-baibai-image'] || tavernState.extensionSettings['ST-BaiBai-Image']);
-      if (bbi && extNai && extNai.key) {
-        if (bbi.novelai && !bbi.novelai.apiKey) bbi.novelai.apiKey = extNai.key;
-        if (bbi.nai) {
-          if (!bbi.nai.key) bbi.nai.key = extNai.key;
-          if (Array.isArray(bbi.nai.endpoints) && bbi.nai.endpoints[0] && !bbi.nai.endpoints[0].key) {
-            bbi.nai.endpoints[0].key = extNai.key;
+      for (const imgKey of ['baibai_image', 'st-baibai-image', 'ST-BaiBai-Image']) {
+        const bbi = tavernState.extensionSettings[imgKey];
+        if (bbi && extNai && extNai.key) {
+          if (bbi.novelai && !bbi.novelai.apiKey) bbi.novelai.apiKey = extNai.key;
+          if (bbi.nai) {
+            if (!bbi.nai.key) bbi.nai.key = extNai.key;
+            if (Array.isArray(bbi.nai.endpoints) && bbi.nai.endpoints[0] && !bbi.nai.endpoints[0].key) {
+              bbi.nai.endpoints[0].key = extNai.key;
+            }
+            if (bbi.defaultBackend === 'comfyui' && (!bbi.comfyui || !Array.isArray(bbi.comfyui.workflows) || bbi.comfyui.workflows.length === 0)) {
+              bbi.defaultBackend = 'nai';
+            }
           }
         }
       }
       const extApi = resolveTavernApiCredentials();
       if (extApi && extApi.baseUrl && extApi.apiKey) {
-        for (const extKeyName of ['st-baibai-image', 'st-baibai-book']) {
-          const extCfg = tavernState.extensionSettings && tavernState.extensionSettings[extKeyName];
+        const cleanUrlWithV1 = extApi.baseUrl.replace(/\/+$/, '').endsWith('/v1')
+          ? extApi.baseUrl.replace(/\/+$/, '')
+          : extApi.baseUrl.replace(/\/+$/, '') + '/v1';
+        if (!tavernState.extensionSettings['baibai_api_channels'] || typeof tavernState.extensionSettings['baibai_api_channels'] !== 'object') {
+          tavernState.extensionSettings['baibai_api_channels'] = {
+            schemaVersion: 1,
+            revision: 1,
+            channels: [
+              {
+                id: 'default_phone_api',
+                name: '默认主接口',
+                provider: 'custom',
+                url: cleanUrlWithV1,
+                key: extApi.apiKey,
+                model: extApi.model || 'gpt-4o-mini',
+                models: extApi.model ? [extApi.model] : ['gpt-4o-mini'],
+                maxTokens: 8192,
+                temperature: 0.7,
+                timeoutSec: 180
+              }
+            ]
+          };
+        } else if (Array.isArray(tavernState.extensionSettings['baibai_api_channels'].channels)) {
+          const chs = tavernState.extensionSettings['baibai_api_channels'].channels;
+          if (chs.length === 0) {
+            chs.push({
+              id: 'default_phone_api',
+              name: '默认主接口',
+              provider: 'custom',
+              url: cleanUrlWithV1,
+              key: extApi.apiKey,
+              model: extApi.model || 'gpt-4o-mini',
+              models: extApi.model ? [extApi.model] : ['gpt-4o-mini'],
+              maxTokens: 8192,
+              temperature: 0.7,
+              timeoutSec: 180
+            });
+          } else if (chs[0] && !chs[0].url && !chs[0].key) {
+            chs[0].url = cleanUrlWithV1;
+            chs[0].key = extApi.apiKey;
+            if (extApi.model) {
+              chs[0].model = extApi.model;
+              if (!Array.isArray(chs[0].models) || chs[0].models.length === 0) {
+                chs[0].models = [extApi.model];
+              }
+            }
+          }
+        }
+        for (const extKeyName of ['baibai_image', 'baibai_book', 'st-baibai-image', 'st-baibai-book']) {
+          const extCfg = tavernState.extensionSettings[extKeyName];
           if (extCfg && extCfg.api && Array.isArray(extCfg.api.channels) && extCfg.api.channels.length > 0) {
             const firstCh = extCfg.api.channels[0];
             if (firstCh && !firstCh.url && !firstCh.key) {
-              firstCh.url = extApi.baseUrl + '/v1';
+              firstCh.url = cleanUrlWithV1;
               firstCh.key = extApi.apiKey;
               if (extApi.model) {
                 firstCh.model = extApi.model;
@@ -2068,7 +2160,15 @@ code, pre {
       },
       worldInfo: tavernState.worldBooks,
       getWorldInfoNames: () => (tavernState.worldBooks || []).map(w => w.name),
-      getWorldInfoPrompt: async () => ({ worldInfoString: '', worldInfoBefore: '', worldInfoAfter: '' }),
+      getWorldInfoPrompt: runTavernCheckWorldInfo,
+      checkWorldInfo: runTavernCheckWorldInfo,
+      power_user: {
+        experimental_macro_engine: false,
+        persona_description: getActivePersona()?.description || ''
+      },
+      doNewChat: async () => {
+        await startNewChatForActiveCard();
+      },
       substituteParams: (str) => replaceTavernMacros(String(str || ''), card),
       eventSource: tavernEventSource,
       event_types: TAVERN_EVENT_TYPES,
@@ -2081,8 +2181,8 @@ code, pre {
       sendSystemMessage: (type, text) => executeTavernSlashCommand('/sys ' + text),
       Generate: () => triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false }),
       generateQuietPrompt: async (quietPrompt) => {
-        const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }]);
-        return res.content;
+        const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }], null, { isBackground: true });
+        return res.content || res.rawContent || res.reasoning || '';
       },
       generateRaw: async (opts = {}) => {
         let promptArr = [];
@@ -2102,8 +2202,8 @@ code, pre {
             if (opts.prompt !== undefined) promptArr.push({ role: 'user', content: String(opts.prompt || '') });
           }
         }
-        const res = await callTavernAiCompletion(promptArr);
-        return res.content;
+        const res = await callTavernAiCompletion(promptArr, null, { isBackground: true });
+        return res.content || res.rawContent || res.reasoning || '';
       },
       getTokenCount: (text) => estimateTokens(String(text || '')),
       getTokenCountAsync: async (text) => estimateTokens(String(text || '')),
@@ -2602,9 +2702,9 @@ code, pre {
                 return new Response(JSON.stringify({ error: { message: '请先填写有效的API地址' } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
               }
               const wantStream = Boolean(bodyObj.stream);
-              const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0 && bodyObj.max_tokens < 32000)
-                ? bodyObj.max_tokens
-                : 4096;
+              const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0)
+                ? Math.min(16384, bodyObj.max_tokens)
+                : 8192;
               const openAiPayload = {
                 model: bodyObj.model || fallbackCreds.model || 'gpt-4o-mini',
                 messages: Array.isArray(bodyObj.messages) ? bodyObj.messages : [],
@@ -2622,7 +2722,10 @@ code, pre {
                   }
                 } catch (_) {}
               }
-              const endpoints = [base + '/v1/chat/completions', base + '/chat/completions'];
+              const cleanBaseForEp = base.replace(/\/+$/, '');
+              const endpoints = cleanBaseForEp.endsWith('/v1')
+                ? [cleanBaseForEp + '/chat/completions', cleanBaseForEp.replace(/\/v1$/i, '') + '/chat/completions']
+                : [cleanBaseForEp + '/v1/chat/completions', cleanBaseForEp + '/chat/completions'];
               const headers = {
                 'Content-Type': 'application/json',
                 ...(key ? { 'Authorization': 'Bearer ' + key } : {}),
@@ -2640,7 +2743,7 @@ code, pre {
                   });
                   if (upstreamRes.status === 400) {
                     const errTxt = await upstreamRes.text().catch(() => '');
-                    if (/max_tokens|max_completion_tokens|token/i.test(errTxt)) {
+                    if (/max_tokens|max_completion_tokens|maximum|token/i.test(errTxt)) {
                       const retryPayload = Object.assign({}, openAiPayload);
                       delete retryPayload.max_tokens;
                       upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
@@ -2663,6 +2766,50 @@ code, pre {
               }
               if (!upstreamRes) {
                 return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+              }
+              if (!wantStream && upstreamRes.ok) {
+                const rawBodyText = await upstreamRes.text().catch(() => '');
+                const trimmedBody = rawBodyText.trim();
+                if (trimmedBody.startsWith('data:')) {
+                  let aggContent = '';
+                  let aggReasoning = '';
+                  const lines = trimmedBody.split(/\r?\n/);
+                  for (const rawLine of lines) {
+                    const line = rawLine.trim();
+                    if (!line.startsWith('data:')) continue;
+                    const dataStr = line.slice(5).trim();
+                    if (!dataStr || dataStr === '[DONE]') continue;
+                    try {
+                      const chunk = JSON.parse(dataStr);
+                      const choice = chunk.choices && chunk.choices[0];
+                      const delta = choice ? (choice.delta || choice.message || {}) : {};
+                      if (typeof delta.content === 'string') aggContent += delta.content;
+                      if (typeof delta.reasoning_content === 'string') aggReasoning += delta.reasoning_content;
+                      else if (typeof delta.reasoning === 'string') aggReasoning += delta.reasoning;
+                    } catch (_) {}
+                  }
+                  const synthJson = {
+                    choices: [
+                      {
+                        index: 0,
+                        message: {
+                          role: 'assistant',
+                          content: aggContent,
+                          ...(aggReasoning ? { reasoning_content: aggReasoning } : {})
+                        },
+                        finish_reason: 'stop'
+                      }
+                    ]
+                  };
+                  return new Response(JSON.stringify(synthJson), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                }
+                return new Response(rawBodyText, {
+                  status: upstreamRes.status,
+                  headers: { 'Content-Type': 'application/json' }
+                });
               }
               return upstreamRes;
             }
@@ -3060,8 +3207,8 @@ code, pre {
             if (opts.prompt !== undefined) promptArr.push({ role: 'user', content: String(opts.prompt || '') });
           }
         }
-        const res = await callTavernAiCompletion(promptArr);
-        return res.content;
+        const res = await callTavernAiCompletion(promptArr, null, { isBackground: true });
+        return res.content || res.rawContent || res.reasoning || '';
       },
       getVariables: window.getVariables,
       insertOrAssignVariables: window.insertOrAssignVariables,
@@ -3102,9 +3249,34 @@ code, pre {
     window.getChatMessages = window.TavernHelper.getChatMessages;
     window.setChatMessages = window.TavernHelper.setChatMessages;
     window.createChatMessages = window.TavernHelper.createChatMessages;
+    window.checkWorldInfo = runTavernCheckWorldInfo;
+    window.getWorldInfoPrompt = runTavernCheckWorldInfo;
+    window.doNewChat = async () => { await startNewChatForActiveCard(); };
+    window.power_user = {
+      get experimental_macro_engine() { return false; },
+      get persona_description() { return getActivePersona()?.description || ''; }
+    };
+    if (!window.SlashCommandParser) {
+      window.SlashCommandParser = {
+        commands: {},
+        addCommandObject: (cmdObj) => {
+          if (cmdObj && cmdObj.name) {
+            window.SlashCommandParser.commands[cmdObj.name] = cmdObj;
+          }
+        }
+      };
+      window.SlashCommand = { fromProps: (props) => Object.assign({}, props) };
+      window.SlashCommandArgument = { fromProps: (props) => Object.assign({}, props) };
+      window.SlashCommandNamedArgument = { fromProps: (props) => Object.assign({}, props) };
+      window.ARGUMENT_TYPE = { STRING: 'string', NUMBER: 'number', BOOLEAN: 'boolean' };
+    }
 
     window.__ST_BRIDGE__ = new Proxy({}, {
       get(_, prop) {
+        if (prop === 'then' || prop === 'catch' || prop === 'finally' || typeof prop === 'symbol') {
+          return undefined;
+        }
+        if (prop === '__esModule') return true;
         if (prop in window) return window[prop];
         const ctx = buildSillyTavernContextObject();
         if (prop in ctx) return ctx[prop];
@@ -4348,7 +4520,8 @@ code, pre {
     const cardScripts = (card && Array.isArray(card.regexScripts)) ? card.regexScripts : [];
     const presetScripts = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
-    return [...cardScripts, ...presetScripts, ...globalScripts].filter(s => s && !s.disabled && s.findRegex);
+    const extScripts = Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : [];
+    return [...cardScripts, ...presetScripts, ...globalScripts, ...extScripts].filter(s => s && !s.disabled && s.findRegex);
   }
 
   function applyTavernRegexPipeline(rawText, options = {}) {
@@ -4860,6 +5033,7 @@ code, pre {
     }
 
     working = working.replace(/___TAVERN_TAG_HOLD_(\d+)___/g, (_, idx) => tagHolders[Number(idx)] || '');
+    working = working.replace(/<div\s+data-bbi-slot=""\s*><\/div>/gi, '\n<div data-bbi-slot=""></div>\n');
 
     // 7. Convert plain text paragraphs while keeping HTML tags and protected blocks intact
     const lines = working.split('\n');
@@ -5622,15 +5796,33 @@ code, pre {
     return buckets;
   }
 
+  function getActiveReasoningTagPairs() {
+    const fmt = tavernState.formatting || (tavernState.formatting = {});
+    if (!Array.isArray(fmt.reasoningTagPairs) || fmt.reasoningTagPairs.length === 0) {
+      const legacyStart = String(fmt.reasoningStartTag || '<think>').trim() || '<think>';
+      const legacyEnd = String(fmt.reasoningEndTag || '</think>').trim() || '</think>';
+      fmt.reasoningTagPairs = [
+        { start: legacyStart, end: legacyEnd }
+      ];
+      if (legacyStart.toLowerCase() !== '<thinking>' || legacyEnd.toLowerCase() !== '</thinking>') {
+        fmt.reasoningTagPairs.push({ start: '<thinking>', end: '</thinking>' });
+      }
+    }
+    return fmt.reasoningTagPairs;
+  }
+
   function stripHistoricalReasoningFromText(rawMes) {
     if (!rawMes) return '';
     let text = String(rawMes);
-    const startTag = (tavernState.formatting?.reasoningStartTag || '<think>').trim();
-    const endTag = (tavernState.formatting?.reasoningEndTag || '</think>').trim();
-    if (startTag && endTag) {
-      const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      text = text.replace(new RegExp(escStart + '[\\s\\S]*?' + escEnd, 'gi'), '');
+    const pairs = getActiveReasoningTagPairs();
+    for (const pair of pairs) {
+      const startTag = String(pair?.start || '').trim();
+      const endTag = String(pair?.end || '').trim();
+      if (startTag && endTag) {
+        const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        text = text.replace(new RegExp(escStart + '[\\s\\S]*?' + escEnd, 'gi'), '');
+      }
     }
     text = text.replace(/<(?:think|thinking|thought|reasoning|cot)>[\s\S]*?<\/(?:think|thinking|thought|reasoning|cot)>/gi, '');
     return text.trim();
@@ -6034,10 +6226,13 @@ code, pre {
     if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.content) return false;
     const txt = String(lastMsg.content).trim();
     if (/<(?:think|thinking|thought|reasoning|cot)>\s*$/i.test(txt)) return true;
-    const startTag = (tavernState.formatting?.reasoningStartTag || '').trim();
-    if (startTag) {
-      const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (new RegExp(escStart + '\\s*$', 'i').test(txt)) return true;
+    const pairs = getActiveReasoningTagPairs();
+    for (const pair of pairs) {
+      const startTag = String(pair?.start || '').trim();
+      if (startTag) {
+        const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (new RegExp(escStart + '\\s*$', 'i').test(txt)) return true;
+      }
     }
     return false;
   }
@@ -6046,14 +6241,15 @@ code, pre {
     if (!rawReply) return { reasoning: '', cleanReply: '' };
     let text = String(rawReply);
     const reasoningChunks = [];
+    const pairs = getActiveReasoningTagPairs();
 
-    const startTag = (tavernState.formatting?.reasoningStartTag || '<think>').trim();
-    const endTag = (tavernState.formatting?.reasoningEndTag || '</think>').trim();
-    const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // 1. Custom reasoning tags (paired)
-    if (startTag && endTag) {
+    // 1. Custom reasoning tags (all configured pairs)
+    for (const pair of pairs) {
+      const startTag = String(pair?.start || '').trim();
+      const endTag = String(pair?.end || '').trim();
+      if (!startTag || !endTag) continue;
+      const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const customRx = new RegExp(escStart + '([\\s\\S]*?)' + escEnd, 'gi');
       text = text.replace(customRx, (_, inner) => {
         if (inner && inner.trim()) reasoningChunks.push(inner.trim());
@@ -6067,11 +6263,16 @@ code, pre {
       return '';
     });
 
-    // 3. Prefill closing tag without opening tag (e.g. preset prefill ended with <thinking> or <think>, so model output starts with reasoning and closes with </thinking> or </think>)
-    if (endTag) {
+    // 3. Prefill closing tag without opening tag
+    for (const pair of pairs) {
+      const startTag = String(pair?.start || '').trim();
+      const endTag = String(pair?.end || '').trim();
+      if (!endTag) continue;
+      const escStart = startTag ? startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+      const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const prefillCustomRx = new RegExp('^([\\s\\S]*?)' + escEnd, 'i');
       const mCustom = text.match(prefillCustomRx);
-      if (mCustom && !new RegExp(escStart, 'i').test(mCustom[1])) {
+      if (mCustom && (!escStart || !new RegExp(escStart, 'i').test(mCustom[1]))) {
         if (mCustom[1].trim()) reasoningChunks.push(mCustom[1].trim());
         text = text.slice(mCustom[0].length);
       }
@@ -6083,7 +6284,10 @@ code, pre {
     }
 
     // 4. Unclosed opening tag during live streaming
-    if (startTag) {
+    for (const pair of pairs) {
+      const startTag = String(pair?.start || '').trim();
+      if (!startTag) continue;
+      const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const unclosedCustomRx = new RegExp(escStart + '([\\s\\S]*)$', 'i');
       const uCustom = text.match(unclosedCustomRx);
       if (uCustom) {
@@ -6108,7 +6312,8 @@ code, pre {
     };
   }
 
-  async function callTavernAiCompletion(messages, onStreamUpdate = null) {
+  async function callTavernAiCompletion(messages, onStreamUpdate = null, options = {}) {
+    const isBackground = Boolean(options && options.isBackground);
     const creds = resolveTavernApiCredentials();
     if (!creds.baseUrl || !creds.apiKey) {
       throw new Error('未检测到有效的API地址与密钥，请点击顶栏第二个插头配置或同步外部API');
@@ -6123,12 +6328,13 @@ code, pre {
 
     const cleanBase = normalizeTavernBaseUrl(creds.baseUrl);
     const cleanKey = cleanTavernApiKeyString(creds.apiKey);
-    const endpoints = [
-      cleanBase + '/v1/chat/completions',
-      cleanBase + '/chat/completions'
-    ];
+    const endpoints = cleanBase.endsWith('/v1')
+      ? [cleanBase + '/chat/completions', cleanBase.replace(/\/v1$/i, '') + '/chat/completions']
+      : [cleanBase + '/v1/chat/completions', cleanBase + '/chat/completions'];
 
-    const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
+    const requestedMaxTokens = isBackground
+      ? Math.min(16384, Math.max(4096, Number(preset.openai_max_tokens || 8192)))
+      : Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
     const payload = {
       model: creds.model,
       messages,
@@ -6140,12 +6346,14 @@ code, pre {
       stream: useStreaming
     };
 
-    if (Array.isArray(tavernState.formatting?.customStoppingStrings) && tavernState.formatting.customStoppingStrings.length > 0) {
+    if (!isBackground && Array.isArray(tavernState.formatting?.customStoppingStrings) && tavernState.formatting.customStoppingStrings.length > 0) {
       payload.stop = tavernState.formatting.customStoppingStrings;
     }
 
     const abortCtrl = new AbortController();
-    uiRuntime.abortController = abortCtrl;
+    if (!isBackground) {
+      uiRuntime.abortController = abortCtrl;
+    }
 
     const reqHeaders = {
       'Content-Type': 'application/json',
@@ -6290,6 +6498,7 @@ code, pre {
       return {
         content: parsed.cleanReply,
         reasoning: combinedReasoning,
+        rawContent,
         genTime: elapsedSec
       };
     }
@@ -7627,6 +7836,8 @@ code, pre {
     const activeHelperScripts = (activeCardForShell?.helperScripts || []).filter(s => s && s.enabled !== false);
     const uiPlugins = (tavernState.plugins || []).filter(p => p && p.enabled && !p.builtInType && p.uiHtml && !isBaiBaiPlugin(p));
 
+    // Preserve existing #chat node so plugin MutationObservers (ST-BaiBai-Image / ST-BaiBai-Book) never detach
+    const prevChatEl = document.getElementById('chat');
     // Preserve third-party plugin menu items mounted inside #extensionsMenu and #top-settings-holder, plus active card floating widgets only if they belong to the current active card
     const prevExtMenuNodes = Array.from(document.querySelectorAll('#extensionsMenu > .extension_container'));
     const canPreserveFloatingWidgets = Boolean(
@@ -7714,6 +7925,11 @@ code, pre {
         <input type="file" id="tavern-file-card-avatar" accept="image/*" style="display:none" />
       </div>
     `;
+
+    const newChatPlaceholder = document.getElementById('chat');
+    if (prevChatEl && newChatPlaceholder && prevChatEl !== newChatPlaceholder) {
+      newChatPlaceholder.replaceWith(prevChatEl);
+    }
 
     const newExtMenu = document.getElementById('extensionsMenu');
     if (newExtMenu && prevExtMenuNodes.length > 0) {
@@ -8235,6 +8451,13 @@ code, pre {
     if (options && options.scrollToBottom && !uiRuntime.userScrolledUpDuringStream) {
       chatEl.scrollTop = chatEl.scrollHeight;
     }
+    if (!uiRuntime.isGenerating) {
+      Promise.resolve().then(() => {
+        try {
+          tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_UPDATED, idx);
+        } catch (_) {}
+      });
+    }
   }
 
   function renderTavernChatFloors(keepTopOnSingleFloor = false, options = {}) {
@@ -8613,18 +8836,32 @@ code, pre {
   // Drawer 3: fa-font (Formatting & Instruct Templates)
   function renderDrawerFont() {
     const fmt = tavernState.formatting || {};
+    const cotPairs = getActiveReasoningTagPairs();
     return `
       <div class="tavern-section-card">
-        <div class="tavern-section-label">思维链与文本净化规则</div>
-        <div class="tavern-grid-2">
-          <div class="tavern-field-group">
-            <label>思维链起始标签</label>
-            <input type="text" class="tavern-input" data-fmt-str="reasoningStartTag" value="${escapeHtmlSimple(fmt.reasoningStartTag || '<think>')}" />
+        <div class="tavern-section-label">
+          <span>思维链与文本净化规则</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="cot-add-pair">新增</button>
+            <button type="button" class="tavern-btn small primary" data-action="save-formatting-settings">保存</button>
           </div>
-          <div class="tavern-field-group">
-            <label>思维链结束标签</label>
-            <input type="text" class="tavern-input" data-fmt-str="reasoningEndTag" value="${escapeHtmlSimple(fmt.reasoningEndTag || '</think>')}" />
-          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
+          ${cotPairs.map((pair, idx) => `
+            <div style="display:flex;align-items:flex-end;gap:8px;">
+              <div class="tavern-field-group" style="flex:1;margin-bottom:0;">
+                <label>起始</label>
+                <input type="text" class="tavern-input" data-cot-pair-idx="${idx}" data-cot-pair-field="start" value="${escapeHtmlSimple(pair?.start || '')}" placeholder="<think>" />
+              </div>
+              <div class="tavern-field-group" style="flex:1;margin-bottom:0;">
+                <label>结束</label>
+                <input type="text" class="tavern-input" data-cot-pair-idx="${idx}" data-cot-pair-field="end" value="${escapeHtmlSimple(pair?.end || '')}" placeholder="</think>" />
+              </div>
+              ${cotPairs.length > 1 ? `
+                <button type="button" class="tavern-btn small danger" data-action="cot-del-pair" data-cot-pair-idx="${idx}" style="flex-shrink:0;height:36px;">删除</button>
+              ` : ''}
+            </div>
+          `).join('')}
         </div>
         <label class="tavern-check-row">
           <input type="checkbox" data-fmt-bool="autoCollapseReasoning" ${fmt.autoCollapseReasoning !== false ? 'checked' : ''} />
@@ -11131,9 +11368,48 @@ code, pre {
       }
 
       // Drawer 3 (Font & Formatting) Actions
+      if (action === 'cot-add-pair') {
+        const pairs = getActiveReasoningTagPairs();
+        pairs.push({ start: '<think>', end: '</think>' });
+        if (pairs[0]) {
+          tavernState.formatting.reasoningStartTag = pairs[0].start || '<think>';
+          tavernState.formatting.reasoningEndTag = pairs[0].end || '</think>';
+        }
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'cot-del-pair') {
+        const idx = Number(actionEl.getAttribute('data-cot-pair-idx'));
+        const pairs = getActiveReasoningTagPairs();
+        if (pairs.length > 1 && idx >= 0 && idx < pairs.length) {
+          pairs.splice(idx, 1);
+          if (pairs[0]) {
+            tavernState.formatting.reasoningStartTag = pairs[0].start || '<think>';
+            tavernState.formatting.reasoningEndTag = pairs[0].end || '</think>';
+          }
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+        }
+        return;
+      }
       if (action === 'save-formatting-settings') {
         const stopStr = document.getElementById('tavern-stop-strings-input')?.value || '';
         tavernState.formatting.customStoppingStrings = stopStr.split(',').map(s => s.trim()).filter(Boolean);
+        const pairs = getActiveReasoningTagPairs();
+        document.querySelectorAll('[data-cot-pair-idx]').forEach(inp => {
+          if (inp.tagName !== 'INPUT') return;
+          const pIdx = Number(inp.getAttribute('data-cot-pair-idx'));
+          const pField = inp.getAttribute('data-cot-pair-field');
+          if (pairs[pIdx] && (pField === 'start' || pField === 'end')) {
+            pairs[pIdx][pField] = inp.value;
+          }
+        });
+        if (pairs[0]) {
+          tavernState.formatting.reasoningStartTag = pairs[0].start || '<think>';
+          tavernState.formatting.reasoningEndTag = pairs[0].end || '</think>';
+        }
         await saveTavernStore();
         renderTavernChatFloors(false);
         showTavernToast('文本格式化设置已保存');
@@ -12004,6 +12280,21 @@ code, pre {
         tavernState.formatting[k] = Boolean(target.checked);
         await saveTavernStore();
         renderTavernChatFloors(false);
+        return;
+      }
+      if (target.hasAttribute('data-cot-pair-field')) {
+        const pIdx = Number(target.getAttribute('data-cot-pair-idx'));
+        const pField = target.getAttribute('data-cot-pair-field');
+        const pairs = getActiveReasoningTagPairs();
+        if (pairs[pIdx] && (pField === 'start' || pField === 'end')) {
+          pairs[pIdx][pField] = target.value;
+          if (pIdx === 0) {
+            tavernState.formatting.reasoningStartTag = pairs[0].start || '<think>';
+            tavernState.formatting.reasoningEndTag = pairs[0].end || '</think>';
+          }
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+        }
         return;
       }
       if (target.hasAttribute('data-fmt-str')) {
