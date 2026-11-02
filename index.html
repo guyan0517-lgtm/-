@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v10.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v10.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -32982,6 +32982,90 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         window.mashuActiveInspection = window.mashuActiveInspection || null;
 
+        window.getMashuActiveInspection = function (chatObj) {
+          const targetChat = chatObj || (state && state.chats && state.chats[window.MASHU_COMPANION_ID]) || null;
+          if (targetChat && targetChat.settings && targetChat.settings.mashuActiveInspection !== undefined) {
+            const chatSaved = targetChat.settings.mashuActiveInspection;
+            if (chatSaved && chatSaved.active) {
+              window.mashuActiveInspection = chatSaved;
+              return chatSaved;
+            }
+            if (chatSaved && chatSaved.active === false) {
+              window.mashuActiveInspection = null;
+              return null;
+            }
+          }
+          if (window.mashuActiveInspection && window.mashuActiveInspection.active) {
+            return window.mashuActiveInspection;
+          }
+          try {
+            const rawSaved = localStorage.getItem("mashu_active_inspection_v1");
+            if (rawSaved) {
+              const parsed = JSON.parse(rawSaved);
+              if (parsed && parsed.active) {
+                window.mashuActiveInspection = parsed;
+                if (targetChat) {
+                  if (!targetChat.settings) targetChat.settings = {};
+                  targetChat.settings.mashuActiveInspection = parsed;
+                }
+                return parsed;
+              }
+              if (parsed && parsed.active === false) {
+                return null;
+              }
+            }
+          } catch (_) {}
+          if (targetChat && Array.isArray(targetChat.history)) {
+            for (let i = targetChat.history.length - 1; i >= 0; i--) {
+              const m = targetChat.history[i];
+              if (!m || !m.isExecuted) continue;
+              if (m.type === "mashu_inspect_close_card") {
+                return null;
+              }
+              if (m.type === "mashu_inspect_request_card") {
+                const pData = m.pendingData || {};
+                const restored = {
+                  active: true,
+                  targetType: pData.targetType || "tavern_card",
+                  targetName: pData.targetName || "当前角色",
+                  connectedAt: m.timestamp || Date.now()
+                };
+                window.mashuActiveInspection = restored;
+                if (!targetChat.settings) targetChat.settings = {};
+                targetChat.settings.mashuActiveInspection = restored;
+                try {
+                  localStorage.setItem("mashu_active_inspection_v1", JSON.stringify(restored));
+                } catch (_) {}
+                return restored;
+              }
+            }
+          }
+          return null;
+        };
+
+        window.setMashuActiveInspection = function (chatObj, inspState) {
+          const targetChat = chatObj || (state && state.chats && state.chats[window.MASHU_COMPANION_ID]) || null;
+          if (inspState && inspState.active) {
+            window.mashuActiveInspection = inspState;
+            if (targetChat) {
+              if (!targetChat.settings) targetChat.settings = {};
+              targetChat.settings.mashuActiveInspection = inspState;
+            }
+            try {
+              localStorage.setItem("mashu_active_inspection_v1", JSON.stringify(inspState));
+            } catch (_) {}
+          } else {
+            window.mashuActiveInspection = null;
+            if (targetChat) {
+              if (!targetChat.settings) targetChat.settings = {};
+              targetChat.settings.mashuActiveInspection = { active: false, disconnectedAt: Date.now() };
+            }
+            try {
+              localStorage.setItem("mashu_active_inspection_v1", JSON.stringify({ active: false, disconnectedAt: Date.now() }));
+            } catch (_) {}
+          }
+        };
+
         window.getMashuLiveInspectionSnapshot = function (targetType, targetName) {
           try {
             const qName = String(targetName || "").trim();
@@ -33091,12 +33175,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           })();
 
           let activeInspectBlock = `当前未建立实时查看连接。当前小手机里已有的QQ群聊与KPC单聊列表为：${availableChatsSummary}。若你对其中某个群聊、某个KPC的聊天记录感兴趣想要吃瓜品鉴，或者对方让你帮忙检查酒馆角色卡与QQ聊天，请直接在回复文字末尾附带 [申请连接:qq_chat:群聊或KPC名:快让我看看你们聊了啥] 或 [申请连接:tavern_card:角色名:让我看看这个角色卡]，经对方点击同意后即可实时读取。`;
-          if (window.mashuActiveInspection && window.mashuActiveInspection.active) {
+          const activeInspectState = typeof window.getMashuActiveInspection === "function"
+            ? window.getMashuActiveInspection(chat)
+            : window.mashuActiveInspection;
+          if (activeInspectState && activeInspectState.active) {
             const snapStr = window.getMashuLiveInspectionSnapshot(
-              window.mashuActiveInspection.targetType,
-              window.mashuActiveInspection.targetName
+              activeInspectState.targetType,
+              activeInspectState.targetName
             );
-            activeInspectBlock = `【已建立实时查看连接：类型=${window.mashuActiveInspection.targetType}，目标=${window.mashuActiveInspection.targetName || "当前选中项"}】\n实时读取到的内部数据与聊天记录如下：\n${snapStr}\n【重要提醒】：如果你是出于好奇心在看对方的群聊或KPC聊天记录，看完以后绝对不要长篇大论、详细地去描述或总结这个群聊里的内容！麻薯调戏人一般就是短促直接地说「哎呦」「哎呦」，或者直接评价对方性癖，比如说「你个恋老癖」「我操，给你玩爽了」「我操，好骚啊」，大概就是这种接地气的调戏感觉，绝不会长篇大论地去说；如果你是在帮对方排查问题，请直接简短指出原因。等你已经品鉴够了或检查完毕、不再需要占用这块数据时，请在气泡末尾附上 [申请断开:已经看完啦，断开连接释放内存] 发送断开卡片。`;
+            activeInspectBlock = `【已建立实时查看连接：类型=${activeInspectState.targetType}，目标=${activeInspectState.targetName || "当前选中项"}】\n实时读取到的内部数据与聊天记录如下：\n${snapStr}\n【重要提醒】：只要这个实时查看连接还在开启状态，你每一回合都能直接看到上面这些聊天记录或角色卡数据，直到对方点击确认断开为止！如果你是出于好奇心在看对方的群聊或KPC聊天记录，看完以后绝对不要长篇大论、详细地去描述或总结这个群聊里的内容！麻薯调戏人一般就是短促直接地说「哎呦」「哎呦」，或者直接评价对方性癖，比如说「你个恋老癖」「我操，给你玩爽了」「我操，好骚啊」，大概就是这种接地气的调戏感觉，绝不会长篇大论地去说；如果你是在帮对方排查问题，请直接简短指出原因。只有当你和对方聊完这个话题、明确不需要再看这份记忆时，才在气泡末尾附上 [申请断开:已经看完啦，断开连接释放内存] 发送断开卡片。`;
           }
 
           return `【最高优先级身份与语气准则：你是虚拟陪伴朋友「麻薯」】
@@ -41613,16 +41700,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   e.stopPropagation();
                   msg.isExecuted = true;
                   if (isCloseCard) {
-                    window.mashuActiveInspection = null;
+                    if (typeof window.setMashuActiveInspection === "function") {
+                      window.setMashuActiveInspection(chat, null);
+                    } else {
+                      window.mashuActiveInspection = null;
+                    }
                     msg.statusText = "已断开";
                     confirmBtn.textContent = "已断开";
                   } else {
-                    window.mashuActiveInspection = {
+                    const nextInsp = {
                       active: true,
                       targetType: targetType,
                       targetName: targetName,
                       connectedAt: Date.now()
                     };
+                    if (typeof window.setMashuActiveInspection === "function") {
+                      window.setMashuActiveInspection(chat, nextInsp);
+                    } else {
+                      window.mashuActiveInspection = nextInsp;
+                    }
                     msg.statusText = "已连接";
                     confirmBtn.textContent = "已连接";
                   }
@@ -41636,17 +41732,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (dbInstance) await dbInstance.chats.put(chat);
 
                   if (!isCloseCard && typeof triggerAiReply === "function") {
-                    const snapStr = typeof window.getMashuLiveInspectionSnapshot === "function"
-                      ? window.getMashuLiveInspectionSnapshot(targetType, targetName)
-                      : "";
-                    chat.history = chat.history || [];
-                    chat.history.push({
-                      role: "system",
-                      content: `[系统通知：对方已点击同意连接，实时读取到的 ${typeLabel} 内部数据与聊天记录如下：\n${snapStr}\n请根据上述真实数据自然地回应对方：如果你是出于好奇心在看群聊或KPC的聊天记录，请津津有味地细细品味、吐槽或感叹里面的KPC互动与剧情细节；如果你是在帮对方排查问题，请告诉对方你看到了什么。等品鉴完或排查完后记得附带 [申请断开:看完啦，断开连接释放内存] 标签。]`,
-                      timestamp: Date.now(),
-                      isHidden: true
-                    });
-                    if (dbInstance) await dbInstance.chats.put(chat);
                     triggerAiReply(chat.id);
                   }
                 };
@@ -52594,6 +52679,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 role: "system",
                 content: window.formatPromptSection("机运", turnNotice).trim()
               });
+            }
+
+            // 麻薯持续连接记忆实时注入：只要未点击确认断开，每回合都在消息末尾保持注入所连接的聊天或角色卡数据
+            if (chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor)) {
+              const activeInspForTurn = typeof window.getMashuActiveInspection === "function"
+                ? window.getMashuActiveInspection(chat)
+                : window.mashuActiveInspection;
+              if (activeInspForTurn && activeInspForTurn.active && typeof window.getMashuLiveInspectionSnapshot === "function") {
+                const liveSnap = window.getMashuLiveInspectionSnapshot(activeInspForTurn.targetType, activeInspForTurn.targetName);
+                const liveTypeLabel = activeInspForTurn.targetType === "qq_chat" ? "聊天档案" : "酒馆角色卡与配置";
+                messagesPayload.push({
+                  role: "system",
+                  content: `[实时连接记忆保持中：当前正持续连接查看 ${liveTypeLabel}「${activeInspForTurn.targetName || "当前选中项"}」，直到对方点击确认断开前每回合均持续生效。实时数据与聊天记录如下：\n${liveSnap}\n请基于上述真实数据自然互动或调侃，不要刚看一回合就急着断开；仅在彻底聊完或对方要求断开时才附带 [申请断开:看完啦，断开连接释放内存] 标签。]`
+                });
+              }
             }
 
             // 在上下文最后一条消息之后（作者注释与最底部位置）附带自然交互原则
@@ -75636,6 +75736,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         }
 
         function recordChatDebugLog(chatId, sentPayload, receivedPayload, logId) {
+          const targetChatObj = state && state.chats ? state.chats[chatId] : null;
+          const isMashuOnlyDebug = Boolean(
+            chatId === window.MASHU_COMPANION_ID ||
+            (targetChatObj && (targetChatObj.id === window.MASHU_COMPANION_ID || targetChatObj.isMashuAuthor || (window.isMashuChat && window.isMashuChat(targetChatObj))))
+          );
+          const effectiveSentPayload = isMashuOnlyDebug ? null : sentPayload;
           if (!state.chatDebugLogs) state.chatDebugLogs = {};
           if (!state.chatDebugLogs[chatId]) {
             try {
@@ -75651,14 +75757,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (existingIdx !== -1) {
             state.chatDebugLogs[chatId][existingIdx] = {
               ...state.chatDebugLogs[chatId][existingIdx],
-              sent: sentPayload || state.chatDebugLogs[chatId][existingIdx].sent,
+              sent: isMashuOnlyDebug ? null : (effectiveSentPayload || state.chatDebugLogs[chatId][existingIdx].sent),
               received: receivedPayload,
             };
           } else {
             state.chatDebugLogs[chatId].push({
               logId: logId || ("dbg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
               timestamp: Date.now(),
-              sent: sentPayload,
+              sent: effectiveSentPayload,
               received: receivedPayload,
             });
           }
@@ -75680,6 +75786,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (!body) return;
 
           const chat = state.chats[state.activeChatId];
+          const isMashuOnlyDebug = Boolean(
+            chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor || (window.isMashuChat && window.isMashuChat(chat)))
+          );
           let logs = [];
           if (chat) {
             if (state.chatDebugLogs && Array.isArray(state.chatDebugLogs[chat.id])) {
@@ -75710,9 +75819,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const itemEl = document.createElement("div");
             itemEl.style.cssText = "background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px;";
             const timeStr = new Date(entry.timestamp).toLocaleTimeString();
-            const fullSentRaw = extractFullSentText(entry.sent);
+            const fullSentRaw = isMashuOnlyDebug ? "" : extractFullSentText(entry.sent);
             const fullReceivedRaw = extractFullReceivedText(entry.received);
-            const formattedSent = formatDebugDisplay(fullSentRaw);
+            const formattedSent = isMashuOnlyDebug ? "" : formatDebugDisplay(fullSentRaw);
             const formattedReceived = formatDebugDisplay(fullReceivedRaw);
 
             itemEl.innerHTML = `
@@ -75721,6 +75830,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 <span style="font-size: 11px; color: var(--text-secondary);">${timeStr}</span>
               </div>
 
+              ${isMashuOnlyDebug ? "" : `
               <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">我方发送的完整字段</span>
@@ -75728,6 +75838,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 </div>
                 <pre style="margin: 0; padding: 8px; font-size: 11px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; max-height: 340px; overflow-y: auto; background: var(--secondary-bg); border-radius: 6px; font-family: monospace;">${formattedSent}</pre>
               </div>
+              `}
 
               <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -75739,7 +75850,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             `;
 
             const copySentBtn = itemEl.querySelector(".copy-sent-btn");
-            if (copySentBtn) {
+            if (copySentBtn && !isMashuOnlyDebug) {
               copySentBtn.onclick = async () => {
                 try {
                   await navigator.clipboard.writeText(fullSentRaw);

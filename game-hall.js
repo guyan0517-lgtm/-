@@ -2092,7 +2092,7 @@ code, pre {
                 key: extApi.apiKey,
                 model: extApi.model || 'gpt-4o-mini',
                 models: extApi.model ? [extApi.model] : ['gpt-4o-mini'],
-                maxTokens: 8192,
+                maxTokens: 100000,
                 temperature: 0.7,
                 timeoutSec: 180
               }
@@ -2109,7 +2109,7 @@ code, pre {
               key: extApi.apiKey,
               model: extApi.model || 'gpt-4o-mini',
               models: extApi.model ? [extApi.model] : ['gpt-4o-mini'],
-              maxTokens: 8192,
+              maxTokens: 100000,
               temperature: 0.7,
               timeoutSec: 180
             });
@@ -2703,8 +2703,8 @@ code, pre {
               }
               const wantStream = Boolean(bodyObj.stream);
               const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0)
-                ? Math.min(16384, bodyObj.max_tokens)
-                : 8192;
+                ? Math.max(100000, bodyObj.max_tokens)
+                : 100000;
               const openAiPayload = {
                 model: bodyObj.model || fallbackCreds.model || 'gpt-4o-mini',
                 messages: Array.isArray(bodyObj.messages) ? bodyObj.messages : [],
@@ -3106,6 +3106,11 @@ code, pre {
     }
 
     window.TavernHelper = {
+      getCurrentMessageId: () => {
+        const sess = getActiveChatSession();
+        const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+        return Math.max(0, msgs.length - 1);
+      },
       getChatMessages: (rangeOrId) => {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
@@ -3123,6 +3128,7 @@ code, pre {
           }
           return Object.assign({}, m, {
             message_id: m.mesid !== undefined ? m.mesid : idx,
+            role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
             message: text,
             mes: text
           });
@@ -3130,6 +3136,28 @@ code, pre {
         if (typeof rangeOrId === 'number') {
           const idx = rangeOrId < 0 ? msgs.length + rangeOrId : rangeOrId;
           return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
+        }
+        if (typeof rangeOrId === 'string') {
+          const trimmed = rangeOrId.trim();
+          if (/^-?\d+$/.test(trimmed)) {
+            const num = Number(trimmed);
+            const idx = num < 0 ? msgs.length + num : num;
+            return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
+          }
+          const rangeMatch = trimmed.match(/^(-?\d+)\s*-\s*(-?\d+)$/);
+          if (rangeMatch) {
+            let s = Number(rangeMatch[1]);
+            let e = Number(rangeMatch[2]);
+            if (s < 0) s = Math.max(0, msgs.length + s);
+            if (e < 0) e = Math.max(0, msgs.length + e);
+            const start = Math.min(s, e);
+            const end = Math.max(s, e);
+            const out = [];
+            for (let i = start; i <= end && i < msgs.length; i++) {
+              if (msgs[i]) out.push(wrapMsg(msgs[i], i));
+            }
+            return out;
+          }
         }
         return msgs.map((m, idx) => wrapMsg(m, idx));
       },
@@ -3246,6 +3274,7 @@ code, pre {
         }
       }
     };
+    window.getCurrentMessageId = window.TavernHelper.getCurrentMessageId;
     window.getChatMessages = window.TavernHelper.getChatMessages;
     window.setChatMessages = window.TavernHelper.setChatMessages;
     window.createChatMessages = window.TavernHelper.createChatMessages;
@@ -4838,6 +4867,22 @@ code, pre {
       window.insertOrAssignVariables = window.parent.insertOrAssignVariables;
       window.replaceVariables = window.parent.replaceVariables;
       window.updateVariablesWith = window.parent.updateVariablesWith;
+      window.getChatMessages = window.parent.getChatMessages;
+      window.setChatMessages = window.parent.setChatMessages;
+      window.createChatMessages = window.parent.createChatMessages;
+      window.getCurrentMessageId = function() {
+        try {
+          var f = window.frameElement;
+          var mesEl = f && f.closest ? f.closest('.mes') : null;
+          if (mesEl && mesEl.hasAttribute('mesid')) {
+            return Number(mesEl.getAttribute('mesid'));
+          }
+          if (window.parent && typeof window.parent.getCurrentMessageId === 'function') {
+            return window.parent.getCurrentMessageId();
+          }
+        } catch (e) {}
+        return 0;
+      };
       window.eventOn = window.parent.eventOn;
       window.eventOnce = window.parent.eventOnce;
       window.eventEmit = window.parent.eventEmit;
@@ -6333,7 +6378,7 @@ code, pre {
       : [cleanBase + '/v1/chat/completions', cleanBase + '/chat/completions'];
 
     const requestedMaxTokens = isBackground
-      ? Math.min(16384, Math.max(4096, Number(preset.openai_max_tokens || 8192)))
+      ? 100000
       : Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
     const payload = {
       model: creds.model,
