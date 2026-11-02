@@ -1201,8 +1201,13 @@
     ensurePersistentExtensionContainers();
 
     function parseHtmlNodes(htmlStr) {
+      const trimmed = String(htmlStr || '').trim();
+      const bareTagMatch = trimmed.match(/^<([a-zA-Z][a-zA-Z0-9:-]*)\s*\/?>$/);
+      if (bareTagMatch) {
+        return [document.createElement(bareTagMatch[1])];
+      }
       const tpl = document.createElement('template');
-      tpl.innerHTML = String(htmlStr || '').trim();
+      tpl.innerHTML = trimmed;
       return Array.from(tpl.content.childNodes);
     }
 
@@ -1264,6 +1269,16 @@
         last() { return wrapElements(arr.length ? [arr[arr.length - 1]] : []); },
         each(fn) {
           arr.forEach((el, i) => fn.call(el, i, el));
+          return api;
+        },
+        ready(fn) {
+          if (typeof fn === 'function') {
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', () => fn(jq));
+            } else {
+              setTimeout(() => fn(jq), 0);
+            }
+          }
           return api;
         },
         find(subSel) {
@@ -1738,8 +1753,10 @@
       worldInfo: tavernState.worldBooks,
       eventSource: tavernEventSource,
       event_types: TAVERN_EVENT_TYPES,
+      eventTypes: TAVERN_EVENT_TYPES,
       extension_prompt_types: TAVERN_EXT_PROMPT_TYPES,
       setExtensionPrompt,
+      getCurrentChatId: () => (sess && sess.chatId) ? sess.chatId : 'chat_default',
       executeSlashCommands: executeTavernSlashCommand,
       executeSlashCommandsWithOptions: executeTavernSlashCommand,
       sendSystemMessage: (type, text) => executeTavernSlashCommand('/sys ' + text),
@@ -2121,14 +2138,44 @@
     return null;
   }
 
+  function isBaiBaiPlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    return /柏宝绘|baibai|ST-BaiBai-Image/i.test(n) || /ST-BaiBai-Image/i.test(u);
+  }
+
   function resolvePluginMetaUrl(plugin) {
-    if (plugin && plugin.repoBaseUrl) {
-      return plugin.repoBaseUrl.replace(/\/+$/, '') + '/index.js';
+    if (isBaiBaiPlugin(plugin)) {
+      return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/dist/index.js';
     }
-    if (plugin && plugin.name && /baibai|ST-BaiBai-Image/i.test(plugin.name)) {
-      return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/index.js';
+    if (plugin && plugin.repoBaseUrl) {
+      const entry = (plugin.jsEntryPath || 'index.js').replace(/^\/+/, '');
+      return plugin.repoBaseUrl.replace(/\/+$/, '') + '/' + entry;
     }
     return 'https://raw.githubusercontent.com/SillyTavern/Extension/main/index.js';
+  }
+
+  let cachedBaiBaiShadowCss = '';
+  let baiBaiUpgradeInFlight = false;
+  async function syncBaiBaiShadowDomCss() {
+    try {
+      const host = document.getElementById('bbi-app-host');
+      if (!host || !host.shadowRoot) return;
+      if (host.shadowRoot.getElementById('bbi-inline-shadow-css')) return;
+      if (!cachedBaiBaiShadowCss) {
+        const res = await fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/dist/index.css');
+        if (res.ok) {
+          cachedBaiBaiShadowCss = await res.text();
+        }
+      }
+      if (cachedBaiBaiShadowCss && host.shadowRoot && !host.shadowRoot.getElementById('bbi-inline-shadow-css')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'bbi-inline-shadow-css';
+        styleEl.textContent = cachedBaiBaiShadowCss;
+        host.shadowRoot.appendChild(styleEl);
+      }
+    } catch (_) {}
   }
 
   function transpilePluginImports(codeStr, plugin = null) {
@@ -2173,8 +2220,28 @@
     if (!plugin.code && plugin.content) {
       plugin.code = plugin.content;
     }
-    if (!plugin.repoBaseUrl && plugin.name && /ST-BaiBai-Image|baibai/i.test(plugin.name)) {
+    if (isBaiBaiPlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
+      plugin.jsEntryPath = 'dist/index.js';
+      if ((!plugin.code || !String(plugin.code).includes('bbi-app-host')) && !baiBaiUpgradeInFlight) {
+        baiBaiUpgradeInFlight = true;
+        fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/dist/index.js')
+          .then(r => (r.ok ? r.text() : ''))
+          .then(async jsTxt => {
+            if (jsTxt && jsTxt.includes('bbi-app-host')) {
+              plugin.code = jsTxt;
+              await saveTavernStore();
+              executeUserPluginScript(plugin);
+            }
+          })
+          .catch(() => {})
+          .finally(() => { baiBaiUpgradeInFlight = false; });
+        return;
+      }
+      if (document.getElementById('bbi-app-host') && document.getElementById('bbi-menu-item')) {
+        syncBaiBaiShadowDomCss();
+        return;
+      }
     }
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
@@ -2230,7 +2297,13 @@
         window.toastr,
         window.jQuery,
         window.$
-      ).catch(err => {
+      ).then(() => {
+        if (isBaiBaiPlugin(plugin)) {
+          syncBaiBaiShadowDomCss();
+          setTimeout(syncBaiBaiShadowDomCss, 120);
+          setTimeout(syncBaiBaiShadowDomCss, 500);
+        }
+      }).catch(err => {
         console.warn('Async plugin script warning:', plugin.name, err);
       });
     } catch (err) {
@@ -2601,13 +2674,13 @@
   function executeCardHelperScripts(cardObj, forceRun = false) {
     const card = cardObj || getActiveCard();
     if (!card) return;
-    if (!forceRun && lastExecutedHelperCardId === card.id && document.getElementById('gourmet-fixed-ball-ui')) {
+    const stageRoot = document.getElementById('tavern-stage-root');
+    const ballInStage = stageRoot ? stageRoot.querySelector('#gourmet-fixed-ball-ui') : document.getElementById('gourmet-fixed-ball-ui');
+    if (!forceRun && lastExecutedHelperCardId === card.id && ballInStage) {
       return;
     }
     // Remove floating widgets from previously active cards when switching cards
-    if (lastExecutedHelperCardId && lastExecutedHelperCardId !== card.id) {
-      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
-    }
+    document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
     lastExecutedHelperCardId = card.id;
     const scripts = Array.isArray(card.helperScripts) ? card.helperScripts : [];
     scripts.forEach(hs => {
@@ -2633,33 +2706,53 @@
     if (!isGourmetCard) return;
     gourmetBackfillInFlight = true;
     try {
-      const res = await fetch('/assets/aistudio/2_1_cb1723ff.png');
-      if (!res.ok) return;
-      const buf = await res.arrayBuffer();
+      let buf = null;
+      try {
+        const res = await fetch('/assets/aistudio/2_1_cb1723ff.png');
+        if (res.ok) buf = await res.arrayBuffer();
+      } catch (_) {}
+      if (!buf && card.avatar) {
+        let avUrl = card.avatar;
+        if (String(avUrl).startsWith('vault://') && typeof window.resolveVaultRefToUrl === 'function') {
+          avUrl = await window.resolveVaultRefToUrl(avUrl);
+        }
+        if (avUrl && !String(avUrl).startsWith('data:image/svg')) {
+          const avRes = await fetch(avUrl);
+          if (avRes.ok) buf = await avRes.arrayBuffer();
+        }
+      }
+      if (!buf) return;
       const rawJson = await extractCharacterJsonFromPngBuffer(buf);
       const data = (rawJson && rawJson.data && typeof rawJson.data === 'object') ? rawJson.data : rawJson;
       const ext = (data && data.extensions) || (rawJson && rawJson.extensions) || {};
       const th = ext.tavern_helper;
       const extracted = [];
-      if (th && typeof th === 'object' && Array.isArray(th.scripts)) {
-        th.scripts.forEach((sc, idx) => {
-          if (sc && sc.content) {
-            extracted.push({
-              id: sc.id || ('helper_gourmet_' + idx),
-              name: String(sc.name || '冒险与美食图鉴').trim(),
-              content: sc.content,
-              info: sc.info || '',
-              enabled: sc.enabled !== false,
-              buttons: Array.isArray(sc.button?.buttons) ? sc.button.buttons : []
-            });
+      const pushExtracted = (sc, idx) => {
+        if (sc && (sc.content || sc.code || sc.script)) {
+          extracted.push({
+            id: sc.id || ('helper_gourmet_' + idx),
+            name: String(sc.name || '冒险与美食图鉴').trim(),
+            content: sc.content || sc.code || sc.script,
+            info: sc.info || '',
+            enabled: sc.enabled !== false,
+            buttons: Array.isArray(sc.button?.buttons) ? sc.button.buttons : (Array.isArray(sc.buttons) ? sc.buttons : [])
+          });
+        }
+      };
+      if (Array.isArray(th)) {
+        th.forEach(pair => {
+          if (Array.isArray(pair) && pair[0] === 'scripts' && Array.isArray(pair[1])) {
+            pair[1].forEach((sc, idx) => pushExtracted(sc, idx));
           }
         });
+      } else if (th && typeof th === 'object' && Array.isArray(th.scripts)) {
+        th.scripts.forEach((sc, idx) => pushExtracted(sc, idx));
       }
       if (extracted.length > 0) {
         card.helperScripts = extracted;
         await saveTavernStore();
-        executeCardHelperScripts(card, true);
         renderTavernShell();
+        executeCardHelperScripts(card, true);
       }
     } catch (_) {
     } finally {
@@ -3277,12 +3370,12 @@
       if (contentH < 36) {
         contentH = Math.max(b.scrollHeight || 0, b.offsetHeight || 0);
       }
-      var maxAllowed = 1200;
+      var maxAllowed = 25000;
       var targetH = Math.min(maxAllowed, Math.max(56, contentH));
       if (Math.abs(targetH - lastAppliedH) > 1) {
         lastAppliedH = targetH;
         frame.style.height = targetH + 'px';
-        frame.style.maxHeight = maxAllowed + 'px';
+        frame.style.maxHeight = 'none';
       }
     } catch (e) {}
   }
@@ -3353,7 +3446,7 @@
       return escapedSrcDoc;
     }
 
-    return `<iframe class="tavern-html-sandbox-frame" scrolling="no" frameborder="0" style="width:100%;height:320px;min-height:56px;max-height:1200px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
+    return `<iframe class="tavern-html-sandbox-frame" scrolling="no" frameborder="0" style="width:100%;height:320px;min-height:56px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
   }
 
   function renderTavernMessageHtml(rawText, options = {}) {
@@ -3737,8 +3830,7 @@
           right: 14px !important;
         }
         #tavern-stage-root .mes[is_user="true"]::before {
-          left: 14px !important;
-          right: auto !important;
+          display: none !important;
         }
         #tavern-stage-root .swipe_left {
           left: auto !important;
@@ -3787,6 +3879,25 @@
 
     // Universal compatibility guards for all SillyTavern themes
     rules.push(`
+      #tavern-stage-root .mes .ch_name {
+        position: relative !important;
+        z-index: 42 !important;
+        pointer-events: auto !important;
+      }
+      #tavern-stage-root .mes .mes_buttons,
+      #tavern-stage-root .mes .mes_edit_buttons {
+        position: relative !important;
+        z-index: 45 !important;
+        pointer-events: auto !important;
+      }
+      #tavern-stage-root .mes .extraMesButtons,
+      #tavern-stage-root .mes .extraMesButtonsHint,
+      #tavern-stage-root .mes .mes_edit,
+      #tavern-stage-root .mes .tavern-mes-icon-btn {
+        position: relative !important;
+        z-index: 46 !important;
+        pointer-events: auto !important;
+      }
       #tavern-stage-root details.mes_reasoning_details {
         position: relative !important;
         z-index: 25 !important;
@@ -3807,6 +3918,9 @@
         display: none !important;
       }
       #tavern-stage-root .extraMesButtons.tavern-extra-hidden {
+        display: none !important;
+      }
+      #tavern-stage-root .swipes-counter:empty {
         display: none !important;
       }
     `);
@@ -5537,6 +5651,23 @@
       .tavern-popup-item:active {
         background: rgba(235, 235, 242, 0.85);
       }
+      #extensionsMenu .extension_container a,
+      #extensionsMenu .list-group-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 8px 12px !important;
+        border-radius: 11px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: #3a3a3c !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+      }
+      #extensionsMenu .extension_container a:hover,
+      #extensionsMenu .list-group-item:hover {
+        background: rgba(235, 235, 242, 0.85) !important;
+      }
 
       /* Square-in-square WorldBook Green/Blue Light Indicator */
       .tavern-light-box {
@@ -5913,7 +6044,10 @@
 
     const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
     const activeHelperScripts = (getActiveCard()?.helperScripts || []).filter(s => s && s.enabled !== false);
-    const uiPlugins = (tavernState.plugins || []).filter(p => p && p.enabled && !p.builtInType && p.uiHtml);
+    const uiPlugins = (tavernState.plugins || []).filter(p => p && p.enabled && !p.builtInType && p.uiHtml && !isBaiBaiPlugin(p));
+
+    // Preserve third-party plugin menu items mounted inside #extensionsMenu and #top-settings-holder
+    const prevExtMenuNodes = Array.from(document.querySelectorAll('#extensionsMenu > .extension_container'));
 
     shell.innerHTML = `
       <div id="tavern-stage-root">
@@ -5988,6 +6122,15 @@
         <input type="file" id="tavern-file-card-avatar" accept="image/*" style="display:none" />
       </div>
     `;
+
+    const newExtMenu = document.getElementById('extensionsMenu');
+    if (newExtMenu && prevExtMenuNodes.length > 0) {
+      prevExtMenuNodes.forEach(node => {
+        if (node && node.id && !newExtMenu.querySelector('#' + node.id)) {
+          newExtMenu.insertBefore(node, newExtMenu.firstChild);
+        }
+      });
+    }
 
     applyActiveTavernTheme();
     renderTavernChatFloors(true);
@@ -6172,7 +6315,7 @@
   }
 
   function renderBottomExtensionsPopup() {
-    const userPlugins = (tavernState.plugins || []).filter(p => p && !p.builtInType && p.enabled);
+    const userPlugins = (tavernState.plugins || []).filter(p => p && !p.builtInType && p.enabled && !isBaiBaiPlugin(p));
     const card = getActiveCard();
     const helperScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
     return `
@@ -6184,7 +6327,7 @@
         `).join('')}
         ${userPlugins.map(up => `
           <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}">
-            插件面板: ${escapeHtmlSimple(stripUiEmojis(up.name))}
+            ${escapeHtmlSimple(stripUiEmojis(up.name))}
           </div>
         `).join('')}
         <div class="tavern-popup-item" data-action="popup-translate-last">双语翻译最后一层消息</div>
@@ -6284,7 +6427,9 @@
             }));
 
     const hasReasoning = Boolean(effectiveReasoning);
-    const openReasoningAttr = fmtCfg.autoCollapseReasoning === false ? 'open' : '';
+    const isLiveReasoningOnly = uiRuntime.isGenerating && isLast && !isUser && hasReasoning && !effectiveCleanText.trim();
+    const openReasoningAttr = (isLiveReasoningOnly || fmtCfg.autoCollapseReasoning === false) ? 'open' : '';
+    const reasoningTitleText = isLiveReasoningOnly ? '思考过程中...' : '思考过程';
     const hasTranslation = Boolean(m.translation && String(m.translation).trim());
 
     return `
@@ -6356,7 +6501,7 @@
             <details class="mes_reasoning_details" ${openReasoningAttr}>
               <summary class="mes_reasoning_summary flex-container">
                 <div class="mes_reasoning_header flex-container">
-                  <span class="mes_reasoning_header_title">思考过程</span>
+                  <span class="mes_reasoning_header_title">${reasoningTitleText}</span>
                 </div>
                 <div class="mes_reasoning_arrow"></div>
               </summary>
@@ -6386,10 +6531,10 @@
             </div>
           ` : ''}
 
-          ${(isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
+          ${!isUser && (isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
         </div>
 
-        ${(isLast || swipes.length > 1) ? `
+        ${!isUser && (isLast || swipes.length > 1) ? `
           <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
           <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
         ` : ''}
@@ -6449,8 +6594,14 @@
 
     if (keepTopOnSingleFloor && messages.length <= 1) {
       chatEl.scrollTop = 0;
-    } else if (shouldScrollBottom) {
+    } else if ((keepTopOnSingleFloor && messages.length > 1) || shouldScrollBottom) {
       chatEl.scrollTop = chatEl.scrollHeight;
+      setTimeout(() => {
+        if (chatEl && !uiRuntime.userScrolledUpDuringStream) chatEl.scrollTop = chatEl.scrollHeight;
+      }, 80);
+      setTimeout(() => {
+        if (chatEl && !uiRuntime.userScrolledUpDuringStream) chatEl.scrollTop = chatEl.scrollHeight;
+      }, 260);
     } else {
       chatEl.scrollTop = prevScrollTop;
     }
@@ -7775,17 +7926,31 @@
     }
     if (msg.reasoning && String(msg.reasoning).trim()) {
       let detailsEl = floorEl.querySelector('.mes_reasoning_details');
+      const isStillThinkingOnly = uiRuntime.isGenerating && !String(msg.mes || '').trim();
       if (!detailsEl && textEl) {
         detailsEl = document.createElement('details');
         detailsEl.className = 'mes_reasoning_details';
-        if (tavernState.formatting?.autoCollapseReasoning === false) {
+        if (isStillThinkingOnly || tavernState.formatting?.autoCollapseReasoning === false) {
           detailsEl.setAttribute('open', '');
         }
-        detailsEl.innerHTML = `<summary class="mes_reasoning_summary flex-container"><div class="mes_reasoning_header flex-container"><span class="mes_reasoning_header_title">思考过程</span></div><div class="mes_reasoning_arrow"></div></summary><div class="mes_reasoning mes_reasoning_content"></div>`;
+        detailsEl.innerHTML = `<summary class="mes_reasoning_summary flex-container"><div class="mes_reasoning_header flex-container"><span class="mes_reasoning_header_title">${isStillThinkingOnly ? '思考过程中...' : '思考过程'}</span></div><div class="mes_reasoning_arrow"></div></summary><div class="mes_reasoning mes_reasoning_content"></div>`;
         textEl.parentNode.insertBefore(detailsEl, textEl);
+      } else if (detailsEl) {
+        const titleSpan = detailsEl.querySelector('.mes_reasoning_header_title');
+        if (titleSpan) titleSpan.textContent = isStillThinkingOnly ? '思考过程中...' : '思考过程';
+        if (isStillThinkingOnly) {
+          detailsEl.setAttribute('open', '');
+        } else if (tavernState.formatting?.autoCollapseReasoning !== false && String(msg.mes || '').trim()) {
+          detailsEl.removeAttribute('open');
+        }
       }
       const rContent = detailsEl && detailsEl.querySelector('.mes_reasoning_content');
-      if (rContent) rContent.textContent = msg.reasoning;
+      if (rContent) {
+        rContent.textContent = msg.reasoning;
+        if (isStillThinkingOnly) {
+          rContent.scrollTop = rContent.scrollHeight;
+        }
+      }
     }
     if (!uiRuntime.userScrolledUpDuringStream) {
       chatEl.scrollTop = chatEl.scrollHeight;
@@ -8189,6 +8354,17 @@
     });
 
     root.addEventListener('click', async e => {
+      const anchorLink = e.target.closest('a[href="#"]');
+      if (anchorLink) {
+        e.preventDefault();
+        if (anchorLink.closest('#extensionsMenu')) {
+          uiRuntime.showExtensionsPopup = false;
+          uiRuntime.showOptionsPopup = false;
+          refreshBottomPopupsOnly();
+          syncBaiBaiShadowDomCss();
+        }
+      }
+
       const actionEl = e.target.closest('[data-action]');
       if (!actionEl) {
         if (uiRuntime.showOptionsPopup || uiRuntime.showExtensionsPopup) {
@@ -8248,25 +8424,35 @@
         const sid = actionEl.getAttribute('data-script-id');
         uiRuntime.showExtensionsPopup = false;
         uiRuntime.showOptionsPopup = false;
+        uiRuntime.openDrawerKey = null;
         refreshBottomPopupsOnly();
+        refreshOpenDrawerOnly();
         const card = getActiveCard();
         const hs = (card && Array.isArray(card.helperScripts)) ? card.helperScripts.find(s => s.id === sid) || card.helperScripts[0] : null;
         if (hs) {
           executeCardHelperScripts(card);
+          const gourmetBall = document.getElementById('gourmet-fixed-ball-ui');
           const gourmetPanel = document.getElementById('gourmet-fixed-panel-ui');
-          if (gourmetPanel) {
-            const firstBtn = Array.isArray(hs.buttons) && hs.buttons[0] ? hs.buttons[0].name : '';
-            if (firstBtn) {
-              await tavernEventSource.emit(firstBtn);
-            } else {
-              window.$(gourmetPanel).toggle();
+          if (gourmetBall || gourmetPanel) {
+            if (gourmetBall && getComputedStyle(gourmetBall).display === 'none') {
+              gourmetBall.style.display = 'flex';
+            }
+            if (gourmetPanel) {
+              const isHidden = gourmetPanel.style.display === 'none' || getComputedStyle(gourmetPanel).display === 'none';
+              if (isHidden && gourmetBall) {
+                gourmetBall.dispatchEvent(new Event('touchend', { bubbles: true, cancelable: true }));
+                if (getComputedStyle(gourmetPanel).display === 'none') {
+                  gourmetPanel.style.display = 'flex';
+                }
+              } else {
+                gourmetPanel.style.display = isHidden ? 'flex' : 'none';
+              }
             }
             return;
           }
         }
         uiRuntime.activeHelperScriptId = sid;
         uiRuntime.activePluginModalId = null;
-        uiRuntime.openDrawerKey = null;
         renderTavernShell();
         return;
       }
@@ -8280,14 +8466,24 @@
       if (action === 'open-plugin-modal') {
         const pid = actionEl.getAttribute('data-plugin-id');
         const p = (tavernState.plugins || []).find(x => x.id === pid);
-        if (p && p.enabled) {
-          executeUserPluginScript(p);
-        }
-        uiRuntime.activePluginModalId = pid;
-        uiRuntime.activeHelperScriptId = null;
         uiRuntime.showExtensionsPopup = false;
         uiRuntime.showOptionsPopup = false;
         uiRuntime.openDrawerKey = null;
+        refreshBottomPopupsOnly();
+        refreshOpenDrawerOnly();
+        if (p && p.enabled) {
+          executeUserPluginScript(p);
+        }
+        if (isBaiBaiPlugin(p)) {
+          await syncBaiBaiShadowDomCss();
+          const bbiMenu = document.getElementById('bbi-menu-item') || document.getElementById('bbi-topbar-button');
+          if (bbiMenu) {
+            bbiMenu.click();
+            return;
+          }
+        }
+        uiRuntime.activePluginModalId = pid;
+        uiRuntime.activeHelperScriptId = null;
         renderTavernShell();
         return;
       }
@@ -8672,6 +8868,12 @@
       if (action === 'floor-del-one' || action === 'floor-del-below') {
         const idx = Number(actionEl.getAttribute('data-mesid'));
         const sess = getActiveChatSession();
+        if (!sess || sess.messages.length <= 1) {
+          showTavernToast('至少保留开场白楼层');
+          return;
+        }
+        const confirmed = await callGenericPopupShim('确定要删除该楼层消息吗？删除后无法恢复。', 2);
+        if (!confirmed) return;
         uiRuntime.isGenerating = false;
         uiRuntime.editingFloorMesId = null;
         uiRuntime.editingFloorReasoning = false;
@@ -8815,6 +9017,8 @@
           showTavernToast('至少保留一个预设');
           return;
         }
+        const confirmed = await callGenericPopupShim('确定要删除当前选中的预设吗？删除后无法恢复。', 2);
+        if (!confirmed) return;
         tavernState.presets = tavernState.presets.filter(p => p.id !== tavernState.activePresetId);
         tavernState.activePresetId = tavernState.presets[0].id;
         await saveTavernStore(true);
@@ -8974,6 +9178,8 @@
           showTavernToast('请先在下拉框中选择要删除的内置预设');
           return;
         }
+        const confirmed = await callGenericPopupShim('确定要删除该内置API预设吗？', 2);
+        if (!confirmed) return;
         tavernState.apiConfig.savedPresets = (tavernState.apiConfig.savedPresets || []).filter(x => x.id !== curId);
         tavernState.apiConfig.activeSavedPresetId = '';
         await saveTavernStore(true);
@@ -9063,6 +9269,8 @@
         return;
       }
       if (action === 'delete-worldbook') {
+        const confirmed = await callGenericPopupShim('确定要删除该世界书吗？删除后无法恢复。', 2);
+        if (!confirmed) return;
         const wbId = actionEl.getAttribute('data-wb-id');
         tavernState.worldBooks = (tavernState.worldBooks || []).filter(b => b.id !== wbId);
         await saveTavernStore();
@@ -9160,6 +9368,8 @@
         return;
       }
       if (action === 'wb-del-entry') {
+        const confirmed = await callGenericPopupShim('确定要删除该世界书词条吗？', 2);
+        if (!confirmed) return;
         const wbId = actionEl.getAttribute('data-wb-id');
         const uid = actionEl.getAttribute('data-uid');
         const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
@@ -9384,6 +9594,8 @@
         return;
       }
       if (action === 'del-regex-script') {
+        const confirmed = await callGenericPopupShim('确定要删除该正则脚本吗？', 2);
+        if (!confirmed) return;
         const rxId = actionEl.getAttribute('data-rx-id');
         const scope = actionEl.getAttribute('data-scope');
         const card = getActiveCard();
@@ -9434,7 +9646,15 @@
         return;
       }
       if (action === 'del-plugin-item') {
+        const confirmed = await callGenericPopupShim('确定要卸载并删除该插件吗？', 2);
+        if (!confirmed) return;
         const pid = actionEl.getAttribute('data-plugin-id');
+        const targetP = (tavernState.plugins || []).find(x => x.id === pid);
+        if (isBaiBaiPlugin(targetP)) {
+          document.getElementById('bbi-app-host')?.remove();
+          document.getElementById('extension_container_bbi')?.remove();
+          document.getElementById('bbi-topbar-button')?.remove();
+        }
         tavernState.plugins = (tavernState.plugins || []).filter(x => x.id !== pid);
         await saveTavernStore();
         refreshOpenDrawerOnly();
@@ -9506,6 +9726,8 @@
           showTavernToast('至少保留一个人设面具');
           return;
         }
+        const confirmed = await callGenericPopupShim('确定要删除当前玩家人设吗？删除后无法恢复。', 2);
+        if (!confirmed) return;
         const activeP = getActivePersona();
         tavernState.personas = tavernState.personas.filter(p => p.id !== activeP.id);
         tavernState.activePersonaId = tavernState.personas[0].id;
@@ -9570,6 +9792,8 @@
       if (action === 'delete-card') {
         const cid = actionEl.getAttribute('data-card-id');
         if (tavernState.cards.length <= 1) return;
+        const confirmed = await callGenericPopupShim('确定要删除该角色卡及关联会话吗？删除后无法恢复。', 2);
+        if (!confirmed) return;
         tavernState.cards = tavernState.cards.filter(c => c.id !== cid);
         if (tavernState.activeCardId === cid) {
           tavernState.activeCardId = tavernState.cards[0].id;
@@ -9641,6 +9865,8 @@
         const card = getActiveCard();
         let archives = (tavernState.chatArchivesByCardId && tavernState.chatArchivesByCardId[card.id]) || [];
         if (archives.length <= 1) return;
+        const confirmed = await callGenericPopupShim('确定要删除该聊天分支存档吗？删除后无法恢复。', 2);
+        if (!confirmed) return;
         archives = archives.filter(a => a.chatId !== chatId);
         tavernState.chatArchivesByCardId[card.id] = archives;
         if (tavernState.chatsByCardId[card.id]?.chatId === chatId) {
@@ -9997,8 +10223,10 @@
             break;
           }
         }
-        const jsFile = (manifest && manifest.js) ? manifest.js : 'index.js';
-        const cssFile = (manifest && manifest.css) ? manifest.css : 'style.css';
+        const rawJsFile = (manifest && manifest.js) ? manifest.js : 'index.js';
+        const rawCssFile = (manifest && manifest.css) ? manifest.css : 'style.css';
+        const jsFile = String(rawJsFile).split('?')[0].replace(/^\/+/, '');
+        const cssFile = String(rawCssFile).split('?')[0].replace(/^\/+/, '');
         let jsCode = '';
         let cssCode = '';
         const jsRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${jsFile}`);
@@ -10033,17 +10261,24 @@
           jsCode = injectCss + jsCode;
         }
         const combinedHtml = Object.values(htmlTemplates).join('\n') || extractEmbeddedHtmlFromPluginCode(jsCode);
+        const pluginName = (manifest && manifest.display_name) || repo;
+        const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || x.repoBaseUrl === repoBaseUrl));
         const plugin = {
-          id: 'plugin_' + Date.now(),
-          name: (manifest && manifest.display_name) || repo,
+          id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_' + Date.now()),
+          name: pluginName,
           enabled: true,
           code: jsCode,
           uiHtml: combinedHtml,
           htmlTemplates,
           repoBaseUrl,
+          jsEntryPath: jsFile,
           description: (manifest && manifest.description) || ('从GitHub安装的扩展: ' + owner + '/' + repo)
         };
-        tavernState.plugins.push(plugin);
+        if (existingIdx >= 0) {
+          tavernState.plugins[existingIdx] = plugin;
+        } else {
+          tavernState.plugins.push(plugin);
+        }
         if (plugin.code) executeUserPluginScript(plugin);
         await saveTavernStore();
         refreshOpenDrawerOnly();
@@ -10480,6 +10715,11 @@
     screenEl._tavernVisibilityObserved = true;
     const obs = new MutationObserver(() => {
       applyActiveTavernTheme();
+      const isTavernVisible = screenEl.classList.contains('active');
+      const bbiHost = document.getElementById('bbi-app-host');
+      if (bbiHost) {
+        bbiHost.style.display = isTavernVisible ? '' : 'none';
+      }
     });
     obs.observe(screenEl, { attributes: true, attributeFilter: ['class', 'style'] });
   }
