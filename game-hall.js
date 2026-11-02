@@ -6269,7 +6269,8 @@ code, pre {
           role: entry.role === 1 ? 'user' : (entry.role === 2 ? 'assistant' : 'system'),
           depth: Math.max(0, Number(entry.depth ?? 4)),
           order: Number(entry.order ?? 100),
-          content: entry.resolvedContent
+          content: entry.resolvedContent,
+          _debugLabel: '世界书深度注入 @D' + Math.max(0, Number(entry.depth ?? 4)) + (entry.comment ? ' · ' + entry.comment : '')
         });
       }
     });
@@ -6314,7 +6315,8 @@ code, pre {
       isImpersonate = false,
       isContinue = false,
       isSwipeRegen = false,
-      targetMesIndex = null
+      targetMesIndex = null,
+      forDebugConsole = false
     } = options;
 
     const card = getActiveCard();
@@ -6328,7 +6330,9 @@ code, pre {
       : fullChat;
 
     // Sync built-in CSPRNG D100 pool into extensionPrompts if enabled
-    syncBuiltInD100Pool(isSwipeRegen);
+    if (!forDebugConsole) {
+      syncBuiltInD100Pool(isSwipeRegen);
+    }
 
     // Collect World Book entries
     const wiBuckets = collectTriggeredWorldBookEntries(card, rawChat);
@@ -6339,11 +6343,13 @@ code, pre {
     if (persona && persona.description && persona.description.trim()) {
       const pText = replaceTavernMacros(persona.description.trim(), card);
       if (Number(persona.position) === 4) {
+        const pDepth = Math.max(0, Number(persona.depth ?? 2));
         depthInjections.push({
           role: ['system', 'user', 'assistant'][Number(persona.role) || 0] || 'system',
-          depth: Math.max(0, Number(persona.depth ?? 2)),
+          depth: pDepth,
           order: 90,
-          content: pText
+          content: pText,
+          _debugLabel: '用户人设深度注入 @D' + pDepth
         });
       }
     }
@@ -6357,7 +6363,8 @@ code, pre {
         role: anRole,
         depth: anDepth,
         order: 108,
-        content: wiBuckets.beforeAN.join('\n\n')
+        content: wiBuckets.beforeAN.join('\n\n'),
+        _debugLabel: '世界书 · 作者注释前 @D' + anDepth
       });
     }
     if (an.text && an.text.trim()) {
@@ -6365,7 +6372,8 @@ code, pre {
         role: anRole,
         depth: anDepth,
         order: 110,
-        content: replaceTavernMacros(an.text.trim(), card)
+        content: replaceTavernMacros(an.text.trim(), card),
+        _debugLabel: '作者注释 · Author Note @D' + anDepth
       });
     }
     if (wiBuckets.afterAN && wiBuckets.afterAN.length > 0) {
@@ -6373,50 +6381,66 @@ code, pre {
         role: anRole,
         depth: anDepth,
         order: 112,
-        content: wiBuckets.afterAN.join('\n\n')
+        content: wiBuckets.afterAN.join('\n\n'),
+        _debugLabel: '世界书 · 作者注释后 @D' + anDepth
       });
     }
 
     // Character's Note / Depth Prompt
     const charNoteText = (an.charNoteText && an.charNoteText.trim()) || (card && card.depth_prompt_prompt && card.depth_prompt_prompt.trim()) || '';
     if (charNoteText) {
+      const cnDepth = Math.max(0, Number(an.charNoteDepth ?? card.depth_prompt_depth ?? 4));
       depthInjections.push({
         role: an.charNoteRole || card.depth_prompt_role || 'system',
-        depth: Math.max(0, Number(an.charNoteDepth ?? card.depth_prompt_depth ?? 4)),
+        depth: cnDepth,
         order: 115,
-        content: replaceTavernMacros(charNoteText, card)
+        content: replaceTavernMacros(charNoteText, card),
+        _debugLabel: '角色深度提示词 @D' + cnDepth
       });
     }
 
     // Memory Summary injection
     const mem = tavernState.memory || {};
     if (mem.enabled && mem.summaryText && mem.summaryText.trim()) {
+      const mDepth = Math.max(0, Number(mem.injectDepth ?? 2));
       depthInjections.push({
         role: mem.injectRole || 'system',
-        depth: Math.max(0, Number(mem.injectDepth ?? 2)),
+        depth: mDepth,
         order: 95,
-        content: '【前情剧情记忆摘要】\n' + replaceTavernMacros(mem.summaryText.trim(), card)
+        content: '【前情剧情记忆摘要】\n' + replaceTavernMacros(mem.summaryText.trim(), card),
+        _debugLabel: '前情剧情记忆摘要 @D' + mDepth
       });
     }
 
     // Extension prompts (SillyTavern IN_CHAT, IN_PROMPT, BEFORE_PROMPT)
     const beforePromptExtensionMessages = [];
     const inPromptExtensionMessages = [];
-    Object.values(tavernExtensionPrompts).forEach(extP => {
+    Object.entries(tavernExtensionPrompts).forEach(([extKey, extP]) => {
       if (!extP || !extP.value || !String(extP.value).trim()) return;
       const extRole = extP.role === 1 ? 'user' : (extP.role === 2 ? 'assistant' : 'system');
       const resolvedVal = replaceTavernMacros(extP.value, card);
+      const extLabelName = extKey || extP.key || '扩展模块';
       if (extP.position === TAVERN_EXT_PROMPT_TYPES.IN_CHAT) {
+        const extDepth = Math.max(0, Number(extP.depth ?? 0));
         depthInjections.push({
           role: extRole,
-          depth: Math.max(0, Number(extP.depth ?? 0)),
+          depth: extDepth,
           order: 999,
-          content: resolvedVal
+          content: resolvedVal,
+          _debugLabel: '插件深度注入 @D' + extDepth + ' · ' + extLabelName
         });
       } else if (extP.position === TAVERN_EXT_PROMPT_TYPES.BEFORE_PROMPT) {
-        beforePromptExtensionMessages.push({ role: extRole, content: resolvedVal });
+        beforePromptExtensionMessages.push({
+          role: extRole,
+          content: resolvedVal,
+          _debugLabel: '插件前置提示词 · ' + extLabelName
+        });
       } else if (extP.position === TAVERN_EXT_PROMPT_TYPES.IN_PROMPT) {
-        inPromptExtensionMessages.push({ role: extRole, content: resolvedVal });
+        inPromptExtensionMessages.push({
+          role: extRole,
+          content: resolvedVal,
+          _debugLabel: '插件提示词注入 · ' + extLabelName
+        });
       }
     });
 
@@ -6432,15 +6456,19 @@ code, pre {
     };
 
     // Relative and In-Chat custom prompts from preset (preserve exact prompt_order sequence via seqIdx)
-    const enabledPresetPrompts = (preset.prompts || []).filter(p => p && p.enabled);
+    const allPresetPromptList = Array.isArray(preset.prompts) ? preset.prompts : [];
+    const allPresetIds = new Set(allPresetPromptList.map(p => p && p.identifier).filter(Boolean));
+    const enabledPresetPrompts = allPresetPromptList.filter(p => p && p.enabled);
     enabledPresetPrompts.forEach((p, seqIdx) => {
       if (!p.marker && isItemInChatDepth(p) && p.content && p.content.trim()) {
+        const pDepth = Math.max(0, Number(p.injection_depth ?? 4));
         depthInjections.push({
           role: p.role || 'system',
-          depth: Math.max(0, Number(p.injection_depth ?? 4)),
+          depth: pDepth,
           order: Number(p.injection_order ?? 100),
           seqIdx,
-          content: applyTavernRegexPipeline(p.content, { isPrompt: true, depth: Number(p.injection_depth ?? 4), card })
+          content: applyTavernRegexPipeline(p.content, { isPrompt: true, depth: pDepth, card }),
+          _debugLabel: '预设深度提示词 @D' + pDepth + ' · ' + (p.name || p.identifier || '自定义条目')
         });
       }
     });
@@ -6449,6 +6477,13 @@ code, pre {
     const maxFloors = Math.max(4, Number(tavernState.memory?.contextFloors || 40));
     const visibleRawChat = rawChat.filter(m => !(m && m.extra && m.extra.bbs_hidden));
     const slicedChat = visibleRawChat.slice(-maxFloors);
+    let lastUserSliceIdx = -1;
+    for (let i = slicedChat.length - 1; i >= 0; i--) {
+      if (slicedChat[i] && slicedChat[i].is_user) {
+        lastUserSliceIdx = i;
+        break;
+      }
+    }
     const chatHistoryMessages = slicedChat.map((m, idx) => {
       const depthFromEnd = slicedChat.length - 1 - idx;
       const baseMes = m.is_user ? (m.mes || '') : stripHistoricalReasoningFromText(m.mes || '');
@@ -6459,9 +6494,15 @@ code, pre {
         depth: depthFromEnd,
         card
       });
+      const floorNo = m.mesid !== undefined ? m.mesid : idx;
+      const chatLabel = m.is_user
+        ? (idx === lastUserSliceIdx ? `用户输入 · 本次发送 #${floorNo}` : `历史对话 · 用户 #${floorNo}`)
+        : (m.is_system ? `历史对话 · 系统 #${floorNo}` : `历史对话 · 角色回复 #${floorNo}`);
       return {
         role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
-        content: cleanedContent
+        content: cleanedContent,
+        _debugLabel: chatLabel,
+        _isChatContext: true
       };
     });
 
@@ -6486,7 +6527,9 @@ code, pre {
       const targetIdx = Math.max(0, originalChatLen - d);
       const formattedGroup = group.map(inj => ({
         role: inj.role || 'system',
-        content: inj.content
+        content: inj.content,
+        _debugLabel: inj._debugLabel || ('深度注入 @D' + d),
+        _isChatContext: true
       }));
       chatHistoryMessages.splice(targetIdx, 0, ...formattedGroup);
     });
@@ -6494,25 +6537,49 @@ code, pre {
     // Assemble top-level prompt order
     const finalMessages = [...beforePromptExtensionMessages];
 
+    if (!allPresetIds.has('main')) {
+      const fallbackMain = (card && card.system_prompt && card.system_prompt.trim()) || tavernState.formatting.systemPrompt || '';
+      if (fallbackMain.trim()) {
+        finalMessages.push({
+          role: 'system',
+          content: applyTavernRegexPipeline(fallbackMain, { isPrompt: true, card }),
+          _debugLabel: '预设系统提示词 · Main Prompt'
+        });
+      }
+    }
+
     for (const item of enabledPresetPrompts) {
       const id = item.identifier;
       if (id === 'worldInfoBefore') {
         if (wiBuckets.beforeChar.length > 0) {
-          finalMessages.push({ role: 'system', content: wiBuckets.beforeChar.join('\n\n') });
+          finalMessages.push({
+            role: 'system',
+            content: wiBuckets.beforeChar.join('\n\n'),
+            _debugLabel: '世界书 · 角色定义前'
+          });
         }
       } else if (id === 'worldInfoAfter') {
         if (wiBuckets.afterChar.length > 0) {
-          finalMessages.push({ role: 'system', content: wiBuckets.afterChar.join('\n\n') });
+          finalMessages.push({
+            role: 'system',
+            content: wiBuckets.afterChar.join('\n\n'),
+            _debugLabel: '世界书 · 角色定义后'
+          });
         }
       } else if (id === 'personaDescription') {
         if (persona && persona.description && Number(persona.position) !== 4) {
-          finalMessages.push({ role: 'system', content: replaceTavernMacros(persona.description, card) });
+          finalMessages.push({
+            role: 'system',
+            content: replaceTavernMacros(persona.description, card),
+            _debugLabel: '用户人设 · Persona'
+          });
         }
       } else if (id === 'charDescription') {
         if (card && card.description && card.description.trim()) {
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(card.description, { isPrompt: true, card })
+            content: applyTavernRegexPipeline(card.description, { isPrompt: true, card }),
+            _debugLabel: '角色设定 · Description'
           });
         }
       } else if (id === 'charPersonality') {
@@ -6520,7 +6587,8 @@ code, pre {
           const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, card })
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, card }),
+            _debugLabel: '角色性格 · Personality'
           });
         }
       } else if (id === 'scenario') {
@@ -6528,7 +6596,8 @@ code, pre {
           const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, card })
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, card }),
+            _debugLabel: '场景设定 · Scenario'
           });
         }
       } else if (id === 'dialogueExamples') {
@@ -6539,16 +6608,80 @@ code, pre {
         }
         if (wiBuckets.afterExample.length > 0) parts.push(wiBuckets.afterExample.join('\n'));
         if (parts.length > 0) {
-          finalMessages.push({ role: 'system', content: parts.join('\n\n') });
+          finalMessages.push({
+            role: 'system',
+            content: parts.join('\n\n'),
+            _debugLabel: '对话示例 · Dialogue Examples'
+          });
         }
       } else if (id === 'chatHistory') {
+        if (!allPresetIds.has('worldInfoBefore') && wiBuckets.beforeChar.length > 0) {
+          finalMessages.push({
+            role: 'system',
+            content: wiBuckets.beforeChar.join('\n\n'),
+            _debugLabel: '世界书 · 角色定义前'
+          });
+        }
+        if (!allPresetIds.has('personaDescription') && persona && persona.description && Number(persona.position) !== 4) {
+          finalMessages.push({
+            role: 'system',
+            content: replaceTavernMacros(persona.description, card),
+            _debugLabel: '用户人设 · Persona'
+          });
+        }
+        if (!allPresetIds.has('charDescription') && card && card.description && card.description.trim()) {
+          finalMessages.push({
+            role: 'system',
+            content: applyTavernRegexPipeline(card.description, { isPrompt: true, card }),
+            _debugLabel: '角色设定 · Description'
+          });
+        }
+        if (!allPresetIds.has('charPersonality') && card && card.personality && card.personality.trim()) {
+          const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
+          finalMessages.push({
+            role: 'system',
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, card }),
+            _debugLabel: '角色性格 · Personality'
+          });
+        }
+        if (!allPresetIds.has('scenario') && card && card.scenario && card.scenario.trim()) {
+          const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
+          finalMessages.push({
+            role: 'system',
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, card }),
+            _debugLabel: '场景设定 · Scenario'
+          });
+        }
+        if (!allPresetIds.has('dialogueExamples')) {
+          const parts = [];
+          if (wiBuckets.beforeExample.length > 0) parts.push(wiBuckets.beforeExample.join('\n'));
+          if (card && card.mes_example && card.mes_example.trim()) {
+            parts.push(applyTavernRegexPipeline(card.mes_example, { isPrompt: true, card }));
+          }
+          if (wiBuckets.afterExample.length > 0) parts.push(wiBuckets.afterExample.join('\n'));
+          if (parts.length > 0) {
+            finalMessages.push({
+              role: 'system',
+              content: parts.join('\n\n'),
+              _debugLabel: '对话示例 · Dialogue Examples'
+            });
+          }
+        }
+        if (!allPresetIds.has('worldInfoAfter') && wiBuckets.afterChar.length > 0) {
+          finalMessages.push({
+            role: 'system',
+            content: wiBuckets.afterChar.join('\n\n'),
+            _debugLabel: '世界书 · 角色定义后'
+          });
+        }
         if (inPromptExtensionMessages.length > 0) {
           finalMessages.push(...inPromptExtensionMessages);
         }
         if (tavernState.formatting.newChatPrompt && chatHistoryMessages.length > 0) {
           finalMessages.push({
             role: 'system',
-            content: replaceTavernMacros(tavernState.formatting.newChatPrompt, card)
+            content: replaceTavernMacros(tavernState.formatting.newChatPrompt, card),
+            _debugLabel: '新对话开始提示词'
           });
         }
         finalMessages.push(...chatHistoryMessages);
@@ -6560,7 +6693,8 @@ code, pre {
         if (content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(content, { isPrompt: true, card })
+            content: applyTavernRegexPipeline(content, { isPrompt: true, card }),
+            _debugLabel: '预设系统提示词 · ' + (item.name || 'Main Prompt')
           });
         }
       } else if (id === 'jailbreak') {
@@ -6571,28 +6705,43 @@ code, pre {
         if (content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(content, { isPrompt: true, card })
+            content: applyTavernRegexPipeline(content, { isPrompt: true, card }),
+            _debugLabel: '预设后置指令 · ' + (item.name || 'Post-History Instructions')
           });
         }
       } else if (!item.marker && !isItemInChatDepth(item)) {
         if (item.content && item.content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(item.content, { isPrompt: true, card })
+            content: applyTavernRegexPipeline(item.content, { isPrompt: true, card }),
+            _debugLabel: '预设提示词 · ' + (item.name || item.identifier || '自定义条目')
           });
         }
+      }
+    }
+
+    if (!allPresetIds.has('jailbreak')) {
+      const fallbackJb = (card && card.post_history_instructions && card.post_history_instructions.trim()) || tavernState.formatting.postHistoryPrompt || '';
+      if (fallbackJb.trim()) {
+        finalMessages.push({
+          role: 'system',
+          content: applyTavernRegexPipeline(fallbackJb, { isPrompt: true, card }),
+          _debugLabel: '预设后置指令 · Post-History Instructions'
+        });
       }
     }
 
     if (isImpersonate) {
       finalMessages.push({
         role: 'system',
-        content: replaceTavernMacros(tavernState.formatting.impersonationPrompt || preset.impersonation_prompt, card)
+        content: replaceTavernMacros(tavernState.formatting.impersonationPrompt || preset.impersonation_prompt, card),
+        _debugLabel: '帮写生成控制指令'
       });
     } else if (isContinue) {
       finalMessages.push({
         role: 'system',
-        content: replaceTavernMacros(tavernState.formatting.continueNudgePrompt || preset.continue_nudge_prompt, card)
+        content: replaceTavernMacros(tavernState.formatting.continueNudgePrompt || preset.continue_nudge_prompt, card),
+        _debugLabel: '继续生成控制指令'
       });
     }
 
@@ -6611,6 +6760,14 @@ code, pre {
         mergedList.push({ ...msg });
       }
     }
+
+    try {
+      Object.defineProperty(mergedList, '_debugBlocks', {
+        value: filtered,
+        enumerable: false,
+        configurable: true
+      });
+    } catch (_) {}
 
     return mergedList;
   }
@@ -6816,9 +6973,12 @@ code, pre {
     const requestedMaxTokens = isBackground
       ? 100000
       : Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
+    const cleanWireMessages = Array.isArray(messages)
+      ? messages.map(m => ({ role: m?.role || 'system', content: String(m?.content || '') }))
+      : [];
     const payload = {
       model: creds.model,
-      messages,
+      messages: cleanWireMessages,
       temperature: Number(preset.temperature ?? 1.0),
       top_p: Number(preset.top_p ?? 1.0),
       max_tokens: requestedMaxTokens,
@@ -7229,39 +7389,91 @@ code, pre {
     lazyFloorChatId: null,
     showDebugConsole: false,
     debugConsoleLogs: [],
+    debugConsoleClearedChatId: '',
     toastTimer: null,
     errorTimer: null
   };
+
+  function formatTavernApiMessagesForDebugConsole(apiMessages) {
+    const blocks = Array.isArray(apiMessages?._debugBlocks)
+      ? apiMessages._debugBlocks
+      : (Array.isArray(apiMessages) ? apiMessages : []);
+    if (blocks.length === 0) return '';
+    const textBlocks = [];
+    blocks.forEach((msg, idx) => {
+      const role = msg?.role || 'system';
+      let baseRoleTitle = '系统提示与全部注入词';
+      if (role === 'user') baseRoleTitle = '用户输入';
+      else if (role === 'assistant') baseRoleTitle = '助手历史回复与预填充';
+      const detailLabel = msg?._debugLabel ? ` · ${msg._debugLabel}` : '';
+      const rawContent = String(msg?.content || '');
+      const itemTokens = estimateTokens(rawContent);
+      const curIsCtx = Boolean(msg?._isChatContext);
+      const prevIsCtx = idx > 0 ? Boolean(blocks[idx - 1]?._isChatContext) : false;
+      const nextIsCtx = idx < blocks.length - 1 ? Boolean(blocks[idx + 1]?._isChatContext) : false;
+
+      let blockStr = `=== 第 ${idx + 1} 块消息 · ${baseRoleTitle}${detailLabel} · ${role} · ${itemTokens} Tokens ===\n${rawContent}`;
+      if (curIsCtx && !prevIsCtx) {
+        blockStr = `==================================================\n【上下文 开始】\n${blockStr}`;
+      }
+      if (curIsCtx && !nextIsCtx) {
+        blockStr = `${blockStr}\n【上下文 结束】\n==================================================`;
+      }
+      textBlocks.push(blockStr);
+    });
+    return textBlocks.join('\n\n');
+  }
+
+  function calculateTavernApiMessagesTokens(apiMessages) {
+    const blocks = Array.isArray(apiMessages?._debugBlocks)
+      ? apiMessages._debugBlocks
+      : (Array.isArray(apiMessages) ? apiMessages : []);
+    return blocks.reduce((sum, m) => sum + estimateTokens(String(m?.content || '')), 0);
+  }
 
   function recordTavernDebugConsoleLog(entry) {
     if (!entry || typeof entry !== 'object') return;
     if (!Array.isArray(uiRuntime.debugConsoleLogs)) {
       uiRuntime.debugConsoleLogs = [];
     }
+    uiRuntime.debugConsoleClearedChatId = '';
     const hasApiMsgs = Array.isArray(entry.apiMessages);
     const formattedPrompt = hasApiMsgs
-      ? entry.apiMessages.map((m, idx) => {
-          const itemText = String(m?.content || '');
-          const itemTokens = estimateTokens(itemText);
-          return `[#${idx + 1} ${m?.role || 'system'} · ${itemTokens} Tokens]\n${itemText}`;
-        }).join('\n\n')
+      ? formatTavernApiMessagesForDebugConsole(entry.apiMessages)
       : String(entry.sentPromptText || '');
     const sentTokens = hasApiMsgs
-      ? entry.apiMessages.reduce((sum, m) => sum + estimateTokens(String(m?.content || '')), 0)
+      ? calculateTavernApiMessagesTokens(entry.apiMessages)
       : estimateTokens(formattedPrompt);
     const rawReplyStr = String(entry.rawReplyText || '');
     const replyTokens = estimateTokens(rawReplyStr);
+    const activeSess = getActiveChatSession();
+    const chatId = String(entry.chatId || activeSess?.id || '');
+    const floorIdx = entry.floorIdx !== undefined && entry.floorIdx !== null ? entry.floorIdx : 0;
+    const logId = entry.id || ('dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
     const logItem = {
-      id: 'dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      id: logId,
+      chatId,
       time: new Date().toLocaleTimeString(),
-      floorIdx: entry.floorIdx !== undefined && entry.floorIdx !== null ? entry.floorIdx : 0,
+      floorIdx,
       cardName: String(entry.cardName || getActiveCard()?.name || '角色'),
       sentPromptText: formattedPrompt,
       rawReplyText: rawReplyStr,
       sentTokens,
       replyTokens
     };
-    uiRuntime.debugConsoleLogs.unshift(logItem);
+    const existingIdx = uiRuntime.debugConsoleLogs.findIndex(x =>
+      x && ((entry.id && x.id === entry.id) || (chatId && x.chatId === chatId && x.floorIdx === floorIdx))
+    );
+    if (existingIdx >= 0) {
+      uiRuntime.debugConsoleLogs[existingIdx] = {
+        ...uiRuntime.debugConsoleLogs[existingIdx],
+        ...logItem,
+        sentPromptText: formattedPrompt || uiRuntime.debugConsoleLogs[existingIdx].sentPromptText,
+        sentTokens: sentTokens || uiRuntime.debugConsoleLogs[existingIdx].sentTokens
+      };
+    } else {
+      uiRuntime.debugConsoleLogs.unshift(logItem);
+    }
     if (uiRuntime.debugConsoleLogs.length > 5) {
       uiRuntime.debugConsoleLogs.length = 5;
     }
@@ -9122,6 +9334,28 @@ code, pre {
         console.warn('Floor inline script warning:', err);
       }
     });
+    const frames = containerEl.querySelectorAll('iframe.tavern-html-sandbox-frame');
+    frames.forEach(frame => {
+      if (frame._backGuardBound) return;
+      frame._backGuardBound = true;
+      const bindFrameGuard = () => {
+        try {
+          const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+          if (!doc || doc._backGuardDocBound) return;
+          doc._backGuardDocBound = true;
+          const notifyGesture = () => {
+            if (typeof window.replenishMobileBackGuard === 'function') {
+              window.replenishMobileBackGuard();
+            }
+          };
+          doc.addEventListener('touchend', notifyGesture, { passive: true, capture: true });
+          doc.addEventListener('pointerup', notifyGesture, { passive: true, capture: true });
+          doc.addEventListener('click', notifyGesture, { passive: true, capture: true });
+        } catch (_) {}
+      };
+      frame.addEventListener('load', bindFrameGuard);
+      bindFrameGuard();
+    });
   }
 
   // ============================================================================
@@ -9937,32 +10171,69 @@ code, pre {
 
     const activeCard = getActiveCard();
     const sess = getActiveChatSession();
+    const curChatId = sess?.id || '';
     const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
-    let consoleEntries = Array.isArray(uiRuntime.debugConsoleLogs) ? uiRuntime.debugConsoleLogs.slice(0, 5) : [];
-    if (consoleEntries.length === 0 && msgs.length > 0) {
-      const startFloor = Math.max(0, msgs.length - 5);
-      const fallbackList = [];
-      for (let i = msgs.length - 1; i >= startFloor; i--) {
-        const m = msgs[i];
-        if (!m) continue;
-        const prevUserMsg = (i > 0 && msgs[i - 1] && msgs[i - 1].is_user) ? msgs[i - 1].mes : (m.is_user ? m.mes : '');
-        const rawSwipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
-        const sIdx = Math.min(rawSwipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
-        const rawText = rawSwipes[sIdx] !== undefined ? rawSwipes[sIdx] : (m.mes || '');
-        const fullReply = (m.reasoning ? `[思考过程]\n${m.reasoning}\n\n` : '') + String(rawText || '');
-        const sentText = String(prevUserMsg || '');
-        fallbackList.push({
-          id: 'hist_' + i,
-          time: m.gen_time || '历史楼层',
-          floorIdx: i,
-          cardName: activeCard?.name || m.name || '角色',
-          sentPromptText: sentText || '本层无单独发送文本记录，新生成回复后将在此显示完整上下文提示词',
-          rawReplyText: fullReply,
-          sentTokens: sentText ? estimateTokens(sentText) : 0,
-          replyTokens: estimateTokens(fullReply)
+    let consoleEntries = [];
+    if (uiRuntime.showDebugConsole) {
+      const liveLogs = Array.isArray(uiRuntime.debugConsoleLogs)
+        ? uiRuntime.debugConsoleLogs.filter(x => x && (!x.chatId || x.chatId === curChatId))
+        : [];
+      const isCleared = uiRuntime.debugConsoleClearedChatId === curChatId && liveLogs.length === 0;
+      if (!isCleared) {
+        const usedFloorSet = new Set();
+        const combinedList = [];
+        // Reconstruct or match the latest 5 interaction floors from current chat session so full prompts are ALWAYS shown
+        for (let i = msgs.length - 1; i >= 0 && combinedList.length < 5; i--) {
+          const m = msgs[i];
+          if (!m) continue;
+          // If floor i is a user message and floor i+1 is an AI reply, floor i is already the input of floor i+1
+          if (m.is_user && i < msgs.length - 1 && msgs[i + 1] && !msgs[i + 1].is_user) {
+            continue;
+          }
+          // Skip floor #0 opening greeting if there are subsequent interaction floors
+          if (i === 0 && !m.is_user && msgs.length > 1) {
+            continue;
+          }
+          usedFloorSet.add(i);
+          const matchedLive = liveLogs.find(x => Number(x.floorIdx) === i && x.sentPromptText && x.sentPromptText.includes('=== 第 1 块消息'));
+          if (matchedLive) {
+            combinedList.push(matchedLive);
+            continue;
+          }
+          const targetIdxForPrompt = !m.is_user ? (i > 0 ? i : 1) : (i + 1);
+          const reconstructedMsgs = buildTavernApiMessages({
+            isSwipeRegen: true,
+            targetMesIndex: targetIdxForPrompt,
+            forDebugConsole: true
+          });
+          const fullSentPrompt = formatTavernApiMessagesForDebugConsole(reconstructedMsgs);
+          const fullSentTokens = calculateTavernApiMessagesTokens(reconstructedMsgs);
+          const rawSwipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
+          const sIdx = Math.min(rawSwipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
+          const rawText = rawSwipes[sIdx] !== undefined ? rawSwipes[sIdx] : (m.mes || '');
+          const fullReply = m.is_user
+            ? '当前楼层为用户发送消息，等待AI生成回复'
+            : ((m.reasoning ? `=== AI 深度思考推理 ===\n${m.reasoning}\n\n=== AI 完整回复与输出内容 ===\n` : '') + String(rawText || ''));
+          combinedList.push({
+            id: 'hist_' + i,
+            chatId: curChatId,
+            time: m.gen_time || '当前会话楼层',
+            floorIdx: i,
+            cardName: activeCard?.name || m.name || '角色',
+            sentPromptText: fullSentPrompt,
+            rawReplyText: fullReply,
+            sentTokens: fullSentTokens,
+            replyTokens: m.is_user ? 0 : estimateTokens(fullReply)
+          });
+        }
+        // Also prepend any live logs whose floorIdx wasn't in msgs (e.g. pending generation or impersonate)
+        liveLogs.forEach(l => {
+          if (l && !usedFloorSet.has(Number(l.floorIdx))) {
+            combinedList.unshift(l);
+          }
         });
+        consoleEntries = combinedList.slice(0, 5);
       }
-      consoleEntries = fallbackList.slice(0, 5);
     }
 
     return `
@@ -10044,29 +10315,32 @@ code, pre {
           </div>
         </div>
         ${uiRuntime.showDebugConsole ? `
-          <div style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;margin-top:6px;">
+          <div style="display:flex;flex-direction:column;gap:10px;max-height:440px;overflow-y:auto;margin-top:6px;">
             ${consoleEntries.length === 0 ? `
               <div style="font-size:12px;color:#777;padding:6px 0;">暂无最近楼层调试记录，发送消息或生成回复后会自动记录最近5层内容。</div>
-            ` : consoleEntries.map(log => {
-              const isMashu = /麻薯|mashu/i.test(String(log.cardName || activeCard?.name || ''));
+            ` : consoleEntries.map((log, idx) => {
               const sentTok = typeof log.sentTokens === 'number' ? log.sentTokens : estimateTokens(log.sentPromptText || '');
               const replyTok = typeof log.replyTokens === 'number' ? log.replyTokens : estimateTokens(log.rawReplyText || '');
               return `
-                <div style="border:1px solid rgba(205,205,215,0.85);border-radius:10px;padding:8px 10px;background:#fafafc;">
-                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:700;color:#444;margin-bottom:6px;gap:6px;flex-wrap:wrap;">
-                    <span>楼层 #${escapeHtmlSimple(String(log.floorIdx))} · ${escapeHtmlSimple(stripUiEmojis(log.cardName || '角色'))}</span>
-                    <span style="font-weight:500;color:#666;font-size:11px;">${!isMashu ? `发送 ${sentTok} Tokens · ` : ''}回复 ${replyTok} Tokens · ${escapeHtmlSimple(String(log.time || ''))}</span>
+                <div style="border:1px solid rgba(205,205,215,0.85);border-radius:10px;padding:10px;background:#fafafc;display:flex;flex-direction:column;gap:8px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:#333;border-bottom:1px dashed rgba(200,200,210,0.8);padding-bottom:6px;gap:6px;flex-wrap:wrap;">
+                    <span>第 ${idx + 1} 条交互 · 楼层 #${escapeHtmlSimple(String(log.floorIdx))} · ${escapeHtmlSimple(stripUiEmojis(log.cardName || '角色'))}</span>
+                    <span style="font-weight:600;color:#666;font-size:11px;">发送 ${sentTok} Tokens · 回复 ${replyTok} Tokens · ${escapeHtmlSimple(String(log.time || ''))}</span>
                   </div>
-                  ${!isMashu ? `
-                    <details style="margin-bottom:6px;">
-                      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">发送完整内容 · 共 ${sentTok} Tokens 点击展开</summary>
-                      <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#f1f2f6;padding:8px;border-radius:8px;max-height:180px;overflow-y:auto;margin:4px 0 0 0;color:#333;">${escapeHtmlSimple(log.sentPromptText || '')}</pre>
-                    </details>
-                  ` : ''}
-                  <details open>
-                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">回复完整内容 · 共 ${replyTok} Tokens 点击展开或收起</summary>
-                    <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#f1f2f6;padding:8px;border-radius:8px;max-height:200px;overflow-y:auto;margin:4px 0 0 0;color:#333;">${escapeHtmlSimple(log.rawReplyText || '')}</pre>
-                  </details>
+                  <div class="tavern-debug-field-box" style="background:#fff;border:1px solid rgba(210,210,220,0.85);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                      <span style="font-size:11.5px;font-weight:700;color:#333;">我方发送的完整字段 · 含预设系统提示词与世界书及上下文 · 共 ${sentTok} Tokens</span>
+                      <button type="button" class="tavern-btn small" data-action="copy-tavern-debug-block" style="min-height:22px !important;padding:2px 8px !important;font-size:11px !important;flex-shrink:0;">复制</button>
+                    </div>
+                    <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.55;background:#f2f3f7;padding:8px;border-radius:6px;max-height:260px;overflow-y:auto;margin:0;color:#2c2c2e;font-family:monospace;">${escapeHtmlSimple(log.sentPromptText || '')}</pre>
+                  </div>
+                  <div class="tavern-debug-field-box" style="background:#fff;border:1px solid rgba(210,210,220,0.85);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                      <span style="font-size:11.5px;font-weight:700;color:#333;">对方回复的完整字段 · 共 ${replyTok} Tokens</span>
+                      <button type="button" class="tavern-btn small" data-action="copy-tavern-debug-block" style="min-height:22px !important;padding:2px 8px !important;font-size:11px !important;flex-shrink:0;">复制</button>
+                    </div>
+                    <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.55;background:#f2f3f7;padding:8px;border-radius:6px;max-height:220px;overflow-y:auto;margin:0;color:#2c2c2e;font-family:monospace;">${escapeHtmlSimple(log.rawReplyText || '')}</pre>
+                  </div>
                 </div>
               `;
             }).join('')}
@@ -10892,6 +11166,18 @@ code, pre {
         }
       }
       const apiMessages = buildTavernApiMessages({ isImpersonate, isContinue, isSwipeRegen, targetMesIndex });
+      const pendingDbgFloorIdx = isContinue
+        ? Math.max(0, sess.messages.length - 1)
+        : (isSwipeRegen && targetMesIndex !== null ? targetMesIndex : sess.messages.length);
+      const currentDbgLogId = 'dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      recordTavernDebugConsoleLog({
+        id: currentDbgLogId,
+        chatId: sess?.id || '',
+        floorIdx: pendingDbgFloorIdx,
+        cardName: card?.name || '角色',
+        apiMessages,
+        rawReplyText: '正在等待AI生成回复...'
+      });
 
       if (isImpersonate) {
         const textarea = document.getElementById('send_textarea');
@@ -10901,6 +11187,14 @@ code, pre {
             if (textarea) textarea.value = partial.content;
           } : null);
           if (textarea) textarea.value = result.content;
+          recordTavernDebugConsoleLog({
+            id: currentDbgLogId,
+            chatId: sess?.id || '',
+            floorIdx: pendingDbgFloorIdx,
+            cardName: card?.name || '角色',
+            apiMessages,
+            rawReplyText: result.rawContent || result.content || ''
+          });
           showTavernToast('已填入帮写草稿');
         } catch (impErr) {
           if (textarea && !textarea.value.trim() && prevDraft) {
@@ -10938,6 +11232,8 @@ code, pre {
         lastMsg.gen_time = result.genTime;
         recordMessageToSwipeInfo(lastMsg, curSwipe);
         recordTavernDebugConsoleLog({
+          id: currentDbgLogId,
+          chatId: sess?.id || '',
           floorIdx: lastIdx,
           cardName: card?.name || '角色',
           apiMessages,
@@ -10992,10 +11288,12 @@ code, pre {
         targetMsg.token_count = estimateTokens(result.content);
         recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
         recordTavernDebugConsoleLog({
+          id: currentDbgLogId,
+          chatId: sess?.id || '',
           floorIdx: targetMesIndex,
           cardName: card?.name || '角色',
           apiMessages,
-          rawReplyText: result.rawContent || ((result.reasoning ? `[思考过程]\n${result.reasoning}\n\n` : '') + (result.content || ''))
+          rawReplyText: result.rawContent || ((result.reasoning ? `=== AI 深度思考推理 ===\n${result.reasoning}\n\n=== AI 完整回复与输出内容 ===\n` : '') + (result.content || ''))
         });
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(targetMesIndex);
@@ -11055,10 +11353,12 @@ code, pre {
         botMsg.token_count = estimateTokens(result.content);
         recordMessageToSwipeInfo(botMsg, 0);
         recordTavernDebugConsoleLog({
+          id: currentDbgLogId,
+          chatId: sess?.id || '',
           floorIdx: newFloorIdx,
           cardName: card?.name || '角色',
           apiMessages,
-          rawReplyText: result.rawContent || ((result.reasoning ? `[思考过程]\n${result.reasoning}\n\n` : '') + (result.content || ''))
+          rawReplyText: result.rawContent || ((result.reasoning ? `=== AI 深度思考推理 ===\n${result.reasoning}\n\n=== AI 完整回复与输出内容 ===\n` : '') + (result.content || ''))
         });
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
@@ -11410,6 +11710,9 @@ code, pre {
         uiRuntime.showExtensionsPopup = false;
         refreshBottomPopupsOnly();
         uiRuntime.openDrawerKey = uiRuntime.openDrawerKey === key ? null : key;
+        if (uiRuntime.openDrawerKey && typeof window.pushMobileBackGuard === 'function') {
+          window.pushMobileBackGuard('tavern_drawer_' + uiRuntime.openDrawerKey);
+        }
         refreshOpenDrawerOnly();
         return;
       }
@@ -11420,6 +11723,9 @@ code, pre {
         uiRuntime.showExtensionsPopup = false;
         refreshBottomPopupsOnly();
         uiRuntime.openDrawerKey = key;
+        if (key && typeof window.pushMobileBackGuard === 'function') {
+          window.pushMobileBackGuard('tavern_drawer_' + key);
+        }
         refreshOpenDrawerOnly();
         return;
       }
@@ -11568,6 +11874,9 @@ code, pre {
               return;
             }
           }
+        }
+        if (typeof window.pushMobileBackGuard === 'function') {
+          window.pushMobileBackGuard('tavern_plugin_modal');
         }
         uiRuntime.activePluginModalId = pid;
         uiRuntime.activeHelperScriptId = null;
@@ -12729,13 +13038,30 @@ code, pre {
       }
       if (action === 'toggle-tavern-debug-console') {
         uiRuntime.showDebugConsole = !uiRuntime.showDebugConsole;
+        if (uiRuntime.showDebugConsole && typeof window.pushMobileBackGuard === 'function') {
+          window.pushMobileBackGuard('tavern_debug_console');
+        }
         refreshOpenDrawerOnly();
         return;
       }
       if (action === 'clear-tavern-debug-console') {
         uiRuntime.debugConsoleLogs = [];
+        uiRuntime.debugConsoleClearedChatId = getActiveChatSession()?.id || 'cleared';
         refreshOpenDrawerOnly();
         showTavernToast('已清空控制台临时记录');
+        return;
+      }
+      if (action === 'copy-tavern-debug-block') {
+        const box = actionEl.closest('.tavern-debug-field-box');
+        const preEl = box ? box.querySelector('pre') : null;
+        const textToCopy = preEl ? (preEl.textContent || '') : '';
+        if (textToCopy && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            showTavernToast('已复制完整内容到剪贴板');
+          }).catch(() => {
+            showTavernToast('复制失败，请手动长按复制');
+          });
+        }
         return;
       }
 
@@ -14189,7 +14515,51 @@ code, pre {
     }
   };
 
+  let lastTavernSubBackTs = 0;
+
   window.handleTavernMobileBack = function () {
+    const now = Date.now();
+    const markSubLayerClosed = () => {
+      lastTavernSubBackTs = Date.now();
+      if (typeof window.pushMobileBackGuard === 'function') {
+        window.pushMobileBackGuard('tavern_keep');
+      }
+      return true;
+    };
+
+    // 0. Check third-party plugin modals / overlays appended to document.body (e.g. book-excerpt, st-memory, custom extensions)
+    const bodyPluginSelectors = [
+      '.be-modal-overlay', '.be-overlay', '#be-notebook-modal', '#be-modal', '#be-card-modal', '.be-popup',
+      '#st-memory-modal', '.st-memory-modal', '.memory-modal-overlay',
+      '#bbs-app-host'
+    ];
+    for (const sel of bodyPluginSelectors) {
+      const nodes = Array.from(document.querySelectorAll(sel));
+      for (const node of nodes) {
+        if (!node) continue;
+        if (node.id === 'bbs-app-host' && node.shadowRoot) {
+          const bbsClose = node.shadowRoot.querySelector('.bbs-close, [data-action="close"], .modal-close, .close-btn');
+          const bbsVisible = node.shadowRoot.querySelector('.bbs-overlay.active, .bbs-modal.open, .bbs-modal.active, .bbs-backdrop:not([style*="display: none"])');
+          if (bbsVisible && bbsClose) {
+            bbsClose.click();
+            return markSubLayerClosed();
+          }
+          continue;
+        }
+        const cs = window.getComputedStyle(node);
+        if (cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0.05) {
+          const closeBtn = node.querySelector('.be-close, .be-modal-close, .close-btn, .modal-close, [data-action="close"], button[title*="关闭"], button[aria-label*="Close"]');
+          if (closeBtn) {
+            closeBtn.click();
+          } else {
+            node.style.display = 'none';
+            node.classList.remove('active', 'open', 'visible');
+          }
+          return markSubLayerClosed();
+        }
+      }
+    }
+
     // 1. Check BaiBai Shadow DOM modal
     const bbiHost = document.getElementById('bbi-app-host');
     if (bbiHost && bbiHost.shadowRoot) {
@@ -14197,7 +14567,7 @@ code, pre {
       const bbiVisibleOverlay = bbiHost.shadowRoot.querySelector('.bbi-overlay.active, .bbi-modal.open, .bbi-modal.active, .bbi-backdrop:not([style*="display: none"])');
       if (bbiVisibleOverlay && bbiClose) {
         bbiClose.click();
-        return true;
+        return markSubLayerClosed();
       }
     }
     // 2. Check Tavern helper script or plugin modal
@@ -14209,29 +14579,79 @@ code, pre {
         modalBackdrop.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
         modalBackdrop.remove();
       }
-      return true;
+      return markSubLayerClosed();
     }
-    // 3. Check floating card helper panel (e.g. gourmet-fixed-panel-ui)
-    const gourmetPanel = document.getElementById('gourmet-fixed-panel-ui');
-    if (gourmetPanel && gourmetPanel.style.display !== 'none' && getComputedStyle(gourmetPanel).display !== 'none') {
-      gourmetPanel.style.display = 'none';
-      return true;
+    // 3. Check floating card helper panels (e.g. gourmet-fixed-panel-ui, adv-codex-panel)
+    for (const panelId of ['gourmet-fixed-panel-ui', 'adv-codex-panel']) {
+      const panelEl = document.getElementById(panelId);
+      if (panelEl && panelEl.style.display !== 'none' && getComputedStyle(panelEl).display !== 'none') {
+        panelEl.style.display = 'none';
+        return markSubLayerClosed();
+      }
     }
-    // 4. Check top dropdown drawer
+    // 4. Check sub-panels / inline editors inside an open top dropdown drawer before closing the drawer itself
     const drawerHost = document.getElementById('tavern-drawer-host');
     if ((drawerHost && drawerHost.classList.contains('active')) || uiRuntime.openDrawerKey) {
+      if (uiRuntime.showDebugConsole) {
+        uiRuntime.showDebugConsole = false;
+        refreshOpenDrawerOnly();
+        return markSubLayerClosed();
+      }
+      if (uiRuntime.editingPromptId) {
+        uiRuntime.editingPromptId = null;
+        refreshOpenDrawerOnly();
+        return markSubLayerClosed();
+      }
+      if (uiRuntime.showAdvancedSamplers) {
+        uiRuntime.showAdvancedSamplers = false;
+        refreshOpenDrawerOnly();
+        return markSubLayerClosed();
+      }
+      if (uiRuntime.editingWorldEntryUid !== null && uiRuntime.editingWorldEntryUid !== undefined) {
+        uiRuntime.editingWorldEntryUid = null;
+        refreshOpenDrawerOnly();
+        return markSubLayerClosed();
+      }
+      if (uiRuntime.showAdvancedWorldBookSettings) {
+        uiRuntime.showAdvancedWorldBookSettings = false;
+        refreshOpenDrawerOnly();
+        return markSubLayerClosed();
+      }
+      if (uiRuntime.editingRegexId) {
+        uiRuntime.editingRegexId = null;
+        refreshOpenDrawerOnly();
+        return markSubLayerClosed();
+      }
       uiRuntime.openDrawerKey = null;
       refreshOpenDrawerOnly();
-      return true;
+      return markSubLayerClosed();
     }
-    // 5. Check bottom popups (#options / #extensionsMenu)
+    // 5. Check floor inline editor or floor extra menu
+    if (uiRuntime.editingFloorMesId !== null && uiRuntime.editingFloorMesId !== undefined) {
+      const prevEditId = uiRuntime.editingFloorMesId;
+      uiRuntime.editingFloorMesId = null;
+      uiRuntime.editingFloorReasoning = false;
+      appendOrUpdateSingleFloorDom(prevEditId);
+      return markSubLayerClosed();
+    }
+    if (uiRuntime.openExtraMenuMesId !== null && uiRuntime.openExtraMenuMesId !== undefined) {
+      const prevMenuId = uiRuntime.openExtraMenuMesId;
+      uiRuntime.openExtraMenuMesId = null;
+      appendOrUpdateSingleFloorDom(prevMenuId);
+      return markSubLayerClosed();
+    }
+    // 6. Check bottom popups (#options / #extensionsMenu)
     if (uiRuntime.showOptionsPopup || uiRuntime.showExtensionsPopup) {
       uiRuntime.showOptionsPopup = false;
       uiRuntime.showExtensionsPopup = false;
       refreshBottomPopupsOnly();
-      return true;
+      return markSubLayerClosed();
     }
-    // 6. Otherwise, immediately exit Tavern back to the phone home screen
+    // 7. Cooldown guard: prevent rapid double-swipe from immediately exiting Tavern right after closing a sub-layer
+    if (now - lastTavernSubBackTs < 650) {
+      return markSubLayerClosed();
+    }
+    // 8. Otherwise, exit Tavern back to the phone home screen
     window.exitTavernToHome();
     return true;
   };
