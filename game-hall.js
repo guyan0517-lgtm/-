@@ -1417,26 +1417,37 @@
     jq.extend = Object.assign;
     jq.get = async (url, cb) => {
       try {
-        const cleanPath = String(url || '').split('?')[0].split('/').pop() || '';
+        const rawUrlStr = String(url || '').trim();
+        const cleanPath = rawUrlStr.split('?')[0].replace(/^\/+/, '');
+        const fileNameOnly = cleanPath.split('/').pop() || '';
         for (const p of (tavernState.plugins || [])) {
-          if (p && p.htmlTemplates && cleanPath && p.htmlTemplates[cleanPath] && !isHostAppHtmlFallback(p.htmlTemplates[cleanPath])) {
-            const cached = p.htmlTemplates[cleanPath];
-            if (typeof cb === 'function') cb(cached);
-            return cached;
+          if (!p) continue;
+          if (p.htmlTemplates) {
+            const hit = p.htmlTemplates[cleanPath] || p.htmlTemplates[fileNameOnly];
+            if (hit && !isHostAppHtmlFallback(hit)) {
+              if (typeof cb === 'function') cb(hit);
+              return hit;
+            }
           }
-          if (p && p.repoBaseUrl && cleanPath && /\.(html|htm|css|json)$/i.test(cleanPath)) {
-            const ghRes = await fetch(p.repoBaseUrl + '/' + cleanPath);
-            if (ghRes.ok) {
-              const ghText = await ghRes.text();
-              if (!isHostAppHtmlFallback(ghText)) {
-                if (typeof cb === 'function') cb(ghText);
-                return ghText;
+          if (p.repoBaseUrl && fileNameOnly && /\.(html|htm|css|json)$/i.test(fileNameOnly)) {
+            const subPath = cleanPath.replace(/^scripts\/extensions\/(?:third-party\/)?[^/]+\//i, '');
+            for (const tryCandidate of [subPath, fileNameOnly]) {
+              if (!tryCandidate) continue;
+              const ghRes = await fetch(p.repoBaseUrl + '/' + tryCandidate.replace(/^\/+/, ''));
+              if (ghRes.ok) {
+                const ghText = await ghRes.text();
+                if (!isHostAppHtmlFallback(ghText)) {
+                  if (!p.htmlTemplates) p.htmlTemplates = {};
+                  p.htmlTemplates[fileNameOnly] = ghText;
+                  if (typeof cb === 'function') cb(ghText);
+                  return ghText;
+                }
               }
             }
           }
         }
-        if (/^https?:\/\//i.test(String(url || ''))) {
-          const res = await fetch(url);
+        if (/^https?:\/\//i.test(rawUrlStr) && !rawUrlStr.startsWith(window.location.origin)) {
+          const res = await fetch(rawUrlStr);
           if (res.ok) {
             const text = await res.text();
             if (!isHostAppHtmlFallback(text)) {
@@ -1452,6 +1463,20 @@
     };
     jq.getJSON = async (url, cb) => {
       try {
+        const rawUrlStr = String(url || '').trim();
+        const cleanPath = rawUrlStr.split('?')[0].replace(/^\/+/, '');
+        const fileNameOnly = cleanPath.split('/').pop() || '';
+        for (const p of (tavernState.plugins || [])) {
+          if (p && p.repoBaseUrl && fileNameOnly && fileNameOnly.endsWith('.json')) {
+            const subPath = cleanPath.replace(/^scripts\/extensions\/(?:third-party\/)?[^/]+\//i, '');
+            const ghRes = await fetch(p.repoBaseUrl + '/' + (subPath || fileNameOnly));
+            if (ghRes.ok) {
+              const data = await ghRes.json();
+              if (typeof cb === 'function') cb(data);
+              return data;
+            }
+          }
+        }
         const res = await fetch(url);
         const data = await res.json();
         if (typeof cb === 'function') cb(data);
@@ -1465,20 +1490,31 @@
 
   async function renderExtensionTemplateAsyncShim(extensionName, fileName) {
     const cleanFile = String(fileName || 'settings').replace(/\.html$/i, '') + '.html';
-    for (const p of (tavernState.plugins || [])) {
-      if (p && p.htmlTemplates && p.htmlTemplates[cleanFile] && !isHostAppHtmlFallback(p.htmlTemplates[cleanFile])) {
+    const extKey = String(extensionName || '').split('/').pop().toLowerCase();
+    const sortedPlugins = [...(tavernState.plugins || [])].sort((a, b) => {
+      const aMatch = a && a.name && extKey && a.name.toLowerCase().includes(extKey) ? 1 : 0;
+      const bMatch = b && b.name && extKey && b.name.toLowerCase().includes(extKey) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+    for (const p of sortedPlugins) {
+      if (!p) continue;
+      if (p.htmlTemplates && p.htmlTemplates[cleanFile] && !isHostAppHtmlFallback(p.htmlTemplates[cleanFile])) {
         return p.htmlTemplates[cleanFile];
       }
-      if (p && p.repoBaseUrl) {
+      if (p.repoBaseUrl) {
         try {
           const r = await fetch(p.repoBaseUrl + '/' + cleanFile);
           if (r.ok) {
             const txt = await r.text();
-            if (!isHostAppHtmlFallback(txt)) return txt;
+            if (!isHostAppHtmlFallback(txt)) {
+              if (!p.htmlTemplates) p.htmlTemplates = {};
+              p.htmlTemplates[cleanFile] = txt;
+              return txt;
+            }
           }
         } catch (_) {}
       }
-      if (p && p.uiHtml && !isHostAppHtmlFallback(p.uiHtml)) return p.uiHtml;
+      if (p.uiHtml && !isHostAppHtmlFallback(p.uiHtml)) return p.uiHtml;
     }
     return '';
   }
@@ -1494,7 +1530,7 @@
       const body = document.createElement('div');
       body.style.cssText = 'padding:14px;overflow-y:auto;flex:1;font-size:13px;color:#2c2c2e;';
       if (typeof contentHtml === 'string') {
-        body.innerHTML = contentHtml;
+        body.innerHTML = isHostAppHtmlFallback(contentHtml) ? '' : contentHtml;
       } else if (contentHtml && contentHtml._isTavernJq && contentHtml.elements[0]) {
         body.appendChild(contentHtml.elements[0]);
       } else if (contentHtml instanceof Node) {
@@ -1575,11 +1611,48 @@
     if (typeof window.jQuery === 'undefined') window.jQuery = jqShim;
     if (typeof window.$ === 'undefined') window.$ = jqShim;
 
+    // Intercept native fetch calls targeting SillyTavern /scripts/extensions/ so Vite never returns the host mini-phone HTML
+    if (!window._tavernFetchIntercepted && typeof window.fetch === 'function') {
+      window._tavernFetchIntercepted = true;
+      const origFetch = window.fetch.bind(window);
+      window.fetch = async function (input, init) {
+        try {
+          const reqUrl = typeof input === 'string' ? input : (input && input.url ? input.url : String(input || ''));
+          const isSameOriginOrRel = !/^https?:\/\//i.test(reqUrl) || reqUrl.startsWith(window.location.origin);
+          if (isSameOriginOrRel && (/scripts\/extensions\//i.test(reqUrl) || /\.(html|htm)$/i.test(reqUrl.split('?')[0]))) {
+            const cleanPath = reqUrl.replace(window.location.origin, '').split('?')[0].replace(/^\/+/, '');
+            const fileName = cleanPath.split('/').pop() || '';
+            if (fileName && fileName.toLowerCase() !== 'index.html' || /scripts\/extensions\//i.test(reqUrl)) {
+              for (const p of (tavernState.plugins || [])) {
+                if (!p) continue;
+                if (p.htmlTemplates && p.htmlTemplates[fileName] && !isHostAppHtmlFallback(p.htmlTemplates[fileName])) {
+                  return new Response(p.htmlTemplates[fileName], { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+                }
+                if (p.repoBaseUrl) {
+                  const subPath = cleanPath.replace(/^scripts\/extensions\/(?:third-party\/)?[^/]+\//i, '');
+                  const ghRes = await origFetch(p.repoBaseUrl + '/' + (subPath || fileName));
+                  if (ghRes.ok) {
+                    const txt = await ghRes.text();
+                    if (!isHostAppHtmlFallback(txt)) {
+                      if (!p.htmlTemplates) p.htmlTemplates = {};
+                      p.htmlTemplates[fileName] = txt;
+                      return new Response(txt, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (_) {}
+        return origFetch(input, init);
+      };
+    }
+
     const toastrShim = {
       info: (m) => showTavernToast(m),
       success: (m) => showTavernToast(m),
       warning: (m) => showTavernToast(m),
-      error: (m) => showTavernToast(m),
+      error: (m, title) => showTavernErrorBanner(title ? (title + ': ' + m) : m),
       clear: () => {}
     };
     window.toastr = toastrShim;
@@ -1726,18 +1799,21 @@
         const sess = getActiveChatSession();
         if (sess && Array.isArray(newMsgs)) {
           newMsgs.forEach(m => {
+            const text = m.message || m.mes || m.content || '';
+            const nowTs = Date.now();
             sess.messages.push({
               mesid: sess.messages.length,
               name: m.name || (m.role === 'user' || m.is_user ? getUserDisplayName() : (getActiveCard()?.name || '角色')),
               is_user: Boolean(m.is_user || m.role === 'user'),
               is_system: Boolean(m.is_system || m.role === 'system'),
-              send_date: Date.now(),
-              mes: m.message || m.mes || m.content || '',
-              swipes: [m.message || m.mes || m.content || ''],
+              send_date: nowTs,
+              mes: text,
+              swipes: [text],
               swipe_id: 0,
+              swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: estimateTokens(text) }],
               reasoning: '',
               gen_time: '',
-              token_count: estimateTokens(m.message || m.mes || m.content || '')
+              token_count: estimateTokens(text)
             });
           });
           await saveTavernStore();
@@ -1808,9 +1884,19 @@
         if (!data || typeof data !== 'object') return;
         if (data.type === 'TAVERN_IFRAME_SLASH' && data.command !== undefined) {
           await executeTavernSlashCommand(String(data.command), { fromIframe: true });
-        } else if (data.type === 'TAVERN_IFRAME_SEND' && data.text) {
+        } else if (data.type === 'TAVERN_IFRAME_SEND' && data.text !== undefined) {
           const shouldTrigger = data.trigger !== false;
-          await executeTavernSlashCommand('/send ' + String(data.text) + (shouldTrigger ? ' | /trigger' : ''), { fromIframe: true, suppressAutoTrigger: !shouldTrigger });
+          const cleanText = String(data.text || '').trim();
+          if (cleanText) {
+            await executeTavernSlashCommand('/send ' + cleanText + (shouldTrigger ? ' | /trigger' : ''), { fromIframe: true, suppressAutoTrigger: !shouldTrigger });
+          } else if (shouldTrigger) {
+            await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+          }
+        } else if (data.type === 'TAVERN_IFRAME_SET_INPUT' && data.text !== undefined) {
+          const textarea = document.getElementById('send_textarea');
+          if (textarea) textarea.value = String(data.text || '');
+        } else if (data.type === 'TAVERN_IFRAME_CLICK_SEND') {
+          await handleSendUserMessage();
         } else if (data.type === 'TAVERN_IFRAME_GENERATE') {
           await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
         }
@@ -1823,10 +1909,21 @@
     return null;
   }
 
-  function transpilePluginImports(codeStr) {
+  function resolvePluginMetaUrl(plugin) {
+    if (plugin && plugin.repoBaseUrl) {
+      return plugin.repoBaseUrl.replace(/\/+$/, '') + '/index.js';
+    }
+    if (plugin && plugin.name && /baibai|ST-BaiBai-Image/i.test(plugin.name)) {
+      return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/index.js';
+    }
+    return 'https://raw.githubusercontent.com/SillyTavern/Extension/main/index.js';
+  }
+
+  function transpilePluginImports(codeStr, plugin = null) {
+    const safeMetaUrl = JSON.stringify(resolvePluginMetaUrl(plugin));
     return String(codeStr || '')
-      .replace(/\bimport\.meta\.url\b/g, 'window.location.href')
-      .replace(/\bimport\.meta\b/g, '({ url: window.location.href, env: {} })')
+      .replace(/\bimport\.meta\.url\b/g, safeMetaUrl)
+      .replace(/\bimport\.meta\b/g, `({ url: ${safeMetaUrl}, env: {} })`)
       .replace(/\bimport\s*\(/g, '(async (u) => window.__ST_BRIDGE__)(')
       .replace(/^\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s+['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
@@ -1851,7 +1948,7 @@
     const backtickMatches = raw.matchAll(/`([\s\S]*?)`/g);
     for (const m of backtickMatches) {
       const inner = (m[1] || '').trim();
-      if (inner.length > 35 && /<(?:div|section|form|table|style|button|input|select|details|header|main)\b/i.test(inner) && /<\/(?:div|section|form|table|style|button|select|details|header|main)>/i.test(inner)) {
+      if (inner.length > 35 && !isHostAppHtmlFallback(inner) && /<(?:div|section|form|table|style|button|input|select|details|header|main)\b/i.test(inner) && /<\/(?:div|section|form|table|style|button|select|details|header|main)>/i.test(inner)) {
         chunks.push(inner);
       }
     }
@@ -1864,16 +1961,20 @@
     if (!plugin.code && plugin.content) {
       plugin.code = plugin.content;
     }
+    if (!plugin.repoBaseUrl && plugin.name && /ST-BaiBai-Image|baibai/i.test(plugin.name)) {
+      plugin.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
+    }
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
 
-    if (!plugin.uiHtml) {
+    if (!plugin.uiHtml || isHostAppHtmlFallback(plugin.uiHtml)) {
       const extracted = extractEmbeddedHtmlFromPluginCode(codeStr);
-      if (extracted) plugin.uiHtml = extracted;
+      if (extracted && !isHostAppHtmlFallback(extracted)) plugin.uiHtml = extracted;
     }
 
     // If the plugin code is pure HTML or a settings template, mount it into #extensions_settings
     if (/^(?:<!DOCTYPE\s+html|<html\b|<div\b|<section\b|<style\b)/i.test(codeStr) && !/<script[\s>]/i.test(codeStr)) {
+      if (isHostAppHtmlFallback(codeStr)) return;
       if (persistentExtSettingsEl && !persistentExtSettingsEl.querySelector(`[data-plugin-mount="${plugin.id}"]`)) {
         const wrap = document.createElement('div');
         wrap.setAttribute('data-plugin-mount', plugin.id);
@@ -1885,7 +1986,7 @@
     }
 
     try {
-      const transformedCode = transpilePluginImports(codeStr);
+      const transformedCode = transpilePluginImports(codeStr, plugin);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
       const runner = new AsyncFunction(
         'SillyTavern',
@@ -2613,11 +2714,16 @@
       if (Array.isArray(script.placement) && script.placement.length > 0) {
         if (!script.placement.includes(targetPlacement)) continue;
       }
-      if (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '' && depth < Number(script.minDepth)) {
-        continue;
-      }
-      if (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '' && depth > Number(script.maxDepth)) {
-        continue;
+      const minD = (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '') ? Number(script.minDepth) : null;
+      const maxD = (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '') ? Number(script.maxDepth) : null;
+      const isDefaultZeroPair = (minD === 0 || minD === null) && maxD === 0;
+      if (isPrompt && !isDefaultZeroPair) {
+        if (minD !== null && !Number.isNaN(minD) && minD > 0 && depth < minD) {
+          continue;
+        }
+        if (maxD !== null && !Number.isNaN(maxD) && maxD > 0 && depth > maxD) {
+          continue;
+        }
       }
 
       let patternStr = script.findRegex;
@@ -2697,6 +2803,7 @@
       e.preventDefault();
     }
   }, false);
+  var pendingInputText = '';
   window.triggerSlash = function(cmd) {
     try {
       if (window.parent && typeof window.parent.triggerSlash === 'function') {
@@ -2715,6 +2822,71 @@
   window.Generate = function() {
     window.parent.postMessage({ type: 'TAVERN_IFRAME_GENERATE' }, '*');
   };
+  function makeHostSelectorProxy(sel) {
+    return {
+      length: 1,
+      val: function(v) {
+        if (v === undefined) {
+          try {
+            var pEl = window.parent && window.parent.document && window.parent.document.querySelector(sel);
+            if (pEl && pEl.value !== undefined) return pEl.value;
+          } catch (e) {}
+          return pendingInputText;
+        }
+        pendingInputText = String(v ?? '');
+        try {
+          var pInput = window.parent && window.parent.document && window.parent.document.querySelector('#send_textarea');
+          if (pInput) pInput.value = pendingInputText;
+        } catch (e) {}
+        window.parent.postMessage({ type: 'TAVERN_IFRAME_SET_INPUT', text: pendingInputText }, '*');
+        return this;
+      },
+      text: function(v) { return this.val(v); },
+      trigger: function(ev) {
+        if (!ev || String(ev).indexOf('click') !== -1 || String(ev).indexOf('submit') !== -1) {
+          if (sel.indexOf('#send_but') !== -1 || sel.indexOf('#send_form') !== -1) {
+            window.parent.postMessage({ type: 'TAVERN_IFRAME_CLICK_SEND', text: pendingInputText }, '*');
+          }
+        }
+        return this;
+      },
+      click: function(fn) {
+        if (typeof fn === 'function') return this;
+        if (sel.indexOf('#send_but') !== -1) {
+          window.parent.postMessage({ type: 'TAVERN_IFRAME_CLICK_SEND', text: pendingInputText }, '*');
+        }
+        return this;
+      },
+      on: function() { return this; },
+      off: function() { return this; },
+      focus: function() { return this; },
+      prop: function() { return false; },
+      attr: function() { return ''; }
+    };
+  }
+  function wrapJQueryInstance(jqFn) {
+    if (!jqFn || jqFn._tavernWrapped) return jqFn;
+    var wrapped = function(sel, ctx) {
+      if (typeof sel === 'string') {
+        var s = sel.trim();
+        if (s === '#send_textarea' || s === '#send_but' || s === '#send_form') {
+          return makeHostSelectorProxy(s);
+        }
+        if (s.indexOf('#options') !== -1 || s.indexOf('#extensions') !== -1) {
+          try {
+            if (window.parent && window.parent.$) return window.parent.$(sel);
+          } catch (e) {}
+        }
+      }
+      return jqFn(sel, ctx || document);
+    };
+    try {
+      Object.assign(wrapped, jqFn);
+      wrapped.fn = jqFn.fn;
+    } catch (e) {}
+    wrapped._tavernWrapped = true;
+    return wrapped;
+  }
   try {
     if (window.parent) {
       window.SillyTavern = window.parent.SillyTavern;
@@ -2728,13 +2900,8 @@
       window.eventOnce = window.parent.eventOnce;
       window.eventEmit = window.parent.eventEmit;
       window.toastr = window.parent.toastr;
-      if (!window.$ && window.parent.$) {
-        window.$ = function(sel, ctx) {
-          if (typeof sel === 'string' && (sel.includes('#send_textarea') || sel.includes('#send_but') || sel.includes('#options') || sel.includes('#extensions'))) {
-            return window.parent.$(sel);
-          }
-          return window.parent.$(sel, ctx || document);
-        };
+      if (window.parent.$) {
+        window.$ = wrapJQueryInstance(window.parent.$);
         window.jQuery = window.$;
       }
     }
@@ -2742,6 +2909,10 @@
   var lastAppliedH = 0;
   var isModalFrame = ${isFullModal ? 'true' : 'false'};
   function syncFrameHeight() {
+    if (window.$ && !window.$._tavernWrapped) {
+      window.$ = wrapJQueryInstance(window.$);
+      window.jQuery = window.$;
+    }
     if (isModalFrame) return;
     try {
       var frame = window.frameElement;
@@ -2775,12 +2946,26 @@
     } catch (e) {}
   }
   window.addEventListener('DOMContentLoaded', function() {
+    if (window.$ && !window.$._tavernWrapped) {
+      window.$ = wrapJQueryInstance(window.$);
+      window.jQuery = window.$;
+    }
     syncFrameHeight();
     setTimeout(syncFrameHeight, 60);
     setTimeout(syncFrameHeight, 240);
   });
-  window.addEventListener('load', syncFrameHeight);
+  window.addEventListener('load', function() {
+    if (window.$ && !window.$._tavernWrapped) {
+      window.$ = wrapJQueryInstance(window.$);
+      window.jQuery = window.$;
+    }
+    syncFrameHeight();
+  });
   document.addEventListener('click', function() {
+    if (window.$ && !window.$._tavernWrapped) {
+      window.$ = wrapJQueryInstance(window.$);
+      window.jQuery = window.$;
+    }
     setTimeout(syncFrameHeight, 50);
     setTimeout(syncFrameHeight, 220);
   });
@@ -3888,30 +4073,20 @@
 
   function detectAssistantReasoningPrefill(messages) {
     if (!Array.isArray(messages) || messages.length === 0) return false;
-    const startTag = (tavernState.formatting?.reasoningStartTag || '<think>').trim();
-    const endTag = (tavernState.formatting?.reasoningEndTag || '</think>').trim();
-    const escStart = startTag ? startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
-    const escEnd = endTag ? endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
-
-    for (let i = messages.length - 1; i >= Math.max(0, messages.length - 3); i--) {
-      const m = messages[i];
-      if (!m || m.role !== 'assistant' || !m.content) continue;
-      const txt = String(m.content);
-      const hasStdOpen = /<(?:think|thinking|thought|reasoning|cot)>/i.test(txt);
-      const hasStdClose = /<\/(?:think|thinking|thought|reasoning|cot)>/i.test(txt);
-      if (hasStdOpen && !hasStdClose) return true;
-      if (escStart && escEnd) {
-        const hasCustomOpen = new RegExp(escStart, 'i').test(txt);
-        const hasCustomClose = new RegExp(escEnd, 'i').test(txt);
-        if (hasCustomOpen && !hasCustomClose) return true;
-      }
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.content) return false;
+    const txt = String(lastMsg.content).trim();
+    if (/<(?:think|thinking|thought|reasoning|cot)>\s*$/i.test(txt)) return true;
+    const startTag = (tavernState.formatting?.reasoningStartTag || '').trim();
+    if (startTag) {
+      const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(escStart + '\\s*$', 'i').test(txt)) return true;
     }
     return false;
   }
 
   function extractReasoningAndCleanReply(rawReply, options = {}) {
     if (!rawReply) return { reasoning: '', cleanReply: '' };
-    const { hasPrefill = false, isLiveStream = false } = options;
     let text = String(rawReply);
     const reasoningChunks = [];
 
@@ -3936,21 +4111,18 @@
     });
 
     // 3. Prefill closing tag without opening tag (e.g. preset prefill ended with <thinking> or <think>, so model output starts with reasoning and closes with </thinking> or </think>)
-    let matchedPrefillClose = false;
     if (endTag) {
       const prefillCustomRx = new RegExp('^([\\s\\S]*?)' + escEnd, 'i');
       const mCustom = text.match(prefillCustomRx);
       if (mCustom && !new RegExp(escStart, 'i').test(mCustom[1])) {
         if (mCustom[1].trim()) reasoningChunks.push(mCustom[1].trim());
         text = text.slice(mCustom[0].length);
-        matchedPrefillClose = true;
       }
     }
     const prefillStdMatch = text.match(/^([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot)>/i);
     if (prefillStdMatch && !/<(?:think|thinking|thought|reasoning|cot)>/i.test(prefillStdMatch[1])) {
       if (prefillStdMatch[1].trim()) reasoningChunks.push(prefillStdMatch[1].trim());
       text = text.slice(prefillStdMatch[0].length);
-      matchedPrefillClose = true;
     }
 
     // 4. Unclosed opening tag during live streaming
@@ -3966,12 +4138,6 @@
     if (unclosedStdMatch) {
       if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
       text = text.slice(0, unclosedStdMatch.index);
-    }
-
-    // 5. If preset had an unclosed assistant reasoning prefill (e.g. <thinking>) and we are still streaming before the closing tag arrives, keep the in-progress text inside reasoning so it never flashes in the main chat bubble
-    if (hasPrefill && isLiveStream && !matchedPrefillClose && reasoningChunks.length === 0 && text.trim()) {
-      reasoningChunks.push(text.trim());
-      text = '';
     }
 
     let cleanReply = text.trim();
@@ -4018,58 +4184,92 @@
       payload.stop = tavernState.formatting.customStoppingStrings;
     }
 
+    const abortCtrl = new AbortController();
+    uiRuntime.abortController = abortCtrl;
+
     const t0 = performance.now();
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + creds.apiKey,
-        'Accept': useStreaming ? 'text/event-stream, application/json' : 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + creds.apiKey,
+          'Accept': useStreaming ? 'text/event-stream, application/json' : 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: abortCtrl.signal
+      });
+    } catch (netErr) {
+      if (netErr && netErr.name === 'AbortError') {
+        throw new Error('已手动停止生成');
+      }
+      throw new Error('网络连接失败，请检查API地址是否正确或跨域代理是否可用: ' + (netErr.message || 'Failed to fetch'));
+    }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      throw new Error('API请求失败 ' + res.status + ': ' + (errText.slice(0, 160) || res.statusText));
+      let detail = errText.slice(0, 200) || res.statusText;
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson && errJson.error) {
+          detail = errJson.error.message || errJson.error.code || JSON.stringify(errJson.error);
+        }
+      } catch (_) {}
+      throw new Error('API请求失败 HTTP ' + res.status + ': ' + detail);
     }
 
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
 
-    // Strictly Non-Streaming Mode: Wait for full response and return all at once without any progressive loop
+    const extractErrorFromJson = (obj) => {
+      if (!obj || typeof obj !== 'object') return null;
+      if (obj.error) {
+        if (typeof obj.error === 'string') return obj.error;
+        return obj.error.message || obj.error.code || JSON.stringify(obj.error);
+      }
+      return null;
+    };
+
+    // Strictly Non-Streaming Mode
     if (!useStreaming) {
       const rawText = await res.text();
       let rawContent = '';
       let nativeReasoning = '';
       const trimmed = rawText.trim();
       if (trimmed.startsWith('data:')) {
-        // Handle proxies that force SSE format even when stream:false was requested
         const lines = trimmed.split(/\r?\n/);
         for (const rawLine of lines) {
           const line = rawLine.trim();
           if (!line.startsWith('data:')) continue;
           const dataStr = line.slice(5).trim();
           if (!dataStr || dataStr === '[DONE]') continue;
-          try {
-            const parsedChunk = JSON.parse(dataStr);
-            const choice = parsedChunk.choices && parsedChunk.choices[0];
-            if (!choice) continue;
-            const delta = choice.delta || choice.message || {};
-            if (typeof delta.content === 'string') {
-              rawContent += delta.content;
-            } else if (Array.isArray(delta.content)) {
-              delta.content.forEach(part => {
-                if (typeof part === 'string') rawContent += part;
-                else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
-                else if (part && part.text) rawContent += part.text;
-              });
-            }
-            const rDelta = delta.reasoning_content || delta.reasoning || '';
-            if (rDelta) nativeReasoning += rDelta;
-          } catch (_) {}
+          const parsedChunk = JSON.parse(dataStr);
+          const apiErr = extractErrorFromJson(parsedChunk);
+          if (apiErr) throw new Error('API返回错误: ' + apiErr);
+          const choice = parsedChunk.choices && parsedChunk.choices[0];
+          if (!choice) continue;
+          const delta = choice.delta || choice.message || {};
+          if (typeof delta.content === 'string') {
+            rawContent += delta.content;
+          } else if (Array.isArray(delta.content)) {
+            delta.content.forEach(part => {
+              if (typeof part === 'string') rawContent += part;
+              else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
+              else if (part && part.text) rawContent += part.text;
+            });
+          }
+          const rDelta = delta.reasoning_content || delta.reasoning || '';
+          if (rDelta) nativeReasoning += rDelta;
         }
       } else {
-        const data = JSON.parse(trimmed);
+        let data;
+        try {
+          data = JSON.parse(trimmed);
+        } catch (_) {
+          throw new Error('API返回了非JSON格式响应: ' + trimmed.slice(0, 120));
+        }
+        const apiErr = extractErrorFromJson(data);
+        if (apiErr) throw new Error('API返回错误: ' + apiErr);
         const choice = data.choices && data.choices[0];
         const msgObj = choice ? (choice.message || choice.delta || {}) : {};
         if (typeof msgObj.content === 'string') {
@@ -4086,6 +4286,9 @@
 
       const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
       const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
+      if (!parsed.cleanReply && !combinedReasoning) {
+        throw new Error('AI返回了空内容，请检查模型额度、预设提示词或反代状态');
+      }
       const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
       return {
         content: parsed.cleanReply,
@@ -4094,17 +4297,14 @@
       };
     }
 
-    // Streaming Mode: Decouple network reading from UI typewriter speed so network never stalls or truncates
-    const charsPerSec = Math.max(5, Math.min(500, Number(tavernState.uiSettings?.streamSpeed ?? 35)));
-
+    // Real-Time Streaming Mode: Render tokens immediately as they arrive from the network socket
     if (res.body && !contentType.includes('application/json')) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let sseBuffer = '';
       let networkContent = '';
-      let displayedLen = 0;
       let nativeReasoningAccum = '';
-      let networkDone = false;
+      let streamErrorMsg = null;
 
       const parseSseLines = (linesArr) => {
         for (const rawLine of linesArr) {
@@ -4121,13 +4321,22 @@
           if (!dataStr || dataStr === '[DONE]') continue;
           try {
             const parsedChunk = JSON.parse(dataStr);
+            const apiErr = extractErrorFromJson(parsedChunk);
+            if (apiErr) {
+              streamErrorMsg = apiErr;
+              return;
+            }
             const choice = parsedChunk.choices && parsedChunk.choices[0];
             if (!choice) continue;
             const delta = choice.delta || choice.message || {};
             if (typeof delta.content === 'string' && delta.content) {
               networkContent += delta.content;
             } else if (Array.isArray(delta.content)) {
-              networkContent += delta.content.map(part => (typeof part === 'string' ? part : (part?.text || ''))).join('');
+              delta.content.forEach(part => {
+                if (typeof part === 'string') networkContent += part;
+                else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoningAccum += (part.thinking || part.text || '');
+                else if (part && part.text) networkContent += part.text;
+              });
             } else if (typeof choice.text === 'string' && choice.text) {
               networkContent += choice.text;
             }
@@ -4139,73 +4348,78 @@
         }
       };
 
-      // Background reader drains network socket immediately so proxy never times out or truncates
-      const readerPromise = (async () => {
-        try {
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) {
-              sseBuffer += decoder.decode();
-              if (sseBuffer.trim()) {
-                parseSseLines(sseBuffer.split(/\r?\n/));
-                sseBuffer = '';
-              }
-              break;
+      const flushLiveDom = (isLive) => {
+        const liveParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: isLive });
+        const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
+        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        onStreamUpdate({
+          content: liveParsed.cleanReply,
+          reasoning: liveReasoning,
+          genTime: elapsedSec,
+          isStreaming: isLive
+        });
+      };
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            sseBuffer += decoder.decode();
+            if (sseBuffer.trim()) {
+              parseSseLines(sseBuffer.split(/\r?\n/));
+              sseBuffer = '';
             }
-            sseBuffer += decoder.decode(value, { stream: true });
-            const lines = sseBuffer.split(/\r?\n/);
-            sseBuffer = lines.pop() || '';
-            parseSseLines(lines);
+            break;
           }
-        } finally {
-          networkDone = true;
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split(/\r?\n/);
+          sseBuffer = lines.pop() || '';
+          parseSseLines(lines);
+          if (streamErrorMsg) {
+            throw new Error('API流式返回错误: ' + streamErrorMsg);
+          }
+          flushLiveDom(true);
         }
-      })();
-
-      const tickMs = 28;
-      let lastReasoningLen = 0;
-      let cleanTarget = '';
-      let inlineReasoning = '';
-
-      while (!networkDone || displayedLen < cleanTarget.length) {
-        const liveParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: !networkDone });
-        cleanTarget = liveParsed.cleanReply;
-        inlineReasoning = liveParsed.reasoning;
-        const liveReasoning = [nativeReasoningAccum, inlineReasoning].filter(Boolean).join('\n\n');
-
-        if (displayedLen < cleanTarget.length) {
-          const backlog = cleanTarget.length - displayedLen;
-          const baseStep = Math.max(1, Math.round((charsPerSec * tickMs) / 1000));
-          // Show the very first chunk immediately without artificial delay so streaming starts instantly
-          const initialBoost = displayedLen === 0 ? Math.min(cleanTarget.length, Math.max(8, baseStep * 3)) : baseStep;
-          const catchupStep = (networkDone && backlog > 600) ? Math.ceil(backlog / 18) : initialBoost;
-          displayedLen = Math.min(cleanTarget.length, displayedLen + Math.max(baseStep, catchupStep));
-
+      } catch (readErr) {
+        if (readErr && readErr.name === 'AbortError') {
           const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-          onStreamUpdate({
-            content: cleanTarget.slice(0, displayedLen),
-            reasoning: liveReasoning,
+          const partialParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
+          const partialReasoning = [nativeReasoningAccum, partialParsed.reasoning].filter(Boolean).join('\n\n');
+          return {
+            content: partialParsed.cleanReply,
+            reasoning: partialReasoning,
             genTime: elapsedSec,
-            isStreaming: true
-          });
-        } else if (liveReasoning.length !== lastReasoningLen) {
-          lastReasoningLen = liveReasoning.length;
-          const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-          onStreamUpdate({
-            content: cleanTarget.slice(0, displayedLen),
-            reasoning: liveReasoning,
-            genTime: elapsedSec,
-            isStreaming: true
-          });
+            aborted: true
+          };
         }
-        await new Promise(r => setTimeout(r, tickMs));
+        throw readErr;
       }
 
-      await readerPromise;
+      if (streamErrorMsg) {
+        throw new Error('API流式返回错误: ' + streamErrorMsg);
+      }
+
+      // Check if proxy returned a raw JSON body without SSE "data:" prefixes
+      if (!networkContent && !nativeReasoningAccum && sseBuffer.trim().startsWith('{')) {
+        try {
+          const fallbackJson = JSON.parse(sseBuffer.trim());
+          const apiErr = extractErrorFromJson(fallbackJson);
+          if (apiErr) throw new Error('API返回错误: ' + apiErr);
+          const choice = fallbackJson.choices && fallbackJson.choices[0];
+          const msgObj = choice ? (choice.message || choice.delta || {}) : {};
+          networkContent = msgObj.content || '';
+          nativeReasoningAccum = msgObj.reasoning_content || msgObj.reasoning || '';
+        } catch (e) {
+          if (e.message && e.message.startsWith('API')) throw e;
+        }
+      }
 
       const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
       const finalParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
       const finalReasoning = [nativeReasoningAccum, finalParsed.reasoning].filter(Boolean).join('\n\n');
+      if (!finalParsed.cleanReply && !finalReasoning) {
+        throw new Error('AI返回了空内容，请检查模型额度、预设提示词或反代状态');
+      }
       return {
         content: finalParsed.cleanReply,
         reasoning: finalReasoning,
@@ -4215,6 +4429,8 @@
 
     // Fallback when proxy returns application/json even though stream:true was requested
     const data = await res.json();
+    const apiErr = extractErrorFromJson(data);
+    if (apiErr) throw new Error('API返回错误: ' + apiErr);
     const choice = data.choices && data.choices[0];
     const msgObj = choice ? (choice.message || choice.delta || {}) : {};
     const rawContent = msgObj.content || '';
@@ -4222,24 +4438,20 @@
 
     const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
     const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
-
-    if (useStreaming && parsed.cleanReply && typeof onStreamUpdate === 'function') {
-      const fullText = parsed.cleanReply;
-      const tickMs = 28;
-      const step = Math.max(1, Math.round((charsPerSec * tickMs) / 1000));
-      for (let i = step; i < fullText.length; i += step) {
-        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-        onStreamUpdate({
-          content: fullText.slice(0, i),
-          reasoning: combinedReasoning,
-          genTime: elapsedSec,
-          isStreaming: true
-        });
-        await new Promise(r => setTimeout(r, tickMs));
-      }
+    if (!parsed.cleanReply && !combinedReasoning) {
+      throw new Error('AI返回了空内容，请检查模型额度、预设提示词或反代状态');
     }
 
     const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    if (useStreaming && typeof onStreamUpdate === 'function') {
+      onStreamUpdate({
+        content: parsed.cleanReply,
+        reasoning: combinedReasoning,
+        genTime: elapsedSec,
+        isStreaming: false
+      });
+    }
+
     return {
       content: parsed.cleanReply,
       reasoning: combinedReasoning,
@@ -4313,7 +4525,10 @@
     showOptionsPopup: false,
     showExtensionsPopup: false,
     isGenerating: false,
-    toastTimer: null
+    abortController: null,
+    userScrolledUpDuringStream: false,
+    toastTimer: null,
+    errorTimer: null
   };
 
   function stripUiEmojis(str) {
@@ -4334,6 +4549,29 @@
     uiRuntime.toastTimer = setTimeout(() => {
       el.classList.remove('visible');
     }, 2400);
+  }
+
+  function showTavernErrorBanner(msg) {
+    let el = document.getElementById('tavern-error-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tavern-error-banner';
+      const root = document.getElementById('tavern-stage-root') || document.body;
+      root.appendChild(el);
+    }
+    const cleanMsg = stripUiEmojis(String(msg || '调用失败').replace(/[()（）]/g, ' '));
+    el.innerHTML = `
+      <div class="tavern-error-banner-body">
+        <div class="tavern-error-banner-title">酒馆AI调用报错</div>
+        <div class="tavern-error-banner-desc">${escapeHtmlSimple(cleanMsg)}</div>
+      </div>
+      <button type="button" class="tavern-error-banner-close" onclick="this.parentElement.classList.remove('visible')">关闭</button>
+    `;
+    el.classList.add('visible');
+    if (uiRuntime.errorTimer) clearTimeout(uiRuntime.errorTimer);
+    uiRuntime.errorTimer = setTimeout(() => {
+      el.classList.remove('visible');
+    }, 7500);
   }
 
   function injectTavernShellCss() {
@@ -4554,6 +4792,92 @@
         gap: 5px !important;
         margin-left: auto !important;
         flex-shrink: 0 !important;
+      }
+      .mes[is_user="true"] .mes_buttons,
+      .mes[is_user="true"] .mes_edit_buttons {
+        margin-left: 0 !important;
+        margin-right: auto !important;
+        justify-content: flex-start !important;
+      }
+      .mes[is_user="true"] .mes_buttons > .mes_edit {
+        order: 1;
+      }
+      .mes[is_user="true"] .mes_buttons > .extraMesButtonsHint {
+        order: 2;
+      }
+      .mes[is_user="true"] .mes_buttons > .extraMesButtons {
+        order: 3;
+      }
+      .tavern-typing-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 10px;
+        min-height: 22px;
+      }
+      .tavern-typing-indicator span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #8e8e93;
+        display: inline-block;
+        animation: tavernTypingBounce 1.25s infinite ease-in-out both;
+      }
+      .tavern-typing-indicator span:nth-child(1) {
+        animation-delay: -0.28s;
+      }
+      .tavern-typing-indicator span:nth-child(2) {
+        animation-delay: -0.14s;
+      }
+      @keyframes tavernTypingBounce {
+        0%, 80%, 100% { transform: scale(0.55); opacity: 0.45; }
+        40% { transform: scale(1.05); opacity: 1; }
+      }
+      #tavern-error-banner {
+        position: absolute;
+        top: 56px;
+        left: 10px;
+        right: 10px;
+        z-index: 3600;
+        background: rgba(255, 244, 244, 0.98);
+        border: 1.5px solid rgba(217, 83, 79, 0.75);
+        border-radius: 14px;
+        padding: 10px 12px;
+        box-shadow: 0 10px 26px rgba(180, 40, 40, 0.18);
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      #tavern-error-banner.visible {
+        display: flex;
+      }
+      .tavern-error-banner-body {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .tavern-error-banner-title {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #b52b27;
+        margin-bottom: 2px;
+      }
+      .tavern-error-banner-desc {
+        font-size: 11.5px;
+        color: #6b2422;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .tavern-error-banner-close {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(217, 83, 79, 0.45);
+        background: #ffffff;
+        color: #b52b27;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
       }
       .mes_button,
       .extraMesButtonsHint {
@@ -5364,7 +5688,15 @@
   function renderPluginCustomModal() {
     const p = (tavernState.plugins || []).find(x => x.id === uiRuntime.activePluginModalId);
     if (!p) return '';
+    if (!p.repoBaseUrl && String(p.name || '').includes('柏宝绘')) {
+      p.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
+    }
     if (isHostAppHtmlFallback(p.uiHtml)) p.uiHtml = '';
+    if (p.htmlTemplates && typeof p.htmlTemplates === 'object') {
+      Object.keys(p.htmlTemplates).forEach(k => {
+        if (isHostAppHtmlFallback(p.htmlTemplates[k])) delete p.htmlTemplates[k];
+      });
+    }
     if (persistentExtSettingsEl && isHostAppHtmlFallback(persistentExtSettingsEl.innerHTML)) {
       persistentExtSettingsEl.innerHTML = '';
     }
@@ -5395,7 +5727,7 @@
       </div>
     `;
 
-    const safeTranspiledCode = transpilePluginImports(rawCode);
+    const safeTranspiledCode = transpilePluginImports(rawCode, p);
     const fullDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       body{margin:0;padding:12px;min-height:76vh;font-family:sans-serif;color:#2c2c2e;background:#faf8f5;}
       input,select,textarea,button{font-family:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;box-sizing:border-box;margin:4px 0;}
@@ -5413,6 +5745,9 @@
         window.event_types = window.parent.event_types;
         window.extension_settings = window.parent.extension_settings;
         window.toastr = window.parent.toastr;
+        if (window.parent && window.parent.fetch) {
+          window.fetch = window.parent.fetch.bind(window.parent);
+        }
         const parentJq = window.parent.jQuery || window.parent.$;
         const localJq = function(sel, ctx) {
           if (typeof sel === 'string') {
@@ -5518,6 +5853,221 @@
     return fallbackSvg;
   }
 
+  function syncSwipeInfoToMessage(msg, swipeIdx) {
+    if (!msg) return;
+    if (!Array.isArray(msg.swipe_info)) msg.swipe_info = [];
+    const info = msg.swipe_info[swipeIdx];
+    if (info && typeof info === 'object') {
+      if (info.gen_time !== undefined) msg.gen_time = info.gen_time;
+      if (info.reasoning !== undefined) msg.reasoning = info.reasoning;
+      if (info.send_date !== undefined) msg.send_date = info.send_date;
+      if (info.token_count !== undefined) msg.token_count = info.token_count;
+    }
+  }
+
+  function recordMessageToSwipeInfo(msg, swipeIdx) {
+    if (!msg) return;
+    if (!Array.isArray(msg.swipe_info)) msg.swipe_info = [];
+    msg.swipe_info[swipeIdx] = {
+      send_date: msg.send_date || Date.now(),
+      gen_time: msg.gen_time || '',
+      reasoning: msg.reasoning || '',
+      token_count: msg.token_count || estimateTokens(msg.mes || '')
+    };
+  }
+
+  function buildSingleFloorHtml(m, idx, messages, card) {
+    const uiCfg = tavernState.uiSettings || {};
+    const fmtCfg = tavernState.formatting || {};
+    const charAvatar = resolveSafeAvatarUrl(card ? card.avatar : '', false);
+    const charFallback = resolveAvatarFallbackThumb(card ? card.avatar : '', false);
+    const userRawAvatar = getUserAvatarUrl();
+    const userAvatar = resolveSafeAvatarUrl(userRawAvatar, true);
+    const userFallback = resolveAvatarFallbackThumb(userRawAvatar, true);
+    const userName = getUserDisplayName();
+
+    const isUser = Boolean(m.is_user);
+    const isLast = idx === messages.length - 1;
+    const displayName = isUser ? userName : ((card && card.name) ? card.name : (m.name || '角色'));
+    const avatarSrc = isUser ? userAvatar : charAvatar;
+    const fallbackSrc = isUser ? userFallback : charFallback;
+    const swipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
+    const swipeIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
+    const currentRawText = swipes[swipeIdx] !== undefined ? swipes[swipeIdx] : (m.mes || '');
+    const swipeMeta = (Array.isArray(m.swipe_info) && m.swipe_info[swipeIdx]) ? m.swipe_info[swipeIdx] : null;
+    const effectiveGenTime = (swipeMeta && swipeMeta.gen_time !== undefined) ? swipeMeta.gen_time : (m.gen_time || '');
+    const rawSavedReasoning = (swipeMeta && swipeMeta.reasoning !== undefined) ? swipeMeta.reasoning : (m.reasoning || '');
+    const tokenNum = (swipeMeta && swipeMeta.token_count) || m.token_count || estimateTokens(currentRawText);
+
+    const isEditingThis = uiRuntime.editingFloorMesId === idx;
+    const isExtraOpen = uiRuntime.openExtraMenuMesId === idx;
+
+    const inlineExtracted = extractReasoningAndCleanReply(currentRawText, { hasPrefill: false, isLiveStream: false });
+    const effectiveReasoning = (rawSavedReasoning && String(rawSavedReasoning).trim()) ? String(rawSavedReasoning).trim() : inlineExtracted.reasoning;
+    const effectiveCleanText = (rawSavedReasoning && String(rawSavedReasoning).trim()) ? currentRawText : inlineExtracted.cleanReply;
+
+    const isWaitingFirstToken = uiRuntime.isGenerating && isLast && !isUser && !effectiveCleanText.trim();
+    const renderedHtml = isEditingThis
+      ? ''
+      : (isWaitingFirstToken
+          ? `<div class="tavern-typing-indicator" title="AI正在思考生成中"><span></span><span></span><span></span></div>`
+          : renderTavernMessageHtml(effectiveCleanText, {
+              isUser,
+              isPrompt: false,
+              depth: messages.length - 1 - idx,
+              card
+            }));
+
+    const hasReasoning = Boolean(effectiveReasoning);
+    const openReasoningAttr = fmtCfg.autoCollapseReasoning === false ? 'open' : '';
+    const hasTranslation = Boolean(m.translation && String(m.translation).trim());
+
+    return `
+      <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
+        <div class="mesAvatarWrapper">
+          <div class="avatar">
+            <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${fallbackSrc}';" />
+          </div>
+          <div class="mesIDDisplay">${uiCfg.showMessageId !== false ? '#' + idx : ''}</div>
+          <div class="mes_timer">${uiCfg.showMesTimer !== false && effectiveGenTime ? escapeHtmlSimple(effectiveGenTime) : ''}</div>
+          ${uiCfg.showTokenCount !== false ? `<div class="tokenCounterDisplay">${tokenNum}t</div>` : '<div class="tokenCounterDisplay"></div>'}
+        </div>
+
+        <div class="mes_block">
+          <div class="ch_name flex-container justifySpaceBetween">
+            <div class="flex-container alignItemsBaseline">
+              <span class="name_text">${escapeHtmlSimple(displayName)}</span>
+            </div>
+            ${isEditingThis ? `
+              <div class="flex-container mes_buttons mes_edit_buttons">
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-save" data-mesid="${idx}" title="确认保存修改">
+                  <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制本层原文">
+                  <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-toggle-reasoning-edit" data-mesid="${idx}" title="编辑思维链">
+                  <svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path></svg>
+                </button>
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-del-one" data-mesid="${idx}" title="删除本层">
+                  <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                </button>
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-move-up" data-mesid="${idx}" title="上移本层">
+                  <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                </button>
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-move-down" data-mesid="${idx}" title="下移本层">
+                  <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-cancel" title="取消编辑">
+                  <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            ` : `
+              <div class="flex-container mes_buttons mes_edit_buttons">
+                <div class="extraMesButtons ${isExtraOpen ? '' : 'tavern-extra-hidden'}">
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制原文">
+                    <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-regen" data-mesid="${idx}" title="${isUser ? '在此楼层后触发AI回复' : '重新生成本层'}">
+                    <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-add-swipe" data-mesid="${idx}" title="新增空白回复页">
+                    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-fork" data-mesid="${idx}" title="从本层新建分支存档">
+                    <svg viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+                  </button>
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-del-one" data-mesid="${idx}" title="删除本层">
+                    <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+                  </button>
+                </div>
+                <div class="extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="展开更多操作"></div>
+                <div class="mes_button mes_edit fa-solid fa-pencil" data-action="floor-edit" data-mesid="${idx}" title="编辑本层"></div>
+              </div>
+            `}
+          </div>
+
+          ${hasReasoning ? `
+            <details class="mes_reasoning_details" ${openReasoningAttr}>
+              <summary class="mes_reasoning_summary flex-container">
+                <div class="mes_reasoning_header flex-container">
+                  <span class="mes_reasoning_header_title">思考过程</span>
+                </div>
+                <div class="mes_reasoning_arrow"></div>
+              </summary>
+              <div class="mes_reasoning mes_reasoning_content">${escapeHtmlSimple(effectiveReasoning)}</div>
+            </details>
+          ` : ''}
+
+          ${isEditingThis && uiRuntime.editingFloorReasoning ? `
+            <div style="margin-top:8px;">
+              <textarea id="tavern-floor-reasoning-box-${idx}" class="tavern-textarea" rows="3" placeholder="在此编辑本层思维链内容...">${escapeHtmlSimple(effectiveReasoning)}</textarea>
+            </div>
+          ` : ''}
+
+          <div class="mes_text">
+            ${isEditingThis ? `
+              <textarea id="tavern-floor-edit-box-${idx}" class="edit_textarea" rows="8">${escapeHtmlSimple(currentRawText)}</textarea>
+            ` : renderedHtml}
+          </div>
+
+          ${hasTranslation ? `
+            <div class="mes_translation_box">
+              <div class="mes_translation_header">
+                <span>译文</span>
+                <button type="button" class="tavern-btn small" style="padding:1px 6px;font-size:10px;" data-action="floor-hide-translation" data-mesid="${idx}">隐藏</button>
+              </div>
+              <div class="mes_translation_text">${escapeHtmlSimple(m.translation).replace(/\n/g, '<br/>')}</div>
+            </div>
+          ` : ''}
+
+          ${(isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
+        </div>
+
+        ${(isLast || swipes.length > 1) ? `
+          <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
+          <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  function appendOrUpdateSingleFloorDom(idx, options = {}) {
+    const chatEl = document.getElementById('chat');
+    if (!chatEl) return;
+    const card = getActiveCard();
+    const sess = getActiveChatSession();
+    const messages = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+    const m = messages[idx];
+    if (!m) return;
+
+    // Ensure only the true last floor carries .last_mes
+    chatEl.querySelectorAll('.mes.last_mes').forEach(el => {
+      const mid = Number(el.getAttribute('mesid'));
+      if (mid !== messages.length - 1) {
+        el.classList.remove('last_mes');
+      }
+    });
+
+    const html = buildSingleFloorHtml(m, idx, messages, card);
+    const temp = document.createElement('div');
+    temp.innerHTML = html.trim();
+    const newFloorNode = temp.firstElementChild;
+    if (!newFloorNode) return;
+
+    const existingNode = chatEl.querySelector(`.mes[mesid="${idx}"]`);
+    if (existingNode) {
+      existingNode.replaceWith(newFloorNode);
+    } else {
+      chatEl.appendChild(newFloorNode);
+    }
+    executeInlineMessageScripts(newFloorNode);
+
+    if (options && options.scrollToBottom && !uiRuntime.userScrolledUpDuringStream) {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+  }
+
   function renderTavernChatFloors(keepTopOnSingleFloor = false, options = {}) {
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
@@ -5528,156 +6078,9 @@
     const card = getActiveCard();
     const sess = getActiveChatSession();
     const messages = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
-    const uiCfg = tavernState.uiSettings || {};
-    const fmtCfg = tavernState.formatting || {};
 
-    const charAvatar = resolveSafeAvatarUrl(card ? card.avatar : '', false);
-    const charFallback = resolveAvatarFallbackThumb(card ? card.avatar : '', false);
-    const userRawAvatar = getUserAvatarUrl();
-    const userAvatar = resolveSafeAvatarUrl(userRawAvatar, true);
-    const userFallback = resolveAvatarFallbackThumb(userRawAvatar, true);
-    const userName = getUserDisplayName();
-
-    chatEl.innerHTML = messages.map((m, idx) => {
-      const isUser = Boolean(m.is_user);
-      const isLast = idx === messages.length - 1;
-      const displayName = isUser ? userName : ((card && card.name) ? card.name : (m.name || '角色'));
-      const avatarSrc = isUser ? userAvatar : charAvatar;
-      const fallbackSrc = isUser ? userFallback : charFallback;
-      const swipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
-      const swipeIdx = Math.min(swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
-      const currentRawText = swipes[swipeIdx] !== undefined ? swipes[swipeIdx] : (m.mes || '');
-      const tokenNum = m.token_count || estimateTokens(currentRawText);
-
-      const isEditingThis = uiRuntime.editingFloorMesId === idx;
-      const isExtraOpen = uiRuntime.openExtraMenuMesId === idx;
-
-      const inlineExtracted = extractReasoningAndCleanReply(currentRawText, { hasPrefill: false, isLiveStream: false });
-      const effectiveReasoning = (m.reasoning && String(m.reasoning).trim()) ? String(m.reasoning).trim() : inlineExtracted.reasoning;
-      const effectiveCleanText = (m.reasoning && String(m.reasoning).trim()) ? currentRawText : inlineExtracted.cleanReply;
-
-      const renderedHtml = isEditingThis
-        ? ''
-        : renderTavernMessageHtml(effectiveCleanText, {
-            isUser,
-            isPrompt: false,
-            depth: messages.length - 1 - idx,
-            card
-          });
-
-      const hasReasoning = Boolean(effectiveReasoning);
-      const openReasoningAttr = fmtCfg.autoCollapseReasoning === false ? 'open' : '';
-      const hasTranslation = Boolean(m.translation && String(m.translation).trim());
-
-      return `
-        <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
-          <div class="mesAvatarWrapper">
-            <div class="avatar">
-              <img src="${avatarSrc}" alt="avatar" onerror="this.onerror=null;this.src='${fallbackSrc}';" />
-            </div>
-            <div class="mesIDDisplay">${uiCfg.showMessageId !== false ? '#' + idx : ''}</div>
-            <div class="mes_timer">${uiCfg.showMesTimer !== false && m.gen_time ? escapeHtmlSimple(m.gen_time) : ''}</div>
-            ${uiCfg.showTokenCount !== false ? `<div class="tokenCounterDisplay">${tokenNum}t</div>` : '<div class="tokenCounterDisplay"></div>'}
-          </div>
-
-          <div class="mes_block">
-            <div class="ch_name flex-container justifySpaceBetween">
-              <div class="flex-container alignItemsBaseline">
-                <span class="name_text">${escapeHtmlSimple(displayName)}</span>
-              </div>
-              ${isEditingThis ? `
-                <div class="flex-container mes_buttons mes_edit_buttons">
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-save" data-mesid="${idx}" title="确认保存修改">
-                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  </button>
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制本层原文">
-                    <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                  </button>
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-toggle-reasoning-edit" data-mesid="${idx}" title="编辑思维链">
-                    <svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path></svg>
-                  </button>
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-del-one" data-mesid="${idx}" title="删除本层">
-                    <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
-                  </button>
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-move-up" data-mesid="${idx}" title="上移本层">
-                    <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                  </button>
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-move-down" data-mesid="${idx}" title="下移本层">
-                    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </button>
-                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-cancel" title="取消编辑">
-                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-              ` : `
-                <div class="flex-container mes_buttons mes_edit_buttons">
-                  <div class="extraMesButtons ${isExtraOpen ? '' : 'tavern-extra-hidden'}">
-                    <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制原文">
-                      <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                    </button>
-                    <button type="button" class="tavern-mes-icon-btn" data-action="floor-regen" data-mesid="${idx}" title="${isUser ? '在此楼层后触发AI回复' : '重新生成本层'}">
-                      <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                    </button>
-                    <button type="button" class="tavern-mes-icon-btn" data-action="floor-add-swipe" data-mesid="${idx}" title="新增空白回复页">
-                      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    </button>
-                    <button type="button" class="tavern-mes-icon-btn" data-action="floor-fork" data-mesid="${idx}" title="从本层新建分支存档">
-                      <svg viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
-                    </button>
-                    <button type="button" class="tavern-mes-icon-btn" data-action="floor-del-one" data-mesid="${idx}" title="删除本层">
-                      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
-                    </button>
-                  </div>
-                  <div class="extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="展开更多操作"></div>
-                  <div class="mes_button mes_edit fa-solid fa-pencil" data-action="floor-edit" data-mesid="${idx}" title="编辑本层"></div>
-                </div>
-              `}
-            </div>
-
-            ${hasReasoning ? `
-              <details class="mes_reasoning_details" ${openReasoningAttr}>
-                <summary class="mes_reasoning_summary flex-container">
-                  <div class="mes_reasoning_header flex-container">
-                    <span class="mes_reasoning_header_title">思考过程</span>
-                  </div>
-                  <div class="mes_reasoning_arrow"></div>
-                </summary>
-                <div class="mes_reasoning mes_reasoning_content">${escapeHtmlSimple(effectiveReasoning)}</div>
-              </details>
-            ` : ''}
-
-            ${isEditingThis && uiRuntime.editingFloorReasoning ? `
-              <div style="margin-top:8px;">
-                <textarea id="tavern-floor-reasoning-box-${idx}" class="tavern-textarea" rows="3" placeholder="在此编辑本层思维链内容...">${escapeHtmlSimple(m.reasoning || '')}</textarea>
-              </div>
-            ` : ''}
-
-            <div class="mes_text">
-              ${isEditingThis ? `
-                <textarea id="tavern-floor-edit-box-${idx}" class="edit_textarea" rows="8">${escapeHtmlSimple(currentRawText)}</textarea>
-              ` : renderedHtml}
-            </div>
-
-            ${hasTranslation ? `
-              <div class="mes_translation_box">
-                <div class="mes_translation_header">
-                  <span>译文</span>
-                  <button type="button" class="tavern-btn small" style="padding:1px 6px;font-size:10px;" data-action="floor-hide-translation" data-mesid="${idx}">隐藏</button>
-                </div>
-                <div class="mes_translation_text">${escapeHtmlSimple(m.translation).replace(/\n/g, '<br/>')}</div>
-              </div>
-            ` : ''}
-
-            ${(isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
-          </div>
-
-          ${(isLast || swipes.length > 1) ? `
-            <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
-            <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
+    chatEl.innerHTML = messages.map((m, idx) => buildSingleFloorHtml(m, idx, messages, card)).join('');
+    executeInlineMessageScripts(chatEl);
 
     if (keepTopOnSingleFloor && messages.length <= 1) {
       chatEl.scrollTop = 0;
@@ -5736,7 +6139,6 @@
   function renderDrawerSliders() {
     const preset = getActivePreset();
     const prompts = Array.isArray(preset.prompts) ? preset.prompts : [];
-    const presetRegexes = Array.isArray(preset.regexScripts) ? preset.regexScripts : [];
 
     return `
       <div class="tavern-section-card">
@@ -5784,18 +6186,13 @@
             <input type="number" class="tavern-input" data-preset-num="temperature" value="${preset.temperature}" min="0" max="2.5" step="0.05" />
             <div class="tavern-field-hint">控制AI脑洞大小，越高文风越发散灵动，越低越稳重守规矩</div>
           </div>
-          <div class="tavern-field-group">
-            <label>流式打字速度 字每秒: ${tavernState.uiSettings?.streamSpeed ?? 35}</label>
-            <input type="number" class="tavern-input" data-ui-num="streamSpeed" value="${tavernState.uiSettings?.streamSpeed ?? 35}" min="0" max="300" step="5" />
-            <div class="tavern-field-hint">控制流式出字快慢 填30至45最舒适 填0为瞬间直出</div>
-          </div>
         </div>
 
         <label class="tavern-check-row" style="margin-top:4px;">
           <input type="checkbox" data-preset-bool="stream_openai" ${(tavernState.apiConfig?.streamEnabled !== false && preset.stream_openai) ? 'checked' : ''} />
-          <span>启用真实流式逐字生成</span>
+          <span>启用真实流式实时出字</span>
         </label>
-        <div class="tavern-field-hint" style="margin-bottom:8px;">开启后AI回复会按设定速度逐字显示，关闭则等待AI整段全部写完后一次性显示</div>
+        <div class="tavern-field-hint" style="margin-bottom:8px;">开启后AI一出字屏幕就实时同步显示，关闭则等待AI整段写完后一次性显示</div>
 
         <div class="inline-drawer" style="margin-top:6px;margin-bottom:0;">
           <div class="inline-drawer-header" data-action="toggle-adv-samplers">
@@ -5854,30 +6251,6 @@
             </div>
           ` : ''}
         </div>
-      </div>
-
-      <div class="tavern-section-card">
-        <div class="tavern-section-label">
-          <span>当前预设配套正则 共${presetRegexes.length}条</span>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="tavern-btn small" data-action="trigger-import-presets">导入配套正则</button>
-            <button type="button" class="tavern-btn small primary" data-action="open-drawer-direct" data-drawer="cubes">正则工作台</button>
-          </div>
-        </div>
-        ${presetRegexes.length === 0 ? `
-          <div class="tavern-field-hint">导入带有绑定正则的预设JSON或直接在此选择正则JSON文件，即可在此一键开关预设配套正则</div>
-        ` : presetRegexes.map(rx => `
-          <div class="tavern-list-row">
-            <input type="checkbox" class="tavern-fixed-check" data-action="toggle-regex-script" data-rx-id="${rx.id}" data-scope="preset" ${!rx.disabled ? 'checked' : ''} />
-            <div class="tavern-list-row-main">
-              <div>${escapeHtmlSimple(rx.scriptName)}</div>
-              <div class="tavern-list-row-sub">预设正则 | ${escapeHtmlSimple(String(rx.findRegex).slice(0, 42))}</div>
-            </div>
-            <div class="tavern-list-row-actions">
-              <button type="button" class="tavern-btn small danger" data-action="del-regex-script" data-rx-id="${rx.id}" data-scope="preset">删</button>
-            </div>
-          </div>
-        `).join('')}
       </div>
 
       <div id="completion_prompt_manager" class="tavern-section-card">
@@ -6938,10 +7311,18 @@
   // 12. Chat Generation, Floor Actions & Event Delegation
   // ============================================================================
   async function handleSendUserMessage() {
-    if (uiRuntime.isGenerating) return;
+    if (uiRuntime.isGenerating) {
+      if (uiRuntime.abortController) {
+        uiRuntime.abortController.abort();
+      }
+      return;
+    }
     const textarea = document.getElementById('send_textarea');
     if (!textarea) return;
     const rawInput = textarea.value.trim();
+    uiRuntime.editingFloorMesId = null;
+    uiRuntime.editingFloorReasoning = false;
+
     if (!rawInput) {
       await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
       return;
@@ -6955,22 +7336,26 @@
 
     textarea.value = '';
     const sess = getActiveChatSession();
+    const tokenCnt = estimateTokens(rawInput);
+    const nowTs = Date.now();
     const userMsg = {
       mesid: sess.messages.length,
       name: getUserDisplayName(),
       is_user: true,
       is_system: false,
-      send_date: Date.now(),
+      send_date: nowTs,
       mes: rawInput,
       swipes: [rawInput],
       swipe_id: 0,
+      swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: tokenCnt }],
       reasoning: '',
       gen_time: '',
-      token_count: estimateTokens(rawInput)
+      token_count: tokenCnt
     };
     sess.messages.push(userMsg);
+    uiRuntime.userScrolledUpDuringStream = false;
     await saveTavernStore();
-    renderTavernChatFloors(false, { scrollToBottom: true });
+    appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: true });
     await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
     await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
 
@@ -6986,34 +7371,42 @@
     if (!msg) return;
     const floorEl = chatEl.querySelector(`.mes[mesid="${mesIndex}"]`);
     if (!floorEl) {
-      renderTavernChatFloors(false, { scrollToBottom: true });
+      appendOrUpdateSingleFloorDom(mesIndex, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
       return;
     }
     const textEl = floorEl.querySelector('.mes_text');
     if (textEl) {
       let rawStreamText = String(msg.mes || '');
-      const hasUnclosedHtmlDoc = (/<!DOCTYPE\s+html/i.test(rawStreamText) || /<html[\s>]/i.test(rawStreamText)) && !/<\/html\s*>/i.test(rawStreamText);
-      if (hasUnclosedHtmlDoc) {
-        const beforeHtml = rawStreamText.split(/```(?:html)?\s*<!DOCTYPE\s+html|<!DOCTYPE\s+html|<html[\s>]/i)[0] || '';
-        const narrativeHtml = beforeHtml.trim() ? renderTavernMessageHtml(beforeHtml, {
-          isUser: Boolean(msg.is_user),
-          isPrompt: false,
-          depth: sess.messages.length - 1 - mesIndex,
-          card
-        }) : '';
-        textEl.innerHTML = `${narrativeHtml}<div style="padding:10px 14px;margin-top:8px;border-radius:10px;background:rgba(240,236,228,0.85);color:#666;font-size:12.5px;">正在实时流式构建互动状态栏面板... 已接收 ${rawStreamText.length} 字符</div>`;
+      if (!rawStreamText.trim() && uiRuntime.isGenerating) {
+        textEl.innerHTML = `<div class="tavern-typing-indicator" title="AI正在思考生成中"><span></span><span></span><span></span></div>`;
       } else {
-        textEl.innerHTML = renderTavernMessageHtml(rawStreamText, {
-          isUser: Boolean(msg.is_user),
-          isPrompt: false,
-          depth: sess.messages.length - 1 - mesIndex,
-          card
-        });
+        const hasUnclosedHtmlDoc = (/<!DOCTYPE\s+html/i.test(rawStreamText) || /<html[\s>]/i.test(rawStreamText)) && !/<\/html\s*>/i.test(rawStreamText);
+        if (hasUnclosedHtmlDoc) {
+          const beforeHtml = rawStreamText.split(/```(?:html)?\s*<!DOCTYPE\s+html|<!DOCTYPE\s+html|<html[\s>]/i)[0] || '';
+          const narrativeHtml = beforeHtml.trim() ? renderTavernMessageHtml(beforeHtml, {
+            isUser: Boolean(msg.is_user),
+            isPrompt: false,
+            depth: sess.messages.length - 1 - mesIndex,
+            card
+          }) : '';
+          textEl.innerHTML = `${narrativeHtml}<div style="padding:10px 14px;margin-top:8px;border-radius:10px;background:rgba(240,236,228,0.85);color:#666;font-size:12.5px;">正在实时流式构建互动状态栏面板... 已接收 ${rawStreamText.length} 字符</div>`;
+        } else {
+          textEl.innerHTML = renderTavernMessageHtml(rawStreamText, {
+            isUser: Boolean(msg.is_user),
+            isPrompt: false,
+            depth: sess.messages.length - 1 - mesIndex,
+            card
+          });
+        }
       }
     }
     const timerEl = floorEl.querySelector('.mes_timer');
     if (timerEl && msg.gen_time) {
       timerEl.textContent = msg.gen_time;
+    }
+    const tokenEl = floorEl.querySelector('.tokenCounterDisplay');
+    if (tokenEl && tavernState.uiSettings?.showTokenCount !== false) {
+      tokenEl.textContent = estimateTokens(msg.mes || '') + 't';
     }
     if (msg.reasoning && String(msg.reasoning).trim()) {
       let detailsEl = floorEl.querySelector('.mes_reasoning_details');
@@ -7029,7 +7422,9 @@
       const rContent = detailsEl && detailsEl.querySelector('.mes_reasoning_content');
       if (rContent) rContent.textContent = msg.reasoning;
     }
-    chatEl.scrollTop = chatEl.scrollHeight;
+    if (!uiRuntime.userScrolledUpDuringStream) {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
   }
 
   async function translateTextFreeWeb(rawText, targetLangLabel) {
@@ -7087,7 +7482,7 @@
       if (translated) {
         msg.translation = translated;
         await saveTavernStore();
-        renderTavernChatFloors(false);
+        appendOrUpdateSingleFloorDom(mesIndex);
         if (!silent) showTavernToast('第 #' + mesIndex + ' 层翻译完成');
       }
     } catch (err) {
@@ -7107,6 +7502,10 @@
     const card = getActiveCard();
     const sess = getActiveChatSession();
     const preset = getActivePreset();
+
+    uiRuntime.editingFloorMesId = null;
+    uiRuntime.editingFloorReasoning = false;
+    uiRuntime.userScrolledUpDuringStream = false;
 
     // Smart handling when regenerating or continuing after deleting AI replies or on a user floor
     if (isSwipeRegen && sess && sess.messages.length > 0) {
@@ -7137,6 +7536,12 @@
     }
 
     uiRuntime.isGenerating = true;
+    const sendBtnEl = document.getElementById('send_but');
+    if (sendBtnEl) {
+      sendBtnEl.classList.add('is-generating');
+      sendBtnEl.setAttribute('title', '点击停止生成');
+    }
+
     const isStreamOn = tavernState.apiConfig?.streamEnabled !== false && Boolean(preset.stream_openai);
     showTavernToast(isImpersonate ? '正在帮写玩家回复...' : (isSwipeRegen ? '正在重新生成全新回复...' : '正在思考并生成回复...'));
 
@@ -7171,6 +7576,7 @@
           lastMsg.swipes[curSwipe] = combined;
           lastMsg.mes = combined;
           lastMsg.gen_time = partial.genTime;
+          recordMessageToSwipeInfo(lastMsg, curSwipe);
           updateStreamingFloorDom(lastIdx);
         } : null);
         const combined = mergeContinuation(baseText, result.content);
@@ -7178,57 +7584,80 @@
         lastMsg.mes = combined;
         lastMsg.token_count = estimateTokens(combined);
         lastMsg.gen_time = result.genTime;
+        recordMessageToSwipeInfo(lastMsg, curSwipe);
         await saveTavernStore();
-        renderTavernChatFloors(false);
-        executeInlineMessageScripts(document.getElementById('chat'));
+        appendOrUpdateSingleFloorDom(lastIdx);
       } else if (isSwipeRegen && targetMesIndex !== null && sess.messages[targetMesIndex]) {
         const targetMsg = sess.messages[targetMesIndex];
         if (!Array.isArray(targetMsg.swipes)) targetMsg.swipes = [targetMsg.mes || ''];
+        const prevSwipeIdx = Math.max(0, Number(targetMsg.swipe_id || 0));
+        recordMessageToSwipeInfo(targetMsg, prevSwipeIdx);
+
         targetMsg.swipes.push('');
         const newSwipeIdx = targetMsg.swipes.length - 1;
         targetMsg.swipe_id = newSwipeIdx;
         targetMsg.mes = '';
         targetMsg.reasoning = '';
+        targetMsg.gen_time = '';
+        targetMsg.token_count = 1;
         targetMsg.translation = '';
-        renderTavernChatFloors(false);
+        recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
+        appendOrUpdateSingleFloorDom(targetMesIndex, { scrollToBottom: true });
 
-        const result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
-          targetMsg.swipes[newSwipeIdx] = partial.content;
-          targetMsg.mes = partial.content;
-          targetMsg.reasoning = partial.reasoning || '';
-          targetMsg.gen_time = partial.genTime;
-          updateStreamingFloorDom(targetMesIndex);
-        } : null);
+        let result;
+        try {
+          result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
+            targetMsg.swipes[newSwipeIdx] = partial.content;
+            targetMsg.mes = partial.content;
+            targetMsg.reasoning = partial.reasoning || '';
+            targetMsg.gen_time = partial.genTime;
+            targetMsg.token_count = estimateTokens(partial.content);
+            recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
+            updateStreamingFloorDom(targetMesIndex);
+          } : null);
+        } catch (regenErr) {
+          if (!targetMsg.mes && targetMsg.swipes.length > 1 && targetMsg.swipes[newSwipeIdx] === '') {
+            targetMsg.swipes.splice(newSwipeIdx, 1);
+            targetMsg.swipe_id = Math.max(0, targetMsg.swipes.length - 1);
+            targetMsg.mes = targetMsg.swipes[targetMsg.swipe_id] || '';
+            syncSwipeInfoToMessage(targetMsg, targetMsg.swipe_id);
+            await saveTavernStore();
+            appendOrUpdateSingleFloorDom(targetMesIndex);
+          }
+          throw regenErr;
+        }
 
         targetMsg.swipes[newSwipeIdx] = result.content;
         targetMsg.mes = result.content;
         targetMsg.reasoning = result.reasoning || '';
         targetMsg.gen_time = result.genTime;
         targetMsg.token_count = estimateTokens(result.content);
+        recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
         await saveTavernStore();
-        renderTavernChatFloors(false);
-        executeInlineMessageScripts(document.getElementById('chat'));
+        appendOrUpdateSingleFloorDom(targetMesIndex);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
         if (tavernState.formatting?.autoTranslateIncoming) {
           translateTavernFloor(targetMesIndex, true);
         }
       } else {
         const newFloorIdx = sess.messages.length;
+        const nowTs = Date.now();
         const botMsg = {
           mesid: newFloorIdx,
           name: card.name || '角色',
           is_user: false,
           is_system: false,
-          send_date: Date.now(),
+          send_date: nowTs,
           mes: '',
           swipes: [''],
           swipe_id: 0,
+          swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: 1 }],
           reasoning: '',
           gen_time: '',
           token_count: 1
         };
         sess.messages.push(botMsg);
-        renderTavernChatFloors(false, { scrollToBottom: true });
+        appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: true });
 
         let result;
         try {
@@ -7237,13 +7666,18 @@
             botMsg.swipes[0] = partial.content;
             botMsg.reasoning = partial.reasoning || '';
             botMsg.gen_time = partial.genTime;
+            botMsg.token_count = estimateTokens(partial.content);
+            recordMessageToSwipeInfo(botMsg, 0);
             updateStreamingFloorDom(newFloorIdx);
           } : null);
         } catch (genErr) {
           if (!botMsg.mes && sess.messages[newFloorIdx] === botMsg) {
             sess.messages.splice(newFloorIdx, 1);
             await saveTavernStore();
-            renderTavernChatFloors(false);
+            const orphanNode = document.querySelector(`#chat .mes[mesid="${newFloorIdx}"]`);
+            if (orphanNode) orphanNode.remove();
+            const prevLastNode = document.querySelector(`#chat .mes[mesid="${sess.messages.length - 1}"]`);
+            if (prevLastNode) prevLastNode.classList.add('last_mes');
           }
           throw genErr;
         }
@@ -7253,9 +7687,9 @@
         botMsg.reasoning = result.reasoning || '';
         botMsg.gen_time = result.genTime;
         botMsg.token_count = estimateTokens(result.content);
+        recordMessageToSwipeInfo(botMsg, 0);
         await saveTavernStore();
-        renderTavernChatFloors(false, { scrollToBottom: true });
-        executeInlineMessageScripts(document.getElementById('chat'));
+        appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, newFloorIdx);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, newFloorIdx);
         if (tavernState.formatting?.autoTranslateIncoming) {
@@ -7265,9 +7699,19 @@
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_ENDED);
     } catch (err) {
       console.error('Tavern generation error:', err);
-      showTavernToast(err.message || '生成失败');
+      const errMsg = err.message || 'AI调用失败，请检查API配置';
+      showTavernToast(errMsg);
+      if (!String(errMsg).includes('已手动停止')) {
+        showTavernErrorBanner(errMsg);
+      }
     } finally {
       uiRuntime.isGenerating = false;
+      uiRuntime.abortController = null;
+      const btnEl = document.getElementById('send_but');
+      if (btnEl) {
+        btnEl.classList.remove('is-generating');
+        btnEl.setAttribute('title', '发送');
+      }
     }
   }
 
@@ -7322,6 +7766,32 @@
     const root = document.getElementById('tavern-stage-root');
     if (!root || root._tavernBound) return;
     root._tavernBound = true;
+
+    const chatEl = document.getElementById('chat');
+    if (chatEl && !chatEl._tavernScrollBound) {
+      chatEl._tavernScrollBound = true;
+      const checkUserScrollState = () => {
+        if (!uiRuntime.isGenerating) return;
+        const distFromBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+        if (distFromBottom > 85) {
+          uiRuntime.userScrolledUpDuringStream = true;
+        } else if (distFromBottom <= 36) {
+          uiRuntime.userScrolledUpDuringStream = false;
+        }
+      };
+      chatEl.addEventListener('wheel', e => {
+        if (e.deltaY < 0 && uiRuntime.isGenerating) {
+          uiRuntime.userScrolledUpDuringStream = true;
+        }
+        checkUserScrollState();
+      }, { passive: true });
+      chatEl.addEventListener('touchmove', () => {
+        checkUserScrollState();
+      }, { passive: true });
+      chatEl.addEventListener('scroll', () => {
+        checkUserScrollState();
+      }, { passive: true });
+    }
 
     if (!document._tavernOutsidePopupBound) {
       document._tavernOutsidePopupBound = true;
@@ -7521,7 +7991,7 @@
                 lastMsg.swipes[lastMsg.swipe_id || 0] = lastMsg.mes;
               }
               await saveTavernStore();
-              renderTavernChatFloors(false);
+              appendOrUpdateSingleFloorDom(sess.messages.length - 1);
               showTavernToast('场景插图已生成并插入当前楼层');
               return;
             }
@@ -7579,33 +8049,49 @@
         const sess = getActiveChatSession();
         const msg = sess && sess.messages[idx];
         if (!msg) return;
+        uiRuntime.editingFloorMesId = null;
+        uiRuntime.editingFloorReasoning = false;
         if (!Array.isArray(msg.swipes) || msg.swipes.length === 0) {
           msg.swipes = [msg.mes || ''];
         }
         const cur = Number(msg.swipe_id || 0);
+        recordMessageToSwipeInfo(msg, cur);
         if (action === 'floor-swipe-left') {
           msg.swipe_id = cur > 0 ? cur - 1 : msg.swipes.length - 1;
           msg.mes = msg.swipes[msg.swipe_id];
+          syncSwipeInfoToMessage(msg, msg.swipe_id);
           msg.token_count = estimateTokens(msg.mes);
           await saveTavernStore();
-          renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
+          appendOrUpdateSingleFloorDom(idx);
+          if (idx === 0 && sess.messages.length === 1) {
+            const chatEl = document.getElementById('chat');
+            if (chatEl) chatEl.scrollTop = 0;
+          }
           await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, idx);
         } else {
           if (cur < msg.swipes.length - 1) {
             msg.swipe_id = cur + 1;
             msg.mes = msg.swipes[msg.swipe_id];
+            syncSwipeInfoToMessage(msg, msg.swipe_id);
             msg.token_count = estimateTokens(msg.mes);
             await saveTavernStore();
-            renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
+            appendOrUpdateSingleFloorDom(idx);
+            if (idx === 0 && sess.messages.length === 1) {
+              const chatEl = document.getElementById('chat');
+              if (chatEl) chatEl.scrollTop = 0;
+            }
             await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, idx);
           } else if (!msg.is_user && idx > 0) {
             await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: idx });
           } else if (idx === 0) {
             msg.swipe_id = 0;
             msg.mes = msg.swipes[0];
+            syncSwipeInfoToMessage(msg, 0);
             msg.token_count = estimateTokens(msg.mes);
             await saveTavernStore();
-            renderTavernChatFloors(true);
+            appendOrUpdateSingleFloorDom(0);
+            const chatEl = document.getElementById('chat');
+            if (chatEl && sess.messages.length === 1) chatEl.scrollTop = 0;
           }
         }
         return;
@@ -7616,13 +8102,14 @@
         uiRuntime.editingFloorMesId = uiRuntime.editingFloorMesId === idx ? null : idx;
         uiRuntime.editingFloorReasoning = false;
         uiRuntime.openExtraMenuMesId = null;
-        renderTavernChatFloors(false);
+        appendOrUpdateSingleFloorDom(idx);
         return;
       }
 
       if (action === 'floor-toggle-reasoning-edit') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
         uiRuntime.editingFloorReasoning = !uiRuntime.editingFloorReasoning;
-        renderTavernChatFloors(false);
+        appendOrUpdateSingleFloorDom(idx);
         return;
       }
 
@@ -7644,9 +8131,14 @@
       }
 
       if (action === 'floor-edit-cancel') {
+        const prevEditIdx = uiRuntime.editingFloorMesId;
         uiRuntime.editingFloorMesId = null;
         uiRuntime.editingFloorReasoning = false;
-        renderTavernChatFloors(false);
+        if (prevEditIdx !== null && prevEditIdx !== undefined) {
+          appendOrUpdateSingleFloorDom(prevEditIdx);
+        } else {
+          renderTavernChatFloors(false);
+        }
         return;
       }
 
@@ -7666,10 +8158,11 @@
           if (rBox) {
             msg.reasoning = rBox.value;
           }
+          recordMessageToSwipeInfo(msg, sId);
           uiRuntime.editingFloorMesId = null;
           uiRuntime.editingFloorReasoning = false;
           await saveTavernStore();
-          renderTavernChatFloors(idx === 0 && sess.messages.length === 1);
+          appendOrUpdateSingleFloorDom(idx);
           showTavernToast('已保存本层内容');
         }
         return;
@@ -7710,7 +8203,7 @@
         if (msg) {
           msg.translation = '';
           await saveTavernStore();
-          renderTavernChatFloors(false);
+          appendOrUpdateSingleFloorDom(idx);
         }
         return;
       }
@@ -7722,7 +8215,7 @@
         if (msg && navigator.clipboard) {
           await navigator.clipboard.writeText(msg.mes || '');
           uiRuntime.openExtraMenuMesId = null;
-          renderTavernChatFloors(false);
+          appendOrUpdateSingleFloorDom(idx);
           showTavernToast('已复制该楼层原文');
         }
         return;
@@ -7731,6 +8224,8 @@
       if (action === 'floor-regen') {
         const idx = Number(actionEl.getAttribute('data-mesid'));
         uiRuntime.openExtraMenuMesId = null;
+        uiRuntime.editingFloorMesId = null;
+        uiRuntime.editingFloorReasoning = false;
         uiRuntime.isGenerating = false;
         await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: idx });
         return;
@@ -7742,12 +8237,15 @@
         const msg = sess && sess.messages[idx];
         if (msg) {
           if (!Array.isArray(msg.swipes)) msg.swipes = [msg.mes || ''];
+          const prevSwipeIdx = Math.max(0, Number(msg.swipe_id || 0));
+          recordMessageToSwipeInfo(msg, prevSwipeIdx);
           msg.swipes.push(msg.mes || '');
           msg.swipe_id = msg.swipes.length - 1;
+          recordMessageToSwipeInfo(msg, msg.swipe_id);
           uiRuntime.openExtraMenuMesId = null;
           uiRuntime.editingFloorMesId = idx;
           await saveTavernStore();
-          renderTavernChatFloors(false);
+          appendOrUpdateSingleFloorDom(idx);
         }
         return;
       }
@@ -7772,6 +8270,8 @@
           tavernState.chatArchivesByCardId[card.id].unshift(newSess);
           tavernState.chatsByCardId[card.id] = newSess;
           uiRuntime.openExtraMenuMesId = null;
+          uiRuntime.editingFloorMesId = null;
+          uiRuntime.editingFloorReasoning = false;
           await saveTavernStore();
           renderTavernChatFloors(false);
           showTavernToast('已从第' + idx + '层创建新分支存档');
@@ -7783,6 +8283,8 @@
         const idx = Number(actionEl.getAttribute('data-mesid'));
         const sess = getActiveChatSession();
         uiRuntime.isGenerating = false;
+        uiRuntime.editingFloorMesId = null;
+        uiRuntime.editingFloorReasoning = false;
         if (sess && sess.messages.length > 1) {
           if (action === 'floor-del-one') {
             sess.messages.splice(idx, 1);
@@ -7812,6 +8314,8 @@
         tavernState.chatsByCardId[card.id] = newSess;
         uiRuntime.showOptionsPopup = false;
         uiRuntime.isGenerating = false;
+        uiRuntime.editingFloorMesId = null;
+        uiRuntime.editingFloorReasoning = false;
         await saveTavernStore();
         renderTavernShell();
         showTavernToast('已开启新对话存档');
@@ -7821,6 +8325,8 @@
       if (action === 'chat-regenerate-last') {
         uiRuntime.showOptionsPopup = false;
         uiRuntime.isGenerating = false;
+        uiRuntime.editingFloorMesId = null;
+        uiRuntime.editingFloorReasoning = false;
         const sess = getActiveChatSession();
         if (sess && sess.messages.length > 0) {
           const lastIdx = sess.messages.length - 1;
