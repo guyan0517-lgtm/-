@@ -1765,6 +1765,29 @@
         const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }]);
         return res.content;
       },
+      generateRaw: async (opts = {}) => {
+        let promptArr = [];
+        if (Array.isArray(opts)) {
+          promptArr = opts;
+        } else if (typeof opts === 'string') {
+          promptArr = [{ role: 'user', content: opts }];
+        } else if (opts && typeof opts === 'object') {
+          if (Array.isArray(opts.ordered_prompts)) {
+            promptArr = opts.ordered_prompts;
+          } else if (Array.isArray(opts.prompt)) {
+            promptArr = opts.prompt;
+          } else if (Array.isArray(opts.messages)) {
+            promptArr = opts.messages;
+          } else {
+            if (opts.systemPrompt) promptArr.push({ role: 'system', content: String(opts.systemPrompt) });
+            if (opts.prompt !== undefined) promptArr.push({ role: 'user', content: String(opts.prompt || '') });
+          }
+        }
+        const res = await callTavernAiCompletion(promptArr);
+        return res.content;
+      },
+      getTokenCount: (text) => estimateTokens(String(text || '')),
+      getTokenCountAsync: async (text) => estimateTokens(String(text || '')),
       renderExtensionTemplateAsync: renderExtensionTemplateAsyncShim,
       renderExtensionTemplate: (extName, fileName) => '',
       callGenericPopup: callGenericPopupShim,
@@ -1780,24 +1803,107 @@
     };
   }
 
+  function getTavernRawFetch() {
+    if (typeof window._origNativeFetch === 'function') {
+      return window._origNativeFetch.bind(window);
+    }
+    return window.fetch.bind(window);
+  }
+
+  function normalizeTavernBaseUrl(rawUrl) {
+    let u = String(rawUrl || '').replace(/[\u200B-\u200D\uFEFF"'\s]+/g, '').trim();
+    if (!u) return '';
+    if (!/^https?:\/\//i.test(u)) {
+      u = 'https://' + u.replace(/^\/+/, '');
+    }
+    u = u.replace(/\/+$/, '');
+    let prev = '';
+    while (u !== prev) {
+      prev = u;
+      u = u
+        .replace(/\/v1\/chat\/completions$/i, '')
+        .replace(/\/chat\/completions$/i, '')
+        .replace(/\/v1\/messages$/i, '')
+        .replace(/\/messages$/i, '')
+        .replace(/\/v1\/models$/i, '')
+        .replace(/\/models$/i, '')
+        .replace(/\/v1$/i, '')
+        .replace(/\/+$/, '');
+    }
+    return u;
+  }
+
+  function cleanTavernApiKeyString(rawKey) {
+    let k = String(rawKey || '').replace(/^Bearer\s+/i, '').trim();
+    if (!k) return '';
+    if (k.includes(',') || k.includes('\n')) {
+      const parts = k.split(/[,\r\n]+/).map(s => s.trim()).filter(Boolean);
+      if (parts.length > 0) k = parts[0];
+    }
+    return k.replace(/[\u200B-\u200D\uFEFF"'\s]+/g, '');
+  }
+
+  async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
+    const rawFetch = getTavernRawFetch();
+    const method = options.method || 'GET';
+    const headers = Object.assign({}, options.headers || {});
+    let directErr = null;
+    try {
+      const res = await rawFetch(url, options);
+      return res;
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      directErr = err;
+    }
+    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
+    if (!isStaticHost) {
+      try {
+        let parsedBody = options.body;
+        if (typeof parsedBody === 'string') {
+          try { parsedBody = JSON.parse(parsedBody); } catch (_) {}
+        }
+        const proxyRes = await rawFetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: options.signal,
+          body: JSON.stringify({
+            url,
+            method,
+            headers,
+            body: method !== 'GET' && method !== 'HEAD' ? parsedBody : undefined
+          })
+        });
+        if (proxyRes.ok || (proxyRes.status !== 404 && proxyRes.status !== 405)) {
+          return proxyRes;
+        }
+      } catch (_) {}
+    }
+    throw directErr || new Error('Failed to fetch');
+  }
+
   function setupSillyTavernGlobalBridge() {
     ensurePersistentExtensionContainers();
     const jqShim = createTavernJQueryShim();
     if (typeof window.jQuery === 'undefined') window.jQuery = jqShim;
     if (typeof window.$ === 'undefined') window.$ = jqShim;
 
-    // Intercept native fetch calls targeting SillyTavern /scripts/extensions/ so Vite never returns the host mini-phone HTML
+    // Intercept SillyTavern-specific extension & backend routes inside the Tavern without affecting the external phone app
     if (!window._tavernFetchIntercepted && typeof window.fetch === 'function') {
       window._tavernFetchIntercepted = true;
-      const origFetch = window.fetch.bind(window);
+      const prevFetch = window.fetch.bind(window);
+      const rawFetch = getTavernRawFetch();
       window.fetch = async function (input, init) {
         try {
           const reqUrl = typeof input === 'string' ? input : (input && input.url ? input.url : String(input || ''));
           const isSameOriginOrRel = !/^https?:\/\//i.test(reqUrl) || reqUrl.startsWith(window.location.origin);
+          const cleanPath = isSameOriginOrRel
+            ? reqUrl.replace(window.location.origin, '').split('?')[0].replace(/^\/+/, '')
+            : '';
+
+          // 1. SillyTavern Extension HTML/Template requests
           if (isSameOriginOrRel && (/scripts\/extensions\//i.test(reqUrl) || /\.(html|htm)$/i.test(reqUrl.split('?')[0]))) {
-            const cleanPath = reqUrl.replace(window.location.origin, '').split('?')[0].replace(/^\/+/, '');
             const fileName = cleanPath.split('/').pop() || '';
-            if (fileName && fileName.toLowerCase() !== 'index.html' || /scripts\/extensions\//i.test(reqUrl)) {
+            if ((fileName && fileName.toLowerCase() !== 'index.html') || /scripts\/extensions\//i.test(reqUrl)) {
               for (const p of (tavernState.plugins || [])) {
                 if (!p) continue;
                 if (p.htmlTemplates && p.htmlTemplates[fileName] && !isHostAppHtmlFallback(p.htmlTemplates[fileName])) {
@@ -1805,7 +1911,7 @@
                 }
                 if (p.repoBaseUrl) {
                   const subPath = cleanPath.replace(/^scripts\/extensions\/(?:third-party\/)?[^/]+\//i, '');
-                  const ghRes = await origFetch(p.repoBaseUrl + '/' + (subPath || fileName));
+                  const ghRes = await rawFetch(p.repoBaseUrl + '/' + (subPath || fileName));
                   if (ghRes.ok) {
                     const txt = await ghRes.text();
                     if (!isHostAppHtmlFallback(txt)) {
@@ -1818,8 +1924,206 @@
               }
             }
           }
+
+          // 2. SillyTavern Backend API routes used by BaiBai (柏宝绘) and other ST extensions
+          if (isSameOriginOrRel && cleanPath.startsWith('api/')) {
+            // 2a. /api/backends/chat-completions/status (Pulling model list in BaiBai / ST plugins)
+            if (cleanPath === 'api/backends/chat-completions/status') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const fallbackCreds = resolveTavernApiCredentials();
+              const base = normalizeTavernBaseUrl(bodyObj.reverse_proxy || bodyObj.custom_url || fallbackCreds.baseUrl);
+              const key = cleanTavernApiKeyString(bodyObj.proxy_password || fallbackCreds.apiKey);
+              if (!base) {
+                return new Response(JSON.stringify({ error: true, message: '请先填写API地址' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+              }
+              const modelsEndpoints = [base + '/v1/models', base + '/models'];
+              let lastStatus = 500;
+              let lastText = '';
+              for (const mUrl of modelsEndpoints) {
+                try {
+                  const mRes = await executeTavernRawFetchWithProxyFallback(mUrl, {
+                    method: 'GET',
+                    headers: key ? { 'Authorization': 'Bearer ' + key } : {},
+                    signal: init?.signal
+                  });
+                  lastStatus = mRes.status;
+                  if (mRes.ok) {
+                    const mData = await mRes.json();
+                    const rawList = Array.isArray(mData?.data) ? mData.data : (Array.isArray(mData?.models) ? mData.models : (Array.isArray(mData) ? mData : []));
+                    const normalizedModels = rawList.map(item => {
+                      if (typeof item === 'string') return { id: item };
+                      if (item && typeof item.id === 'string') return { id: item.id };
+                      if (item && typeof item.name === 'string') return { id: item.name.replace(/^models\//, '') };
+                      return null;
+                    }).filter(Boolean);
+                    return new Response(JSON.stringify({ data: normalizedModels }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                  } else {
+                    lastText = await mRes.text().catch(() => '');
+                  }
+                } catch (err) {
+                  if (err && err.name === 'AbortError') throw err;
+                  lastText = err.message || 'Failed to fetch';
+                }
+              }
+              return new Response(JSON.stringify({ error: true, message: lastText || ('HTTP ' + lastStatus) }), { status: lastStatus || 500, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            // 2b. /api/backends/chat-completions/generate (Sub-API test & prompt generation in BaiBai / ST plugins)
+            if (cleanPath === 'api/backends/chat-completions/generate') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const fallbackCreds = resolveTavernApiCredentials();
+              const base = normalizeTavernBaseUrl(bodyObj.reverse_proxy || bodyObj.custom_url || fallbackCreds.baseUrl);
+              let key = cleanTavernApiKeyString(bodyObj.proxy_password || '');
+              if (!key && bodyObj.custom_include_headers) {
+                try {
+                  const customH = typeof bodyObj.custom_include_headers === 'string'
+                    ? JSON.parse(bodyObj.custom_include_headers)
+                    : bodyObj.custom_include_headers;
+                  const authVal = customH?.Authorization || customH?.authorization || '';
+                  if (authVal) key = cleanTavernApiKeyString(authVal);
+                } catch (_) {}
+              }
+              if (!key) key = fallbackCreds.apiKey;
+              if (!base) {
+                return new Response(JSON.stringify({ error: { message: '请先填写有效的API地址' } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+              }
+              const wantStream = Boolean(bodyObj.stream);
+              const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0 && bodyObj.max_tokens < 32000)
+                ? bodyObj.max_tokens
+                : 4096;
+              const openAiPayload = {
+                model: bodyObj.model || fallbackCreds.model || 'gpt-4o-mini',
+                messages: Array.isArray(bodyObj.messages) ? bodyObj.messages : [],
+                temperature: typeof bodyObj.temperature === 'number' ? bodyObj.temperature : 1,
+                max_tokens: reqMaxTokens,
+                stream: wantStream
+              };
+              if (bodyObj.custom_include_body) {
+                try {
+                  const extraBody = typeof bodyObj.custom_include_body === 'string'
+                    ? JSON.parse(bodyObj.custom_include_body)
+                    : bodyObj.custom_include_body;
+                  if (extraBody && typeof extraBody === 'object') {
+                    Object.assign(openAiPayload, extraBody);
+                  }
+                } catch (_) {}
+              }
+              const endpoints = [base + '/v1/chat/completions', base + '/chat/completions'];
+              const headers = {
+                'Content-Type': 'application/json',
+                ...(key ? { 'Authorization': 'Bearer ' + key } : {}),
+                ...(wantStream ? { 'Accept': 'text/event-stream' } : { 'Accept': 'application/json' })
+              };
+              let upstreamRes = null;
+              let lastErr = null;
+              for (const ep of endpoints) {
+                try {
+                  upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(openAiPayload),
+                    signal: init?.signal
+                  });
+                  if (upstreamRes.status === 400) {
+                    const errTxt = await upstreamRes.text().catch(() => '');
+                    if (/max_tokens|max_completion_tokens|token/i.test(errTxt)) {
+                      const retryPayload = Object.assign({}, openAiPayload);
+                      delete retryPayload.max_tokens;
+                      upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(retryPayload),
+                        signal: init?.signal
+                      });
+                    } else {
+                      return new Response(errTxt, { status: 400, headers: { 'Content-Type': 'application/json' } });
+                    }
+                  }
+                  if (upstreamRes.status !== 404 && upstreamRes.status !== 405) {
+                    break;
+                  }
+                } catch (err) {
+                  if (err && err.name === 'AbortError') throw err;
+                  lastErr = err;
+                }
+              }
+              if (!upstreamRes) {
+                return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+              }
+              return upstreamRes;
+            }
+
+            // 2c. /api/files/upload, /api/files/delete, /api/images/upload, /api/images/folders, /api/images/list, /api/images/delete, /api/extensions/discover
+            if (cleanPath === 'api/files/upload' || cleanPath === 'api/images/upload') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const fileName = bodyObj.filename || bodyObj.name || ('file_' + Date.now() + '.' + (bodyObj.format || 'png'));
+              const rawData = bodyObj.image || bodyObj.data || '';
+              const mime = cleanPath === 'api/images/upload'
+                ? ('image/' + ((bodyObj.format === 'jpg' ? 'jpeg' : bodyObj.format) || 'png'))
+                : 'application/octet-stream';
+              const dataUrl = String(rawData).startsWith('data:') ? rawData : `data:${mime};base64,${rawData}`;
+              let savedUrl = dataUrl;
+              try {
+                const tRes = await rawFetch('http://127.0.0.1:8765/upload', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ filename: fileName, data: dataUrl })
+                });
+                if (tRes.ok) {
+                  const tJson = await tRes.json();
+                  if (tJson && tJson.url) savedUrl = tJson.url;
+                }
+              } catch (_) {}
+              if (!tavernState.extensionSettings._uploadedGallery) tavernState.extensionSettings._uploadedGallery = [];
+              tavernState.extensionSettings._uploadedGallery.unshift({
+                path: savedUrl,
+                folder: bodyObj.ch_name || 'default',
+                filename: fileName,
+                ts: Date.now()
+              });
+              if (tavernState.extensionSettings._uploadedGallery.length > 60) {
+                tavernState.extensionSettings._uploadedGallery.length = 60;
+              }
+              return new Response(JSON.stringify({ path: savedUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/files/delete' || cleanPath === 'api/images/delete') {
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/images/folders') {
+              const cardName = getActiveCard()?.name || 'default';
+              return new Response(JSON.stringify([cardName, 'default']), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/images/list') {
+              const list = (tavernState.extensionSettings._uploadedGallery || []).map(x => x.path);
+              return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/extensions/discover') {
+              return new Response(JSON.stringify([{ name: 'third-party/ST-BaiBai-Image', type: 'local' }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/extensions/update') {
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+          }
+
+          // 3. NovelAI subscription check & image generation inside Tavern plugins
+          if (isTavernActive() && /novelai\.net/i.test(reqUrl)) {
+            let fixedNaiUrl = reqUrl;
+            if (/image\.novelai\.net\/ai\/user\/subscription/i.test(fixedNaiUrl)) {
+              fixedNaiUrl = 'https://api.novelai.net/user/subscription';
+            }
+            return await executeTavernRawFetchWithProxyFallback(fixedNaiUrl, init || {});
+          }
         } catch (_) {}
-        return origFetch(input, init);
+        return prevFetch(input, init);
       };
     }
 
@@ -2052,7 +2356,23 @@
         }
       },
       generateRaw: async (opts = {}) => {
-        const promptArr = Array.isArray(opts.ordered_prompts) ? opts.ordered_prompts : [{ role: 'user', content: String(opts.prompt || '') }];
+        let promptArr = [];
+        if (Array.isArray(opts)) {
+          promptArr = opts;
+        } else if (typeof opts === 'string') {
+          promptArr = [{ role: 'user', content: opts }];
+        } else if (opts && typeof opts === 'object') {
+          if (Array.isArray(opts.ordered_prompts)) {
+            promptArr = opts.ordered_prompts;
+          } else if (Array.isArray(opts.prompt)) {
+            promptArr = opts.prompt;
+          } else if (Array.isArray(opts.messages)) {
+            promptArr = opts.messages;
+          } else {
+            if (opts.systemPrompt) promptArr.push({ role: 'system', content: String(opts.systemPrompt) });
+            if (opts.prompt !== undefined) promptArr.push({ role: 'user', content: String(opts.prompt || '') });
+          }
+        }
         const res = await callTavernAiCompletion(promptArr);
         return res.content;
       },
@@ -4506,17 +4826,16 @@
     let extModel = '';
     try {
       if (typeof state !== 'undefined' && state && state.apiConfig) {
-        extUrl = (state.apiConfig.proxyUrl || state.apiConfig.url || state.apiConfig.apiUrl || '').trim().replace(/\/+$/, '');
-        extKey = (state.apiConfig.apiKey || state.apiConfig.key || '').trim();
+        extUrl = normalizeTavernBaseUrl(state.apiConfig.proxyUrl || state.apiConfig.url || state.apiConfig.apiUrl || '');
+        extKey = cleanTavernApiKeyString(state.apiConfig.apiKey || state.apiConfig.key || '');
         extModel = (state.apiConfig.model || '').trim();
       }
     } catch (_) {}
 
-    const domUrl = (document.getElementById('proxy-url')?.value || document.getElementById('api-url')?.value || '').trim().replace(/\/+$/, '');
-    const domKey = (document.getElementById('api-key')?.value || '').trim();
+    const domUrl = normalizeTavernBaseUrl(document.getElementById('proxy-url')?.value || document.getElementById('api-url')?.value || '');
+    const domKey = cleanTavernApiKeyString(document.getElementById('api-key')?.value || '');
     const domModel = (document.getElementById('model-input')?.value || document.getElementById('model-select')?.value || document.getElementById('api-model')?.value || '').trim();
 
-    // Check if a built-in saved preset is explicitly active and useExternalPhoneApi is false
     const activeBuiltInId = cfg.activeSavedPresetId || cfg.activeApiPresetId || '';
     const matchedBuiltIn = (activeBuiltInId && Array.isArray(cfg.savedPresets))
       ? cfg.savedPresets.find(x => x && x.id === activeBuiltInId)
@@ -4527,21 +4846,21 @@
         const extPresets = getExternalPhoneApiPresets();
         const matched = extPresets.find(p => p && (p.name === cfg.selectedExternalPresetName || String(p.id) === String(cfg.selectedExternalPresetName)));
         if (matched && (matched.proxyUrl || matched.url || matched.apiUrl)) {
-          const pUrl = (matched.proxyUrl || matched.url || matched.apiUrl || extUrl || domUrl || '').trim().replace(/\/+$/, '');
-          const pKey = (matched.apiKey || matched.key || extKey || domKey || '').trim();
+          const pUrl = normalizeTavernBaseUrl(matched.proxyUrl || matched.url || matched.apiUrl || extUrl || domUrl || '');
+          const pKey = cleanTavernApiKeyString(matched.apiKey || matched.key || extKey || domKey || '');
           const pMod = (matched.model || extModel || domModel || 'gpt-4o-mini').trim();
           return { baseUrl: pUrl, apiKey: pKey, model: pMod };
         }
       }
-      const finalExtUrl = domUrl || extUrl || (cfg.customUrl || '').trim().replace(/\/+$/, '');
-      const finalExtKey = domKey || extKey || (cfg.customKey || '').trim();
+      const finalExtUrl = domUrl || extUrl || normalizeTavernBaseUrl(cfg.customUrl || '');
+      const finalExtKey = domKey || extKey || cleanTavernApiKeyString(cfg.customKey || '');
       const finalExtModel = domModel || extModel || (cfg.customModel || '').trim() || 'gpt-4o-mini';
       return { baseUrl: finalExtUrl, apiKey: finalExtKey, model: finalExtModel };
     }
 
     return {
-      baseUrl: (cfg.customUrl || matchedBuiltIn?.url || domUrl || extUrl || '').trim().replace(/\/+$/, ''),
-      apiKey: (cfg.customKey || matchedBuiltIn?.key || domKey || extKey || '').trim(),
+      baseUrl: normalizeTavernBaseUrl(cfg.customUrl || matchedBuiltIn?.url || domUrl || extUrl || ''),
+      apiKey: cleanTavernApiKeyString(cfg.customKey || matchedBuiltIn?.key || domKey || extKey || ''),
       model: (cfg.customModel || matchedBuiltIn?.model || domModel || extModel || 'gpt-4o-mini').trim()
     };
   }
@@ -4639,11 +4958,14 @@
     const useStreaming = isStreamSettingOn && typeof onStreamUpdate === 'function';
     const hasPrefill = detectAssistantReasoningPrefill(messages);
 
-    const endpoint = creds.baseUrl.endsWith('/chat/completions')
-      ? creds.baseUrl
-      : (creds.baseUrl.endsWith('/v1') ? creds.baseUrl + '/chat/completions' : creds.baseUrl + '/v1/chat/completions');
+    const cleanBase = normalizeTavernBaseUrl(creds.baseUrl);
+    const cleanKey = cleanTavernApiKeyString(creds.apiKey);
+    const endpoints = [
+      cleanBase + '/v1/chat/completions',
+      cleanBase + '/chat/completions'
+    ];
 
-    const requestedMaxTokens = Math.max(1024, Number(preset.openai_max_tokens || 8192));
+    const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
     const payload = {
       model: creds.model,
       messages,
@@ -4662,24 +4984,51 @@
     const abortCtrl = new AbortController();
     uiRuntime.abortController = abortCtrl;
 
+    const reqHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + cleanKey,
+      'Accept': useStreaming ? 'text/event-stream' : 'application/json'
+    };
+
     const t0 = performance.now();
-    let res;
-    try {
-      res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + creds.apiKey,
-          'Accept': useStreaming ? 'text/event-stream, application/json' : 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: abortCtrl.signal
-      });
-    } catch (netErr) {
-      if (netErr && netErr.name === 'AbortError') {
-        throw new Error('已手动停止生成');
+    let res = null;
+    let lastNetErr = null;
+    for (const ep of endpoints) {
+      try {
+        res = await executeTavernRawFetchWithProxyFallback(ep, {
+          method: 'POST',
+          headers: reqHeaders,
+          body: JSON.stringify(payload),
+          signal: abortCtrl.signal
+        });
+        if (res.status === 400) {
+          const errProbe = await res.text().catch(() => '');
+          if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
+            const retryPayload = Object.assign({}, payload);
+            delete retryPayload.max_tokens;
+            res = await executeTavernRawFetchWithProxyFallback(ep, {
+              method: 'POST',
+              headers: reqHeaders,
+              body: JSON.stringify(retryPayload),
+              signal: abortCtrl.signal
+            });
+          } else {
+            res = new Response(errProbe, { status: 400, headers: { 'Content-Type': 'application/json' } });
+          }
+        }
+        if (res.status !== 404 && res.status !== 405) {
+          break;
+        }
+      } catch (netErr) {
+        if (netErr && netErr.name === 'AbortError') {
+          throw new Error('已手动停止生成');
+        }
+        lastNetErr = netErr;
       }
-      throw new Error('网络连接失败，请检查API地址是否正确或跨域代理是否可用: ' + (netErr.message || 'Failed to fetch'));
+    }
+
+    if (!res) {
+      throw new Error('网络连接失败，请检查API地址是否正确或跨域代理是否可用: ' + (lastNetErr?.message || 'Failed to fetch'));
     }
 
     if (!res.ok) {
@@ -4689,6 +5038,8 @@
         const errJson = JSON.parse(errText);
         if (errJson && errJson.error) {
           detail = errJson.error.message || errJson.error.code || JSON.stringify(errJson.error);
+        } else if (errJson && errJson.message) {
+          detail = errJson.message;
         }
       } catch (_) {}
       throw new Error('API请求失败 HTTP ' + res.status + ': ' + detail);
@@ -4934,22 +5285,28 @@
     };
   }
 
-  async function fetchTavernModelList() {
+  async function fetchTavernModelList(overrideUrl = '', overrideKey = '') {
     const creds = resolveTavernApiCredentials();
-    if (!creds.baseUrl || !creds.apiKey) {
+    const base = normalizeTavernBaseUrl(overrideUrl || creds.baseUrl);
+    const key = cleanTavernApiKeyString(overrideKey || creds.apiKey);
+    if (!base || !key) {
       throw new Error('请先填写API地址与密钥');
     }
-    const modelsUrl = creds.baseUrl.endsWith('/models')
-      ? creds.baseUrl
-      : (creds.baseUrl.endsWith('/v1') ? creds.baseUrl + '/models' : creds.baseUrl + '/v1/models');
-
-    const res = await fetch(modelsUrl, {
-      headers: { 'Authorization': 'Bearer ' + creds.apiKey }
-    });
-    if (!res.ok) throw new Error('拉取模型失败 HTTP ' + res.status);
-    const data = await res.json();
-    const list = Array.isArray(data.data) ? data.data.map(m => m.id).filter(Boolean) : [];
-    return list;
+    const endpoints = [base + '/v1/models', base + '/models'];
+    let lastStatus = 500;
+    for (const modelsUrl of endpoints) {
+      const res = await executeTavernRawFetchWithProxyFallback(modelsUrl, {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + key }
+      });
+      lastStatus = res.status;
+      if (res.ok) {
+        const data = await res.json();
+        const rawArr = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.models) ? data.models : (Array.isArray(data) ? data : []));
+        return rawArr.map(m => (typeof m === 'string' ? m : (m?.id || m?.name?.replace(/^models\//, '')))).filter(Boolean);
+      }
+    }
+    throw new Error('拉取模型失败 HTTP ' + lastStatus);
   }
 
   async function generateMemorySummaryFromChat() {
@@ -6904,21 +7261,21 @@
         </div>
         <div class="tavern-field-group">
           <label>接口反代地址 Base URL</label>
-          <input type="text" class="tavern-input" id="tavern-api-url-input" value="${escapeHtmlSimple(cfg.customUrl || resolved.baseUrl || '')}" placeholder="https://api.openai.com/v1" />
+          <input type="text" class="tavern-input" id="tavern-api-url-input" value="${escapeHtmlSimple(cfg.useExternalPhoneApi !== false ? (resolved.baseUrl || '') : (cfg.customUrl || resolved.baseUrl || ''))}" placeholder="https://api.openai.com/v1" />
         </div>
         <div class="tavern-field-group">
           <label>接口密钥 API Key</label>
-          <input type="password" class="tavern-input" id="tavern-api-key-input" value="${escapeHtmlSimple(cfg.customKey || resolved.apiKey || '')}" placeholder="填写密钥，留空则自动读取手机外部密钥" />
+          <input type="password" class="tavern-input" id="tavern-api-key-input" value="${escapeHtmlSimple(cfg.useExternalPhoneApi !== false ? (resolved.apiKey || '') : (cfg.customKey || resolved.apiKey || ''))}" placeholder="填写密钥，留空则自动读取手机外部密钥" />
         </div>
         <div class="tavern-field-group">
           <label>模型名称 Model</label>
-          <input type="text" class="tavern-input" id="tavern-api-model-input" value="${escapeHtmlSimple(cfg.customModel || resolved.model || '')}" placeholder="手动输入或点击下方拉取模型列表" />
+          <input type="text" class="tavern-input" id="tavern-api-model-input" value="${escapeHtmlSimple(cfg.useExternalPhoneApi !== false ? (resolved.model || '') : (cfg.customModel || resolved.model || ''))}" placeholder="手动输入或点击下方拉取模型列表" />
         </div>
         ${models.length > 0 ? `
           <div class="tavern-field-group">
             <label>从已拉取模型列表中下拉选择</label>
             <select class="tavern-select" id="tavern-api-model-select" data-change="select-fetched-model">
-              ${models.map(m => `<option value="${escapeHtmlSimple(m)}" ${m === (cfg.customModel || resolved.model) ? 'selected' : ''}>${escapeHtmlSimple(m)}</option>`).join('')}
+              ${models.map(m => `<option value="${escapeHtmlSimple(m)}" ${m === (cfg.useExternalPhoneApi !== false ? resolved.model : (cfg.customModel || resolved.model)) ? 'selected' : ''}>${escapeHtmlSimple(m)}</option>`).join('')}
             </select>
           </div>
         ` : ''}
@@ -7474,13 +7831,21 @@
                     <span>编辑正则: ${escapeHtmlSimple(editingRx.scriptName)}</span>
                     <button type="button" class="tavern-btn small" data-action="close-regex-editor">收起</button>
                   </div>
-                  <div class="tavern-grid-2">
+                  <div class="tavern-grid-3">
                     <div class="tavern-field-group">
                       <label>脚本名称</label>
                       <input type="text" class="tavern-input" id="rx-edit-name" value="${escapeHtmlSimple(editingRx.scriptName)}" />
                     </div>
                     <div class="tavern-field-group">
-                      <label>生效范围</label>
+                      <label>所属范围</label>
+                      <select class="tavern-select" id="rx-edit-scope">
+                        <option value="global" ${editingRx._scope === 'global' ? 'selected' : ''}>全局脚本</option>
+                        <option value="card" ${editingRx._scope === 'card' ? 'selected' : ''}>角色专属</option>
+                        <option value="preset" ${editingRx._scope === 'preset' ? 'selected' : ''}>预设配套</option>
+                      </select>
+                    </div>
+                    <div class="tavern-field-group">
+                      <label>生效时机</label>
                       <select class="tavern-select" id="rx-edit-mode">
                         <option value="display" ${editingRx.markdownOnly && !editingRx.promptOnly ? 'selected' : ''}>仅渲染画面生效</option>
                         <option value="prompt" ${editingRx.promptOnly && !editingRx.markdownOnly ? 'selected' : ''}>仅发送提示词生效</option>
@@ -7511,6 +7876,8 @@
                       <div class="tavern-list-row-sub">${rx._scope === 'card' ? '角色专属' : (rx._scope === 'preset' ? '预设配套' : '全局脚本')} | ${escapeHtmlSimple(String(rx.findRegex).slice(0, 42))}</div>
                     </div>
                     <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small" data-action="move-regex-up" data-rx-id="${rx.id}" data-scope="${rx._scope}">上移</button>
+                      <button type="button" class="tavern-btn small" data-action="move-regex-down" data-rx-id="${rx.id}" data-scope="${rx._scope}">下移</button>
                       <button type="button" class="tavern-btn small" data-action="edit-regex-script" data-rx-id="${rx.id}">编辑</button>
                       <button type="button" class="tavern-btn small danger" data-action="del-regex-script" data-rx-id="${rx.id}" data-scope="${rx._scope}">删</button>
                     </div>
@@ -9188,11 +9555,19 @@
         return;
       }
       if (action === 'fetch-tavern-models') {
-        tavernState.apiConfig.customUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || tavernState.apiConfig.customUrl;
-        tavernState.apiConfig.customKey = document.getElementById('tavern-api-key-input')?.value?.trim() || tavernState.apiConfig.customKey;
+        const inputUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
+        const inputKey = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
+        const curResolved = resolveTavernApiCredentials();
+        if (inputUrl && inputKey) {
+          tavernState.apiConfig.customUrl = inputUrl;
+          tavernState.apiConfig.customKey = inputKey;
+          if (normalizeTavernBaseUrl(inputUrl) !== normalizeTavernBaseUrl(curResolved.baseUrl) || cleanTavernApiKeyString(inputKey) !== cleanTavernApiKeyString(curResolved.apiKey)) {
+            tavernState.apiConfig.useExternalPhoneApi = false;
+          }
+        }
         try {
           showTavernToast('正在拉取模型列表...');
-          const list = await fetchTavernModelList();
+          const list = await fetchTavernModelList(inputUrl, inputKey);
           tavernState.apiConfig.availableModels = list;
           if (list.length > 0 && !tavernState.apiConfig.customModel) {
             tavernState.apiConfig.customModel = list[0];
@@ -9206,6 +9581,19 @@
         return;
       }
       if (action === 'test-tavern-api') {
+        const inputUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
+        const inputKey = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
+        const inputMod = document.getElementById('tavern-api-model-input')?.value?.trim() || '';
+        const curResolved = resolveTavernApiCredentials();
+        if (inputUrl && inputKey) {
+          tavernState.apiConfig.customUrl = inputUrl;
+          tavernState.apiConfig.customKey = inputKey;
+          if (inputMod) tavernState.apiConfig.customModel = inputMod;
+          if (normalizeTavernBaseUrl(inputUrl) !== normalizeTavernBaseUrl(curResolved.baseUrl) || cleanTavernApiKeyString(inputKey) !== cleanTavernApiKeyString(curResolved.apiKey)) {
+            tavernState.apiConfig.useExternalPhoneApi = false;
+          }
+          await saveTavernStore();
+        }
         try {
           showTavernToast('正在测试API连接...');
           const res = await callTavernAiCompletion([{ role: 'user', content: '请回复OK两个字母' }]);
@@ -9557,11 +9945,34 @@
         }
         return;
       }
+      if (action === 'move-regex-up' || action === 'move-regex-down') {
+        const rxId = actionEl.getAttribute('data-rx-id');
+        const scope = actionEl.getAttribute('data-scope') || 'global';
+        const card = getActiveCard();
+        const preset = getActivePreset();
+        const list = scope === 'card'
+          ? (card && Array.isArray(card.regexScripts) ? card.regexScripts : [])
+          : (scope === 'preset' ? (preset && Array.isArray(preset.regexScripts) ? preset.regexScripts : []) : (tavernState.globalRegexScripts || []));
+        const idx = list.findIndex(r => r && r.id === rxId);
+        if (idx >= 0) {
+          const swapIdx = action === 'move-regex-up' ? idx - 1 : idx + 1;
+          if (swapIdx >= 0 && swapIdx < list.length) {
+            const tmp = list[idx];
+            list[idx] = list[swapIdx];
+            list[swapIdx] = tmp;
+            await saveTavernStore();
+            refreshOpenDrawerOnly();
+            renderTavernChatFloors(false);
+          }
+        }
+        return;
+      }
       if (action === 'edit-regex-script') {
-        uiRuntime.editingRegexId = actionEl.getAttribute('data-rx-id');
-        uiRuntime.activeDrawer = 7;
+        const clickedId = actionEl.getAttribute('data-rx-id');
+        uiRuntime.editingRegexId = uiRuntime.editingRegexId === clickedId ? null : clickedId;
+        uiRuntime.openDrawerKey = 'cubes';
         uiRuntime.openExtensionAcc.regex = true;
-        renderTavernApp(true);
+        refreshOpenDrawerOnly();
         return;
       }
       if (action === 'close-regex-editor') {
@@ -9571,20 +9982,38 @@
       }
       if (action === 'save-regex-editor') {
         const rxId = actionEl.getAttribute('data-rx-id');
-        const scope = actionEl.getAttribute('data-scope');
+        const oldScope = actionEl.getAttribute('data-scope') || 'global';
+        const newScope = document.getElementById('rx-edit-scope')?.value || oldScope;
         const card = getActiveCard();
         const preset = getActivePreset();
-        const list = scope === 'card'
-          ? (card.regexScripts || [])
-          : (scope === 'preset' ? (preset.regexScripts || []) : (tavernState.globalRegexScripts || []));
-        const item = list.find(r => r.id === rxId);
-        if (item) {
+        const getListByScope = (sc) => {
+          if (sc === 'card') {
+            if (!Array.isArray(card.regexScripts)) card.regexScripts = [];
+            return card.regexScripts;
+          }
+          if (sc === 'preset') {
+            if (!Array.isArray(preset.regexScripts)) preset.regexScripts = [];
+            return preset.regexScripts;
+          }
+          if (!Array.isArray(tavernState.globalRegexScripts)) tavernState.globalRegexScripts = [];
+          return tavernState.globalRegexScripts;
+        };
+        const oldList = getListByScope(oldScope);
+        const itemIdx = oldList.findIndex(r => r && r.id === rxId);
+        if (itemIdx >= 0) {
+          const item = oldList[itemIdx];
           item.scriptName = document.getElementById('rx-edit-name')?.value || item.scriptName;
           item.findRegex = document.getElementById('rx-edit-find')?.value || '';
           item.replaceString = document.getElementById('rx-edit-replace')?.value ?? '';
           const mode = document.getElementById('rx-edit-mode')?.value || 'display';
           item.markdownOnly = mode === 'display' || mode === 'both';
           item.promptOnly = mode === 'prompt' || mode === 'both';
+          item.scope = newScope;
+          if (newScope !== oldScope) {
+            oldList.splice(itemIdx, 1);
+            const targetList = getListByScope(newScope);
+            targetList.unshift(item);
+          }
           uiRuntime.editingRegexId = null;
           await saveTavernStore();
           refreshOpenDrawerOnly();
@@ -9594,7 +10023,7 @@
         return;
       }
       if (action === 'del-regex-script') {
-        const confirmed = await callGenericPopupShim('确定要删除该正则脚本吗？', 2);
+        const confirmed = await callGenericPopupShim('确定要删除该正则脚本吗？删除后无法恢复。', 2);
         if (!confirmed) return;
         const rxId = actionEl.getAttribute('data-rx-id');
         const scope = actionEl.getAttribute('data-scope');
@@ -9607,9 +10036,13 @@
         } else {
           tavernState.globalRegexScripts = (tavernState.globalRegexScripts || []).filter(r => r.id !== rxId);
         }
+        if (uiRuntime.editingRegexId === rxId) {
+          uiRuntime.editingRegexId = null;
+        }
         await saveTavernStore();
         refreshOpenDrawerOnly();
         renderTavernChatFloors(false);
+        showTavernToast('已删除正则脚本');
         return;
       }
       if (action === 'save-author-note') {
@@ -9904,6 +10337,10 @@
       if (changeType === 'switch-external-api-preset') {
         tavernState.apiConfig.selectedExternalPresetName = target.value;
         tavernState.apiConfig.useExternalPhoneApi = true;
+        tavernState.apiConfig.activeSavedPresetId = '';
+        tavernState.apiConfig.customUrl = '';
+        tavernState.apiConfig.customKey = '';
+        tavernState.apiConfig.customModel = '';
         const phoneSelect = document.getElementById('api-preset-select');
         if (phoneSelect && target.value) {
           phoneSelect.value = target.value;
@@ -10011,6 +10448,12 @@
         const k = target.getAttribute('data-api-bool');
         const checked = Boolean(target.checked);
         tavernState.apiConfig[k] = checked;
+        if (k === 'useExternalPhoneApi' && checked) {
+          tavernState.apiConfig.activeSavedPresetId = '';
+          tavernState.apiConfig.customUrl = '';
+          tavernState.apiConfig.customKey = '';
+          tavernState.apiConfig.customModel = '';
+        }
         if (k === 'streamEnabled') {
           const preset = getActivePreset();
           if (preset) preset.stream_openai = checked;
