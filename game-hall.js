@@ -1988,6 +1988,9 @@ code, pre {
 
   async function callGenericPopupShim(contentHtml, popupType = 1) {
     const stage = document.getElementById('tavern-stage-root') || document.body;
+    if (typeof window.pushMobileBackGuard === 'function') {
+      window.pushMobileBackGuard('tavern_generic_popup');
+    }
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className = 'tavern-modal-backdrop';
@@ -2008,6 +2011,7 @@ code, pre {
       const okBtn = document.createElement('button');
       okBtn.type = 'button';
       okBtn.className = 'tavern-btn small primary';
+      okBtn.setAttribute('data-popup-ok', '1');
       okBtn.textContent = '确定';
       okBtn.onclick = () => { overlay.remove(); resolve(1); };
       footer.appendChild(okBtn);
@@ -2015,6 +2019,7 @@ code, pre {
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'tavern-btn small';
+        cancelBtn.setAttribute('data-popup-cancel', '1');
         cancelBtn.textContent = '取消';
         cancelBtn.onclick = () => { overlay.remove(); resolve(0); };
         footer.appendChild(cancelBtn);
@@ -6010,7 +6015,23 @@ code, pre {
     }
     syncFrameHeight();
   });
-  document.addEventListener('click', function() {
+  document.addEventListener('touchend', function() {
+    try {
+      if (window.parent && typeof window.parent.replenishMobileBackGuard === 'function') {
+        window.parent.replenishMobileBackGuard();
+      }
+    } catch (e) {}
+  }, true);
+  document.addEventListener('click', function(ev) {
+    try {
+      if (ev && ev.target && ev.target.closest) {
+        var linkEl = ev.target.closest('a[href="#"], a[href^="javascript:"]');
+        if (linkEl) ev.preventDefault();
+      }
+      if (window.parent && typeof window.parent.replenishMobileBackGuard === 'function') {
+        window.parent.replenishMobileBackGuard();
+      }
+    } catch (e) {}
     if (window.$ && !window.$._tavernWrapped) {
       window.$ = wrapJQueryInstance(window.$);
       window.jQuery = window.$;
@@ -15448,11 +15469,13 @@ code, pre {
   };
 
   let lastTavernSubBackTs = 0;
+  let lastTavernExitConfirmTs = 0;
 
   window.handleTavernMobileBack = function () {
     const now = Date.now();
     const markSubLayerClosed = () => {
       lastTavernSubBackTs = Date.now();
+      lastTavernExitConfirmTs = 0;
       if (typeof window.pushMobileBackGuard === 'function') {
         window.pushMobileBackGuard('tavern_keep');
       }
@@ -15516,15 +15539,28 @@ code, pre {
         return markSubLayerClosed();
       }
     }
-    // 2. Check Tavern helper script or plugin modal
-    const modalBackdrop = document.querySelector('#tavern-stage-root > .tavern-modal-backdrop');
+    // 2. Check Tavern helper script, confirm popup, or plugin modal
+    const allBackdrops = Array.from(document.querySelectorAll('.tavern-modal-backdrop'));
+    const modalBackdrop = allBackdrops.length > 0 ? allBackdrops[allBackdrops.length - 1] : null;
     if (modalBackdrop || uiRuntime.activeHelperScriptId || uiRuntime.activePluginModalId) {
       uiRuntime.activeHelperScriptId = null;
       uiRuntime.activePluginModalId = null;
       if (modalBackdrop) {
-        modalBackdrop.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
-        modalBackdrop.remove();
+        const cancelOrCloseBtn = modalBackdrop.querySelector('[data-popup-cancel], [data-action="close-helper-script"], [data-action="close-plugin-modal"], [data-popup-ok]');
+        if (cancelOrCloseBtn && typeof cancelOrCloseBtn.click === 'function') {
+          cancelOrCloseBtn.click();
+        }
+        if (modalBackdrop.isConnected) {
+          modalBackdrop.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
+          modalBackdrop.remove();
+        }
       }
+      return markSubLayerClosed();
+    }
+    // 2b. Check visible Tavern error banner
+    const errBanner = document.getElementById('tavern-error-banner');
+    if (errBanner && errBanner.classList.contains('visible')) {
+      errBanner.classList.remove('visible');
       return markSubLayerClosed();
     }
     // 3. Check floating card helper panels (e.g. gourmet-fixed-panel-ui, adv-codex-panel)
@@ -15593,11 +15629,24 @@ code, pre {
       refreshBottomPopupsOnly();
       return markSubLayerClosed();
     }
-    // 7. Cooldown guard: prevent rapid double-swipe from immediately exiting Tavern right after closing a sub-layer
-    if (now - lastTavernSubBackTs < 650) {
+    // 6b. If an input or textarea inside Tavern is focused, blur it first so swiping back while typing only dismisses the keyboard
+    const activeEl = document.activeElement;
+    const gameScreen = document.getElementById('game-hall-screen');
+    if (activeEl && gameScreen && gameScreen.contains(activeEl) && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+      activeEl.blur();
       return markSubLayerClosed();
     }
-    // 8. Otherwise, exit Tavern back to the phone home screen
+    // 7. Cooldown guard: prevent rapid double-swipe from immediately exiting Tavern right after closing a sub-layer
+    if (now - lastTavernSubBackTs < 900) {
+      return markSubLayerClosed();
+    }
+    // 8. Require double-swipe confirmation on the main Tavern chat screen before exiting to the phone home screen
+    if (now - lastTavernExitConfirmTs > 2200) {
+      lastTavernExitConfirmTs = now;
+      showTavernToast('再滑一次返回退出酒馆回到桌面');
+      return true;
+    }
+    lastTavernExitConfirmTs = 0;
     window.exitTavernToHome();
     return true;
   };

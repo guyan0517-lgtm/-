@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -110623,20 +110623,27 @@ ${specificRules}`;
         // ================= 手机滑动返回拦截：滑动返回等于应用内返回上一层，QQ列表返回主屏幕，主页面返回绝不退出软件 =================
         (function setupMobileBackNavigation() {
           let isHandlingPop = false;
-          let hasUserActivatedHistoryGuard = false;
+          let userActivatedGuardCount = 0;
+          let lastGesturePushTs = 0;
           let lastPopHandledTs = 0;
+          const MAX_USER_GUARD_DEPTH = 6;
 
           window.pushMobileBackGuard = function (tag) {
             if (isHandlingPop) return;
             try {
               const st = window.history.state;
-              if (!st || !st.tukeyGuard || st.tag === "root" || st.tag === "keep_root" || st.tag === "user_root") {
-                window.history.replaceState({ tukeyGuard: true, tag: "user_root" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "user_guard_1" }, "");
+              if (!st || !st.tukeyGuard) {
+                window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
               }
-              window.history.pushState({ tukeyGuard: true, tag: tag || "screen" }, "");
-              if (navigator.userActivation && navigator.userActivation.isActive) {
-                hasUserActivatedHistoryGuard = true;
+              const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
+              if (isUserActive) {
+                if (userActivatedGuardCount < MAX_USER_GUARD_DEPTH) {
+                  userActivatedGuardCount++;
+                  lastGesturePushTs = Date.now();
+                  window.history.pushState({ tukeyGuard: true, tag: tag || "screen", userActivated: true }, "");
+                }
+              } else if (userActivatedGuardCount <= 0) {
+                window.history.pushState({ tukeyGuard: true, tag: tag || "screen" }, "");
               }
             } catch (_) {}
           };
@@ -110645,27 +110652,27 @@ ${specificRules}`;
             try {
               window.history.replaceState({ tukeyGuard: true, tag: "root" }, "");
               window.history.pushState({ tukeyGuard: true, tag: "guard_1" }, "");
-              window.history.pushState({ tukeyGuard: true, tag: "guard_2" }, "");
-              window.history.pushState({ tukeyGuard: true, tag: "guard_3" }, "");
             } catch (_) {}
           };
 
           seedHistoryGuardStack();
 
-          // 关键：移动端浏览器要求至少有一次在用户真实激活手势 touchend/pointerup/click 中触发的 pushState，否则手势返回会直接穿透历史栈退出到手机桌面
+          // 关键：移动端浏览器要求每个历史记录条目必须在独立的用户真实手势中调用 pushState 才会被标记为有效返回点，单次循环塞入多个或 popstate 内塞入都会被浏览器跳过并直接退回手机桌面
           const replenishGuardOnGesture = () => {
             if (isHandlingPop) return;
             try {
-              const st = window.history.state;
+              const now = Date.now();
+              if (now - lastGesturePushTs < 120) return;
               const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
-              if (!hasUserActivatedHistoryGuard || !st || !st.tukeyGuard || st.tag === "root" || st.tag === "keep_root" || st.tag === "user_root") {
-                window.history.replaceState({ tukeyGuard: true, tag: "user_root" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "user_guard_1" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "user_guard_2" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "user_guard_3" }, "");
-                if (isUserActive) {
-                  hasUserActivatedHistoryGuard = true;
-                }
+              if (!isUserActive) return;
+              const st = window.history.state;
+              if (!st || !st.tukeyGuard) {
+                window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
+              }
+              if (userActivatedGuardCount < MAX_USER_GUARD_DEPTH) {
+                userActivatedGuardCount++;
+                lastGesturePushTs = now;
+                window.history.pushState({ tukeyGuard: true, tag: "user_guard_" + userActivatedGuardCount, userActivated: true }, "");
               }
             } catch (_) {}
           };
@@ -110695,7 +110702,9 @@ ${specificRules}`;
             if (isHandlingPop) return;
             const now = Date.now();
             isHandlingPop = true;
-            hasUserActivatedHistoryGuard = false;
+            if (userActivatedGuardCount > 0) {
+              userActivatedGuardCount--;
+            }
             try {
               // 每次触发返回时先实时保存当前聊天输入框草稿，防止手势返回丢失文字
               const inp = document.getElementById("chat-input");
@@ -110703,13 +110712,12 @@ ${specificRules}`;
                 window.saveChatDraftRealtime(window.state.activeChatId, inp.value);
               }
 
-              // 立即补齐多层历史栈，并在下次触摸时重新挂载用户手势级护栏，确保无论什么情况连续滑动返回绝不退出到桌面
-              try {
-                window.history.replaceState({ tukeyGuard: true, tag: "keep_root" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "keep_1" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "keep_2" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "keep_3" }, "");
-              } catch (_) {}
+              // 仅当真实用户手势历史栈耗尽时才做兜底补位，平时绝不在 popstate 内覆盖已激活的手势历史栈，防止移动端浏览器触发防诱导干预直接退出到手机系统桌面
+              if (userActivatedGuardCount <= 0) {
+                try {
+                  window.history.pushState({ tukeyGuard: true, tag: "keep_fallback" }, "");
+                } catch (_) {}
+              }
 
               // 防连发穿透保护：180ms内重复触发的popstate直接拦截原地保留
               if (now - lastPopHandledTs < 180) {
