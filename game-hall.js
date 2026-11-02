@@ -411,7 +411,23 @@
   }
   const saveTavernState = saveTavernStore;
 
+  let hasLoadedTavernStoreOnce = false;
+
+  function isHostAppHtmlFallback(str) {
+    if (!str || typeof str !== 'string') return false;
+    return (
+      str.includes('id="phone-screen"') ||
+      str.includes('id="phone-container"') ||
+      str.includes('id="api-settings-version-tag"') ||
+      str.includes('id="game-hall-screen"') ||
+      str.includes('id="tavern-app-shell"')
+    );
+  }
+
   async function loadTavernStore() {
+    const prevChatsByCardId = Object.assign({}, tavernState.chatsByCardId || {});
+    const prevArchivesByCardId = Object.assign({}, tavernState.chatArchivesByCardId || {});
+
     let loaded = null;
     const baseUrl = getTermuxBaseUrl();
     try {
@@ -513,6 +529,7 @@
             stream_openai: true,
             reasoning_effort: 'medium',
             squash_system_messages: false,
+            regexScripts: [],
             prompts: getDefaultPromptOrderItems()
           }
         ];
@@ -527,8 +544,12 @@
           if (p.frequency_penalty === undefined) p.frequency_penalty = p.freqPenalty ?? 0;
           if (p.presence_penalty === undefined) p.presence_penalty = p.presPenalty ?? 0;
           if (p.repetition_penalty === undefined) p.repetition_penalty = p.repPenalty ?? 1.0;
+          if (!Array.isArray(p.regexScripts)) p.regexScripts = [];
           if (!Array.isArray(p.prompts) || p.prompts.length === 0) {
             p.prompts = getDefaultPromptOrderItems();
+          } else if (!p.builtin) {
+            // Remove unlinked prompts that were previously appended with fallback injection_order >= 200
+            p.prompts = p.prompts.filter((item, idx) => !(idx > 5 && Number(item.injection_order) >= 200 && !item.marker && item.identifier !== 'chatHistory'));
           }
         });
       }
@@ -544,7 +565,17 @@
       if (!Array.isArray(tavernState.plugins)) {
         tavernState.plugins = [];
       } else {
-        tavernState.plugins = tavernState.plugins.filter(pl => pl && pl.id !== 'plugin_d100_rng' && pl.id !== 'plugin_builtin_d100' && pl.builtInType !== 'd100_pool');
+        tavernState.plugins = tavernState.plugins
+          .filter(pl => pl && pl.id !== 'plugin_d100_rng' && pl.id !== 'plugin_builtin_d100' && pl.builtInType !== 'd100_pool')
+          .map(pl => {
+            if (isHostAppHtmlFallback(pl.uiHtml)) pl.uiHtml = '';
+            if (pl.htmlTemplates && typeof pl.htmlTemplates === 'object') {
+              Object.keys(pl.htmlTemplates).forEach(k => {
+                if (isHostAppHtmlFallback(pl.htmlTemplates[k])) delete pl.htmlTemplates[k];
+              });
+            }
+            return pl;
+          });
       }
 
       if (!tavernState.chatsByCardId || typeof tavernState.chatsByCardId !== 'object') {
@@ -553,8 +584,29 @@
       if (!tavernState.chatArchivesByCardId || typeof tavernState.chatArchivesByCardId !== 'object') {
         tavernState.chatArchivesByCardId = {};
       }
+
+      // Never allow a stale storage snapshot to overwrite a richer in-memory chat session
+      if (hasLoadedTavernStoreOnce) {
+        Object.keys(prevChatsByCardId).forEach(cid => {
+          const memSess = prevChatsByCardId[cid];
+          const diskSess = tavernState.chatsByCardId[cid];
+          const memLen = (memSess && Array.isArray(memSess.messages)) ? memSess.messages.length : 0;
+          const diskLen = (diskSess && Array.isArray(diskSess.messages)) ? diskSess.messages.length : 0;
+          if (memLen > diskLen) {
+            tavernState.chatsByCardId[cid] = memSess;
+          }
+        });
+        Object.keys(prevArchivesByCardId).forEach(cid => {
+          const memArc = prevArchivesByCardId[cid];
+          const diskArc = tavernState.chatArchivesByCardId[cid];
+          if (Array.isArray(memArc) && (!Array.isArray(diskArc) || memArc.length > diskArc.length)) {
+            tavernState.chatArchivesByCardId[cid] = memArc;
+          }
+        });
+      }
     }
 
+    hasLoadedTavernStoreOnce = true;
     ensureActiveCardChatInitialized();
   }
   const loadTavernState = loadTavernStore;
@@ -1190,6 +1242,7 @@
             if (!el || !el.appendChild) return;
             items.forEach(item => {
               if (typeof item === 'string') {
+                if (isHostAppHtmlFallback(item)) return;
                 el.insertAdjacentHTML('beforeend', item);
               } else if (item && item._isTavernJq) {
                 item.elements.forEach(child => el.appendChild(child));
@@ -1205,6 +1258,7 @@
             if (!el) return;
             items.forEach(item => {
               if (typeof item === 'string') {
+                if (isHostAppHtmlFallback(item)) return;
                 el.insertAdjacentHTML('afterbegin', item);
               } else if (item && item._isTavernJq) {
                 item.elements.forEach(child => el.insertBefore(child, el.firstChild));
@@ -1225,6 +1279,7 @@
         },
         html(val) {
           if (val === undefined) return arr[0] ? arr[0].innerHTML : '';
+          if (typeof val === 'string' && isHostAppHtmlFallback(val)) return api;
           arr.forEach(el => { if (el) el.innerHTML = String(val); });
           return api;
         },
@@ -1364,7 +1419,7 @@
       try {
         const cleanPath = String(url || '').split('?')[0].split('/').pop() || '';
         for (const p of (tavernState.plugins || [])) {
-          if (p && p.htmlTemplates && cleanPath && p.htmlTemplates[cleanPath]) {
+          if (p && p.htmlTemplates && cleanPath && p.htmlTemplates[cleanPath] && !isHostAppHtmlFallback(p.htmlTemplates[cleanPath])) {
             const cached = p.htmlTemplates[cleanPath];
             if (typeof cb === 'function') cb(cached);
             return cached;
@@ -1373,15 +1428,24 @@
             const ghRes = await fetch(p.repoBaseUrl + '/' + cleanPath);
             if (ghRes.ok) {
               const ghText = await ghRes.text();
-              if (typeof cb === 'function') cb(ghText);
-              return ghText;
+              if (!isHostAppHtmlFallback(ghText)) {
+                if (typeof cb === 'function') cb(ghText);
+                return ghText;
+              }
             }
           }
         }
-        const res = await fetch(url);
-        const text = await res.text();
-        if (typeof cb === 'function') cb(text);
-        return text;
+        if (/^https?:\/\//i.test(String(url || ''))) {
+          const res = await fetch(url);
+          if (res.ok) {
+            const text = await res.text();
+            if (!isHostAppHtmlFallback(text)) {
+              if (typeof cb === 'function') cb(text);
+              return text;
+            }
+          }
+        }
+        return '';
       } catch (_) {
         return '';
       }
@@ -1402,16 +1466,19 @@
   async function renderExtensionTemplateAsyncShim(extensionName, fileName) {
     const cleanFile = String(fileName || 'settings').replace(/\.html$/i, '') + '.html';
     for (const p of (tavernState.plugins || [])) {
-      if (p && p.htmlTemplates && p.htmlTemplates[cleanFile]) {
+      if (p && p.htmlTemplates && p.htmlTemplates[cleanFile] && !isHostAppHtmlFallback(p.htmlTemplates[cleanFile])) {
         return p.htmlTemplates[cleanFile];
       }
       if (p && p.repoBaseUrl) {
         try {
           const r = await fetch(p.repoBaseUrl + '/' + cleanFile);
-          if (r.ok) return await r.text();
+          if (r.ok) {
+            const txt = await r.text();
+            if (!isHostAppHtmlFallback(txt)) return txt;
+          }
         } catch (_) {}
       }
-      if (p && p.uiHtml) return p.uiHtml;
+      if (p && p.uiHtml && !isHostAppHtmlFallback(p.uiHtml)) return p.uiHtml;
     }
     return '';
   }
@@ -2178,9 +2245,14 @@
     if (tavernState.background?.syncWithCard && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
       tavernState.background.url = resolveSafeAvatarUrl(newCard.avatar, false);
     }
-    const initSess = buildInitialSessionForCard(newCard);
-    tavernState.chatsByCardId[newCard.id] = initSess;
-    tavernState.chatArchivesByCardId[newCard.id] = [initSess];
+    const existingSess = tavernState.chatsByCardId[newCard.id];
+    if (!existingSess || !Array.isArray(existingSess.messages) || existingSess.messages.length <= 1) {
+      const initSess = buildInitialSessionForCard(newCard);
+      tavernState.chatsByCardId[newCard.id] = initSess;
+      if (!Array.isArray(tavernState.chatArchivesByCardId[newCard.id]) || tavernState.chatArchivesByCardId[newCard.id].length === 0) {
+        tavernState.chatArchivesByCardId[newCard.id] = [initSess];
+      }
+    }
 
     return {
       card: newCard,
@@ -2189,6 +2261,47 @@
       helperCount: helperScripts.length,
       greetingCount: 1 + altGreetings.length
     };
+  }
+
+  function extractPresetRegexScripts(rawJson) {
+    if (!rawJson || typeof rawJson !== 'object') return [];
+    const ext = rawJson.extensions || {};
+    const sp = ext.SPreset || rawJson.SPreset || {};
+    const candidates = [
+      rawJson.regex_scripts,
+      rawJson.regexScripts,
+      ext.regex_scripts,
+      ext.regexScripts,
+      ext.preset_regexes,
+      sp.RegexBinding && sp.RegexBinding.regexes,
+      sp.regexes,
+      sp.regex_scripts,
+      ext.RegexBinding && ext.RegexBinding.regexes
+    ];
+    if (Array.isArray(ext.tavern_helper)) {
+      ext.tavern_helper.forEach(pair => {
+        if (Array.isArray(pair) && (pair[0] === 'regex_scripts' || pair[0] === 'regexes') && Array.isArray(pair[1])) {
+          candidates.push(pair[1]);
+        }
+      });
+    } else if (ext.tavern_helper && typeof ext.tavern_helper === 'object') {
+      if (Array.isArray(ext.tavern_helper.regex_scripts)) candidates.push(ext.tavern_helper.regex_scripts);
+      if (Array.isArray(ext.tavern_helper.regexes)) candidates.push(ext.tavern_helper.regexes);
+    }
+    const rawList = [];
+    const seenIds = new Set();
+    candidates.forEach(arr => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        if (!item.findRegex && !item.regex && !item.scriptName && !item.name) return;
+        const key = item.id || ((item.scriptName || item.name || '') + '::' + (item.findRegex || item.regex || ''));
+        if (seenIds.has(key)) return;
+        seenIds.add(key);
+        rawList.push(item);
+      });
+    });
+    return normalizeRegexList(rawList, 'preset');
   }
 
   function parsePresetFromRaw(rawJson, fallbackName = '导入预设') {
@@ -2208,14 +2321,14 @@
         // Direct flat prompt_order array
         orderList = rawJson.prompt_order;
       } else {
-        // SillyTavern stores character_id: 100000 and/or 100001; pick the entry with the most complete order array
+        // Official SillyTavern PromptManager always prefers character_id === 100001 (dummyId = 100001) first
         const validGroups = rawJson.prompt_order.filter(o => o && Array.isArray(o.order) && o.order.length > 0);
         if (validGroups.length > 0) {
           validGroups.sort((a, b) => {
-            if (b.order.length !== a.order.length) return b.order.length - a.order.length;
             const aPref = Number(a.character_id) === 100001 ? 2 : (Number(a.character_id) === 100000 ? 1 : 0);
             const bPref = Number(b.character_id) === 100001 ? 2 : (Number(b.character_id) === 100000 ? 1 : 0);
-            return bPref - aPref;
+            if (bPref !== aPref) return bPref - aPref;
+            return b.order.length - a.order.length;
           });
           orderList = validGroups[0].order;
         }
@@ -2255,24 +2368,28 @@
       });
     });
 
-    rawPrompts.forEach((p, rawIdx) => {
-      if (!p || !p.identifier || usedIds.has(p.identifier)) return;
-      usedIds.add(p.identifier);
-      const resolvedContent = p.content || '';
-      const isMarker = structuralMarkers.includes(p.identifier) || (Boolean(p.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(p.identifier));
-      promptItems.push({
-        identifier: p.identifier,
-        name: p.name || p.identifier,
-        enabled: orderList.length > 0 ? false : Boolean(p.enabled ?? true),
-        role: p.role || 'system',
-        content: resolvedContent,
-        marker: isMarker,
-        injection_position: normalizeInjPos(p.injection_position ?? 0),
-        injection_depth: Number(p.injection_depth ?? 4),
-        injection_order: Number(p.injection_order ?? (200 + rawIdx)),
-        forbid_overrides: Boolean(p.forbid_overrides)
+    // Only fall back to rawPrompts when the preset JSON has no prompt_order array at all.
+    // In SillyTavern, prompts in rawJson.prompts that are NOT in prompt_order[100001].order are unlinked prompts and must NOT appear in the prompt manager list.
+    if (orderList.length === 0) {
+      rawPrompts.forEach((p, rawIdx) => {
+        if (!p || !p.identifier || usedIds.has(p.identifier)) return;
+        usedIds.add(p.identifier);
+        const resolvedContent = p.content || '';
+        const isMarker = structuralMarkers.includes(p.identifier) || (Boolean(p.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(p.identifier));
+        promptItems.push({
+          identifier: p.identifier,
+          name: p.name || p.identifier,
+          enabled: Boolean(p.enabled ?? true),
+          role: p.role || 'system',
+          content: resolvedContent,
+          marker: isMarker,
+          injection_position: normalizeInjPos(p.injection_position ?? 0),
+          injection_depth: Number(p.injection_depth ?? 4),
+          injection_order: Number(p.injection_order ?? (100 + rawIdx)),
+          forbid_overrides: Boolean(p.forbid_overrides)
+        });
       });
-    });
+    }
 
     if (promptItems.length === 0) {
       promptItems.push(...getDefaultPromptOrderItems());
@@ -2300,6 +2417,8 @@
       if (chItem) chItem.enabled = true;
     }
 
+    const presetRegexScripts = extractPresetRegexScripts(rawJson);
+
     return {
       id: 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       name: rawJson.name || fallbackName.replace(/\.json$/i, ''),
@@ -2323,6 +2442,7 @@
       wi_format: rawJson.wi_format || '{0}',
       scenario_format: rawJson.scenario_format || '{{scenario}}',
       personality_format: rawJson.personality_format || '{{personality}}',
+      regexScripts: presetRegexScripts,
       prompts: promptItems
     };
   }
@@ -2454,9 +2574,11 @@
 
   function getActiveRegexScriptsForCard(cardObj) {
     const card = cardObj || getActiveCard();
+    const preset = getActivePreset();
     const cardScripts = (card && Array.isArray(card.regexScripts)) ? card.regexScripts : [];
+    const presetScripts = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
-    return [...cardScripts, ...globalScripts].filter(s => s && !s.disabled && s.findRegex);
+    return [...cardScripts, ...presetScripts, ...globalScripts].filter(s => s && !s.disabled && s.findRegex);
   }
 
   function applyTavernRegexPipeline(rawText, options = {}) {
@@ -2926,8 +3048,10 @@
           mask-image: radial-gradient(circle at calc(100% - 34px) 22px, transparent 41px, black 42px) !important;
         }
         #tavern-stage-root .mes .name_text {
+          position: absolute !important;
           left: 88px !important;
-          top: 14px !important;
+          top: 12px !important;
+          z-index: 25 !important;
           max-width: calc(100% - 205px) !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
@@ -2941,20 +3065,22 @@
           left: auto !important;
           right: 88px !important;
         }
-        /* Keep action toolbar clear of avatar on both character and user floors */
+        /* Keep .ch_name static so .name_text is anchored to .mes top (above #0 3995t), while .mes_buttons stays elevated */
         #tavern-stage-root .mes[is_user="false"] .ch_name.flex-container.justifySpaceBetween {
-          position: relative !important;
-          z-index: 35 !important;
+          position: static !important;
           padding-left: 72px !important;
           padding-right: 2px !important;
         }
         #tavern-stage-root .mes[is_user="true"] .ch_name.flex-container.justifySpaceBetween {
-          position: relative !important;
-          z-index: 35 !important;
+          position: static !important;
           flex-direction: row !important;
           justify-content: flex-start !important;
           padding-left: 4px !important;
           padding-right: 72px !important;
+        }
+        #tavern-stage-root .mes .mes_buttons {
+          position: relative !important;
+          z-index: 35 !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mes_buttons {
           margin-left: 0 !important;
@@ -2965,43 +3091,43 @@
           z-index: 38 !important;
           flex-wrap: wrap !important;
         }
-        /* Connected metadata capsule under character/user name (zero gap in the middle!) */
+        /* Connected metadata capsule directly under character/user name (zero gap in the middle!) */
         #tavern-stage-root .mesIDDisplay,
         #tavern-stage-root .mes_timer,
         #tavern-stage-root .tokenCounterDisplay {
-          top: 40px !important;
+          top: 32px !important;
           height: 20px !important;
           font-size: 10.5px !important;
           z-index: 20 !important;
         }
         #tavern-stage-root .mes[is_user="false"] .mesIDDisplay {
-          left: 88px !important;
+          left: 80px !important;
           width: 48px !important;
           border-radius: 10px 0 0 10px !important;
           border-right: none !important;
         }
         #tavern-stage-root .mes[is_user="false"] .mes_timer {
-          left: 136px !important;
+          left: 128px !important;
           width: 44px !important;
           border-radius: 0 !important;
           border-left: none !important;
           border-right: none !important;
         }
         #tavern-stage-root .mes[is_user="false"] .tokenCounterDisplay {
-          left: 180px !important;
+          left: 172px !important;
           width: 50px !important;
           border-radius: 0 10px 10px 0 !important;
           border-left: none !important;
         }
         #tavern-stage-root .mes[is_user="false"] .mes_timer:empty + .tokenCounterDisplay,
         #tavern-stage-root .mes .mes_timer:empty + .tokenCounterDisplay {
-          left: 136px !important;
+          left: 128px !important;
           width: 50px !important;
           border-radius: 0 10px 10px 0 !important;
           border-left: none !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mesIDDisplay {
-          right: 88px !important;
+          right: 80px !important;
           left: auto !important;
           width: 48px !important;
           border-radius: 0 10px 10px 0 !important;
@@ -3009,7 +3135,7 @@
           border-left: none !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mes_timer {
-          right: 136px !important;
+          right: 128px !important;
           left: auto !important;
           width: 44px !important;
           border-radius: 0 !important;
@@ -3017,7 +3143,7 @@
           border-right: none !important;
         }
         #tavern-stage-root .mes[is_user="true"] .tokenCounterDisplay {
-          right: 180px !important;
+          right: 172px !important;
           left: auto !important;
           width: 50px !important;
           border-radius: 10px 0 0 10px !important;
@@ -3025,7 +3151,7 @@
           border-right: none !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mes_timer:empty + .tokenCounterDisplay {
-          right: 136px !important;
+          right: 128px !important;
           left: auto !important;
           width: 50px !important;
           border-radius: 10px 0 0 10px !important;
@@ -4155,10 +4281,7 @@
   };
 
   function stripUiEmojis(str) {
-    return String(str || '')
-      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+    return String(str || '').trim();
   }
 
   function showTavernToast(msg) {
@@ -5213,9 +5336,19 @@
   function renderPluginCustomModal() {
     const p = (tavernState.plugins || []).find(x => x.id === uiRuntime.activePluginModalId);
     if (!p) return '';
+    if (isHostAppHtmlFallback(p.uiHtml)) p.uiHtml = '';
+    if (persistentExtSettingsEl && isHostAppHtmlFallback(persistentExtSettingsEl.innerHTML)) {
+      persistentExtSettingsEl.innerHTML = '';
+    }
+    if (persistentExtSettings2El && isHostAppHtmlFallback(persistentExtSettings2El.innerHTML)) {
+      persistentExtSettings2El.innerHTML = '';
+    }
+
     const rawCode = String(p.code || p.content || '');
-    const extractedUi = p.uiHtml || extractEmbeddedHtmlFromPluginCode(rawCode);
-    const mountedExtHtml = (persistentExtSettingsEl ? persistentExtSettingsEl.innerHTML : '') + (persistentExtSettings2El ? persistentExtSettings2El.innerHTML : '');
+    const rawExtractedUi = p.uiHtml || extractEmbeddedHtmlFromPluginCode(rawCode);
+    const extractedUi = isHostAppHtmlFallback(rawExtractedUi) ? '' : rawExtractedUi;
+    const rawMountedExtHtml = (persistentExtSettingsEl ? persistentExtSettingsEl.innerHTML : '') + (persistentExtSettings2El ? persistentExtSettings2El.innerHTML : '');
+    const mountedExtHtml = isHostAppHtmlFallback(rawMountedExtHtml) ? '' : rawMountedExtHtml;
     const btns = Array.isArray(p.buttons) ? p.buttons : [];
 
     const buttonsBarHtml = btns.length > 0 ? `
@@ -5236,7 +5369,7 @@
 
     const safeTranspiledCode = transpilePluginImports(rawCode);
     const fullDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      body{margin:0;padding:12px;font-family:sans-serif;color:#2c2c2e;background:#faf8f5;}
+      body{margin:0;padding:12px;min-height:76vh;font-family:sans-serif;color:#2c2c2e;background:#faf8f5;}
       input,select,textarea,button{font-family:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;box-sizing:border-box;margin:4px 0;}
       button{cursor:pointer;background:#48484a;color:#fff;border:none;}
       .inline-drawer-content{display:block !important;}
@@ -5252,8 +5385,24 @@
         window.event_types = window.parent.event_types;
         window.extension_settings = window.parent.extension_settings;
         window.toastr = window.parent.toastr;
-        window.jQuery = window.parent.jQuery;
-        window.$ = window.parent.$;
+        const parentJq = window.parent.jQuery || window.parent.$;
+        const localJq = function(sel, ctx) {
+          if (typeof sel === 'string') {
+            const s = sel.trim();
+            if (!s.startsWith('<')) {
+              const localNodes = (ctx || document).querySelectorAll(s);
+              if (localNodes && localNodes.length > 0) {
+                return parentJq(localNodes);
+              }
+            }
+          } else if (sel === document || sel === window || sel === document.body) {
+            return parentJq(document.body);
+          }
+          return parentJq(sel, ctx || document);
+        };
+        Object.assign(localJq, parentJq);
+        window.jQuery = localJq;
+        window.$ = localJq;
         window.__ST_BRIDGE__ = window.parent.__ST_BRIDGE__;
         try {
           (async () => {
@@ -5286,8 +5435,6 @@
         <div class="tavern-popup-item" data-action="chat-regenerate-last">重新生成最后一层回复</div>
         <div class="tavern-popup-item" data-action="chat-continue-last">继续续写最后一层回复</div>
         <div class="tavern-popup-item" data-action="chat-impersonate">帮写玩家下一句回复</div>
-        <div class="tavern-popup-item" data-action="popup-translate-last">双语翻译最后一层消息</div>
-        <div class="tavern-popup-item" data-action="popup-translate-input">翻译输入框草稿文字</div>
         <div class="tavern-popup-item" data-action="open-drawer-direct" data-drawer="address">切换或导入角色存档</div>
       </div>
     `;
@@ -5554,6 +5701,7 @@
   function renderDrawerSliders() {
     const preset = getActivePreset();
     const prompts = Array.isArray(preset.prompts) ? preset.prompts : [];
+    const presetRegexes = Array.isArray(preset.regexScripts) ? preset.regexScripts : [];
 
     return `
       <div class="tavern-section-card">
@@ -5671,6 +5819,30 @@
             </div>
           ` : ''}
         </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>当前预设配套正则 共${presetRegexes.length}条</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="trigger-import-presets">导入配套正则</button>
+            <button type="button" class="tavern-btn small primary" data-action="open-drawer-direct" data-drawer="cubes">正则工作台</button>
+          </div>
+        </div>
+        ${presetRegexes.length === 0 ? `
+          <div class="tavern-field-hint">导入带有绑定正则的预设JSON或直接在此选择正则JSON文件，即可在此一键开关预设配套正则</div>
+        ` : presetRegexes.map(rx => `
+          <div class="tavern-list-row">
+            <input type="checkbox" class="tavern-fixed-check" data-action="toggle-regex-script" data-rx-id="${rx.id}" data-scope="preset" ${!rx.disabled ? 'checked' : ''} />
+            <div class="tavern-list-row-main">
+              <div>${escapeHtmlSimple(rx.scriptName)}</div>
+              <div class="tavern-list-row-sub">预设正则 | ${escapeHtmlSimple(String(rx.findRegex).slice(0, 42))}</div>
+            </div>
+            <div class="tavern-list-row-actions">
+              <button type="button" class="tavern-btn small danger" data-action="del-regex-script" data-rx-id="${rx.id}" data-scope="preset">删</button>
+            </div>
+          </div>
+        `).join('')}
       </div>
 
       <div id="completion_prompt_manager" class="tavern-section-card">
@@ -6332,10 +6504,13 @@
   // Drawer 7: fa-cubes (Extensions: Regex, Author's Note, Memory, Plugins)
   function renderDrawerCubes() {
     const card = getActiveCard();
+    const preset = getActivePreset();
     const cardRegexes = (card && Array.isArray(card.regexScripts)) ? card.regexScripts : [];
+    const presetRegexes = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalRegexes = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
     const allRegexes = [
       ...cardRegexes.map(r => ({ ...r, _scope: 'card' })),
+      ...presetRegexes.map(r => ({ ...r, _scope: 'preset' })),
       ...globalRegexes.map(r => ({ ...r, _scope: 'global' }))
     ];
     const editingRx = allRegexes.find(r => r.id === uiRuntime.editingRegexId) || null;
@@ -6404,12 +6579,12 @@
               ` : ''}
 
               <div style="max-height:240px;overflow-y:auto;">
-                ${allRegexes.length === 0 ? `<div style="font-size:12px;color:#888;padding:6px 0;">暂无正则脚本，导入角色卡时会自动提取并默认启用角色卡内嵌正则。</div>` : allRegexes.map(rx => `
+                ${allRegexes.length === 0 ? `<div style="font-size:12px;color:#888;padding:6px 0;">暂无正则脚本，导入角色卡或预设时会自动提取并启用内嵌正则。</div>` : allRegexes.map(rx => `
                   <div class="tavern-list-row">
                     <input type="checkbox" class="tavern-fixed-check" data-action="toggle-regex-script" data-rx-id="${rx.id}" data-scope="${rx._scope}" ${!rx.disabled ? 'checked' : ''} />
                     <div class="tavern-list-row-main">
                       <div>${escapeHtmlSimple(rx.scriptName)}</div>
-                      <div class="tavern-list-row-sub">${rx._scope === 'card' ? '角色专属' : '全局脚本'} | ${escapeHtmlSimple(String(rx.findRegex).slice(0, 42))}</div>
+                      <div class="tavern-list-row-sub">${rx._scope === 'card' ? '角色专属' : (rx._scope === 'preset' ? '预设配套' : '全局脚本')} | ${escapeHtmlSimple(String(rx.findRegex).slice(0, 42))}</div>
                     </div>
                     <div class="tavern-list-row-actions">
                       <button type="button" class="tavern-btn small" data-action="edit-regex-script" data-rx-id="${rx.id}">编辑</button>
@@ -8163,6 +8338,10 @@
           const card = getActiveCard();
           if (!Array.isArray(card.regexScripts)) card.regexScripts = [];
           card.regexScripts.unshift(newRx);
+        } else if (scope === 'preset') {
+          const preset = getActivePreset();
+          if (!Array.isArray(preset.regexScripts)) preset.regexScripts = [];
+          preset.regexScripts.unshift(newRx);
         } else {
           tavernState.globalRegexScripts.unshift(newRx);
         }
@@ -8175,7 +8354,10 @@
         const rxId = actionEl.getAttribute('data-rx-id');
         const scope = actionEl.getAttribute('data-scope');
         const card = getActiveCard();
-        const list = scope === 'card' ? (card.regexScripts || []) : (tavernState.globalRegexScripts || []);
+        const preset = getActivePreset();
+        const list = scope === 'card'
+          ? (card.regexScripts || [])
+          : (scope === 'preset' ? (preset.regexScripts || []) : (tavernState.globalRegexScripts || []));
         const item = list.find(r => r.id === rxId);
         if (item) {
           item.disabled = !actionEl.checked;
@@ -8186,7 +8368,9 @@
       }
       if (action === 'edit-regex-script') {
         uiRuntime.editingRegexId = actionEl.getAttribute('data-rx-id');
-        refreshOpenDrawerOnly();
+        uiRuntime.activeDrawer = 7;
+        uiRuntime.openExtensionAcc.regex = true;
+        renderTavernApp(true);
         return;
       }
       if (action === 'close-regex-editor') {
@@ -8198,7 +8382,10 @@
         const rxId = actionEl.getAttribute('data-rx-id');
         const scope = actionEl.getAttribute('data-scope');
         const card = getActiveCard();
-        const list = scope === 'card' ? (card.regexScripts || []) : (tavernState.globalRegexScripts || []);
+        const preset = getActivePreset();
+        const list = scope === 'card'
+          ? (card.regexScripts || [])
+          : (scope === 'preset' ? (preset.regexScripts || []) : (tavernState.globalRegexScripts || []));
         const item = list.find(r => r.id === rxId);
         if (item) {
           item.scriptName = document.getElementById('rx-edit-name')?.value || item.scriptName;
@@ -8219,8 +8406,11 @@
         const rxId = actionEl.getAttribute('data-rx-id');
         const scope = actionEl.getAttribute('data-scope');
         const card = getActiveCard();
+        const preset = getActivePreset();
         if (scope === 'card' && card) {
           card.regexScripts = (card.regexScripts || []).filter(r => r.id !== rxId);
+        } else if (scope === 'preset' && preset) {
+          preset.regexScripts = (preset.regexScripts || []).filter(r => r.id !== rxId);
         } else {
           tavernState.globalRegexScripts = (tavernState.globalRegexScripts || []).filter(r => r.id !== rxId);
         }
@@ -9025,10 +9215,42 @@
 
   async function handleBatchImportPresets(files) {
     let count = 0;
+    let rxAdded = 0;
     for (const file of files) {
       try {
         const raw = JSON.parse(await file.text());
+        // If user selected a standalone regex script or regex array while importing presets, attach to active preset
+        const isStandaloneRegex = Array.isArray(raw)
+          ? raw.some(r => r && (r.findRegex !== undefined || r.scriptName !== undefined || r.find_regex !== undefined))
+          : (raw && !Array.isArray(raw.prompts) && (raw.findRegex !== undefined || raw.scriptName !== undefined || raw.find_regex !== undefined));
+        if (isStandaloneRegex) {
+          const activePreset = getActivePreset();
+          if (!Array.isArray(activePreset.regexScripts)) activePreset.regexScripts = [];
+          const list = Array.isArray(raw) ? raw : [raw];
+          list.forEach((rx, idx) => {
+            if (!rx || typeof rx !== 'object') return;
+            activePreset.regexScripts.push({
+              id: rx.id || ('rx_preset_' + Date.now() + '_' + idx),
+              scriptName: rx.scriptName || rx.name || ('预设正则 ' + (idx + 1)),
+              findRegex: rx.findRegex || rx.find_regex || '',
+              replaceString: rx.replaceString ?? rx.replace_string ?? '',
+              trimStrings: Array.isArray(rx.trimStrings) ? rx.trimStrings : [],
+              placement: Array.isArray(rx.placement) ? rx.placement : [1, 2],
+              disabled: Boolean(rx.disabled),
+              markdownOnly: rx.markdownOnly !== undefined ? Boolean(rx.markdownOnly) : true,
+              promptOnly: Boolean(rx.promptOnly),
+              runOnEdit: rx.runOnEdit !== undefined ? Boolean(rx.runOnEdit) : true,
+              substituteRegex: Number(rx.substituteRegex || 0),
+              minDepth: rx.minDepth ?? null,
+              maxDepth: rx.maxDepth ?? null,
+              scope: 'preset'
+            });
+            rxAdded++;
+          });
+          continue;
+        }
         const preset = parsePresetFromRaw(raw, file.name);
+        if (Array.isArray(preset.regexScripts)) rxAdded += preset.regexScripts.length;
         tavernState.presets.unshift(preset);
         tavernState.activePresetId = preset.id;
         count++;
@@ -9036,10 +9258,17 @@
         console.error('Preset import error:', file.name, err);
       }
     }
-    if (count > 0) {
+    if (count > 0 || rxAdded > 0) {
       await saveTavernStore();
       refreshOpenDrawerOnly();
-      showTavernToast('成功导入并启用 ' + count + ' 个预设');
+      renderTavernChatFloors(false);
+      if (count > 0 && rxAdded > 0) {
+        showTavernToast('成功导入预设并提取 ' + rxAdded + ' 条配套正则');
+      } else if (rxAdded > 0) {
+        showTavernToast('已为当前预设绑定 ' + rxAdded + ' 条配套正则');
+      } else {
+        showTavernToast('成功导入并启用 ' + count + ' 个预设');
+      }
     }
   }
 
