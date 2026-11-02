@@ -1735,6 +1735,15 @@
   function buildSillyTavernContextObject() {
     const sess = getActiveChatSession();
     const card = getActiveCard();
+    try {
+      const bbi = tavernState.extensionSettings && tavernState.extensionSettings['st-baibai-image'];
+      if (bbi && bbi.novelai && !bbi.novelai.apiKey) {
+        const extNai = resolveExternalNovelAiConfig();
+        if (extNai && extNai.key) {
+          bbi.novelai.apiKey = extNai.key;
+        }
+      }
+    } catch (_) {}
     return {
       chat: sess ? sess.messages : [],
       characters: tavernState.cards,
@@ -1841,6 +1850,258 @@
       if (parts.length > 0) k = parts[0];
     }
     return k.replace(/[\u200B-\u200D\uFEFF"'\s]+/g, '');
+  }
+
+  function resolveExternalNovelAiConfig() {
+    let key = '';
+    let proxy = '';
+    try {
+      if (typeof getNovelAISettings === 'function') {
+        const cfg = getNovelAISettings();
+        if (cfg) {
+          key = cleanTavernApiKeyString(cfg.key || '');
+          proxy = String(cfg.cors_proxy || '').trim();
+        }
+      }
+    } catch (_) {}
+    if (!key) {
+      const domKey = document.getElementById('novelai-api-key')?.value || localStorage.getItem('novelai_api_key') || '';
+      key = cleanTavernApiKeyString(domKey);
+    }
+    if (!proxy) {
+      proxy = String(document.getElementById('novelai-cors-proxy')?.value || localStorage.getItem('novelai_cors_proxy') || '').trim();
+    }
+    return { key, proxy };
+  }
+
+  function wrapImageBytesInStoreZip(imgUint8) {
+    const nameBytes = new Uint8Array([105, 109, 97, 103, 101, 95, 48, 46, 112, 110, 103]); // "image_0.png"
+    const nameLen = nameBytes.byteLength;
+    const dataLen = imgUint8.byteLength;
+    const localHeaderLen = 30 + nameLen;
+    const cdHeaderLen = 46 + nameLen;
+    const eocdLen = 22;
+    const totalLen = localHeaderLen + dataLen + cdHeaderLen + eocdLen;
+    const buf = new ArrayBuffer(totalLen);
+    const view = new DataView(buf);
+    const bytes = new Uint8Array(buf);
+
+    // Compute standard CRC32
+    let crc = 0 ^ (-1);
+    for (let i = 0; i < dataLen; i++) {
+      let c = (crc ^ imgUint8[i]) & 0xff;
+      for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      crc = (crc >>> 8) ^ c;
+    }
+    crc = (crc ^ (-1)) >>> 0;
+
+    // 1. Local File Header
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint16(6, 0, true);
+    view.setUint16(8, 0, true); // store (uncompressed)
+    view.setUint32(10, 0, true);
+    view.setUint32(14, crc, true);
+    view.setUint32(18, dataLen, true);
+    view.setUint32(22, dataLen, true);
+    view.setUint16(26, nameLen, true);
+    view.setUint16(28, 0, true);
+    bytes.set(nameBytes, 30);
+
+    // 2. File Data
+    bytes.set(imgUint8, localHeaderLen);
+
+    // 3. Central Directory Header
+    const cdOffset = localHeaderLen + dataLen;
+    view.setUint32(cdOffset, 0x02014b50, true);
+    view.setUint16(cdOffset + 4, 20, true);
+    view.setUint16(cdOffset + 6, 20, true);
+    view.setUint16(cdOffset + 8, 0, true);
+    view.setUint16(cdOffset + 10, 0, true); // store
+    view.setUint32(cdOffset + 12, 0, true);
+    view.setUint32(cdOffset + 16, crc, true);
+    view.setUint32(cdOffset + 20, dataLen, true);
+    view.setUint32(cdOffset + 24, dataLen, true);
+    view.setUint16(cdOffset + 28, nameLen, true);
+    view.setUint16(cdOffset + 30, 0, true);
+    view.setUint16(cdOffset + 32, 0, true);
+    view.setUint16(cdOffset + 34, 0, true);
+    view.setUint16(cdOffset + 36, 0, true);
+    view.setUint32(cdOffset + 38, 0, true);
+    view.setUint32(cdOffset + 42, 0, true); // local header offset = 0
+    bytes.set(nameBytes, cdOffset + 46);
+
+    // 4. End of Central Directory (EOCD)
+    const eocdOffset = cdOffset + cdHeaderLen;
+    view.setUint32(eocdOffset, 0x06054b50, true);
+    view.setUint16(eocdOffset + 4, 0, true);
+    view.setUint16(eocdOffset + 6, 0, true);
+    view.setUint16(eocdOffset + 8, 1, true);
+    view.setUint16(eocdOffset + 10, 1, true);
+    view.setUint32(eocdOffset + 12, cdHeaderLen, true);
+    view.setUint32(eocdOffset + 16, cdOffset, true);
+    view.setUint16(eocdOffset + 20, 0, true);
+
+    return buf;
+  }
+
+  async function executeTavernNovelAiFetch(reqUrl, init = {}) {
+    const rawFetch = getTavernRawFetch();
+    const method = (init && init.method) ? init.method : 'GET';
+    const rawHeaders = {};
+    if (init && init.headers) {
+      if (typeof init.headers.forEach === 'function') {
+        init.headers.forEach((v, k) => { rawHeaders[k] = v; });
+      } else if (typeof init.headers === 'object') {
+        Object.assign(rawHeaders, init.headers);
+      }
+    }
+
+    const extNai = resolveExternalNovelAiConfig();
+    const authVal = rawHeaders['Authorization'] || rawHeaders['authorization'] || '';
+    const cleanedKey = cleanTavernApiKeyString(authVal) || extNai.key;
+    if (cleanedKey) {
+      rawHeaders['Authorization'] = 'Bearer ' + cleanedKey;
+      delete rawHeaders['authorization'];
+    }
+    if (!rawHeaders['Accept'] && !rawHeaders['accept']) {
+      rawHeaders['Accept'] = '*/*';
+    }
+
+    const isSubCheck = /\/user\/subscription/i.test(reqUrl);
+    const isGenImage = /\/ai\/generate-image/i.test(reqUrl);
+    if (isSubCheck) {
+      showTavernToast('正在连接 NovelAI 验证订阅状态...');
+    } else if (isGenImage) {
+      showTavernToast('正在请求 NovelAI 生成插图...');
+    }
+
+    const candidateUrls = [];
+    if (isSubCheck) {
+      if (/image\.novelai\.net\/ai\/user\/subscription/i.test(reqUrl)) {
+        candidateUrls.push('https://api.novelai.net/user/subscription');
+      } else {
+        candidateUrls.push(reqUrl);
+        if (/\/ai\/user\/subscription/i.test(reqUrl)) {
+          candidateUrls.push(reqUrl.replace(/\/ai\/user\/subscription/i, '/user/subscription'));
+        }
+        if (!/api\.novelai\.net/i.test(reqUrl)) {
+          candidateUrls.push('https://api.novelai.net/user/subscription');
+        }
+      }
+    } else {
+      candidateUrls.push(reqUrl);
+    }
+
+    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
+    let parsedBody = init ? init.body : undefined;
+    if (typeof parsedBody === 'string') {
+      try { parsedBody = JSON.parse(parsedBody); } catch (_) {}
+    }
+
+    let finalRes = null;
+    let lastErr = null;
+
+    for (const targetUrl of candidateUrls) {
+      // 1. Try server-side /api/proxy first to avoid browser CORS & GFW blocks on novelai.net
+      if (!isStaticHost) {
+        try {
+          const proxyRes = await rawFetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: init?.signal,
+            body: JSON.stringify({
+              url: targetUrl,
+              method,
+              headers: rawHeaders,
+              body: method !== 'GET' && method !== 'HEAD' ? parsedBody : undefined
+            })
+          });
+          if (proxyRes.ok) {
+            finalRes = proxyRes;
+            break;
+          }
+          if (proxyRes.status === 401 || proxyRes.status === 402 || proxyRes.status === 403) {
+            finalRes = proxyRes;
+            break;
+          }
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw err;
+          lastErr = err;
+        }
+      }
+
+      // 2. Try user's custom CORS proxy if configured in outer NovelAI settings
+      if (extNai.proxy) {
+        try {
+          let proxiedUrl = '';
+          if (extNai.proxy.includes('{url}')) {
+            proxiedUrl = extNai.proxy.replace('{url}', encodeURIComponent(targetUrl));
+          } else if (extNai.proxy.includes('?')) {
+            proxiedUrl = extNai.proxy + encodeURIComponent(targetUrl);
+          } else {
+            proxiedUrl = extNai.proxy.replace(/\/+$/, '') + '/' + targetUrl;
+          }
+          const corsRes = await rawFetch(proxiedUrl, {
+            method,
+            headers: rawHeaders,
+            body: method !== 'GET' && method !== 'HEAD' ? init?.body : undefined,
+            signal: init?.signal
+          });
+          if (corsRes.ok || corsRes.status === 401 || corsRes.status === 402) {
+            finalRes = corsRes;
+            break;
+          }
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw err;
+          lastErr = err;
+        }
+      }
+
+      // 3. Direct browser fetch fallback
+      try {
+        const directRes = await rawFetch(targetUrl, {
+          method,
+          headers: rawHeaders,
+          body: method !== 'GET' && method !== 'HEAD' ? init?.body : undefined,
+          signal: init?.signal
+        });
+        finalRes = directRes;
+        if (directRes.ok || directRes.status === 401) break;
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        lastErr = err;
+      }
+    }
+
+    if (!finalRes) {
+      throw lastErr || new Error('NovelAI 网络连接失败，请检查 API Key 或代理地址');
+    }
+
+    // If generating an image and the upstream returned a raw PNG/JPEG/WebP instead of a ZIP archive, wrap it into a store ZIP so ST-BaiBai-Image's ky() parser succeeds
+    if (isGenImage && finalRes.ok) {
+      const ab = await finalRes.arrayBuffer();
+      const u8 = new Uint8Array(ab);
+      const isZip = u8.byteLength >= 4 && u8[0] === 0x50 && u8[1] === 0x4b && u8[2] === 0x03 && u8[3] === 0x04;
+      if (isZip) {
+        return new Response(ab, { status: 200, headers: { 'Content-Type': 'application/zip' } });
+      }
+      // Check if it's a raw PNG (89 50 4E 47), JPEG (FF D8), or WebP (52 49 46 46)
+      const isRawImg = u8.byteLength > 16 && (
+        (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) ||
+        (u8[0] === 0xff && u8[1] === 0xd8) ||
+        (u8[0] === 0x52 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x46)
+      );
+      if (isRawImg) {
+        const zippedBuf = wrapImageBytesInStoreZip(u8);
+        return new Response(zippedBuf, { status: 200, headers: { 'Content-Type': 'application/zip' } });
+      }
+      return new Response(ab, { status: finalRes.status, headers: finalRes.headers });
+    }
+
+    return finalRes;
   }
 
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
@@ -2114,23 +2375,24 @@
             }
           }
 
-          // 3. NovelAI subscription check & image generation inside Tavern plugins
-          if (isTavernActive() && /novelai\.net/i.test(reqUrl)) {
-            let fixedNaiUrl = reqUrl;
-            if (/image\.novelai\.net\/ai\/user\/subscription/i.test(fixedNaiUrl)) {
-              fixedNaiUrl = 'https://api.novelai.net/user/subscription';
-            }
-            return await executeTavernRawFetchWithProxyFallback(fixedNaiUrl, init || {});
+          // 3. NovelAI subscription check & image generation inside Tavern plugins (including custom NAI reverse proxies)
+          if (isTavernActive() && (/novelai\.net/i.test(reqUrl) || /\/ai\/(?:user\/subscription|generate-image|encode-vibe)/i.test(reqUrl) || (/^https?:\/\//i.test(reqUrl) && /\/user\/subscription$/i.test(reqUrl.split('?')[0])))) {
+            return await executeTavernNovelAiFetch(reqUrl, init || {});
           }
-        } catch (_) {}
+        } catch (fetchInterceptorErr) {
+          if (fetchInterceptorErr && fetchInterceptorErr.name === 'AbortError') throw fetchInterceptorErr;
+          if (/novelai\.net|\/ai\/(?:user\/subscription|generate-image)|\/user\/subscription/i.test(String(input || ''))) {
+            throw fetchInterceptorErr;
+          }
+        }
         return prevFetch(input, init);
       };
     }
 
     const toastrShim = {
-      info: (m) => showTavernToast(m),
-      success: (m) => showTavernToast(m),
-      warning: (m) => showTavernToast(m),
+      info: (m, title) => showTavernToast(title ? (title + ': ' + m) : m),
+      success: (m, title) => showTavernToast(title ? (title + ': ' + m) : m),
+      warning: (m, title) => showTavernToast(title ? (title + ': ' + m) : m),
       error: (m, title) => showTavernErrorBanner(title ? (title + ': ' + m) : m),
       clear: () => {}
     };
@@ -3582,6 +3844,13 @@
         background-size: cover !important;
         background-position: center !important;
       }
+      #outerContainer, .gourmet-outer-container {
+        overflow: hidden !important;
+        overflow-x: hidden !important;
+        overflow-y: hidden !important;
+        padding-bottom: 10px !important;
+        box-sizing: content-box !important;
+      }
     </style>`;
 
     const bridgeScript = `<script>
@@ -3794,10 +4063,12 @@
       if (!b || !d) return;
       var contentH = 0;
       var bRect = b.getBoundingClientRect();
-      var rootCard = document.getElementById('statusRoot') || document.getElementById('outerContainer') || document.querySelector('.gourmet-main-frame');
+      var outerC = document.getElementById('outerContainer');
+      var rootCard = document.getElementById('statusRoot') || outerC || document.querySelector('.gourmet-main-frame');
       if (rootCard) {
         var rcRect = rootCard.getBoundingClientRect();
-        contentH = Math.ceil(rcRect.bottom - bRect.top) + 6;
+        var ocBottom = outerC ? outerC.getBoundingClientRect().bottom : rcRect.bottom;
+        contentH = Math.ceil(Math.max(rcRect.bottom, ocBottom) - bRect.top) + 10;
       } else {
         var children = b.children;
         if (children && children.length > 0) {
@@ -5506,15 +5777,16 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'tavern-toast-banner';
-      const root = document.getElementById('tavern-stage-root') || document.body;
-      root.appendChild(el);
+      document.body.appendChild(el);
+    } else if (el.parentElement !== document.body) {
+      document.body.appendChild(el);
     }
     el.textContent = stripUiEmojis(String(msg || '').replace(/[()（）]/g, ' '));
     el.classList.add('visible');
     if (uiRuntime.toastTimer) clearTimeout(uiRuntime.toastTimer);
     uiRuntime.toastTimer = setTimeout(() => {
       el.classList.remove('visible');
-    }, 2400);
+    }, 2600);
   }
 
   function showTavernErrorBanner(msg) {
@@ -5522,13 +5794,14 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'tavern-error-banner';
-      const root = document.getElementById('tavern-stage-root') || document.body;
-      root.appendChild(el);
+      document.body.appendChild(el);
+    } else if (el.parentElement !== document.body) {
+      document.body.appendChild(el);
     }
     const cleanMsg = stripUiEmojis(String(msg || '调用失败').replace(/[()（）]/g, ' '));
     el.innerHTML = `
       <div class="tavern-error-banner-body">
-        <div class="tavern-error-banner-title">酒馆AI调用报错</div>
+        <div class="tavern-error-banner-title">酒馆提示与报错</div>
         <div class="tavern-error-banner-desc">${escapeHtmlSimple(cleanMsg)}</div>
       </div>
       <button type="button" class="tavern-error-banner-close" onclick="this.parentElement.classList.remove('visible')">关闭</button>
@@ -5800,16 +6073,18 @@
         40% { transform: scale(1.05); opacity: 1; }
       }
       #tavern-error-banner {
-        position: absolute;
+        position: fixed;
         top: 56px;
-        left: 10px;
-        right: 10px;
-        z-index: 3600;
+        left: 12px;
+        right: 12px;
+        max-width: 460px;
+        margin: 0 auto;
+        z-index: 2147483647;
         background: rgba(255, 244, 244, 0.98);
         border: 1.5px solid rgba(217, 83, 79, 0.75);
         border-radius: 14px;
         padding: 10px 12px;
-        box-shadow: 0 10px 26px rgba(180, 40, 40, 0.18);
+        box-shadow: 0 10px 26px rgba(180, 40, 40, 0.22);
         display: none;
         align-items: center;
         justify-content: space-between;
@@ -6503,21 +6778,21 @@
 
       /* Toast Banner */
       #tavern-toast-banner {
-        position: absolute;
+        position: fixed;
         top: 62px;
         left: 50%;
         transform: translateX(-50%) translateY(-10px);
-        z-index: 4000;
-        background: rgba(44, 44, 46, 0.92);
+        z-index: 2147483647;
+        background: rgba(44, 44, 46, 0.94);
         color: #ffffff;
-        padding: 7px 16px;
+        padding: 8px 18px;
         border-radius: 999px;
         font-size: 12.5px;
         font-weight: 600;
         pointer-events: none;
         opacity: 0;
         transition: opacity 0.2s ease, transform 0.2s ease;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         max-width: 88%;
         text-align: center;
       }
@@ -6949,7 +7224,7 @@
 
     const hasReasoning = Boolean(effectiveReasoning);
     const isLiveReasoningOnly = uiRuntime.isGenerating && isLast && !isUser && hasReasoning && !effectiveCleanText.trim();
-    const openReasoningAttr = (isLiveReasoningOnly || fmtCfg.autoCollapseReasoning === false) ? 'open' : '';
+    const openReasoningAttr = (fmtCfg.autoCollapseReasoning === false) ? 'open' : '';
     const reasoningTitleText = isLiveReasoningOnly ? '思考过程中...' : '思考过程';
     const hasTranslation = Boolean(m.translation && String(m.translation).trim());
 
@@ -7088,11 +7363,53 @@
 
     const existingNode = chatEl.querySelector(`.mes[mesid="${idx}"]`);
     if (existingNode) {
-      existingNode.replaceWith(newFloorNode);
+      const oldDetails = existingNode.querySelector('.mes_reasoning_details');
+      const newDetails = newFloorNode.querySelector('.mes_reasoning_details');
+      if (oldDetails && newDetails) {
+        if (oldDetails.hasAttribute('open')) {
+          newDetails.setAttribute('open', '');
+        } else {
+          newDetails.removeAttribute('open');
+        }
+      }
+      const isEditingTransition = Boolean(existingNode.querySelector('.tavern-floor-edit-box') || newFloorNode.querySelector('.tavern-floor-edit-box'));
+      const oldTextEl = existingNode.querySelector('.mes_text');
+      const newTextEl = newFloorNode.querySelector('.mes_text');
+      const hasLiveFramesOrImgs = oldTextEl && (oldTextEl.querySelector('iframe.tavern-html-sandbox-frame') || oldTextEl.querySelector('img'));
+      if (!isEditingTransition && oldTextEl && newTextEl && hasLiveFramesOrImgs) {
+        // Update in-place so already-mounted iframes and images inside .mes_text never detach from document and never reload/flash
+        existingNode.className = newFloorNode.className;
+        const oldAvatarWrapper = existingNode.querySelector('.mesAvatarWrapper');
+        const newAvatarWrapper = newFloorNode.querySelector('.mesAvatarWrapper');
+        if (oldAvatarWrapper && newAvatarWrapper) oldAvatarWrapper.innerHTML = newAvatarWrapper.innerHTML;
+        const oldChName = existingNode.querySelector('.ch_name');
+        const newChName = newFloorNode.querySelector('.ch_name');
+        if (oldChName && newChName) oldChName.innerHTML = newChName.innerHTML;
+        if (newDetails && !oldDetails) {
+          oldTextEl.parentNode.insertBefore(newDetails, oldTextEl);
+        } else if (oldDetails && newDetails) {
+          const oldTitle = oldDetails.querySelector('.mes_reasoning_header_title');
+          const newTitle = newDetails.querySelector('.mes_reasoning_header_title');
+          if (oldTitle && newTitle) oldTitle.textContent = newTitle.textContent;
+          const oldRC = oldDetails.querySelector('.mes_reasoning_content');
+          const newRC = newDetails.querySelector('.mes_reasoning_content');
+          if (oldRC && newRC) oldRC.textContent = newRC.textContent;
+        } else if (oldDetails && !newDetails) {
+          oldDetails.remove();
+        }
+        patchStreamingMesTextDom(oldTextEl, newTextEl.innerHTML);
+        const oldSwipesCounter = existingNode.querySelector('.swipes-counter');
+        const newSwipesCounter = newFloorNode.querySelector('.swipes-counter');
+        if (oldSwipesCounter && newSwipesCounter) oldSwipesCounter.outerHTML = newSwipesCounter.outerHTML;
+        executeInlineMessageScripts(existingNode);
+      } else {
+        existingNode.replaceWith(newFloorNode);
+        executeInlineMessageScripts(newFloorNode);
+      }
     } else {
       chatEl.appendChild(newFloorNode);
+      executeInlineMessageScripts(newFloorNode);
     }
-    executeInlineMessageScripts(newFloorNode);
 
     if (options && options.scrollToBottom && !uiRuntime.userScrolledUpDuringStream) {
       chatEl.scrollTop = chatEl.scrollHeight;
@@ -8409,6 +8726,126 @@
     await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
   }
 
+  function splitUnclosedStreamBlocks(rawStreamText) {
+    const text = String(rawStreamText || '');
+    if (!text) return { completedText: '', hasPendingTail: false };
+
+    let cutIdx = -1;
+    const updateCut = (idx) => {
+      if (idx >= 0 && (cutIdx === -1 || idx < cutIdx)) {
+        cutIdx = idx;
+      }
+    };
+
+    // 1. Check unclosed HTML documents (<!DOCTYPE html or <html without </html>)
+    const lastDoctype = text.search(/```(?:html)?\s*<!DOCTYPE\s+html|<!DOCTYPE\s+html|<html[\s>]/i);
+    if (lastDoctype !== -1 && !/<\/html\s*>/i.test(text.slice(lastDoctype))) {
+      updateCut(lastDoctype);
+    }
+
+    // 2. Check unclosed card status/interactive blocks (e.g. <gourmet_journal>, <chef_newspaper>, <magical_menu>, <Achievement>, <status_block>)
+    const blockTags = ['gourmet_journal', 'chef_newspaper', 'magical_menu', 'Achievement', 'status_block', 'status_bar', 'rpg_status'];
+    for (const tag of blockTags) {
+      const openRx = new RegExp('<' + tag + '\\b[^>]*>', 'gi');
+      let match;
+      let lastOpenIdx = -1;
+      while ((match = openRx.exec(text)) !== null) {
+        lastOpenIdx = match.index;
+      }
+      if (lastOpenIdx !== -1) {
+        const closeRx = new RegExp('<\\/' + tag + '\\s*>', 'i');
+        if (!closeRx.test(text.slice(lastOpenIdx))) {
+          updateCut(lastOpenIdx);
+        }
+      }
+    }
+
+    // 3. Check unclosed first-line [STATUS] before its first newline arrives
+    if (/^\s*\[STATUS\][^\r\n]*$/i.test(text)) {
+      updateCut(0);
+    }
+
+    if (cutIdx !== -1) {
+      return {
+        completedText: text.slice(0, cutIdx),
+        hasPendingTail: true
+      };
+    }
+    return {
+      completedText: text,
+      hasPendingTail: false
+    };
+  }
+
+  function isSameMediaOrFrameNode(oldNode, newNode) {
+    if (!oldNode || !newNode || oldNode.nodeType !== 1 || newNode.nodeType !== 1) return false;
+    if (oldNode.tagName !== newNode.tagName) return false;
+    if (oldNode.tagName === 'IFRAME') {
+      return (oldNode.getAttribute('srcdoc') || '') === (newNode.getAttribute('srcdoc') || '') &&
+             (oldNode.getAttribute('src') || '') === (newNode.getAttribute('src') || '');
+    }
+    if (oldNode.tagName === 'IMG') {
+      return (oldNode.getAttribute('src') || '') === (newNode.getAttribute('src') || '');
+    }
+    const oldFrames = oldNode.querySelectorAll('iframe, img');
+    const newFrames = newNode.querySelectorAll('iframe, img');
+    if (oldFrames.length > 0 && oldFrames.length === newFrames.length) {
+      for (let i = 0; i < oldFrames.length; i++) {
+        if (oldFrames[i].tagName !== newFrames[i].tagName) return false;
+        if (oldFrames[i].tagName === 'IFRAME' && (oldFrames[i].getAttribute('srcdoc') || '') !== (newFrames[i].getAttribute('srcdoc') || '')) {
+          return false;
+        }
+        if (oldFrames[i].tagName === 'IMG' && (oldFrames[i].getAttribute('src') || '') !== (newFrames[i].getAttribute('src') || '')) {
+          return false;
+        }
+      }
+      if (oldNode.outerHTML === newNode.outerHTML) return true;
+    }
+    return false;
+  }
+
+  function patchStreamingMesTextDom(textEl, newHtml) {
+    if (!textEl) return;
+    const temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    const newChildren = Array.from(temp.childNodes);
+    const oldChildren = Array.from(textEl.childNodes);
+
+    for (let i = 0; i < newChildren.length; i++) {
+      const newChild = newChildren[i];
+      const oldChild = oldChildren[i];
+      if (!oldChild) {
+        textEl.appendChild(newChild);
+        continue;
+      }
+      if (oldChild.nodeType === 3 && newChild.nodeType === 3) {
+        if (oldChild.textContent !== newChild.textContent) {
+          oldChild.textContent = newChild.textContent;
+        }
+        continue;
+      }
+      if (oldChild.nodeType === 1 && newChild.nodeType === 1) {
+        // Never touch or reload an existing iframe or image with identical source!
+        if (isSameMediaOrFrameNode(oldChild, newChild)) {
+          continue;
+        }
+        if (oldChild.outerHTML === newChild.outerHTML) {
+          continue;
+        }
+        const hasMediaInside = oldChild.querySelector('iframe, img') || newChild.querySelector('iframe, img') || oldChild.tagName === 'IFRAME' || newChild.tagName === 'IFRAME' || oldChild.tagName === 'IMG' || newChild.tagName === 'IMG';
+        if (!hasMediaInside && oldChild.tagName === newChild.tagName && oldChild.className === newChild.className) {
+          oldChild.innerHTML = newChild.innerHTML;
+          continue;
+        }
+      }
+      textEl.replaceChild(newChild, oldChild);
+    }
+
+    while (textEl.childNodes.length > newChildren.length) {
+      textEl.removeChild(textEl.lastChild);
+    }
+  }
+
   function updateStreamingFloorDom(mesIndex) {
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
@@ -8423,28 +8860,34 @@
     }
     const textEl = floorEl.querySelector('.mes_text');
     if (textEl) {
-      let rawStreamText = String(msg.mes || '');
+      const rawStreamText = String(msg.mes || '');
+      const isLastFloor = mesIndex === sess.messages.length - 1;
       if (!rawStreamText.trim() && uiRuntime.isGenerating) {
-        textEl.innerHTML = `<div class="tavern-typing-indicator" title="AI正在思考生成中"><span></span><span></span><span></span></div>`;
+        patchStreamingMesTextDom(textEl, `<div class="tavern-typing-indicator" title="AI正在思考生成中"><span></span><span></span><span></span></div>`);
+      } else if (uiRuntime.isGenerating) {
+        const splitRes = splitUnclosedStreamBlocks(rawStreamText);
+        const narrativeHtml = splitRes.completedText.trim()
+          ? renderTavernMessageHtml(splitRes.completedText, {
+              isUser: Boolean(msg.is_user),
+              isPrompt: false,
+              isLastFloor,
+              depth: sess.messages.length - 1 - mesIndex,
+              card
+            })
+          : '';
+        const tailNotice = splitRes.hasPendingTail
+          ? `<div class="tavern-stream-building-bar" style="padding:10px 14px;margin-top:8px;border-radius:10px;background:rgba(240,236,228,0.85);color:#666;font-size:12.5px;">正在实时接收状态栏面板数据... 已接收 ${rawStreamText.length} 字符</div>`
+          : '';
+        patchStreamingMesTextDom(textEl, narrativeHtml + tailNotice);
       } else {
-        const hasUnclosedHtmlDoc = (/<!DOCTYPE\s+html/i.test(rawStreamText) || /<html[\s>]/i.test(rawStreamText)) && !/<\/html\s*>/i.test(rawStreamText);
-        if (hasUnclosedHtmlDoc) {
-          const beforeHtml = rawStreamText.split(/```(?:html)?\s*<!DOCTYPE\s+html|<!DOCTYPE\s+html|<html[\s>]/i)[0] || '';
-          const narrativeHtml = beforeHtml.trim() ? renderTavernMessageHtml(beforeHtml, {
-            isUser: Boolean(msg.is_user),
-            isPrompt: false,
-            depth: sess.messages.length - 1 - mesIndex,
-            card
-          }) : '';
-          textEl.innerHTML = `${narrativeHtml}<div style="padding:10px 14px;margin-top:8px;border-radius:10px;background:rgba(240,236,228,0.85);color:#666;font-size:12.5px;">正在实时流式构建互动状态栏面板... 已接收 ${rawStreamText.length} 字符</div>`;
-        } else {
-          textEl.innerHTML = renderTavernMessageHtml(rawStreamText, {
-            isUser: Boolean(msg.is_user),
-            isPrompt: false,
-            depth: sess.messages.length - 1 - mesIndex,
-            card
-          });
-        }
+        const finalHtml = renderTavernMessageHtml(rawStreamText, {
+          isUser: Boolean(msg.is_user),
+          isPrompt: false,
+          isLastFloor,
+          depth: sess.messages.length - 1 - mesIndex,
+          card
+        });
+        patchStreamingMesTextDom(textEl, finalHtml);
       }
     }
     const timerEl = floorEl.querySelector('.mes_timer');
@@ -8461,7 +8904,7 @@
       if (!detailsEl && textEl) {
         detailsEl = document.createElement('details');
         detailsEl.className = 'mes_reasoning_details';
-        if (isStillThinkingOnly || tavernState.formatting?.autoCollapseReasoning === false) {
+        if (tavernState.formatting?.autoCollapseReasoning === false) {
           detailsEl.setAttribute('open', '');
         }
         detailsEl.innerHTML = `<summary class="mes_reasoning_summary flex-container"><div class="mes_reasoning_header flex-container"><span class="mes_reasoning_header_title">${isStillThinkingOnly ? '思考过程中...' : '思考过程'}</span></div><div class="mes_reasoning_arrow"></div></summary><div class="mes_reasoning mes_reasoning_content"></div>`;
@@ -8469,16 +8912,11 @@
       } else if (detailsEl) {
         const titleSpan = detailsEl.querySelector('.mes_reasoning_header_title');
         if (titleSpan) titleSpan.textContent = isStillThinkingOnly ? '思考过程中...' : '思考过程';
-        if (isStillThinkingOnly) {
-          detailsEl.setAttribute('open', '');
-        } else if (tavernState.formatting?.autoCollapseReasoning !== false && String(msg.mes || '').trim()) {
-          detailsEl.removeAttribute('open');
-        }
       }
       const rContent = detailsEl && detailsEl.querySelector('.mes_reasoning_content');
       if (rContent) {
         rContent.textContent = msg.reasoning;
-        if (isStillThinkingOnly) {
+        if (isStillThinkingOnly && detailsEl.hasAttribute('open')) {
           rContent.scrollTop = rContent.scrollHeight;
         }
       }
