@@ -2278,6 +2278,67 @@
       const c = getActiveCard();
       return resolveSafeAvatarUrl(c ? c.avatar : '', false);
     };
+    window.__isTavernScreenActive = () => isTavernActive();
+    window.__registerTavernAudioInstance = (audioEl, isAllowedFloor = true) => {
+      if (!audioEl) return false;
+      if (!window.__tavernActiveAudioSet) {
+        window.__tavernActiveAudioSet = new Set();
+      }
+      window.__tavernActiveAudioSet.add(audioEl);
+      if (!isTavernActive() || !isAllowedFloor) {
+        try {
+          audioEl.pause();
+          audioEl.currentTime = 0;
+        } catch (_) {}
+        return false;
+      }
+      // Pause any other currently playing audio instances so BGM never plays twice in parallel
+      window.__tavernActiveAudioSet.forEach(other => {
+        if (other && other !== audioEl) {
+          try {
+            if (!other.paused) {
+              other.pause();
+            }
+          } catch (_) {}
+        }
+      });
+      return true;
+    };
+
+    if (!window._tavernHostAudioHooked && typeof HTMLMediaElement !== 'undefined') {
+      window._tavernHostAudioHooked = true;
+      const origMediaPlay = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function (...args) {
+        try {
+          const inTavernDom = Boolean(
+            (this.closest && (this.closest('#game-hall-screen') || this.closest('[id^="gourmet-fixed-"]') || this.closest('#adv-codex-panel') || this.closest('#bbi-app-host'))) ||
+            this._createdWhileTavernActive
+          );
+          if (inTavernDom) {
+            const allowed = window.__registerTavernAudioInstance(this, true);
+            if (!allowed) {
+              return Promise.resolve();
+            }
+          }
+        } catch (_) {}
+        return origMediaPlay.apply(this, args);
+      };
+      const OrigAudio = window.Audio;
+      if (typeof OrigAudio === 'function' && !OrigAudio._tavernWrapped) {
+        const WrappedAudio = function (...a) {
+          const inst = new OrigAudio(...a);
+          if (isTavernActive()) {
+            inst._createdWhileTavernActive = true;
+            if (!window.__tavernActiveAudioSet) window.__tavernActiveAudioSet = new Set();
+            window.__tavernActiveAudioSet.add(inst);
+          }
+          return inst;
+        };
+        WrappedAudio.prototype = OrigAudio.prototype;
+        WrappedAudio._tavernWrapped = true;
+        window.Audio = WrappedAudio;
+      }
+    }
 
     window.TavernHelper = {
       getChatMessages: (rangeOrId) => {
@@ -2448,6 +2509,10 @@
           await handleSendUserMessage();
         } else if (data.type === 'TAVERN_IFRAME_GENERATE') {
           await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+        } else if (data.type === 'TAVERN_IFRAME_TOUCH_GESTURE') {
+          if (typeof window.pushMobileBackGuard === 'function') {
+            window.pushMobileBackGuard('tavern_iframe');
+          }
         }
       });
     }
@@ -3469,9 +3534,15 @@
 
   function buildSandboxIframeHtml(rawHtmlDoc, options = {}) {
     const isFullModal = Boolean(options && options.isModal);
+    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
+    const allowAudioInFrame = isFullModal || isLastFloor;
     let cleaned = String(rawHtmlDoc || '')
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
       .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '');
+
+    if (!allowAudioInFrame) {
+      cleaned = cleaned.replace(/<audio\b([^>]*?)\bautoplay\b([^>]*)>/gi, '<audio$1$2>');
+    }
 
     if (!isFullModal) {
       cleaned = cleaned
@@ -3515,6 +3586,60 @@
 
     const bridgeScript = `<script>
 (function(){
+  var allowFrameAudio = ${allowAudioInFrame ? 'true' : 'false'};
+  try {
+    if (typeof HTMLMediaElement !== 'undefined') {
+      var origPlay = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function() {
+        try {
+          var parentActive = window.parent && typeof window.parent.__isTavernScreenActive === 'function'
+            ? window.parent.__isTavernScreenActive()
+            : true;
+          if (!parentActive || !allowFrameAudio) {
+            this.pause();
+            return Promise.resolve();
+          }
+          if (window.parent && typeof window.parent.__registerTavernAudioInstance === 'function') {
+            var ok = window.parent.__registerTavernAudioInstance(this, allowFrameAudio);
+            if (!ok) {
+              this.pause();
+              return Promise.resolve();
+            }
+          }
+        } catch (e) {}
+        return origPlay.apply(this, arguments);
+      };
+    }
+    if (typeof window.Audio === 'function') {
+      var OrigIframeAudio = window.Audio;
+      var WrappedIframeAudio = function() {
+        var a = new (Function.prototype.bind.apply(OrigIframeAudio, [null].concat(Array.prototype.slice.call(arguments))))();
+        try {
+          if (!allowFrameAudio) {
+            a.autoplay = false;
+            a.muted = true;
+          }
+          if (window.parent && window.parent.__tavernActiveAudioSet) {
+            window.parent.__tavernActiveAudioSet.add(a);
+          }
+        } catch (e) {}
+        return a;
+      };
+      WrappedIframeAudio.prototype = OrigIframeAudio.prototype;
+      window.Audio = WrappedIframeAudio;
+    }
+  } catch (e) {}
+  function notifyParentGesture() {
+    try {
+      if (window.parent && typeof window.parent.pushMobileBackGuard === 'function') {
+        window.parent.pushMobileBackGuard('tavern_iframe');
+      } else if (window.parent) {
+        window.parent.postMessage({ type: 'TAVERN_IFRAME_TOUCH_GESTURE' }, '*');
+      }
+    } catch (e) {}
+  }
+  document.addEventListener('touchstart', notifyParentGesture, { passive: true, capture: true });
+  document.addEventListener('pointerdown', notifyParentGesture, { passive: true, capture: true });
   document.addEventListener('selectstart', function(e) {
     var t = e.target;
     if (!t || !t.closest || !t.closest('input, textarea, [contenteditable="true"]')) {
@@ -3788,10 +3913,11 @@
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
 
     // 2. Extract full HTML documents (<!DOCTYPE html>...</html> or <html...>...</html>) into sandboxed iframes
+    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
     const protectedBlocks = [];
     working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*?<\/html>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(buildSandboxIframeHtml(match));
+      protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
     });
 
@@ -5058,7 +5184,15 @@
 
     // Strictly Non-Streaming Mode
     if (!useStreaming) {
-      const rawText = await res.text();
+      let rawText = '';
+      try {
+        rawText = await res.text();
+      } catch (readTxtErr) {
+        if (readTxtErr && readTxtErr.name === 'AbortError') {
+          throw new Error('已手动停止生成');
+        }
+        throw readTxtErr;
+      }
       let rawContent = '';
       let nativeReasoning = '';
       const trimmed = rawText.trim();
@@ -5953,6 +6087,27 @@
         cursor: pointer;
         flex-shrink: 0;
       }
+      .tavern-stop-gen-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 15px;
+        border: 1px solid rgba(210, 120, 120, 0.55);
+        background: rgba(255, 245, 245, 0.96);
+        color: #b84a46;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+        transition: transform 0.12s ease;
+      }
+      .tavern-stop-gen-btn:active {
+        transform: scale(0.95);
+      }
       #send_textarea {
         flex: 1 1 auto;
         width: 100%;
@@ -6460,6 +6615,10 @@
               </div>
               <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
               <div id="rightSendForm">
+                <button type="button" id="mes_stop" class="tavern-stop-gen-btn" data-action="stop-generation" title="暂停生成" style="display:${uiRuntime.isGenerating ? 'inline-flex' : 'none'};">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1.2"></rect><rect x="14" y="5" width="4" height="14" rx="1.2"></rect></svg>
+                  <span>暂停</span>
+                </button>
                 <div id="send_but" data-action="send-message" title="发送"></div>
               </div>
             </div>
@@ -6490,17 +6649,21 @@
     }
 
     applyActiveTavernTheme();
-    renderTavernChatFloors(true);
-    bindTavernStageEvents();
-    (tavernState.plugins || []).forEach(p => {
-      if (p && p.enabled && !p.builtInType && p.code) {
-        executeUserPluginScript(p);
+    if (isTavernActive()) {
+      renderTavernChatFloors(true);
+      bindTavernStageEvents();
+      (tavernState.plugins || []).forEach(p => {
+        if (p && p.enabled && !p.builtInType && p.code) {
+          executeUserPluginScript(p);
+        }
+      });
+      const activeCard = getActiveCard();
+      if (activeCard) {
+        executeCardHelperScripts(activeCard);
+        ensureCardEmbeddedScriptsLoaded(activeCard);
       }
-    });
-    const activeCard = getActiveCard();
-    if (activeCard) {
-      executeCardHelperScripts(activeCard);
-      ensureCardEmbeddedScriptsLoaded(activeCard);
+    } else {
+      bindTavernStageEvents();
     }
   }
 
@@ -6779,6 +6942,7 @@
           : renderTavernMessageHtml(effectiveCleanText, {
               isUser,
               isPrompt: false,
+              isLastFloor: isLast,
               depth: messages.length - 1 - idx,
               card
             }));
@@ -8387,6 +8551,19 @@
     }
   }
 
+  function syncTavernGeneratingUiState(isGen) {
+    uiRuntime.isGenerating = Boolean(isGen);
+    const sendBtnEl = document.getElementById('send_but');
+    if (sendBtnEl) {
+      sendBtnEl.classList.toggle('is-generating', Boolean(isGen));
+      sendBtnEl.setAttribute('title', isGen ? '点击暂停生成' : '发送');
+    }
+    const stopBtnEl = document.getElementById('mes_stop');
+    if (stopBtnEl) {
+      stopBtnEl.style.display = isGen ? 'inline-flex' : 'none';
+    }
+  }
+
   async function triggerCharacterReplyGeneration(options = {}) {
     if (uiRuntime.isGenerating) return;
     let {
@@ -8432,12 +8609,7 @@
       }
     }
 
-    uiRuntime.isGenerating = true;
-    const sendBtnEl = document.getElementById('send_but');
-    if (sendBtnEl) {
-      sendBtnEl.classList.add('is-generating');
-      sendBtnEl.setAttribute('title', '点击停止生成');
-    }
+    syncTavernGeneratingUiState(true);
 
     const isStreamOn = tavernState.apiConfig?.streamEnabled !== false && Boolean(preset.stream_openai);
     showTavernToast(isImpersonate ? '正在帮写玩家回复...' : (isSwipeRegen ? '正在重新生成全新回复...' : '正在思考并生成回复...'));
@@ -8605,18 +8777,15 @@
     } catch (err) {
       console.error('Tavern generation error:', err);
       const errMsg = err.message || 'AI调用失败，请检查API配置';
-      showTavernToast(errMsg);
-      if (!String(errMsg).includes('已手动停止')) {
+      if (String(errMsg).includes('已手动停止')) {
+        showTavernToast('已暂停生成');
+      } else {
+        showTavernToast(errMsg);
         showTavernErrorBanner(errMsg);
       }
     } finally {
-      uiRuntime.isGenerating = false;
       uiRuntime.abortController = null;
-      const btnEl = document.getElementById('send_but');
-      if (btnEl) {
-        btnEl.classList.remove('is-generating');
-        btnEl.setAttribute('title', '发送');
-      }
+      syncTavernGeneratingUiState(false);
     }
   }
 
@@ -8773,16 +8942,8 @@
       }
 
       if (action === 'exit-tavern-home') {
-        uiRuntime.openDrawerKey = null;
-        uiRuntime.activeHelperScriptId = null;
-        uiRuntime.activePluginModalId = null;
-        const themeStyle = document.getElementById('tavern-custom-theme-style');
-        if (themeStyle) themeStyle.textContent = '';
-        if (typeof showScreen === 'function') {
-          showScreen('home-screen');
-        } else {
-          document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-          document.getElementById('home-screen')?.classList.add('active');
+        if (typeof window.exitTavernToHome === 'function') {
+          window.exitTavernToHome();
         }
         return;
       }
@@ -8826,7 +8987,13 @@
 
       if (action === 'close-helper-script') {
         uiRuntime.activeHelperScriptId = null;
-        renderTavernShell();
+        const modalEl = document.querySelector('#tavern-stage-root > .tavern-modal-backdrop');
+        if (modalEl) {
+          modalEl.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
+          modalEl.remove();
+        } else {
+          renderTavernShell();
+        }
         return;
       }
 
@@ -8901,7 +9068,13 @@
 
       if (action === 'close-plugin-modal') {
         uiRuntime.activePluginModalId = null;
-        renderTavernShell();
+        const modalEl = document.querySelector('#tavern-stage-root > .tavern-modal-backdrop');
+        if (modalEl) {
+          modalEl.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
+          modalEl.remove();
+        } else {
+          renderTavernShell();
+        }
         return;
       }
 
@@ -8969,6 +9142,15 @@
         uiRuntime.showExtensionsPopup = !uiRuntime.showExtensionsPopup;
         uiRuntime.showOptionsPopup = false;
         refreshBottomPopupsOnly();
+        return;
+      }
+
+      if (action === 'stop-generation') {
+        if (uiRuntime.abortController) {
+          uiRuntime.abortController.abort();
+        }
+        syncTavernGeneratingUiState(false);
+        showTavernToast('已暂停生成');
         return;
       }
 
@@ -10609,12 +10791,7 @@
       }
     });
 
-    root.addEventListener('keydown', async e => {
-      if (e.target && e.target.id === 'send_textarea' && e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        await handleSendUserMessage();
-      }
-    });
+    // Enter key in #send_textarea inserts a newline; sending is only triggered via the Send button
   }
 
   // ============================================================================
@@ -11152,6 +11329,51 @@
   // ============================================================================
   // 14. Initialize Tavern App & Hook Desktop Entry
   // ============================================================================
+  function stopAllTavernAudioAndMedia() {
+    try {
+      if (window.__tavernActiveAudioSet) {
+        window.__tavernActiveAudioSet.forEach(a => {
+          try {
+            if (a && typeof a.pause === 'function') {
+              a.pause();
+              a.currentTime = 0;
+            }
+          } catch (_) {}
+        });
+      }
+      const screenEl = document.getElementById('game-hall-screen');
+      if (screenEl) {
+        screenEl.querySelectorAll('audio, video').forEach(m => {
+          try {
+            m.pause();
+            m.currentTime = 0;
+          } catch (_) {}
+        });
+        screenEl.querySelectorAll('iframe.tavern-html-sandbox-frame').forEach(frame => {
+          try {
+            const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+            if (doc) {
+              doc.querySelectorAll('audio, video').forEach(m => {
+                try {
+                  m.pause();
+                  m.currentTime = 0;
+                } catch (_) {}
+              });
+            }
+          } catch (_) {}
+        });
+      }
+      document.querySelectorAll('[id^="gourmet-fixed-"] audio, [id^="gourmet-fixed-"] video, #adv-codex-panel audio, #adv-codex-panel video').forEach(m => {
+        try {
+          m.pause();
+          m.currentTime = 0;
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
+  let hasRenderedTavernOnOpen = false;
+
   function setupTavernScreenVisibilityObserver() {
     const screenEl = document.getElementById('game-hall-screen');
     if (!screenEl || screenEl._tavernVisibilityObserved) return;
@@ -11163,32 +11385,115 @@
       if (bbiHost) {
         bbiHost.style.display = isTavernVisible ? '' : 'none';
       }
+      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => {
+        if (!isTavernVisible) {
+          el.style.display = 'none';
+        } else if (el.id === 'gourmet-fixed-ball-ui' || el.id === 'adv-codex-toggle') {
+          el.style.display = 'flex';
+        }
+      });
+      if (!isTavernVisible) {
+        stopAllTavernAudioAndMedia();
+      } else if (!hasRenderedTavernOnOpen) {
+        hasRenderedTavernOnOpen = true;
+        renderTavernShell();
+      }
     });
     obs.observe(screenEl, { attributes: true, attributeFilter: ['class', 'style'] });
   }
+
+  window.exitTavernToHome = function () {
+    uiRuntime.openDrawerKey = null;
+    uiRuntime.activeHelperScriptId = null;
+    uiRuntime.activePluginModalId = null;
+    uiRuntime.showOptionsPopup = false;
+    uiRuntime.showExtensionsPopup = false;
+    stopAllTavernAudioAndMedia();
+    const themeStyle = document.getElementById('tavern-custom-theme-style');
+    if (themeStyle) themeStyle.textContent = '';
+    const bbiHost = document.getElementById('bbi-app-host');
+    if (bbiHost) bbiHost.style.display = 'none';
+    document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => {
+      el.style.display = 'none';
+    });
+    if (typeof window.showScreen === 'function') {
+      window.showScreen('home-screen');
+    } else {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('home-screen')?.classList.add('active');
+    }
+  };
+
+  window.handleTavernMobileBack = function () {
+    // 1. Check BaiBai Shadow DOM modal
+    const bbiHost = document.getElementById('bbi-app-host');
+    if (bbiHost && bbiHost.shadowRoot) {
+      const bbiClose = bbiHost.shadowRoot.querySelector('.bbi-close, [data-action="close"], .modal-close, .close-btn');
+      const bbiVisibleOverlay = bbiHost.shadowRoot.querySelector('.bbi-overlay.active, .bbi-modal.open, .bbi-modal.active, .bbi-backdrop:not([style*="display: none"])');
+      if (bbiVisibleOverlay && bbiClose) {
+        bbiClose.click();
+        return true;
+      }
+    }
+    // 2. Check Tavern helper script or plugin modal
+    const modalBackdrop = document.querySelector('#tavern-stage-root > .tavern-modal-backdrop');
+    if (modalBackdrop || uiRuntime.activeHelperScriptId || uiRuntime.activePluginModalId) {
+      uiRuntime.activeHelperScriptId = null;
+      uiRuntime.activePluginModalId = null;
+      if (modalBackdrop) {
+        modalBackdrop.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
+        modalBackdrop.remove();
+      }
+      return true;
+    }
+    // 3. Check floating card helper panel (e.g. gourmet-fixed-panel-ui)
+    const gourmetPanel = document.getElementById('gourmet-fixed-panel-ui');
+    if (gourmetPanel && gourmetPanel.style.display !== 'none' && getComputedStyle(gourmetPanel).display !== 'none') {
+      gourmetPanel.style.display = 'none';
+      return true;
+    }
+    // 4. Check top dropdown drawer
+    const drawerHost = document.getElementById('tavern-drawer-host');
+    if ((drawerHost && drawerHost.classList.contains('active')) || uiRuntime.openDrawerKey) {
+      uiRuntime.openDrawerKey = null;
+      refreshOpenDrawerOnly();
+      return true;
+    }
+    // 5. Check bottom popups (#options / #extensionsMenu)
+    if (uiRuntime.showOptionsPopup || uiRuntime.showExtensionsPopup) {
+      uiRuntime.showOptionsPopup = false;
+      uiRuntime.showExtensionsPopup = false;
+      refreshBottomPopupsOnly();
+      return true;
+    }
+    // 6. Otherwise, immediately exit Tavern back to the phone home screen
+    window.exitTavernToHome();
+    return true;
+  };
 
   async function initTavernApp() {
     await loadTavernStore();
     setupSillyTavernGlobalBridge();
     setupTavernScreenVisibilityObserver();
     syncBuiltInD100Pool(false);
-    (tavernState.plugins || []).forEach(p => {
-      if (p && p.enabled && !p.builtInType && p.code) {
-        executeUserPluginScript(p);
-      }
-    });
-    renderTavernShell();
-    await tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+    // Do NOT render Tavern floors, iframes, or card helper scripts until the user actually opens the Tavern screen
+    if (isTavernActive()) {
+      hasRenderedTavernOnOpen = true;
+      renderTavernShell();
+      await tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+    }
   }
 
   window.openTavernApp = function () {
-    if (typeof showScreen === 'function') {
-      showScreen('game-hall-screen');
+    hasRenderedTavernOnOpen = true;
+    if (typeof window.showScreen === 'function') {
+      window.showScreen('game-hall-screen');
     } else {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById('game-hall-screen')?.classList.add('active');
     }
     renderTavernShell();
+    tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
   };
 
   window.getTavernLiveInspectionData = function (targetType, targetIdOrName) {

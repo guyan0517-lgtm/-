@@ -2496,7 +2496,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v9.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v9.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -109580,21 +109580,11 @@ ${specificRules}`;
                     window.showScreen("home-screen");
                   }
                 } else if (activeScreen.id === "game-hall-screen") {
-                  const gourmetPanel = document.getElementById("gourmet-fixed-panel-ui");
-                  const drawerHost = document.getElementById("tavern-drawer-host");
-                  const closeHelperBtn = activeScreen.querySelector('[data-action="close-helper-script"]');
-                  const closePluginBtn = activeScreen.querySelector('[data-action="close-plugin-modal"]');
-                  const closeDrawerBtn = activeScreen.querySelector('[data-action="close-drawer"]');
-                  if (closeHelperBtn) {
-                    closeHelperBtn.click();
-                  } else if (closePluginBtn) {
-                    closePluginBtn.click();
-                  } else if (gourmetPanel && gourmetPanel.style.display !== "none" && getComputedStyle(gourmetPanel).display !== "none") {
-                    gourmetPanel.style.display = "none";
-                  } else if (drawerHost && drawerHost.classList.contains("active") && closeDrawerBtn) {
-                    closeDrawerBtn.click();
+                  if (typeof window.handleTavernMobileBack === "function") {
+                    window.handleTavernMobileBack();
+                  } else if (typeof window.showScreen === "function") {
+                    window.showScreen("home-screen");
                   }
-                  // 保持在酒馆界面，绝不因为关闭插件或点击锚点而退回主屏幕
                 } else {
                   const backBtn = activeScreen.querySelector(".header .back-btn, .back-btn");
                   if (backBtn) {
