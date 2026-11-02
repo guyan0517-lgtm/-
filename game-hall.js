@@ -11812,6 +11812,11 @@
 
   let hasRenderedTavernOnOpen = false;
 
+  function isTavernActive() {
+    const screenEl = document.getElementById('game-hall-screen');
+    return Boolean(screenEl && screenEl.classList.contains('active'));
+  }
+
   function setupTavernScreenVisibilityObserver() {
     const screenEl = document.getElementById('game-hall-screen');
     if (!screenEl || screenEl._tavernVisibilityObserved) return;
