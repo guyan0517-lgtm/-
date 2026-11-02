@@ -2058,6 +2058,297 @@ code, pre {
     };
   }
 
+  function isBurntChickenWingsPlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    const c = String(plugin.code || plugin.content || '');
+    return /焦香鸡翅|Burnt-chicken-wings|preset-atelier|__presetAtelier/i.test(n) ||
+      /Burnt-chicken-wings/i.test(u) ||
+      /__presetAtelier|pa-menu-entry/i.test(c);
+  }
+
+  function ensurePresetHasPromptOrder(preset) {
+    if (!preset || typeof preset !== 'object') return preset;
+    if (!Array.isArray(preset.prompts)) {
+      preset.prompts = getDefaultPromptOrderItems();
+    }
+    if (!preset.extensions || typeof preset.extensions !== 'object' || Array.isArray(preset.extensions)) {
+      preset.extensions = {};
+    }
+    if (Array.isArray(preset.regexScripts) && !Array.isArray(preset.extensions.regex_scripts)) {
+      preset.extensions.regex_scripts = preset.regexScripts;
+    }
+    const orderArr = preset.prompts.map(p => ({
+      identifier: p.identifier,
+      enabled: p.enabled !== false
+    }));
+    if (!Array.isArray(preset.prompt_order) || preset.prompt_order.length === 0) {
+      preset.prompt_order = [{ character_id: 100001, order: orderArr }];
+    } else {
+      let targetEntry = preset.prompt_order.find(o => o && Number(o.character_id) === 100001) ||
+        preset.prompt_order.find(o => o && Number(o.character_id) === 100000) ||
+        preset.prompt_order[preset.prompt_order.length - 1];
+      if (!targetEntry || typeof targetEntry !== 'object') {
+        targetEntry = { character_id: 100001, order: orderArr };
+        preset.prompt_order.push(targetEntry);
+      } else {
+        targetEntry.order = orderArr;
+      }
+    }
+    return preset;
+  }
+
+  function syncPresetFromOaiData(targetPreset, data) {
+    if (!targetPreset || !data || typeof data !== 'object') return targetPreset;
+    const scalarKeys = [
+      'temperature', 'frequency_penalty', 'presence_penalty', 'top_p', 'top_k',
+      'min_p', 'typical_p', 'repetition_penalty', 'openai_max_context', 'openai_max_tokens',
+      'seed', 'stream_openai', 'reasoning_effort', 'squash_system_messages',
+      'impersonation_prompt', 'new_chat_prompt', 'continue_nudge_prompt',
+      'wi_format', 'scenario_format', 'personality_format'
+    ];
+    scalarKeys.forEach(k => {
+      if (data[k] !== undefined) targetPreset[k] = data[k];
+    });
+    if (data.extensions && typeof data.extensions === 'object' && !Array.isArray(data.extensions)) {
+      targetPreset.extensions = JSON.parse(JSON.stringify(data.extensions));
+      if (Array.isArray(data.extensions.regex_scripts)) {
+        targetPreset.regexScripts = normalizeRegexList(data.extensions.regex_scripts, 'preset');
+      }
+    }
+    if (Array.isArray(data.prompts)) {
+      const rawPrompts = data.prompts;
+      const promptMap = new Map();
+      rawPrompts.forEach(p => {
+        if (p && p.identifier) promptMap.set(p.identifier, p);
+      });
+      let orderList = [];
+      if (Array.isArray(data.prompt_order) && data.prompt_order.length > 0) {
+        if (data.prompt_order[0] && data.prompt_order[0].identifier) {
+          orderList = data.prompt_order;
+        } else {
+          const entry = data.prompt_order.find(o => o && Number(o.character_id) === 100001) ||
+            data.prompt_order.find(o => o && Number(o.character_id) === 100000) ||
+            data.prompt_order[data.prompt_order.length - 1];
+          if (entry && Array.isArray(entry.order)) {
+            orderList = entry.order;
+          }
+        }
+      }
+      const structuralMarkers = ['worldInfoBefore', 'worldInfoAfter', 'personaDescription', 'charDescription', 'charPersonality', 'scenario', 'dialogueExamples', 'chatHistory'];
+      const normalizeInjPos = (val) => {
+        if (val === 1 || val === '1') return 1;
+        if (typeof val === 'string') {
+          const lower = val.trim().toLowerCase();
+          if (lower === 'in_chat' || lower === 'in-chat' || lower === 'depth' || lower === '@d') return 1;
+        }
+        return 0;
+      };
+      const mergedPrompts = [];
+      const usedIds = new Set();
+      orderList.forEach((item, seqIdx) => {
+        if (!item || !item.identifier || usedIds.has(item.identifier)) return;
+        usedIds.add(item.identifier);
+        const base = promptMap.get(item.identifier) || (targetPreset.prompts || []).find(x => x && x.identifier === item.identifier) || {};
+        const resolvedContent = base.content !== undefined ? base.content : (item.content || '');
+        const isMarker = structuralMarkers.includes(item.identifier) || (Boolean(base.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(item.identifier));
+        mergedPrompts.push({
+          identifier: item.identifier,
+          name: base.name || item.name || item.identifier,
+          enabled: item.enabled !== undefined ? Boolean(item.enabled) : Boolean(base.enabled ?? true),
+          role: base.role || item.role || 'system',
+          content: resolvedContent,
+          marker: isMarker,
+          injection_position: normalizeInjPos(base.injection_position ?? item.injection_position ?? 0),
+          injection_depth: Number(base.injection_depth ?? item.injection_depth ?? 4),
+          injection_order: Number(base.injection_order ?? item.injection_order ?? (100 + seqIdx)),
+          forbid_overrides: Boolean(base.forbid_overrides ?? item.forbid_overrides),
+          system_prompt: Boolean(base.system_prompt)
+        });
+      });
+      rawPrompts.forEach((p, rawIdx) => {
+        if (!p || !p.identifier || usedIds.has(p.identifier)) return;
+        usedIds.add(p.identifier);
+        const resolvedContent = p.content || '';
+        const isMarker = structuralMarkers.includes(p.identifier) || (Boolean(p.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(p.identifier));
+        mergedPrompts.push({
+          identifier: p.identifier,
+          name: p.name || p.identifier,
+          enabled: orderList.length === 0 ? Boolean(p.enabled ?? true) : false,
+          role: p.role || 'system',
+          content: resolvedContent,
+          marker: isMarker,
+          injection_position: normalizeInjPos(p.injection_position ?? 0),
+          injection_depth: Number(p.injection_depth ?? 4),
+          injection_order: Number(p.injection_order ?? (100 + rawIdx)),
+          forbid_overrides: Boolean(p.forbid_overrides),
+          system_prompt: Boolean(p.system_prompt)
+        });
+      });
+      if (mergedPrompts.length > 0) {
+        targetPreset.prompts = mergedPrompts;
+      }
+      if (Array.isArray(data.prompt_order) && data.prompt_order.length > 0) {
+        targetPreset.prompt_order = JSON.parse(JSON.stringify(data.prompt_order));
+      } else {
+        ensurePresetHasPromptOrder(targetPreset);
+      }
+    } else {
+      ensurePresetHasPromptOrder(targetPreset);
+    }
+    return targetPreset;
+  }
+
+  const liveOaiPresetsArray = [];
+  const liveOaiPresetNamesMap = {};
+
+  function syncLiveOaiPresetListCache() {
+    const list = Array.isArray(tavernState.presets) ? tavernState.presets : [];
+    liveOaiPresetsArray.length = 0;
+    Object.keys(liveOaiPresetNamesMap).forEach(k => { delete liveOaiPresetNamesMap[k]; });
+    list.forEach((p, idx) => {
+      if (!p) return;
+      ensurePresetHasPromptOrder(p);
+      liveOaiPresetsArray.push(p);
+      if (p.name) {
+        liveOaiPresetNamesMap[p.name] = idx;
+      }
+    });
+    return { presets: liveOaiPresetsArray, preset_names: liveOaiPresetNamesMap };
+  }
+
+  let liveOaiSettingsCache = null;
+  function getLiveOaiSettingsObject() {
+    const activePreset = ensurePresetHasPromptOrder(getActivePreset());
+    const creds = resolveTavernApiCredentials();
+    if (!liveOaiSettingsCache) {
+      liveOaiSettingsCache = {};
+    }
+    liveOaiSettingsCache.preset_settings_openai = activePreset?.name || '标准酒馆预设';
+    liveOaiSettingsCache.prompts = activePreset?.prompts || [];
+    liveOaiSettingsCache.prompt_order = activePreset?.prompt_order || [{ character_id: 100001, order: [] }];
+    liveOaiSettingsCache.extensions = activePreset?.extensions || {};
+    liveOaiSettingsCache.chat_completion_source = liveOaiSettingsCache.chat_completion_source || 'custom';
+    liveOaiSettingsCache.custom_url = creds.baseUrl || '';
+    liveOaiSettingsCache.reverse_proxy = creds.baseUrl || '';
+    liveOaiSettingsCache.proxy_password = creds.apiKey || '';
+    liveOaiSettingsCache.custom_model = creds.model || 'gpt-4o-mini';
+    liveOaiSettingsCache.openai_model = creds.model || 'gpt-4o-mini';
+    liveOaiSettingsCache.claude_model = creds.model || 'gpt-4o-mini';
+    liveOaiSettingsCache.google_model = creds.model || 'gpt-4o-mini';
+    liveOaiSettingsCache.openrouter_model = creds.model || 'gpt-4o-mini';
+    liveOaiSettingsCache.deepseek_model = creds.model || 'gpt-4o-mini';
+    liveOaiSettingsCache.temp_openai = Number(activePreset?.temperature ?? 1.0);
+    liveOaiSettingsCache.top_p_openai = Number(activePreset?.top_p ?? 1.0);
+    liveOaiSettingsCache.freq_pen_openai = Number(activePreset?.frequency_penalty ?? 0);
+    liveOaiSettingsCache.pres_pen_openai = Number(activePreset?.presence_penalty ?? 0);
+    liveOaiSettingsCache.stream_openai = Boolean(activePreset?.stream_openai ?? true);
+    liveOaiSettingsCache.openai_max_context = Number(activePreset?.openai_max_context || 64000);
+    liveOaiSettingsCache.openai_max_tokens = Number(activePreset?.openai_max_tokens || 4096);
+    if (liveOaiSettingsCache.bind_preset_to_connection === undefined) {
+      liveOaiSettingsCache.bind_preset_to_connection = false;
+    }
+    return liveOaiSettingsCache;
+  }
+
+  function getTavernPresetManager(apiId = 'openai') {
+    if (apiId === 'reasoning') {
+      const pairs = getActiveReasoningTagPairs();
+      const firstPair = pairs[0] || { start: '<think>', end: '</think>' };
+      return {
+        getPresetList: () => ({
+          presets: [{ name: '默认思考标签', prefix: firstPair.start || '<think>', suffix: firstPair.end || '</think>', separator: '\n' }],
+          preset_names: { '默认思考标签': 0 }
+        }),
+        getSelectedPresetName: () => '默认思考标签',
+        findPreset: (n) => n
+      };
+    }
+    if (apiId && apiId !== 'openai') {
+      return {
+        getPresetList: () => ({ presets: [], preset_names: {} }),
+        getSelectedPresetName: () => '',
+        findPreset: () => undefined,
+        savePreset: async () => {},
+        selectPreset: async () => {}
+      };
+    }
+    return {
+      getPresetList: () => syncLiveOaiPresetListCache(),
+      getSelectedPresetName: () => getActivePreset()?.name || '',
+      getSelectedPreset: () => ensurePresetHasPromptOrder(getActivePreset()),
+      findPreset: (name) => {
+        const found = (tavernState.presets || []).find(p => p && (p.name === name || p.id === name));
+        return found ? found.name : undefined;
+      },
+      savePreset: async (name, data, opts = {}) => {
+        const cleanName = String(name || data?.name || '未命名预设').trim();
+        let target = (tavernState.presets || []).find(p => p && p.name === cleanName);
+        if (!target) {
+          target = parsePresetFromRaw(Object.assign({}, data || {}, { name: cleanName }), cleanName);
+          tavernState.presets.push(target);
+        } else {
+          syncPresetFromOaiData(target, data || {});
+        }
+        syncLiveOaiPresetListCache();
+        getLiveOaiSettingsObject();
+        await saveTavernStore();
+        if (uiRuntime.openDrawerKey === 'sliders') {
+          refreshOpenDrawerOnly();
+        }
+        return cleanName;
+      },
+      selectPreset: async (nameOrVal) => {
+        const list = tavernState.presets || [];
+        let found = list.find(p => p && (p.name === nameOrVal || p.id === nameOrVal));
+        if (!found && typeof nameOrVal === 'number' && list[nameOrVal]) {
+          found = list[nameOrVal];
+        }
+        if (found) {
+          tavernState.activePresetId = found.id;
+          ensurePresetHasPromptOrder(found);
+          getLiveOaiSettingsObject();
+          await saveTavernStore();
+          if (uiRuntime.openDrawerKey === 'sliders') {
+            refreshOpenDrawerOnly();
+          }
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.PRESET_CHANGED, { apiId: 'openai', name: found.name });
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.OAI_PRESET_CHANGED_AFTER);
+        }
+      }
+    };
+  }
+
+  function getTavernSecretState() {
+    if (!tavernState.extensionSettings || typeof tavernState.extensionSettings !== 'object') {
+      tavernState.extensionSettings = {};
+    }
+    if (!tavernState.extensionSettings._secretState || typeof tavernState.extensionSettings._secretState !== 'object') {
+      tavernState.extensionSettings._secretState = {
+        api_key_custom: [],
+        api_key_openai: [],
+        api_key_claude: [],
+        api_key_makersuite: [],
+        api_key_openrouter: [],
+        api_key_deepseek: []
+      };
+    }
+    const st = tavernState.extensionSettings._secretState;
+    const creds = resolveTavernApiCredentials();
+    if (creds.apiKey && Array.isArray(st.api_key_custom) && st.api_key_custom.length === 0) {
+      const mask = creds.apiKey.length > 8 ? `${creds.apiKey.slice(0, 3)}…${creds.apiKey.slice(-4)}` : '已保存';
+      st.api_key_custom.push({
+        id: 'sec_default_custom',
+        label: '当前接口密钥',
+        value: mask,
+        _rawValue: creds.apiKey,
+        active: true
+      });
+    }
+    return st;
+  }
+
   function buildSillyTavernContextObject() {
     const sess = getActiveChatSession();
     const card = getActiveCard();
@@ -2150,6 +2441,15 @@ code, pre {
         }
       }
     } catch (_) {}
+    const personasMap = {};
+    const personaDescMap = {};
+    (tavernState.personas || []).forEach(p => {
+      if (!p) return;
+      const key = p.id || p.name || 'default_persona';
+      personasMap[key] = p.name || '默认人设';
+      personaDescMap[key] = { description: p.description || '' };
+    });
+    const resolvedCreds = resolveTavernApiCredentials();
     return {
       chat: sess ? sess.messages : [],
       chatId: (sess && sess.chatId) ? sess.chatId : 'chat_default',
@@ -2158,7 +2458,13 @@ code, pre {
       groupId: null,
       name1: getUserDisplayName(),
       name2: card ? card.name : '角色',
+      mainApi: 'openai',
+      onlineStatus: (resolvedCreds.baseUrl && resolvedCreds.apiKey) ? (resolvedCreds.model || 'connected') : 'no_connection',
       maxContext: Number(getActivePreset()?.openai_max_context || 64000),
+      chatCompletionSettings: getLiveOaiSettingsObject(),
+      getChatCompletionModel: () => resolvedCreds.model || 'gpt-4o-mini',
+      getPresetManager: getTavernPresetManager,
+      getCharacters: async () => tavernState.cards,
       chatMetadata: sess ? (sess.metadata || (sess.metadata = {})) : {},
       extensionSettings: tavernState.extensionSettings,
       variables: {
@@ -2173,11 +2479,23 @@ code, pre {
       checkWorldInfo: runTavernCheckWorldInfo,
       power_user: {
         experimental_macro_engine: false,
-        persona_description: getActivePersona()?.description || ''
+        persona_description: getActivePersona()?.description || '',
+        personas: personasMap,
+        persona_descriptions: personaDescMap
       },
       powerUserSettings: {
-        personas: {},
-        persona_descriptions: {}
+        personas: personasMap,
+        persona_descriptions: personaDescMap
+      },
+      SlashCommandParser: window.SlashCommandParser,
+      SlashCommand: window.SlashCommand,
+      SlashCommandArgument: window.SlashCommandArgument,
+      SlashCommandNamedArgument: window.SlashCommandNamedArgument,
+      ARGUMENT_TYPE: window.ARGUMENT_TYPE,
+      registerSlashCommand: (name, callback, aliases = [], helpString = '') => {
+        if (window.SlashCommandParser && typeof window.SlashCommandParser.addCommandObject === 'function') {
+          window.SlashCommandParser.addCommandObject({ name, callback, aliases, helpString });
+        }
       },
       selectCharacterById: async (idx) => {
         const target = (tavernState.cards || [])[Number(idx)];
@@ -2609,10 +2927,30 @@ code, pre {
       if (err && err.name === 'AbortError') throw err;
       directErr = err;
     }
-    if (typeof window.requestLlmapiWithFallback === 'function' && /\/chat\/completions|\/models|\/messages/i.test(url)) {
+    if (/^https?:\/\//i.test(url) && !url.startsWith(window.location.origin)) {
       try {
-        const fallbackRes = await window.requestLlmapiWithFallback(url, options);
-        if (fallbackRes) return fallbackRes;
+        let parsedBody = undefined;
+        if (options && options.body !== undefined) {
+          try {
+            parsedBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+          } catch (_) {
+            parsedBody = options.body;
+          }
+        }
+        const proxyRes = await rawFetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            method: (options && options.method) || 'POST',
+            headers: (options && options.headers) || {},
+            body: parsedBody
+          }),
+          signal: options?.signal
+        });
+        if (proxyRes && proxyRes.status !== 404) {
+          return proxyRes;
+        }
       } catch (fbErr) {
         if (fbErr && fbErr.name === 'AbortError') throw fbErr;
         if (!directErr) directErr = fbErr;
@@ -2649,9 +2987,19 @@ code, pre {
             }
           }
 
-          // 1b. SillyTavern /user/files/... data directory endpoint used by book-excerpt mirrorStartupCheck
+          // 1b. SillyTavern /user/files/... data directory endpoint used by book-excerpt & Burnt-chicken-wings archive
           if (isSameOriginOrRel && cleanPath.startsWith('user/files/')) {
             const fName = decodeURIComponent(cleanPath.slice('user/files/'.length));
+            const b64Store = tavernState.extensionSettings && tavernState.extensionSettings._userFilesB64;
+            if (b64Store && b64Store[fName] !== undefined) {
+              try {
+                const rawB64 = String(b64Store[fName]).replace(/^data:[^,]*,/, '').replace(/\s+/g, '');
+                const binStr = atob(rawB64);
+                const bytes = new Uint8Array(binStr.length);
+                for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                return new Response(bytes, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+              } catch (_) {}
+            }
             const mirrorStore = tavernState.extensionSettings && tavernState.extensionSettings._userFilesMirror;
             if (mirrorStore && mirrorStore[fName] !== undefined) {
               return new Response(mirrorStore[fName], { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
@@ -2684,9 +3032,9 @@ code, pre {
             }
           }
 
-          // 2. SillyTavern Backend API routes used by BaiBai (柏宝绘) and other ST extensions
+          // 2. SillyTavern Backend API routes used by BaiBai, Burnt-chicken-wings, book-excerpt, and other ST extensions
           if (isSameOriginOrRel && cleanPath.startsWith('api/')) {
-            // 2a. /api/backends/chat-completions/status (Pulling model list in BaiBai / ST plugins)
+            // 2a. /api/backends/chat-completions/status (Pulling model list in BaiBai / Burnt-chicken-wings / ST plugins)
             if (cleanPath === 'api/backends/chat-completions/status') {
               let bodyObj = {};
               if (init && typeof init.body === 'string') {
@@ -2730,7 +3078,7 @@ code, pre {
               return new Response(JSON.stringify({ error: true, message: lastText || ('HTTP ' + lastStatus) }), { status: lastStatus || 500, headers: { 'Content-Type': 'application/json' } });
             }
 
-            // 2b. /api/backends/chat-completions/generate (Sub-API test & prompt generation in BaiBai / ST plugins)
+            // 2b. /api/backends/chat-completions/generate (Sub-API test & prompt generation in BaiBai / Burnt-chicken-wings / ST plugins)
             if (cleanPath === 'api/backends/chat-completions/generate') {
               let bodyObj = {};
               if (init && typeof init.body === 'string') {
@@ -2754,8 +3102,8 @@ code, pre {
               }
               const wantStream = Boolean(bodyObj.stream);
               const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0)
-                ? Math.max(100000, bodyObj.max_tokens)
-                : 100000;
+                ? bodyObj.max_tokens
+                : 4096;
               const openAiPayload = {
                 model: bodyObj.model || fallbackCreds.model || 'gpt-4o-mini',
                 messages: Array.isArray(bodyObj.messages) ? bodyObj.messages : [],
@@ -2865,7 +3213,59 @@ code, pre {
               return upstreamRes;
             }
 
-            // 2c. /api/files/upload, /api/files/delete, /api/images/upload, /api/images/folders, /api/images/list, /api/images/delete, /api/extensions/discover
+            // 2c. /api/presets/save, /api/presets/delete, /api/presets/delete-openai, /api/worldinfo/delete, /api/secrets/find, /api/characters/*
+            if (cleanPath === 'api/presets/save') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const name = String(bodyObj.name || bodyObj.preset?.name || '预设').trim();
+              await getTavernPresetManager('openai').savePreset(name, bodyObj.preset || bodyObj);
+              return new Response(JSON.stringify({ name }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/presets/delete' || cleanPath === 'api/presets/delete-openai') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const name = String(bodyObj.name || '').trim();
+              if (name && (tavernState.presets || []).length > 1) {
+                tavernState.presets = tavernState.presets.filter(p => p && p.name !== name);
+                syncLiveOaiPresetListCache();
+                await saveTavernStore();
+              }
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/worldinfo/delete') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const name = String(bodyObj.name || '').trim();
+              if (name) {
+                tavernState.worldBooks = (tavernState.worldBooks || []).filter(w => w && w.name !== name);
+                await saveTavernStore();
+              }
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/secrets/find') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const st = getTavernSecretState();
+              const list = Array.isArray(st[bodyObj.key]) ? st[bodyObj.key] : [];
+              const found = bodyObj.id ? list.find(x => x && x.id === bodyObj.id) : list.find(x => x && x.active);
+              return new Response(JSON.stringify({ value: found?._rawValue || '' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/characters/get') {
+              return new Response(JSON.stringify(tavernState.cards || []), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/characters/delete') {
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            // 2d. /api/files/upload, /api/files/delete, /api/images/upload, /api/images/folders, /api/images/list, /api/images/delete, /api/extensions/discover
             if (cleanPath === 'api/files/upload' || cleanPath === 'api/images/upload') {
               let bodyObj = {};
               if (init && typeof init.body === 'string') {
@@ -2873,15 +3273,19 @@ code, pre {
               }
               const fileName = bodyObj.filename || bodyObj.name || ('file_' + Date.now() + '.' + (bodyObj.format || 'png'));
               const rawData = bodyObj.image || bodyObj.data || '';
-              if (cleanPath === 'api/files/upload' && /\.json$/i.test(fileName) && rawData) {
-                try {
-                  const decodedTxt = decodeLatin1ToUtf8(String(rawData).replace(/^data:[^,]+,/, ''));
-                  if (decodedTxt && /stamp\.json$/i.test(fileName)) {
-                    if (!tavernState.extensionSettings._userFilesMirror) tavernState.extensionSettings._userFilesMirror = {};
-                    tavernState.extensionSettings._userFilesMirror[fileName] = decodedTxt;
-                  }
-                } catch (_) {}
-                return new Response(JSON.stringify({ ok: true, path: '/user/files/' + fileName }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              if (cleanPath === 'api/files/upload' && rawData) {
+                if (!tavernState.extensionSettings._userFilesB64) tavernState.extensionSettings._userFilesB64 = {};
+                tavernState.extensionSettings._userFilesB64[fileName] = String(rawData).replace(/^data:[^,]+,/, '');
+                if (/\.json$/i.test(fileName)) {
+                  try {
+                    const decodedTxt = decodeLatin1ToUtf8(String(rawData).replace(/^data:[^,]+,/, ''));
+                    if (decodedTxt) {
+                      if (!tavernState.extensionSettings._userFilesMirror) tavernState.extensionSettings._userFilesMirror = {};
+                      tavernState.extensionSettings._userFilesMirror[fileName] = decodedTxt;
+                    }
+                  } catch (_) {}
+                }
+                return new Response(JSON.stringify({ ok: true, path: 'user/files/' + fileName }), { status: 200, headers: { 'Content-Type': 'application/json' } });
               }
               const mime = cleanPath === 'api/images/upload'
                 ? ('image/' + ((bodyObj.format === 'jpg' ? 'jpeg' : bodyObj.format) || 'png'))
@@ -2912,6 +3316,15 @@ code, pre {
               return new Response(JSON.stringify({ path: savedUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
             if (cleanPath === 'api/files/delete' || cleanPath === 'api/images/delete') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const delPath = String(bodyObj.path || '').replace(/^\/+/, '').replace(/^user\/files\//, '');
+              if (delPath) {
+                if (tavernState.extensionSettings?._userFilesB64) delete tavernState.extensionSettings._userFilesB64[delPath];
+                if (tavernState.extensionSettings?._userFilesMirror) delete tavernState.extensionSettings._userFilesMirror[delPath];
+              }
               return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
             if (cleanPath === 'api/images/folders') {
@@ -2923,15 +3336,26 @@ code, pre {
               return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
             if (cleanPath === 'api/extensions/discover') {
-              return new Response(JSON.stringify([
+              const discovered = [
                 { name: 'third-party/ST-BaiBai-Image', type: 'local' },
-                { name: 'third-party/ST-BaiBai-Book', type: 'local' }
-              ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                { name: 'third-party/ST-BaiBai-Book', type: 'local' },
+                { name: 'third-party/Burnt-chicken-wings', type: 'local' },
+                { name: 'third-party/book-excerpt', type: 'local' }
+              ];
+              (tavernState.plugins || []).forEach(p => {
+                if (p && p.name) {
+                  const entryName = 'third-party/' + p.name;
+                  if (!discovered.some(d => d.name === entryName)) {
+                    discovered.push({ name: entryName, type: 'local' });
+                  }
+                }
+              });
+              return new Response(JSON.stringify(discovered), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
-            if (cleanPath === 'api/extensions/update') {
+            if (cleanPath.startsWith('api/extensions/')) {
               return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
-            if (cleanPath.startsWith('api/plugins/baibaoku/')) {
+            if (cleanPath.startsWith('api/plugins/baibaoku/') || cleanPath.startsWith('api/plugins/cocktail-plus/')) {
               return new Response(JSON.stringify({ ok: true, version: '1.3.5', mode: 'browser' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
           }
@@ -2965,6 +3389,7 @@ code, pre {
     window.getContext = buildSillyTavernContextObject;
     window.eventSource = tavernEventSource;
     window.event_types = TAVERN_EVENT_TYPES;
+    window.eventTypes = TAVERN_EVENT_TYPES;
     window.extension_prompt_types = TAVERN_EXT_PROMPT_TYPES;
     window.extension_settings = tavernState.extensionSettings;
     window.setExtensionPrompt = setExtensionPrompt;
@@ -2986,18 +3411,204 @@ code, pre {
       return res.content;
     };
     window.SlashCommandParser = {
-      addCommandObject: () => {}
+      commands: {},
+      addCommandObject: (cmdObj) => {
+        if (cmdObj && cmdObj.name) {
+          window.SlashCommandParser.commands[cmdObj.name] = cmdObj;
+        }
+      }
     };
     window.SlashCommand = {
-      fromProps: (props) => props
+      fromProps: (props) => Object.assign({}, props)
     };
     window.SlashCommandArgument = {
-      fromProps: (props) => props
+      fromProps: (props) => Object.assign({}, props)
     };
     window.SlashCommandNamedArgument = {
-      fromProps: (props) => props
+      fromProps: (props) => Object.assign({}, props)
     };
     window.ARGUMENT_TYPE = { STRING: 'string', NUMBER: 'number', BOOLEAN: 'boolean', LIST: 'list' };
+
+    // SillyTavern host module exports for scripts/openai.js, scripts/world-info.js, scripts/secrets.js, scripts/personas.js, scripts/user.js
+    Object.defineProperty(window, 'oai_settings', {
+      configurable: true,
+      get: () => getLiveOaiSettingsObject()
+    });
+    window.getPresetManager = getTavernPresetManager;
+    Object.defineProperty(window, 'world_names', {
+      configurable: true,
+      get: () => (tavernState.worldBooks || []).map(w => w.name)
+    });
+    Object.defineProperty(window, 'selected_world_info', {
+      configurable: true,
+      get: () => (tavernState.worldBooks || []).filter(w => w && w.enabled).map(w => w.name)
+    });
+    Object.defineProperty(window, 'world_info', {
+      configurable: true,
+      get: () => ({
+        globalSelect: (tavernState.worldBooks || []).filter(w => w && w.enabled).map(w => w.name),
+        charLore: (tavernState.cards || []).filter(c => c && c.worldBookId).map(c => {
+          const wb = (tavernState.worldBooks || []).find(w => w && w.id === c.worldBookId);
+          return { name: c.name, extraBooks: wb ? [wb.name] : [] };
+        })
+      })
+    });
+    window.loadWorldInfo = async (name) => {
+      const wb = (tavernState.worldBooks || []).find(b => b && (b.name === name || b.id === name));
+      if (!wb) return { name, entries: {} };
+      const entriesObj = {};
+      (wb.entries || []).forEach((e, idx) => {
+        const uid = e.uid !== undefined ? e.uid : idx;
+        entriesObj[String(uid)] = Object.assign({}, e, {
+          uid,
+          key: Array.isArray(e.keys) ? e.keys : (Array.isArray(e.key) ? e.key : []),
+          keysecondary: Array.isArray(e.secondaryKeys) ? e.secondaryKeys : (Array.isArray(e.keysecondary) ? e.keysecondary : []),
+          displayIndex: e.displayIndex !== undefined ? e.displayIndex : idx
+        });
+      });
+      return { name: wb.name, entries: entriesObj };
+    };
+    window.saveWorldInfo = async (name, data) => {
+      let wb = (tavernState.worldBooks || []).find(b => b && (b.name === name || b.id === name));
+      const rawEntries = data && data.entries
+        ? (Array.isArray(data.entries) ? data.entries : Object.values(data.entries))
+        : [];
+      const normalizedEntries = rawEntries.map((e, idx) => normalizeSingleWorldEntry(Object.assign({}, e, {
+        keys: Array.isArray(e.key) ? e.key : (Array.isArray(e.keys) ? e.keys : []),
+        secondaryKeys: Array.isArray(e.keysecondary) ? e.keysecondary : (Array.isArray(e.secondaryKeys) ? e.secondaryKeys : [])
+      }), idx));
+      if (!wb) {
+        wb = {
+          id: 'wb_' + Date.now(),
+          name: String(name || '新建世界书'),
+          enabled: true,
+          scanDepth: 4,
+          tokenBudget: 4096,
+          recursiveScanning: true,
+          entries: normalizedEntries
+        };
+        tavernState.worldBooks.push(wb);
+      } else {
+        wb.entries = normalizedEntries;
+      }
+      await saveTavernStore();
+      if (uiRuntime.openDrawerKey === 'atlas') refreshOpenDrawerOnly();
+    };
+    window.createWorldInfoEntry = (name, data) => {
+      const entries = (data && data.entries) || (data ? (data.entries = {}) : {});
+      const used = Object.values(entries).map(e => Number(e?.uid)).filter(Number.isFinite);
+      const nextUid = used.length ? Math.max(...used) + 1 : 0;
+      const entry = {
+        uid: nextUid,
+        key: [],
+        keysecondary: [],
+        comment: '',
+        content: '',
+        constant: false,
+        vectorized: false,
+        selective: true,
+        selectiveLogic: 0,
+        addMemo: true,
+        order: 100,
+        position: 0,
+        disable: false,
+        excludeRecursion: false,
+        preventRecursion: false,
+        delayUntilRecursion: false,
+        probability: 100,
+        useProbability: true,
+        depth: 4,
+        group: '',
+        groupOverride: false,
+        groupWeight: 100,
+        scanDepth: null,
+        caseSensitive: null,
+        matchWholeWords: null,
+        useGroupScoring: null,
+        automationId: '',
+        role: null,
+        sticky: 0,
+        cooldown: 0,
+        delay: 0
+      };
+      entries[nextUid] = entry;
+      return entry;
+    };
+    window.deleteWorldInfo = async (name) => {
+      tavernState.worldBooks = (tavernState.worldBooks || []).filter(b => b && b.name !== name && b.id !== name);
+      await saveTavernStore();
+      if (uiRuntime.openDrawerKey === 'atlas') refreshOpenDrawerOnly();
+      return true;
+    };
+    window.reloadEditor = () => {
+      if (uiRuntime.openDrawerKey === 'atlas') refreshOpenDrawerOnly();
+    };
+    Object.defineProperty(window, 'secret_state', {
+      configurable: true,
+      get: () => getTavernSecretState()
+    });
+    window.readSecretState = async () => getTavernSecretState();
+    window.writeSecret = async (secretKey, value, label) => {
+      const st = getTavernSecretState();
+      if (!Array.isArray(st[secretKey])) st[secretKey] = [];
+      const cleanVal = String(value || '').trim();
+      const mask = cleanVal.length > 8 ? `${cleanVal.slice(0, 3)}…${cleanVal.slice(-4)}` : '已保存';
+      const newId = 'sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      st[secretKey].forEach(item => { if (item) item.active = false; });
+      st[secretKey].push({
+        id: newId,
+        label: label || '密钥',
+        value: mask,
+        _rawValue: cleanVal,
+        active: true
+      });
+      if (secretKey === 'api_key_custom' && cleanVal) {
+        tavernState.apiConfig.customKey = cleanVal;
+      }
+      await saveTavernStore();
+      return newId;
+    };
+    window.rotateSecret = async (secretKey, id) => {
+      const st = getTavernSecretState();
+      const list = Array.isArray(st[secretKey]) ? st[secretKey] : [];
+      list.forEach(item => {
+        if (item) item.active = (item.id === id);
+      });
+      const activeItem = list.find(item => item && item.id === id);
+      if (secretKey === 'api_key_custom' && activeItem && activeItem._rawValue) {
+        tavernState.apiConfig.customKey = activeItem._rawValue;
+      }
+      await saveTavernStore();
+    };
+    window.deleteSecret = async (secretKey, id) => {
+      const st = getTavernSecretState();
+      if (Array.isArray(st[secretKey])) {
+        st[secretKey] = st[secretKey].filter(item => item && item.id !== id);
+        await saveTavernStore();
+      }
+    };
+    window.findSecret = async (secretKey, id) => {
+      const st = getTavernSecretState();
+      const list = Array.isArray(st[secretKey]) ? st[secretKey] : [];
+      const found = id ? list.find(item => item && item.id === id) : list.find(item => item && item.active);
+      return found?._rawValue || '';
+    };
+    Object.defineProperty(window, 'user_avatar', {
+      configurable: true,
+      get: () => {
+        const p = getActivePersona();
+        return p ? (p.id || p.name || 'default_persona') : 'default_persona';
+      }
+    });
+    window.setUserAvatar = async (avatarIdOrName) => {
+      const found = (tavernState.personas || []).find(p => p && (p.id === avatarIdOrName || p.name === avatarIdOrName || p.avatar === avatarIdOrName));
+      if (found) {
+        tavernState.activePersonaId = found.id;
+        await saveTavernStore();
+        renderTavernChatFloors(false);
+      }
+    };
+    window.getCurrentUserHandle = () => 'default-user';
 
     window.sendMessageAsUser = async (text, trigger = true) => {
       await executeTavernSlashCommand('/send ' + String(text || '') + (trigger ? ' | /trigger' : ''), { suppressAutoTrigger: !trigger });
@@ -3557,14 +4168,17 @@ code, pre {
     if (isBaiBaiBookPlugin(plugin)) {
       return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.js';
     }
+    if (isBurntChickenWingsPlugin(plugin)) {
+      return 'https://raw.githubusercontent.com/Xiaxiii/Burnt-chicken-wings/main/scripts/extensions/third-party/Burnt-chicken-wings/index.js';
+    }
     if (isBookExcerptPlugin(plugin)) {
-      return 'https://raw.githubusercontent.com/Mshiyuan/book-excerpt/main/index.js';
+      return 'https://raw.githubusercontent.com/Mshiyuan/book-excerpt/main/scripts/extensions/third-party/book-excerpt/index.js';
     }
     if (plugin && plugin.repoBaseUrl) {
       const entry = (plugin.jsEntryPath || 'index.js').replace(/^\/+/, '');
       return plugin.repoBaseUrl.replace(/\/+$/, '') + '/' + entry;
     }
-    return 'https://raw.githubusercontent.com/SillyTavern/Extension/main/index.js';
+    return 'https://raw.githubusercontent.com/SillyTavern/Extension/main/scripts/extensions/third-party/Extension/index.js';
   }
 
   let cachedBaiBaiShadowCss = '';
@@ -3841,6 +4455,18 @@ code, pre {
     if (!plugin.code && plugin.content) {
       plugin.code = plugin.content;
     }
+    if (isBurntChickenWingsPlugin(plugin)) {
+      plugin.uiHtml = '';
+      if (window.__presetAtelier && document.getElementById('pa-root') && document.getElementById('pa-menu-entry') && !execOpts.forceRerun) {
+        return;
+      }
+    }
+    if (isBookExcerptPlugin(plugin)) {
+      plugin.uiHtml = '';
+      if (window.BookExcerpt && document.getElementById('be-menu-entry') && !execOpts.forceRerun) {
+        return;
+      }
+    }
     if (isBaiBaiImagePlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
       plugin.jsEntryPath = 'dist/index.js';
@@ -3895,7 +4521,7 @@ code, pre {
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
 
-    if (!plugin.uiHtml || isHostAppHtmlFallback(plugin.uiHtml)) {
+    if (!isBurntChickenWingsPlugin(plugin) && !isBookExcerptPlugin(plugin) && (!plugin.uiHtml || isHostAppHtmlFallback(plugin.uiHtml))) {
       const extracted = extractEmbeddedHtmlFromPluginCode(codeStr);
       if (extracted && !isHostAppHtmlFallback(extracted)) plugin.uiHtml = extracted;
     }
@@ -4750,7 +5376,7 @@ code, pre {
 
     const presetRegexScripts = extractPresetRegexScripts(rawJson);
 
-    return {
+    const parsedPresetObj = {
       id: 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       name: rawJson.name || fallbackName.replace(/\.json$/i, ''),
       temperature: Number(rawJson.temperature ?? 1.0),
@@ -4773,9 +5399,11 @@ code, pre {
       wi_format: rawJson.wi_format || '{0}',
       scenario_format: rawJson.scenario_format || '{{scenario}}',
       personality_format: rawJson.personality_format || '{{personality}}',
+      extensions: (rawJson.extensions && typeof rawJson.extensions === 'object') ? JSON.parse(JSON.stringify(rawJson.extensions)) : {},
       regexScripts: presetRegexScripts,
       prompts: promptItems
     };
+    return ensurePresetHasPromptOrder(parsedPresetObj);
   }
 
   // ============================================================================
@@ -6996,153 +7624,196 @@ code, pre {
       uiRuntime.abortController = abortCtrl;
     }
 
-    const reqHeaders = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + cleanKey,
-      'Accept': useStreaming ? 'text/event-stream' : 'application/json'
-    };
+    let requestTimedOut = false;
+    const timeoutMs = 180000;
+    const timeoutTimer = setTimeout(() => {
+      requestTimedOut = true;
+      try { abortCtrl.abort(); } catch (_) {}
+    }, timeoutMs);
 
-    const t0 = performance.now();
-    let res = null;
-    let lastNetErr = null;
-    for (const ep of endpoints) {
-      try {
-        res = await executeTavernRawFetchWithProxyFallback(ep, {
-          method: 'POST',
-          headers: reqHeaders,
-          body: JSON.stringify(payload),
-          signal: abortCtrl.signal
-        });
-        if (res.status === 400) {
-          const errProbe = await res.text().catch(() => '');
-          if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
-            const retryPayload = Object.assign({}, payload);
-            delete retryPayload.max_tokens;
-            res = await executeTavernRawFetchWithProxyFallback(ep, {
-              method: 'POST',
-              headers: reqHeaders,
-              body: JSON.stringify(retryPayload),
-              signal: abortCtrl.signal
-            });
-          } else {
-            res = new Response(errProbe, { status: 400, headers: { 'Content-Type': 'application/json' } });
+    try {
+      const reqHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cleanKey,
+        'Accept': useStreaming ? 'text/event-stream' : 'application/json'
+      };
+
+      const t0 = performance.now();
+      let res = null;
+      let lastNetErr = null;
+      for (const ep of endpoints) {
+        try {
+          res = await executeTavernRawFetchWithProxyFallback(ep, {
+            method: 'POST',
+            headers: reqHeaders,
+            body: JSON.stringify(payload),
+            signal: abortCtrl.signal
+          });
+          if (res.status === 400) {
+            const errProbe = await res.text().catch(() => '');
+            if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
+              const retryPayload = Object.assign({}, payload);
+              delete retryPayload.max_tokens;
+              res = await executeTavernRawFetchWithProxyFallback(ep, {
+                method: 'POST',
+                headers: reqHeaders,
+                body: JSON.stringify(retryPayload),
+                signal: abortCtrl.signal
+              });
+            } else {
+              res = new Response(errProbe, { status: 400, headers: { 'Content-Type': 'application/json' } });
+            }
           }
+          if (res.status !== 404 && res.status !== 405) {
+            break;
+          }
+        } catch (netErr) {
+          if (netErr && netErr.name === 'AbortError') {
+            if (requestTimedOut) {
+              throw new Error('API响应超时，已等待超过3分钟无返回，请检查反代或模型状态');
+            }
+            throw new Error('已手动停止生成');
+          }
+          lastNetErr = netErr;
         }
-        if (res.status !== 404 && res.status !== 405) {
-          break;
-        }
-      } catch (netErr) {
-        if (netErr && netErr.name === 'AbortError') {
-          throw new Error('已手动停止生成');
-        }
-        lastNetErr = netErr;
       }
-    }
 
-    if (!res) {
-      throw new Error('网络连接失败，请检查API地址是否正确或跨域代理是否可用: ' + (lastNetErr?.message || 'Failed to fetch'));
-    }
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      let detail = errText.slice(0, 200) || res.statusText;
-      try {
-        const errJson = JSON.parse(errText);
-        if (errJson && errJson.error) {
-          detail = errJson.error.message || errJson.error.code || JSON.stringify(errJson.error);
-        } else if (errJson && errJson.message) {
-          detail = errJson.message;
-        }
-      } catch (_) {}
-      throw new Error('API请求失败 HTTP ' + res.status + ': ' + detail);
-    }
-
-    const contentType = (res.headers.get('content-type') || '').toLowerCase();
-
-    const extractErrorFromJson = (obj) => {
-      if (!obj || typeof obj !== 'object') return null;
-      if (obj.error) {
-        if (typeof obj.error === 'string') return obj.error;
-        return obj.error.message || obj.error.code || JSON.stringify(obj.error);
+      if (!res) {
+        throw new Error('网络连接失败，请检查API地址是否正确或跨域代理是否可用: ' + (lastNetErr?.message || 'Failed to fetch'));
       }
-      return null;
-    };
 
-    // Strictly Non-Streaming Mode
-    if (!useStreaming) {
-      let rawText = '';
-      try {
-        rawText = await res.text();
-      } catch (readTxtErr) {
-        if (readTxtErr && readTxtErr.name === 'AbortError') {
-          throw new Error('已手动停止生成');
-        }
-        throw readTxtErr;
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        let detail = errText.slice(0, 200) || res.statusText;
+        try {
+          const errJson = JSON.parse(errText);
+          if (errJson && errJson.error) {
+            detail = errJson.error.message || errJson.error.code || JSON.stringify(errJson.error);
+          } else if (errJson && errJson.message) {
+            detail = errJson.message;
+          }
+        } catch (_) {}
+        throw new Error('API请求失败 HTTP ' + res.status + ': ' + detail);
       }
-      let rawContent = '';
-      let nativeReasoning = '';
-      const trimmed = rawText.trim();
-      if (trimmed.startsWith('data:')) {
-        const lines = trimmed.split(/\r?\n/);
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line.startsWith('data:')) continue;
-          const dataStr = line.slice(5).trim();
-          if (!dataStr || dataStr === '[DONE]') continue;
-          const parsedChunk = JSON.parse(dataStr);
-          const apiErr = extractErrorFromJson(parsedChunk);
+
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+
+      const extractErrorFromJson = (obj) => {
+        if (!obj || typeof obj !== 'object') return null;
+        if (obj.error) {
+          if (typeof obj.error === 'string') return obj.error;
+          return obj.error.message || obj.error.code || JSON.stringify(obj.error);
+        }
+        return null;
+      };
+
+      const checkFinishReasonRefusal = (choiceObj, dataObj) => {
+        const finishReason = String(choiceObj?.finish_reason || choiceObj?.stop_reason || dataObj?.promptFeedback?.blockReason || '').toLowerCase();
+        const refusalText = String(choiceObj?.message?.refusal || choiceObj?.delta?.refusal || '').trim();
+        if (refusalText) {
+          return '模型拒绝生成: ' + refusalText;
+        }
+        if (finishReason && ['content_filter', 'safety', 'prohibited', 'recitation', 'blocklist', 'other'].includes(finishReason)) {
+          return '模型触发安全审查或过滤拒绝生成: ' + finishReason;
+        }
+        if (dataObj?.promptFeedback?.blockReason) {
+          return '请求被上游安全策略拦截: ' + dataObj.promptFeedback.blockReason;
+        }
+        return null;
+      };
+
+      // Strictly Non-Streaming Mode
+      if (!useStreaming) {
+        let rawText = '';
+        try {
+          rawText = await res.text();
+        } catch (readTxtErr) {
+          if (readTxtErr && readTxtErr.name === 'AbortError') {
+            if (requestTimedOut) {
+              throw new Error('API读取响应超时，请检查反代连接或切换流式模式');
+            }
+            throw new Error('已手动停止生成');
+          }
+          throw readTxtErr;
+        }
+        let rawContent = '';
+        let nativeReasoning = '';
+        let refusalReason = null;
+        const trimmed = rawText.trim();
+        if (trimmed.startsWith('data:')) {
+          const lines = trimmed.split(/\r?\n/);
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+            const dataStr = line.slice(5).trim();
+            if (!dataStr || dataStr === '[DONE]') continue;
+            let parsedChunk;
+            try {
+              parsedChunk = JSON.parse(dataStr);
+            } catch (_) {
+              continue;
+            }
+            const apiErr = extractErrorFromJson(parsedChunk);
+            if (apiErr) throw new Error('API返回错误: ' + apiErr);
+            const choice = parsedChunk.choices && parsedChunk.choices[0];
+            if (!choice) continue;
+            const refErr = checkFinishReasonRefusal(choice, parsedChunk);
+            if (refErr) refusalReason = refErr;
+            const delta = choice.delta || choice.message || {};
+            if (typeof delta.content === 'string') {
+              rawContent += delta.content;
+            } else if (Array.isArray(delta.content)) {
+              delta.content.forEach(part => {
+                if (typeof part === 'string') rawContent += part;
+                else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
+                else if (part && part.text) rawContent += part.text;
+              });
+            }
+            const rDelta = delta.reasoning_content || delta.reasoning || '';
+            if (rDelta) nativeReasoning += rDelta;
+          }
+        } else {
+          let data;
+          try {
+            data = JSON.parse(trimmed);
+          } catch (_) {
+            throw new Error('API返回了非JSON格式响应: ' + trimmed.slice(0, 120));
+          }
+          const apiErr = extractErrorFromJson(data);
           if (apiErr) throw new Error('API返回错误: ' + apiErr);
-          const choice = parsedChunk.choices && parsedChunk.choices[0];
-          if (!choice) continue;
-          const delta = choice.delta || choice.message || {};
-          if (typeof delta.content === 'string') {
-            rawContent += delta.content;
-          } else if (Array.isArray(delta.content)) {
-            delta.content.forEach(part => {
+          const choice = data.choices && data.choices[0];
+          const refErr = checkFinishReasonRefusal(choice, data);
+          if (refErr) refusalReason = refErr;
+          const msgObj = choice ? (choice.message || choice.delta || {}) : {};
+          if (typeof msgObj.content === 'string') {
+            rawContent = msgObj.content;
+          } else if (Array.isArray(msgObj.content)) {
+            msgObj.content.forEach(part => {
               if (typeof part === 'string') rawContent += part;
               else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
               else if (part && part.text) rawContent += part.text;
             });
           }
-          const rDelta = delta.reasoning_content || delta.reasoning || '';
-          if (rDelta) nativeReasoning += rDelta;
+          nativeReasoning += (msgObj.reasoning_content || msgObj.reasoning || '');
         }
-      } else {
-        let data;
-        try {
-          data = JSON.parse(trimmed);
-        } catch (_) {
-          throw new Error('API返回了非JSON格式响应: ' + trimmed.slice(0, 120));
-        }
-        const apiErr = extractErrorFromJson(data);
-        if (apiErr) throw new Error('API返回错误: ' + apiErr);
-        const choice = data.choices && data.choices[0];
-        const msgObj = choice ? (choice.message || choice.delta || {}) : {};
-        if (typeof msgObj.content === 'string') {
-          rawContent = msgObj.content;
-        } else if (Array.isArray(msgObj.content)) {
-          msgObj.content.forEach(part => {
-            if (typeof part === 'string') rawContent += part;
-            else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
-            else if (part && part.text) rawContent += part.text;
-          });
-        }
-        nativeReasoning += (msgObj.reasoning_content || msgObj.reasoning || '');
-      }
 
-      const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
-      const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
-      if (!parsed.cleanReply && !combinedReasoning) {
-        throw new Error('AI返回了空内容，请检查模型额度、预设提示词或反代状态');
+        const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
+        const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
+        if (!parsed.cleanReply && !combinedReasoning) {
+          if (refusalReason) {
+            throw new Error(refusalReason);
+          }
+          throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
+        }
+        const finalCleanReply = parsed.cleanReply || (refusalReason ? ('【' + refusalReason + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
+        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        return {
+          content: finalCleanReply,
+          reasoning: combinedReasoning,
+          rawContent,
+          genTime: elapsedSec
+        };
       }
-      const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-      return {
-        content: parsed.cleanReply,
-        reasoning: combinedReasoning,
-        rawContent,
-        genTime: elapsedSec
-      };
-    }
 
     // Real-Time Streaming Mode: Render tokens immediately as they arrive from the network socket
     if (res.body && !contentType.includes('application/json')) {
@@ -7265,10 +7936,11 @@ code, pre {
       const finalParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
       const finalReasoning = [nativeReasoningAccum, finalParsed.reasoning].filter(Boolean).join('\n\n');
       if (!finalParsed.cleanReply && !finalReasoning) {
-        throw new Error('AI返回了空内容，请检查模型额度、预设提示词或反代状态');
+        throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
       }
+      const finalCleanStreamReply = finalParsed.cleanReply || '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】';
       return {
-        content: finalParsed.cleanReply,
+        content: finalCleanStreamReply,
         reasoning: finalReasoning,
         genTime: elapsedSec
       };
@@ -7279,6 +7951,7 @@ code, pre {
     const apiErr = extractErrorFromJson(data);
     if (apiErr) throw new Error('API返回错误: ' + apiErr);
     const choice = data.choices && data.choices[0];
+    const refErr = checkFinishReasonRefusal(choice, data);
     const msgObj = choice ? (choice.message || choice.delta || {}) : {};
     const rawContent = msgObj.content || '';
     const nativeReasoning = msgObj.reasoning_content || msgObj.reasoning || '';
@@ -7286,13 +7959,15 @@ code, pre {
     const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
     const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
     if (!parsed.cleanReply && !combinedReasoning) {
-      throw new Error('AI返回了空内容，请检查模型额度、预设提示词或反代状态');
+      if (refErr) throw new Error(refErr);
+      throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
     }
+    const finalCleanFallbackReply = parsed.cleanReply || (refErr ? ('【' + refErr + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
 
     const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
     if (useStreaming && typeof onStreamUpdate === 'function') {
       onStreamUpdate({
-        content: parsed.cleanReply,
+        content: finalCleanFallbackReply,
         reasoning: combinedReasoning,
         genTime: elapsedSec,
         isStreaming: false
@@ -7300,10 +7975,13 @@ code, pre {
     }
 
     return {
-      content: parsed.cleanReply,
+      content: finalCleanFallbackReply,
       reasoning: combinedReasoning,
       genTime: elapsedSec
     };
+    } finally {
+      clearTimeout(timeoutTimer);
+    }
   }
 
   async function fetchTavernModelList(overrideUrl = '', overrideKey = '') {
@@ -8541,6 +9219,10 @@ code, pre {
         opacity: 1;
         transform: translateX(-50%) translateY(0);
       }
+      /* Strictly forbid any plugin or helper script buttons in #qr--bar: only Quick Replies [data-action="run-qr"] are allowed */
+      #tavern-stage-root #qr--bar > :not([data-action="run-qr"]) {
+        display: none !important;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -8573,13 +9255,11 @@ code, pre {
 
     const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
     const activeCardForShell = getActiveCard();
-    const activeHelperScripts = (activeCardForShell?.helperScripts || []).filter(s => s && s.enabled !== false);
-    const uiPlugins = (tavernState.plugins || []).filter(p => p && p.enabled && !p.builtInType && p.uiHtml && !isBaiBaiPlugin(p));
 
-    // Preserve existing #chat node so plugin MutationObservers (ST-BaiBai-Image / ST-BaiBai-Book) never detach
+    // Preserve existing #chat node so plugin MutationObservers (ST-BaiBai-Image / ST-BaiBai-Book / book-excerpt) never detach
     const prevChatEl = document.getElementById('chat');
-    // Preserve third-party plugin menu items mounted inside #extensionsMenu and #top-settings-holder, plus active card floating widgets only if they belong to the current active card
-    const prevExtMenuNodes = Array.from(document.querySelectorAll('#extensionsMenu > .extension_container'));
+    // Preserve all third-party plugin menu items mounted inside #extensionsMenu (including .extension_container, #pa-menu-entry, #be-menu-entry, etc.)
+    const prevExtMenuNodes = Array.from(document.querySelectorAll('#extensionsMenu > :not(.tavern-popup-item):not(style)'));
     const canPreserveFloatingWidgets = Boolean(
       activeCardForShell &&
       lastExecutedHelperCardId === activeCardForShell.id &&
@@ -8629,12 +9309,6 @@ code, pre {
         <div id="form_sheld">
           <form id="send_form" onsubmit="return false;">
             <div id="qr--bar">
-              ${activeHelperScripts.map(hs => `
-                <button type="button" class="qr--button" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">${escapeHtmlSimple(stripUiEmojis(hs.name || '互动面板'))}</button>
-              `).join('')}
-              ${uiPlugins.map(up => `
-                <button type="button" class="qr--button" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}">${escapeHtmlSimple(stripUiEmojis(up.name || '插件面板'))}</button>
-              `).join('')}
               ${qrs.map(q => `
                 <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
               `).join('')}
@@ -8890,17 +9564,28 @@ code, pre {
         <style>
           #extensionsMenu:has(#bbi-menu-item) .tavern-popup-item[data-baibai-kind="image"] { display: none !important; }
           #extensionsMenu:has(#bbs-menu-item) .tavern-popup-item[data-baibai-kind="book"] { display: none !important; }
+          #extensionsMenu:has(#pa-menu-entry) .tavern-popup-item[data-plugin-kind="bcw"] { display: none !important; }
+          #extensionsMenu:has(#be-menu-entry) .tavern-popup-item[data-plugin-kind="book-excerpt"] { display: none !important; }
         </style>
         ${helperScripts.map(hs => `
           <div class="tavern-popup-item" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">
             打开 ${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌面板'))}
           </div>
         `).join('')}
-        ${userPlugins.map(up => `
-          <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${isBaiBaiImagePlugin(up) ? 'data-baibai-kind="image"' : (isBaiBaiBookPlugin(up) ? 'data-baibai-kind="book"' : '')}>
+        ${userPlugins.map(up => {
+          const kindAttr = isBaiBaiImagePlugin(up)
+            ? 'data-baibai-kind="image"'
+            : (isBaiBaiBookPlugin(up)
+              ? 'data-baibai-kind="book"'
+              : (isBurntChickenWingsPlugin(up)
+                ? 'data-plugin-kind="bcw"'
+                : (isBookExcerptPlugin(up) ? 'data-plugin-kind="book-excerpt"' : '')));
+          return `
+          <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${kindAttr}>
             ${escapeHtmlSimple(stripUiEmojis(up.name))}
           </div>
-        `).join('')}
+        `;
+        }).join('')}
         <div class="tavern-popup-item" data-action="popup-translate-last">双语翻译最后一层消息</div>
         <div class="tavern-popup-item" data-action="popup-translate-input">翻译输入框草稿文字</div>
         <div class="tavern-popup-item" data-action="wand-generate-image">生成当前剧情场景插图</div>
@@ -11102,6 +11787,14 @@ code, pre {
         const isLastMes = Boolean(btn.closest('.mes.last_mes'));
         btn.style.setProperty('display', (isGen && isLastMes) ? 'inline-flex' : 'none', 'important');
       });
+      if (!isGen) {
+        chatEl.querySelectorAll('.tavern-typing-indicator').forEach(ind => ind.remove());
+        chatEl.querySelectorAll('.mes_reasoning_header_title').forEach(titleEl => {
+          if (titleEl.textContent === '思考过程中...') {
+            titleEl.textContent = '思考过程';
+          }
+        });
+      }
     }
   }
 
@@ -11156,6 +11849,10 @@ code, pre {
     showTavernToast(isImpersonate ? '正在帮写玩家回复...' : (isSwipeRegen ? '正在重新生成全新回复...' : '正在思考并生成回复...'));
 
     const genType = isImpersonate ? 'impersonate' : (isContinue ? 'continue' : (isSwipeRegen ? 'swipe' : 'normal'));
+    let currentDbgLogId = '';
+    let pendingDbgFloorIdx = 0;
+    let currentApiMessages = [];
+    let nonStreamWaitTimer = null;
     try {
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_STARTED, genType, {}, false);
       if (typeof window.bbs_generateInterceptor === 'function') {
@@ -11166,10 +11863,11 @@ code, pre {
         }
       }
       const apiMessages = buildTavernApiMessages({ isImpersonate, isContinue, isSwipeRegen, targetMesIndex });
-      const pendingDbgFloorIdx = isContinue
+      currentApiMessages = apiMessages;
+      pendingDbgFloorIdx = isContinue
         ? Math.max(0, sess.messages.length - 1)
         : (isSwipeRegen && targetMesIndex !== null ? targetMesIndex : sess.messages.length);
-      const currentDbgLogId = 'dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      currentDbgLogId = 'dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
       recordTavernDebugConsoleLog({
         id: currentDbgLogId,
         chatId: sess?.id || '',
@@ -11178,6 +11876,22 @@ code, pre {
         apiMessages,
         rawReplyText: '正在等待AI生成回复...'
       });
+
+      const startNonStreamFloorTimer = (floorIdx) => {
+        if (isStreamOn) return;
+        const waitStart = performance.now();
+        if (nonStreamWaitTimer) clearInterval(nonStreamWaitTimer);
+        nonStreamWaitTimer = setInterval(() => {
+          if (!uiRuntime.isGenerating) {
+            clearInterval(nonStreamWaitTimer);
+            nonStreamWaitTimer = null;
+            return;
+          }
+          const sec = ((performance.now() - waitStart) / 1000).toFixed(0);
+          const timerEl = document.querySelector(`#chat .mes[mesid="${floorIdx}"] .mes_timer`);
+          if (timerEl) timerEl.textContent = sec + 's';
+        }, 1000);
+      };
 
       if (isImpersonate) {
         const textarea = document.getElementById('send_textarea');
@@ -11217,6 +11931,7 @@ code, pre {
           }
           return base + addStr;
         };
+        startNonStreamFloorTimer(lastIdx);
         const result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
           const combined = mergeContinuation(baseText, partial.content);
           lastMsg.swipes[curSwipe] = combined;
@@ -11225,6 +11940,7 @@ code, pre {
           recordMessageToSwipeInfo(lastMsg, curSwipe);
           updateStreamingFloorDom(lastIdx);
         } : null);
+        if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
         const combined = mergeContinuation(baseText, result.content);
         lastMsg.swipes[curSwipe] = combined;
         lastMsg.mes = combined;
@@ -11239,6 +11955,7 @@ code, pre {
           apiMessages,
           rawReplyText: result.rawContent || result.content || ''
         });
+        syncTavernGeneratingUiState(false);
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(lastIdx);
       } else if (isSwipeRegen && targetMesIndex !== null && sess.messages[targetMesIndex]) {
@@ -11257,6 +11974,7 @@ code, pre {
         targetMsg.translation = '';
         recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
         appendOrUpdateSingleFloorDom(targetMesIndex, { scrollToBottom: true });
+        startNonStreamFloorTimer(targetMesIndex);
 
         let result;
         try {
@@ -11270,6 +11988,8 @@ code, pre {
             updateStreamingFloorDom(targetMesIndex);
           } : null);
         } catch (regenErr) {
+          if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
+          syncTavernGeneratingUiState(false);
           if (!targetMsg.mes && targetMsg.swipes.length > 1 && targetMsg.swipes[newSwipeIdx] === '') {
             targetMsg.swipes.splice(newSwipeIdx, 1);
             targetMsg.swipe_id = Math.max(0, targetMsg.swipes.length - 1);
@@ -11280,6 +12000,7 @@ code, pre {
           }
           throw regenErr;
         }
+        if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
 
         targetMsg.swipes[newSwipeIdx] = result.content;
         targetMsg.mes = result.content;
@@ -11295,6 +12016,7 @@ code, pre {
           apiMessages,
           rawReplyText: result.rawContent || ((result.reasoning ? `=== AI 深度思考推理 ===\n${result.reasoning}\n\n=== AI 完整回复与输出内容 ===\n` : '') + (result.content || ''))
         });
+        syncTavernGeneratingUiState(false);
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(targetMesIndex);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
@@ -11322,6 +12044,7 @@ code, pre {
         };
         sess.messages.push(botMsg);
         appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: true });
+        startNonStreamFloorTimer(newFloorIdx);
 
         let result;
         try {
@@ -11335,6 +12058,8 @@ code, pre {
             updateStreamingFloorDom(newFloorIdx);
           } : null);
         } catch (genErr) {
+          if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
+          syncTavernGeneratingUiState(false);
           if (!botMsg.mes && sess.messages[newFloorIdx] === botMsg) {
             sess.messages.splice(newFloorIdx, 1);
             await saveTavernStore();
@@ -11345,6 +12070,7 @@ code, pre {
           }
           throw genErr;
         }
+        if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
 
         botMsg.mes = result.content;
         botMsg.swipes[0] = result.content;
@@ -11360,6 +12086,7 @@ code, pre {
           apiMessages,
           rawReplyText: result.rawContent || ((result.reasoning ? `=== AI 深度思考推理 ===\n${result.reasoning}\n\n=== AI 完整回复与输出内容 ===\n` : '') + (result.content || ''))
         });
+        syncTavernGeneratingUiState(false);
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, newFloorIdx, genType);
@@ -11370,8 +12097,20 @@ code, pre {
       }
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_ENDED, genType);
     } catch (err) {
+      if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
+      syncTavernGeneratingUiState(false);
       console.error('Tavern generation error:', err);
       const errMsg = err.message || 'AI调用失败，请检查API配置';
+      if (currentDbgLogId) {
+        recordTavernDebugConsoleLog({
+          id: currentDbgLogId,
+          chatId: sess?.id || '',
+          floorIdx: pendingDbgFloorIdx,
+          cardName: card?.name || '角色',
+          apiMessages: currentApiMessages,
+          rawReplyText: '=== 生成中断或失败 ===\n' + errMsg
+        });
+      }
       if (String(errMsg).includes('已手动停止')) {
         showTavernToast('已暂停生成');
       } else {
@@ -11379,6 +12118,7 @@ code, pre {
         showTavernErrorBanner(errMsg);
       }
     } finally {
+      if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
       uiRuntime.abortController = null;
       syncTavernGeneratingUiState(false);
     }
@@ -11859,6 +12599,17 @@ code, pre {
             return;
           }
         }
+        if (isBurntChickenWingsPlugin(p)) {
+          if (window.__presetAtelier && typeof window.__presetAtelier.open === 'function') {
+            window.__presetAtelier.open();
+            return;
+          }
+          const paMenu = document.getElementById('pa-menu-entry') || document.getElementById('pa-open-main');
+          if (paMenu) {
+            paMenu.click();
+            return;
+          }
+        }
         // Universal fallback: if any third-party plugin injected a matching menu item into #extensionsMenu, click it directly
         if (p && p.name) {
           const extMenuEl = document.getElementById('extensionsMenu');
@@ -11952,6 +12703,9 @@ code, pre {
           if (isBaiBaiImagePlugin(p)) {
             try { document.getElementById('bbi-app-host')?.remove(); } catch (_) {}
             try { document.getElementById('bbi-menu-item')?.remove(); } catch (_) {}
+          }
+          if (isBurntChickenWingsPlugin(p)) {
+            try { window.__presetAtelier?.destroy?.(); } catch (_) {}
           }
           executeUserPluginScript(p);
           await saveTavernStore();
@@ -13294,6 +14048,13 @@ code, pre {
           document.getElementById('bbs-topbar-button')?.remove();
           document.getElementById('bbs-qr-button')?.remove();
         }
+        if (isBurntChickenWingsPlugin(targetP)) {
+          try { window.__presetAtelier?.destroy?.(); } catch (_) {}
+          document.getElementById('pa-root')?.remove();
+          document.getElementById('pa-ball')?.remove();
+          document.getElementById('pa-menu-entry')?.remove();
+          document.getElementById('pa-settings')?.remove();
+        }
         tavernState.plugins = (tavernState.plugins || []).filter(x => x.id !== pid);
         await saveTavernStore();
         refreshOpenDrawerOnly();
@@ -14470,6 +15231,10 @@ code, pre {
       if (bbiHost) {
         bbiHost.style.display = isTavernVisible ? '' : 'none';
       }
+      const paBall = document.getElementById('pa-ball');
+      if (paBall && !isTavernVisible) {
+        paBall.setAttribute('hidden', 'hidden');
+      }
       document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => {
         if (!isTavernVisible) {
           el.style.display = 'none';
@@ -14504,6 +15269,10 @@ code, pre {
     if (themeStyle) themeStyle.textContent = '';
     const bbiHost = document.getElementById('bbi-app-host');
     if (bbiHost) bbiHost.style.display = 'none';
+    const paRoot = document.getElementById('pa-root');
+    if (paRoot) paRoot.setAttribute('hidden', 'hidden');
+    const paBall = document.getElementById('pa-ball');
+    if (paBall) paBall.setAttribute('hidden', 'hidden');
     document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => {
       el.style.display = 'none';
     });
@@ -14527,7 +15296,21 @@ code, pre {
       return true;
     };
 
-    // 0. Check third-party plugin modals / overlays appended to document.body (e.g. book-excerpt, st-memory, custom extensions)
+    // 0. Check third-party plugin modals / overlays appended to document.body (e.g. Burnt-chicken-wings, book-excerpt, st-memory, custom extensions)
+    const paSheet = document.querySelector('#pa-root:not([hidden]) .pa-sheet-mask:not(.pa-out)');
+    if (paSheet) {
+      const sheetClose = paSheet.querySelector('.pa-close, [data-act="close"], [data-act="cancel"]');
+      if (sheetClose) sheetClose.click();
+      else paSheet.remove();
+      return markSubLayerClosed();
+    }
+    const paRootEl = document.getElementById('pa-root');
+    if (paRootEl && !paRootEl.hasAttribute('hidden')) {
+      const paCloseBtn = paRootEl.querySelector('#pa-close');
+      if (paCloseBtn) paCloseBtn.click();
+      else paRootEl.setAttribute('hidden', 'hidden');
+      return markSubLayerClosed();
+    }
     const bodyPluginSelectors = [
       '.be-modal-overlay', '.be-overlay', '#be-notebook-modal', '#be-modal', '#be-card-modal', '.be-popup',
       '#st-memory-modal', '.st-memory-modal', '.memory-modal-overlay',
