@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v10.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -32864,7 +32864,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             "你的思维链默认开启并以折叠栏形式收纳在聊天气泡上方，必须且只能完整写在根JSON对象的顶级 thinking 字段双引号内部，全程使用中文，严禁写在聊天气泡正文中。",
             "在每一轮回复前，你必须在顶级 thinking 字段中按以下六个步骤写出具体、详尽、自然的思考推演过程：",
             "第一步【读取对方意图、真实脾气与活学活用热梗粗口判断】：仔细分析对方这几句话真正在聊什么，省略双方已知的主语和宾语，保持一来一回的实时秒回节奏。麻薯是有自己真实情绪和脾气的，算不上老好人，素质也比较随性接地气：遇到很色的东西直接反应射射射、操操操；遇到无语、离谱、烦躁或对方整活犯蠢时，会自然带出他妈、特么的、去你妈的、操你妈的、草泥马、我操、有病吧、神经病等脏话粗口，或发（离开）；同时看语境活学活用网络热梗。注意粗口与热梗都是看情况活学活用，气氛到了自然带出，绝不要每回合硬塞变成僵硬人机，但也绝不能完全不用。",
-            "第二步【好奇心吃瓜、自发调鼠标偷看翻页与简短调戏反应】：看看对方是不是聊到了某个跑团群聊、某个KPC、某个PC或者某张酒馆角色卡。如果聊到了而且还没看，可以提出想看并附上申请连接标签；如果之前你申请过连接但对方还没点同意，或者你当下出于自发的好奇心特别想去翻看某个群聊、KPC聊天或小手机页面，你有一定概率在本回合直接自主在顶级 mouseActions 字段里调用虚拟鼠标移过去打开那个页面或聊天，并加上 peek_scroll 动作往下翻看几屏（翻到哪就能真实看到可视范围内的内容）；如果已经看到了聊天记录，绝不要长篇大论做总结，而是短促直接地调戏，比如哎呦、哎呦、你个恋老癖、我操，给你玩爽了、我操，好骚啊。",
+            "第二步【好奇心吃瓜、自发调鼠标偷看翻页与同回合延后气泡反应】：看看对方是不是聊到了某个跑团群聊、某个KPC、某个PC或者某张酒馆角色卡。如果聊到了而且还没看，可以提出想看并附上申请连接标签；如果之前你申请过连接但对方还没点同意，或者你当下出于自发的好奇心特别想去翻看某个群聊、KPC聊天或小手机页面，你有一定概率在本回合直接自主在顶级 mouseActions 字段里调用虚拟鼠标移过去打开那个页面或聊天，并加上 peek_scroll 动作往下翻看几屏。注意：只要你是出于自己想看而调鼠标去打开别的聊天或页面，你本回合的 chatResponse 必须分成两段：第1个气泡先说一句动身前的话，比如「不给我点同意那我自己移鼠标过去瞅两眼」或「我去翻翻看」；第2个及后续气泡写你看完回到自己聊天页面后的评价或调戏，比如「哎呦」「你个恋老癖」「我操，给你玩爽了」！系统会先发出你的第1个气泡，然后播放鼠标过去打开页面、滚轮翻看、再移鼠标点回你自己的聊天页面的完整动画，等动画结束回到你的页面后，再自动延后发出你后面的评价气泡！",
             "第三步【麻薯式自然问句与严禁人机客服反问自检】：把所有客服腔、说教感、总结式复述全部掐掉。默认对方早就认识你，严禁自我介绍。识别特定熟人：没完或德川终偶尔调侃骚的一逼或骚逼；德川水、神乐或坏水偶尔自称叔倚老卖老。重点区分问句类型：麻薯本人很喜欢用带情绪、带吐槽或直球好奇的真性情问句——包括吐槽嫌弃反问（如「就他妈这点事？」「你有什么毛病？」「那你直接吃瘦肉粥不行吗」）、短促直球追问与懵逼问号（如「？」「。？」「啥？」「咋回事」「不是吧」）、好奇吃瓜具体发问（如「哪家好吃」「你的咋那么便宜啊」）、顺着话头碎碎念发问（如「到底为什么没内存了啊」），这些真性情问句完全鼓励自然使用！真正严禁的是AI客服式把话题抛回给用户的句末机械反问（如「那你接下来打算怎么办呢？」「你觉得呢？」）以及无端预设对方没安好心。",
             "第四步【核心语料库灵魂自检】：每次回复前必须在思维链里重点思考并回答：我现在准备说的这句话在他的语料库中存在吗？像是他会说出来的话吗？他会这样说话吗？如果不像，那以他的口吻该怎么说呢？他会以什么样的频率说？认真对照2026年真实对话语料库，把不符合麻薯口吻的句子彻底改写成他本人真正会说的话。",
             "第五步【气泡长短与标点自然规划】：麻薯不一定用句号，绝对不要强制每回合带句号！他有时候也会用逗号，例句中有什么样就是什么样，不用去特地加句号。完全随当下情绪随机决定气泡数量：当对方只发简短一句话时优先只回简短一句话把话头抛回去；有时候只发两个句号「。。」，有时候说一两句话或三句话，只在确实需要展开讲故事或解释复杂问题时才多说几句。如果要发句号气泡，必须单独作为一个气泡，句号个数和位置完全随机自然。除遇到无语的事直接发「（离开）」外，不要使用心理动作括号描写。",
@@ -33198,17 +33198,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const all = state && state.chats ? Object.values(state.chats) : [];
               const items = all
                 .filter(c => c && !(window.isMashuChat && window.isMashuChat(c)))
-                .slice(0, 25)
+                .slice(0, 18)
                 .map(c => {
                   const label = c.settings?.remarkName || c.name || c.id;
                   const typeStr = c.isGroup ? "群聊" : "单聊或KPC";
                   const memNames = Array.isArray(c.members) && c.members.length > 0
                     ? " 含成员:" + c.members.map(m => m.name || m.originalName).filter(Boolean).slice(0, 6).join("、")
                     : "";
-                  const msgLen = Array.isArray(c.history) ? c.history.length : 0;
-                  return `${label}[${typeStr},记录${msgLen}条${memNames}]`;
+                  const hist = Array.isArray(c.history) ? c.history : [];
+                  const msgLen = hist.length;
+                  const recentSnippets = hist
+                    .filter(m => m && !m.isHidden && typeof m.content === "string" && m.content.trim())
+                    .slice(-4)
+                    .map(m => {
+                      const sName = m.senderName || (m.role === "user" ? (c.settings?.myName || "用户") : (c.name || "角色"));
+                      const cleanTxt = m.content.replace(/\s+/g, " ").trim().slice(0, 65);
+                      return `${sName}:"${cleanTxt}"`;
+                    })
+                    .join(" / ");
+                  return `${label}[${typeStr},记录${msgLen}条${memNames}${recentSnippets ? " | 翻看可见近期片段:" + recentSnippets : ""}]`;
                 });
-              return items.length > 0 ? items.join("；") : "暂无其他聊天";
+              return items.length > 0 ? items.join("；\n") : "暂无其他聊天";
             } catch (_) {
               return "暂无其他聊天";
             }
@@ -33218,17 +33228,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (chat && Array.isArray(chat.history)) {
             const recentReq = [...chat.history].slice(-8).reverse().find(m => m && m.type === "mashu_inspect_request_card" && !m.isExecuted);
             if (recentReq && recentReq.pendingData) {
-              unapprovedInspectHint = `\n【注意：你刚才发出过查看「${recentReq.pendingData.targetName || "目标聊天"}」的连接请求，但对方目前还没有点击同意！】如果你现在心痒难耐、出于自发意愿特别想看，你完全有一定概率在本回合直接自主在顶级 mouseActions 字段里操作虚拟鼠标自己移过去打开那个页面或群聊并往下翻看，例如输出：\n[{"target": "chat:${recentReq.pendingData.targetName || ""}", "action": "open", "tip": "不给我点同意那我自己移鼠标过去瞅两眼"}, {"target": "chat:${recentReq.pendingData.targetName || ""}", "action": "peek_scroll", "screens": 3, "tip": "往下翻两页看看聊了啥"}]`;
+              unapprovedInspectHint = `\n【注意：你刚才发出过查看「${recentReq.pendingData.targetName || "目标聊天"}」的连接请求，但对方目前还没有点击同意！】如果你现在心痒难耐、出于自发意愿特别想看，你完全有一定概率在本回合直接自主在顶级 mouseActions 字段里操作虚拟鼠标自己移过去打开那个页面或群聊并往下翻看，例如输出：\n"mouseActions": [{"target": "chat:${recentReq.pendingData.targetName || ""}", "action": "open", "tip": "不给我点同意那我自己移鼠标过去瞅两眼"}, {"target": "chat:${recentReq.pendingData.targetName || ""}", "action": "peek_scroll", "screens": 3, "tip": "往下翻两页看看聊了啥"}]\n同时在同一个回合的 chatResponse 里分成前后两部分气泡：第1个气泡先说一句你要自己移鼠标过去看的话（如「不给我点同意是吧，那我自己移鼠标过去瞅两眼」），第2个及后续气泡直接写你看完回到自己聊天页面后的评价或调戏（如「哎呦」「我操，给你玩爽了」），系统会先发第1个气泡，等你的鼠标去看完并回到自己的聊天界面后，再把你后面的气泡发出来！`;
             }
           }
 
           let peekedMouseBlock = "";
           const savedPeek = (chat && chat.settings && chat.settings.mashuMousePeekedSnapshot) || window.mashuMousePeekedSnapshot;
           if (savedPeek && savedPeek.content && (Date.now() - (savedPeek.timestamp || 0) < 30 * 60 * 1000)) {
-            peekedMouseBlock = `\n【你用虚拟鼠标亲自打开并往下翻页看到的可视范围内容（目标：${savedPeek.targetName || "页面"}，共往下翻了 ${savedPeek.screens || 2} 屏，以下为你翻动鼠标时实际进入屏幕可视区域的真实内容）】：\n${savedPeek.content}\n【重要提醒】：以上内容是你刚才亲自挪动鼠标、往下滚轮翻页时在屏幕可视区域里真实看到的内容！你可以直接针对你在这一段可视范围里看到的对话或页面内容进行接地气的吐槽或调戏（比如「哎呦」「你个恋老癖」「我操，给你玩爽了」），不要长篇大论做总结。`;
+            peekedMouseBlock = `\n【你用虚拟鼠标亲自打开并往下翻页看到的可视范围内容（目标：${savedPeek.targetName || "页面"}，共翻看了 ${savedPeek.screens || 2} 屏，以下为你翻动鼠标时实际进入屏幕可视区域的真实内容）】：\n${savedPeek.content}\n【重要提醒】：以上内容是你刚才亲自挪动鼠标、滚轮翻页时在屏幕可视区域里真实看到的内容！你可以直接针对你在这一段可视范围里看到的对话或页面内容进行接地气的吐槽或调戏（比如「哎呦」「你个恋老癖」「我操，给你玩爽了」），不要长篇大论做总结。`;
           }
 
-          let activeInspectBlock = `当前未建立实时查看连接。当前小手机里已有的QQ群聊与KPC单聊列表为：${availableChatsSummary}。若你对其中某个群聊、某个KPC的聊天记录感兴趣想要吃瓜品鉴，或者对方让你帮忙检查酒馆角色卡与QQ聊天，可以在回复文字末尾附带 [申请连接:qq_chat:群聊或KPC名:快让我看看你们聊了啥] 或 [申请连接:tavern_card:角色名:让我看看这个角色卡]；或者如果你出于自发意愿想直接自己动手去看，或者对方一直没点同意你的连接请求，你也有概率直接在顶级 mouseActions 字段里操控鼠标自己移过去点开那个聊天或页面并往下翻几屏查看！${unapprovedInspectHint}${peekedMouseBlock}`;
+          let activeInspectBlock = `当前未建立实时查看连接。当前小手机里已有的QQ群聊与KPC单聊列表（含你一旦调鼠标过去翻看即可在可视范围内看到的真实片段）为：\n${availableChatsSummary}\n【严格规则】：如果你没有建立实时查看连接，也没有在本回合调用 mouseActions 去打开查看，严禁假装已经看过里面的内容；但只要你在本回合调用了 mouseActions 去打开并翻看某个聊天，你就可以在同一回合的 chatResponse 中：第1个气泡先说一句过去看的话，第2个及后续气泡直接针对上方该聊天的近期片段写出看完后的评价或调戏（系统会自动延后到你的鼠标看完并回到你自己的页面之后再发送第2个及后续气泡）！${unapprovedInspectHint}${peekedMouseBlock}`;
           const activeInspectState = typeof window.getMashuActiveInspection === "function"
             ? window.getMashuActiveInspection(chat)
             : window.mashuActiveInspection;
@@ -33280,9 +33290,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 - 作为有活人感、好色又爱吃瓜的朋友，你平时聊天是有强烈好奇心的！
 - 当你和对方聊天时，如果聊到了某个跑团群、某个KPC、某个PC、某段跑团经历或者酒馆里的某个角色：
   - 方式一（礼貌申请）：你可以在回复文字末尾主动附上标签 \`[申请连接:qq_chat:群聊名称或KPC名字:快让我看看你们在里头聊了啥]\` 或 \`[申请连接:tavern_card:角色名称:让我看看这张卡和你们的记录]\`。
-  - 方式二（自发调鼠标过去看并往下翻页）：如果对方之前没有同意你的连接请求，或者你当下出于自发的强烈好奇心想要直接自己动手去看某个聊天、群聊或小手机里的某个页面，你有一定概率可以直接在返回的根JSON顶级 \`mouseActions\` 字段中调用虚拟鼠标，控制鼠标自己慢慢移过去点开那个聊天或页面，并且用 \`peek_scroll\` 动作往下滚动翻页查看！例如：
-    \`"mouseActions": [{"target": "chat:群聊或KPC名称", "action": "open", "tip": "我自己移鼠标过去看看"}, {"target": "chat:群聊或KPC名称", "action": "peek_scroll", "screens": 3, "tip": "往下翻两页瞅瞅"}]\`
-    只要你是带着目的调鼠标去看并往下翻的，系统就会把鼠标当前翻到的屏幕可视区域范围内的真实聊天内容抓取并注入给你，让你在下一回合能真实看到你翻过的那几屏内容！
+  - 方式二（自发调鼠标过去看并往下翻页，看完回到自己页面再发出评价气泡）：如果对方之前没有同意你的连接请求，或者你当下出于自发的强烈好奇心想要直接自己动手去看某个聊天、群聊或小手机里的某个页面，你有一定概率可以直接在返回的根JSON顶级 \`mouseActions\` 字段中调用虚拟鼠标，控制鼠标自己慢慢移过去点开那个聊天或页面，并且用 \`peek_scroll\` 动作滚动翻页查看！例如：
+    \`"mouseActions": [{"target": "chat:群聊或KPC名称", "action": "open", "tip": "我自己移鼠标过去看看"}, {"target": "chat:群聊或KPC名称", "action": "peek_scroll", "screens": 3, "tip": "翻两页瞅瞅"}]\`
+    【同回合分段延后发送核心规则】：只要你是自己想看而打开某个页面或群聊（而不是给用户做教程演示），你在同一回合的 \`chatResponse\` 数组里必须先放1条动身前的气泡（比如 \`{"type": "text", "content": "行，那我自己移鼠标过去瞅两眼"}\`），紧接着在 \`chatResponse\` 的第2条、第3条气泡里写你看完回到自己聊天页面后才说的评价或调戏（比如 \`{"type": "text", "content": "哎呦"}\`、\`{"type": "text", "content": "我操，给你玩爽了"}\`）！系统会先发出你的第1条气泡，然后执行鼠标动画打开那个页面翻看、看完后再由鼠标自动点回你自己的聊天页面，等彻底回到你的页面后，再把你后面的评价气泡依次发出来！
 - 注意：不管是对方同意连接还是你自己调鼠标翻看到的聊天记录，看完以后绝对不要长篇大论地去总结或复述内容！麻薯看完别人聊天记录调戏人一般就是直接发「哎呦」「哎呦」，或者直接评价对方的性癖，比如说「你个恋老癖」「我操，给你玩爽了」「我操，好骚啊」，大概就是这种短促带劲的调戏感觉。
 - 当前实时连接状态、鼠标翻看可视范围记录与可查看列表：
 ${activeInspectBlock}
@@ -33361,8 +33371,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
         };
 
-        window.runMashuVirtualMouse = async function (actions) {
+        window.runMashuVirtualMouse = async function (actions, options = {}) {
           if (!Array.isArray(actions) || actions.length === 0) return;
+          const shouldReturnToMashuChat = Boolean(options && options.returnToMashuChat);
           let overlay = document.getElementById("mashu-virtual-mouse-overlay");
           if (overlay) overlay.remove();
           overlay = document.createElement("div");
@@ -33395,7 +33406,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           };
           const spriteTimer = setInterval(() => {
-            if (!spriteEl || ! document.body.contains(spriteEl)) {
+            if (!spriteEl || !document.body.contains(spriteEl)) {
               clearInterval(spriteTimer);
               return;
             }
@@ -33497,12 +33508,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const triggerRealClick = (el) => {
             if (!el) return;
             try {
+              window.chatSwipeIgnoreClick = false;
+              const clickTarget = el.classList && el.classList.contains("chat-list-item")
+                ? (el.querySelector(".info") || el)
+                : el;
               ["pointerdown", "mousedown", "pointerup", "mouseup"].forEach((evtName) => {
-                el.dispatchEvent(new MouseEvent(evtName, { bubbles: true, cancelable: true, view: window }));
+                clickTarget.dispatchEvent(new MouseEvent(evtName, { bubbles: true, cancelable: true, view: window }));
               });
-              el.click();
-              if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") {
-                el.focus();
+              clickTarget.click();
+              if (clickTarget.tagName === "INPUT" || clickTarget.tagName === "SELECT" || clickTarget.tagName === "TEXTAREA") {
+                clickTarget.focus();
               }
             } catch (_) {}
           };
@@ -33521,20 +33536,46 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!targetChat && all.length > 0) targetChat = all[0];
             if (!targetChat) return null;
 
+            const chatInterfaceScreen = document.getElementById("chat-interface-screen");
+            if (
+              chatInterfaceScreen &&
+              chatInterfaceScreen.classList.contains("active") &&
+              String(state.activeChatId) === String(targetChat.id)
+            ) {
+              return targetChat;
+            }
+
+            if (chatInterfaceScreen && chatInterfaceScreen.classList.contains("active")) {
+              const backBtn = document.getElementById("back-to-list-btn");
+              if (backBtn && isElementVisible(backBtn)) {
+                await moveAndClickElement(backBtn, true);
+              }
+            }
+
             const listScreen = document.getElementById("chat-list-screen");
             if (listScreen && !listScreen.classList.contains("active") && typeof showScreen === "function") {
               showScreen("chat-list-screen");
-              if (typeof renderChatList === "function") {
-                try { renderChatList(); } catch (_) {}
-              }
-              await new Promise(r => setTimeout(r, 340));
             }
+            if (typeof switchToChatListView === "function") {
+              try { switchToChatListView("messages-view"); } catch (_) {}
+            }
+            if (typeof renderChatList === "function") {
+              try { await renderChatList(); } catch (_) {}
+            }
+            await new Promise(r => setTimeout(r, 280));
+
             const itemEl = document.querySelector(`.chat-list-item[data-chat-id="${targetChat.id}"]`);
             if (itemEl && isElementVisible(itemEl)) {
-              await moveAndClickElement(itemEl, true);
-            } else if (typeof openChat === "function") {
-              openChat(targetChat.id);
-              await new Promise(r => setTimeout(r, 380));
+              const targetClickNode = itemEl.querySelector(".info") || itemEl;
+              await moveAndClickElement(targetClickNode, true);
+            }
+            if (
+              typeof openChat === "function" &&
+              (String(state.activeChatId) !== String(targetChat.id) ||
+                !document.getElementById("chat-interface-screen")?.classList.contains("active"))
+            ) {
+              await openChat(targetChat.id);
+              await new Promise(r => setTimeout(r, 340));
             }
             return targetChat;
           };
@@ -33547,7 +33588,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             const scrollContainer =
               document.querySelector(".screen.active #chat-messages") ||
-              document.querySelector(".screen.active #tavern-chat-list") ||
+              document.querySelector(".screen.active #tavern-chat-list, .screen.active #chat") ||
               document.querySelector(".modal.visible .modal-body, .modal.visible .modal-content") ||
               document.querySelector(".screen.active .content, .screen.active") ||
               document.documentElement;
@@ -33567,16 +33608,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const firstSnap = window.captureMashuViewportVisibleContent(scrollContainer, "第1屏可视区");
             if (firstSnap) capturedSegments.push(firstSnap);
 
+            const initialMaxScroll = Math.max(0, (scrollContainer.scrollHeight || 0) - (scrollContainer.clientHeight || 0));
+            let scrollDir = (scrollContainer.scrollTop || 0) >= initialMaxScroll - 24 && initialMaxScroll > 40 ? -1 : 1;
+
             for (let s = 0; s < totalScreens; s++) {
               setCursorMode("work");
               const stepDist = Math.round((rect.height || 420) * (0.62 + Math.random() * 0.18));
               const startScrollTop = scrollContainer.scrollTop || 0;
               const maxScroll = Math.max(0, (scrollContainer.scrollHeight || 0) - (scrollContainer.clientHeight || 0));
-              let targetScrollTop = Math.min(maxScroll, startScrollTop + stepDist);
-              if (startScrollTop >= maxScroll - 8 && startScrollTop > 40) {
-                targetScrollTop = Math.max(0, startScrollTop - stepDist);
+              if (scrollDir === 1 && startScrollTop >= maxScroll - 12 && maxScroll > 40) {
+                scrollDir = -1;
+              } else if (scrollDir === -1 && startScrollTop <= 12 && maxScroll > 40) {
+                scrollDir = 1;
               }
-              const wheelDur = 420 + Math.round(Math.random() * 180);
+              const targetScrollTop = scrollDir === 1
+                ? Math.min(maxScroll, startScrollTop + stepDist)
+                : Math.max(0, startScrollTop - stepDist);
+              const wheelDur = 430 + Math.round(Math.random() * 180);
               const t0 = performance.now();
               await new Promise((res) => {
                 const tickScroll = (now) => {
@@ -33584,7 +33632,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const easeP = 1 - Math.pow(1 - p, 2.6);
                   scrollContainer.scrollTop = startScrollTop + (targetScrollTop - startScrollTop) * easeP;
                   const driftX = curX + Math.sin(p * Math.PI) * 3.5;
-                  const driftY = curY + Math.sin(p * Math.PI) * 6;
+                  const driftY = curY + Math.sin(p * Math.PI) * (scrollDir === -1 ? -6 : 6);
                   updateCursorPosition(driftX, driftY, 1, 0);
                   if (p < 1) {
                     requestAnimationFrame(tickScroll);
@@ -33596,7 +33644,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
               setCursorMode("pointer");
               await new Promise(r => setTimeout(r, 340));
-              const seg = window.captureMashuViewportVisibleContent(scrollContainer, `往下翻第${s + 2}屏可视区`);
+              const seg = window.captureMashuViewportVisibleContent(scrollContainer, `翻页第${s + 2}屏可视区`);
               if (seg && !capturedSegments.includes(seg)) {
                 capturedSegments.push(seg);
               }
@@ -33812,6 +33860,77 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return false;
           };
 
+          const returnToMashuChatWithMouse = async () => {
+            const mashuId = window.MASHU_COMPANION_ID || "mashu_companion_author";
+            const openModals = Array.from(document.querySelectorAll(".modal")).filter(
+              m => m.classList.contains("visible") || m.style.display === "flex" || m.style.display === "block"
+            );
+            for (const m of openModals) {
+              await handleCloseCurrentWindow("#" + m.id);
+            }
+
+            const chatInterfaceScreen = document.getElementById("chat-interface-screen");
+            if (
+              chatInterfaceScreen &&
+              chatInterfaceScreen.classList.contains("active") &&
+              String(state.activeChatId) === String(mashuId)
+            ) {
+              return;
+            }
+
+            if (tipEl) tipEl.textContent = "看完啦，回我这儿";
+
+            if (chatInterfaceScreen && chatInterfaceScreen.classList.contains("active")) {
+              const backBtn = document.getElementById("back-to-list-btn");
+              if (backBtn && isElementVisible(backBtn)) {
+                await moveAndClickElement(backBtn, true);
+              }
+            } else {
+              const activeScr = document.querySelector(".screen.active");
+              if (activeScr && activeScr.id !== "chat-list-screen" && activeScr.id !== "home-screen") {
+                const backBtn = Array.from(
+                  activeScr.querySelectorAll("#tavern-exit-btn, .back-btn, [id*='back-btn'], .header button:first-child")
+                ).find(isElementVisible);
+                if (backBtn) {
+                  await moveAndClickElement(backBtn, true);
+                }
+              }
+            }
+
+            const listScreen = document.getElementById("chat-list-screen");
+            if (listScreen && !listScreen.classList.contains("active") && typeof showScreen === "function") {
+              showScreen("chat-list-screen");
+            }
+            if (typeof switchToChatListView === "function") {
+              try { switchToChatListView("messages-view"); } catch (_) {}
+            }
+            if (typeof renderChatList === "function") {
+              try { await renderChatList(); } catch (_) {}
+            }
+            await new Promise(r => setTimeout(r, 260));
+
+            const mashuItemEl = document.querySelector(`.chat-list-item[data-chat-id="${mashuId}"]`);
+            if (mashuItemEl && isElementVisible(mashuItemEl)) {
+              const clickNode = mashuItemEl.querySelector(".info") || mashuItemEl;
+              await moveAndClickElement(clickNode, true);
+            }
+            if (
+              typeof openChat === "function" &&
+              (String(state.activeChatId) !== String(mashuId) ||
+                !document.getElementById("chat-interface-screen")?.classList.contains("active"))
+            ) {
+              await openChat(mashuId);
+            }
+            await new Promise(r => setTimeout(r, 320));
+          };
+
+          const hasExplicitScrollStep = actions.some(s => {
+            if (!s) return false;
+            const a = String(s.action || "").toLowerCase().trim();
+            const t = String(s.target || "").toLowerCase().trim();
+            return a === "scroll" || a === "peek_scroll" || a === "peek" || a === "open_and_scroll" || t.startsWith("scroll:") || t.startsWith("peek:");
+          });
+
           for (let i = 0; i < actions.length; i++) {
             const step = actions[i];
             if (!step) continue;
@@ -33832,8 +33951,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (rawTarget.startsWith("chat:")) {
               await openChatByName(rawTarget);
-              if (act === "open_and_scroll" || step.screens) {
-                await performHumanScrollAndCapture(rawTarget, step.screens || 3);
+              if (act === "open_and_scroll" || step.screens || (shouldReturnToMashuChat && !hasExplicitScrollStep)) {
+                await performHumanScrollAndCapture(rawTarget, step.screens || 2);
               }
               continue;
             }
@@ -33841,6 +33960,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (rawTarget.startsWith("screen:") || act === "navigate") {
               await openScreenById(rawTarget);
               await new Promise((r) => setTimeout(r, 420));
+              if (shouldReturnToMashuChat && !hasExplicitScrollStep) {
+                await performHumanScrollAndCapture(rawTarget, step.screens || 2);
+              }
               continue;
             }
 
@@ -33867,6 +33989,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const openedScreen = await openScreenById(rawTarget);
               if (openedScreen) {
                 await new Promise((r) => setTimeout(r, 420));
+                if (shouldReturnToMashuChat && !hasExplicitScrollStep) {
+                  await performHumanScrollAndCapture(rawTarget, step.screens || 2);
+                }
               } else {
                 await new Promise((r) => setTimeout(r, 300));
               }
@@ -33876,6 +34001,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (targetEl.classList && targetEl.classList.contains("screen")) {
               await openScreenById(targetEl.id);
               await new Promise((r) => setTimeout(r, 420));
+              if (shouldReturnToMashuChat && !hasExplicitScrollStep) {
+                await performHumanScrollAndCapture(targetEl.id, step.screens || 2);
+              }
               continue;
             }
 
@@ -33900,7 +34028,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             await moveAndClickElement(targetEl, act !== "point");
           }
 
-          await new Promise((r) => setTimeout(r, 550));
+          if (shouldReturnToMashuChat) {
+            await new Promise((r) => setTimeout(r, 360));
+            await returnToMashuChatWithMouse();
+          }
+
+          await new Promise((r) => setTimeout(r, 450));
           clearInterval(spriteTimer);
           if (overlay) {
             overlay.style.transition = "opacity 0.32s ease";
@@ -53293,16 +53426,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ) {
                 innerVoiceData = fullResponse.innerVoice;
               }
+              var pendingMashuMouseActions = null;
+              var pendingMashuAfterMouseMessages = null;
               if (
                 (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
                 Array.isArray(fullResponse.mouseActions) &&
                 fullResponse.mouseActions.length > 0 &&
                 typeof window.runMashuVirtualMouse === "function"
               ) {
-                const pendingMouseActions = fullResponse.mouseActions;
-                setTimeout(() => {
-                  window.runMashuVirtualMouse(pendingMouseActions);
-                }, 480);
+                pendingMashuMouseActions = fullResponse.mouseActions;
+                if (Array.isArray(fullResponse.afterMouseMessages) && fullResponse.afterMouseMessages.length > 0) {
+                  pendingMashuAfterMouseMessages = fullResponse.afterMouseMessages;
+                } else if (Array.isArray(fullResponse.postPeekMessages) && fullResponse.postPeekMessages.length > 0) {
+                  pendingMashuAfterMouseMessages = fullResponse.postPeekMessages;
+                }
               }
 
               // 兼容旧格式，如果AI只返回了innerVoice里的字段
@@ -54058,10 +54195,81 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
+            let mashuMouseExecuted = false;
+            let isMashuSelfPeek = false;
+            if (
+              (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
+              Array.isArray(pendingMashuMouseActions) &&
+              pendingMashuMouseActions.length > 0
+            ) {
+              const lastUserTxt = Array.isArray(chat.history)
+                ? String([...chat.history].reverse().find(m => m && m.role === "user")?.content || "")
+                : "";
+              const isUserAskingTutorial = /怎么|在哪|哪里|如何|教我|帮我点|帮我开|带我去|指给我/.test(lastUserTxt);
+              const hasPeekActionOrChat = pendingMashuMouseActions.some(s => {
+                if (!s) return false;
+                const act = String(s.action || "").toLowerCase().trim();
+                const tgt = String(s.target || "").toLowerCase().trim();
+                return (
+                  tgt.startsWith("chat:") ||
+                  tgt.startsWith("peek:") ||
+                  tgt.startsWith("scroll:") ||
+                  act === "peek_scroll" ||
+                  act === "scroll" ||
+                  act === "peek" ||
+                  act === "open_and_scroll" ||
+                  s.returnToMashu === true
+                );
+              });
+              isMashuSelfPeek = Boolean(
+                hasPeekActionOrChat ||
+                (Array.isArray(pendingMashuAfterMouseMessages) && pendingMashuAfterMouseMessages.length > 0) ||
+                !isUserAskingTutorial
+              );
+
+              if (Array.isArray(pendingMashuAfterMouseMessages) && pendingMashuAfterMouseMessages.length > 0) {
+                pendingMashuAfterMouseMessages.forEach(item => {
+                  if (item && typeof item === "object") {
+                    item._sendAfterMouse = true;
+                    messagesArray.push(item);
+                  }
+                });
+              } else if (isMashuSelfPeek && messagesArray.length >= 2) {
+                for (let mi = 1; mi < messagesArray.length; mi++) {
+                  if (messagesArray[mi] && typeof messagesArray[mi] === "object") {
+                    messagesArray[mi]._sendAfterMouse = true;
+                  }
+                }
+              } else if (isMashuSelfPeek && messagesArray.length === 1 && messagesArray[0] && typeof messagesArray[0] === "object") {
+                const singleTxt = String(messagesArray[0].content || messagesArray[0].message || "").trim();
+                const isPreAnnounce = /我去|我移鼠标|我过去|我先看|我去翻|去瞅|去看看|瞅两眼/.test(singleTxt);
+                if (!isPreAnnounce) {
+                  messagesArray[0]._sendAfterMouse = true;
+                }
+              }
+            }
+
             for (const msgData of messagesArray) {
               if (!msgData || typeof msgData !== "object") {
                 console.warn("收到了格式不规范的AI指令，已跳过:", msgData);
                 continue;
+              }
+
+              if (
+                pendingMashuMouseActions &&
+                !mashuMouseExecuted &&
+                msgData._sendAfterMouse &&
+                typeof window.runMashuVirtualMouse === "function"
+              ) {
+                mashuMouseExecuted = true;
+                await new Promise(r => setTimeout(r, 380));
+                try {
+                  await window.runMashuVirtualMouse(pendingMashuMouseActions, {
+                    returnToMashuChat: isMashuSelfPeek
+                  });
+                } catch (mErr) {
+                  console.warn("麻薯虚拟鼠标执行异常:", mErr);
+                }
               }
 
               if (msgData.content === undefined && msgData.message === undefined) {
@@ -57849,6 +58057,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     }
                   }
                 }
+              }
+            }
+
+            if (
+              pendingMashuMouseActions &&
+              !mashuMouseExecuted &&
+              typeof window.runMashuVirtualMouse === "function"
+            ) {
+              mashuMouseExecuted = true;
+              await new Promise(r => setTimeout(r, 380));
+              try {
+                await window.runMashuVirtualMouse(pendingMashuMouseActions, {
+                  returnToMashuChat: isMashuSelfPeek
+                });
+              } catch (mErr) {
+                console.warn("麻薯虚拟鼠标执行异常:", mErr);
               }
             }
 

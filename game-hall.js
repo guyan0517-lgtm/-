@@ -7625,7 +7625,7 @@ code, pre {
     }
 
     let requestTimedOut = false;
-    const timeoutMs = 180000;
+    const timeoutMs = 480000;
     const timeoutTimer = setTimeout(() => {
       requestTimedOut = true;
       try { abortCtrl.abort(); } catch (_) {}
@@ -7670,7 +7670,7 @@ code, pre {
         } catch (netErr) {
           if (netErr && netErr.name === 'AbortError') {
             if (requestTimedOut) {
-              throw new Error('API响应超时，已等待超过3分钟无返回，请检查反代或模型状态');
+              throw new Error('API响应超时，已等待超过8分钟无返回，请检查反代或模型状态');
             }
             throw new Error('已手动停止生成');
           }
@@ -7730,7 +7730,7 @@ code, pre {
         } catch (readTxtErr) {
           if (readTxtErr && readTxtErr.name === 'AbortError') {
             if (requestTimedOut) {
-              throw new Error('API读取响应超时，请检查反代连接或切换流式模式');
+              throw new Error('API读取响应超时，已等待超过8分钟无返回，请检查反代连接或切换流式模式');
             }
             throw new Error('已手动停止生成');
           }
@@ -9800,9 +9800,17 @@ code, pre {
     `;
   }
 
+  function isTavernChatNearBottom(chatEl, threshold = 85) {
+    if (!chatEl) return true;
+    const distFromBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
+    return distFromBottom <= threshold;
+  }
+
   function appendOrUpdateSingleFloorDom(idx, options = {}) {
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
+    const prevScrollTop = chatEl.scrollTop;
+    const wasNearBottom = isTavernChatNearBottom(chatEl, 85);
     const card = getActiveCard();
     const sess = getActiveChatSession();
     const messages = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
@@ -9875,6 +9883,8 @@ code, pre {
 
     if (options && options.scrollToBottom && !uiRuntime.userScrolledUpDuringStream) {
       chatEl.scrollTop = chatEl.scrollHeight;
+    } else if (uiRuntime.userScrolledUpDuringStream || !(options && options.scrollToBottom)) {
+      chatEl.scrollTop = prevScrollTop;
     }
     if (!uiRuntime.isGenerating) {
       Promise.resolve().then(() => {
@@ -11500,10 +11510,12 @@ code, pre {
       gen_time: '',
       token_count: tokenCnt
     };
+    const chatElBeforeSend = document.getElementById('chat');
+    const wasNearBottomBeforeSend = isTavernChatNearBottom(chatElBeforeSend, 85);
     sess.messages.push(userMsg);
-    uiRuntime.userScrolledUpDuringStream = false;
+    uiRuntime.userScrolledUpDuringStream = !wasNearBottomBeforeSend;
     await saveTavernStore();
-    appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: true });
+    appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: wasNearBottomBeforeSend });
     await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
     await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
 
@@ -11633,13 +11645,15 @@ code, pre {
   function updateStreamingFloorDom(mesIndex) {
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
+    const prevScrollTop = chatEl.scrollTop;
+    const wasNearBottom = isTavernChatNearBottom(chatEl, 85);
     const sess = getActiveChatSession();
     const card = getActiveCard();
     const msg = sess && sess.messages[mesIndex];
     if (!msg) return;
     const floorEl = chatEl.querySelector(`.mes[mesid="${mesIndex}"]`);
     if (!floorEl) {
-      appendOrUpdateSingleFloorDom(mesIndex, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
+      appendOrUpdateSingleFloorDom(mesIndex, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream && wasNearBottom });
       return;
     }
     const textEl = floorEl.querySelector('.mes_text');
@@ -11707,6 +11721,8 @@ code, pre {
     }
     if (!uiRuntime.userScrolledUpDuringStream) {
       chatEl.scrollTop = chatEl.scrollHeight;
+    } else {
+      chatEl.scrollTop = prevScrollTop;
     }
   }
 
@@ -11811,9 +11827,11 @@ code, pre {
     const sess = getActiveChatSession();
     const preset = getActivePreset();
 
+    const chatElAtGenStart = document.getElementById('chat');
+    const wasNearBottomAtGenStart = isTavernChatNearBottom(chatElAtGenStart, 85);
     uiRuntime.editingFloorMesId = null;
     uiRuntime.editingFloorReasoning = false;
-    uiRuntime.userScrolledUpDuringStream = false;
+    uiRuntime.userScrolledUpDuringStream = !wasNearBottomAtGenStart;
 
     // Smart handling when regenerating or continuing after deleting AI replies or on a user floor
     if (isSwipeRegen && sess && sess.messages.length > 0) {
@@ -11973,7 +11991,7 @@ code, pre {
         targetMsg.token_count = 1;
         targetMsg.translation = '';
         recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
-        appendOrUpdateSingleFloorDom(targetMesIndex, { scrollToBottom: true });
+        appendOrUpdateSingleFloorDom(targetMesIndex, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
         startNonStreamFloorTimer(targetMesIndex);
 
         let result;
@@ -12043,7 +12061,7 @@ code, pre {
           token_count: 1
         };
         sess.messages.push(botMsg);
-        appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: true });
+        appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
         startNonStreamFloorTimer(newFloorIdx);
 
         let result;
@@ -12179,26 +12197,37 @@ code, pre {
     const chatEl = document.getElementById('chat');
     if (chatEl && !chatEl._tavernScrollBound) {
       chatEl._tavernScrollBound = true;
-      const checkUserScrollState = () => {
-        if (!uiRuntime.isGenerating) return;
+      let userInteractingWithScroll = false;
+      const checkUserScrollState = (fromUserInteraction = false) => {
         const distFromBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight;
-        if (distFromBottom > 85) {
-          uiRuntime.userScrolledUpDuringStream = true;
-        } else if (distFromBottom <= 36) {
+        if (distFromBottom <= 45) {
           uiRuntime.userScrolledUpDuringStream = false;
+        } else if (distFromBottom > 85 && (!uiRuntime.isGenerating || fromUserInteraction || userInteractingWithScroll)) {
+          uiRuntime.userScrolledUpDuringStream = true;
         }
       };
+      chatEl.addEventListener('pointerdown', () => {
+        userInteractingWithScroll = true;
+      }, { passive: true });
+      window.addEventListener('pointerup', () => {
+        userInteractingWithScroll = false;
+      }, { passive: true });
+      window.addEventListener('pointercancel', () => {
+        userInteractingWithScroll = false;
+      }, { passive: true });
       chatEl.addEventListener('wheel', e => {
-        if (e.deltaY < 0 && uiRuntime.isGenerating) {
+        if (e.deltaY < 0) {
           uiRuntime.userScrolledUpDuringStream = true;
+        } else {
+          checkUserScrollState(true);
         }
-        checkUserScrollState();
       }, { passive: true });
       chatEl.addEventListener('touchmove', () => {
-        checkUserScrollState();
+        userInteractingWithScroll = true;
+        checkUserScrollState(true);
       }, { passive: true });
       chatEl.addEventListener('scroll', () => {
-        checkUserScrollState();
+        checkUserScrollState(false);
       }, { passive: true });
     }
 
