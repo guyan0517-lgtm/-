@@ -2918,16 +2918,24 @@ code, pre {
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
     let directErr = null;
+    const attemptStart = performance.now();
     try {
       const res = await rawFetch(url, options);
-      if (res.ok || (res.status !== 502 && res.status !== 503 && res.status !== 504)) {
-        return res;
-      }
+      return res;
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
       directErr = err;
     }
-    if (/^https?:\/\//i.test(url) && !url.startsWith(window.location.origin)) {
+    const elapsedMs = performance.now() - attemptStart;
+    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
+    if (
+      elapsedMs < 3500 &&
+      !isStaticHost &&
+      !options?._noAutoRetry &&
+      !(options?.signal && options.signal.aborted) &&
+      /^https?:\/\//i.test(url) &&
+      !url.startsWith(window.location.origin)
+    ) {
       try {
         let parsedBody = undefined;
         if (options && options.body !== undefined) {
@@ -2948,7 +2956,7 @@ code, pre {
           }),
           signal: options?.signal
         });
-        if (proxyRes && proxyRes.status !== 404) {
+        if (proxyRes && proxyRes.status !== 404 && proxyRes.status !== 405) {
           return proxyRes;
         }
       } catch (fbErr) {
@@ -3407,7 +3415,7 @@ code, pre {
     window.saveMetadataDebounced = () => saveTavernStore();
     window.getRequestHeaders = () => ({ 'Content-Type': 'application/json' });
     window.generateQuietPrompt = async (quietPrompt) => {
-      const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }]);
+      const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }], null, { isBackground: true });
       return res.content;
     };
     window.SlashCommandParser = {
@@ -7578,6 +7586,14 @@ code, pre {
     };
   }
 
+  function isTavernStreamEnabled() {
+    if (tavernState.apiConfig && typeof tavernState.apiConfig.streamEnabled === 'boolean') {
+      return tavernState.apiConfig.streamEnabled;
+    }
+    const preset = getActivePreset();
+    return Boolean(preset && preset.stream_openai);
+  }
+
   async function callTavernAiCompletion(messages, onStreamUpdate = null, options = {}) {
     const isBackground = Boolean(options && options.isBackground);
     const creds = resolveTavernApiCredentials();
@@ -7585,35 +7601,65 @@ code, pre {
       throw new Error('未检测到有效的API地址与密钥，请点击顶栏第二个插头配置或同步外部API');
     }
 
+    const releaseKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === 'function'
+      ? window.acquireBackgroundTaskKeepAlive()
+      : null;
+    if (typeof window.ensureBackgroundKeepAlive === 'function') {
+      window.ensureBackgroundKeepAlive();
+    }
+    const keepAlivePulseTimer = setInterval(() => {
+      if (typeof window.ensureBackgroundKeepAlive === 'function') {
+        window.ensureBackgroundKeepAlive();
+      }
+    }, 2000);
+
     const preset = getActivePreset();
-    const isStreamSettingOn = tavernState.apiConfig?.streamEnabled !== undefined
-      ? Boolean(tavernState.apiConfig.streamEnabled)
-      : Boolean(preset.stream_openai);
+    const isStreamSettingOn = isTavernStreamEnabled();
     const useStreaming = isStreamSettingOn && typeof onStreamUpdate === 'function';
     const hasPrefill = detectAssistantReasoningPrefill(messages);
 
     const cleanBase = normalizeTavernBaseUrl(creds.baseUrl);
     const cleanKey = cleanTavernApiKeyString(creds.apiKey);
-    const endpoints = cleanBase.endsWith('/v1')
-      ? [cleanBase + '/chat/completions', cleanBase.replace(/\/v1$/i, '') + '/chat/completions']
-      : [cleanBase + '/v1/chat/completions', cleanBase + '/chat/completions'];
+    const targetEndpoint = cleanBase.endsWith('/v1')
+      ? (cleanBase + '/chat/completions')
+      : (cleanBase + '/v1/chat/completions');
 
-    const requestedMaxTokens = isBackground
-      ? 100000
-      : Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
-    const cleanWireMessages = Array.isArray(messages)
-      ? messages.map(m => ({ role: m?.role || 'system', content: String(m?.content || '') }))
+    const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
+    const rawWireMessages = Array.isArray(messages)
+      ? messages
+          .map(m => ({ role: m?.role || 'system', content: String(m?.content || '') }))
+          .filter(m => m.content.trim().length > 0)
       : [];
+    const cleanWireMessages = [];
+    for (const msg of rawWireMessages) {
+      const prev = cleanWireMessages[cleanWireMessages.length - 1];
+      if (prev && prev.role === msg.role) {
+        prev.content += '\n\n' + msg.content;
+      } else {
+        cleanWireMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    const isClaudeModel = /claude/i.test(creds.model || '');
     const payload = {
       model: creds.model,
       messages: cleanWireMessages,
       temperature: Number(preset.temperature ?? 1.0),
-      top_p: Number(preset.top_p ?? 1.0),
       max_tokens: requestedMaxTokens,
-      frequency_penalty: Number(preset.frequency_penalty ?? 0),
-      presence_penalty: Number(preset.presence_penalty ?? 0),
       stream: useStreaming
     };
+    const topPVal = Number(preset.top_p ?? 1.0);
+    if (!isClaudeModel && topPVal > 0 && topPVal < 1.0) {
+      payload.top_p = topPVal;
+    }
+    const freqPenVal = Number(preset.frequency_penalty ?? 0);
+    if (!isClaudeModel && freqPenVal !== 0) {
+      payload.frequency_penalty = freqPenVal;
+    }
+    const presPenVal = Number(preset.presence_penalty ?? 0);
+    if (!isClaudeModel && presPenVal !== 0) {
+      payload.presence_penalty = presPenVal;
+    }
 
     if (!isBackground && Array.isArray(tavernState.formatting?.customStoppingStrings) && tavernState.formatting.customStoppingStrings.length > 0) {
       payload.stop = tavernState.formatting.customStoppingStrings;
@@ -7640,46 +7686,41 @@ code, pre {
 
       const t0 = performance.now();
       let res = null;
-      let lastNetErr = null;
-      for (const ep of endpoints) {
-        try {
-          res = await executeTavernRawFetchWithProxyFallback(ep, {
-            method: 'POST',
-            headers: reqHeaders,
-            body: JSON.stringify(payload),
-            signal: abortCtrl.signal
-          });
-          if (res.status === 400) {
-            const errProbe = await res.text().catch(() => '');
-            if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
-              const retryPayload = Object.assign({}, payload);
-              delete retryPayload.max_tokens;
-              res = await executeTavernRawFetchWithProxyFallback(ep, {
-                method: 'POST',
-                headers: reqHeaders,
-                body: JSON.stringify(retryPayload),
-                signal: abortCtrl.signal
-              });
-            } else {
-              res = new Response(errProbe, { status: 400, headers: { 'Content-Type': 'application/json' } });
-            }
+      try {
+        res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
+          method: 'POST',
+          headers: reqHeaders,
+          body: JSON.stringify(payload),
+          signal: abortCtrl.signal
+        });
+        if (res.status === 400 && (performance.now() - t0) < 4000) {
+          const errProbe = await res.text().catch(() => '');
+          if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
+            const retryPayload = Object.assign({}, payload);
+            delete retryPayload.max_tokens;
+            res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
+              method: 'POST',
+              headers: reqHeaders,
+              body: JSON.stringify(retryPayload),
+              signal: abortCtrl.signal,
+              _noAutoRetry: true
+            });
+          } else {
+            res = new Response(errProbe, { status: 400, headers: { 'Content-Type': 'application/json' } });
           }
-          if (res.status !== 404 && res.status !== 405) {
-            break;
-          }
-        } catch (netErr) {
-          if (netErr && netErr.name === 'AbortError') {
-            if (requestTimedOut) {
-              throw new Error('API响应超时，已等待超过8分钟无返回，请检查反代或模型状态');
-            }
-            throw new Error('已手动停止生成');
-          }
-          lastNetErr = netErr;
         }
+      } catch (netErr) {
+        if (netErr && netErr.name === 'AbortError') {
+          if (requestTimedOut) {
+            throw new Error('API响应超时，已等待超过8分钟无返回，请检查反代或模型状态');
+          }
+          throw new Error('已手动停止生成');
+        }
+        throw new Error('网络连接失败，请检查API地址或反代连接状态: ' + (netErr?.message || 'Failed to fetch'));
       }
 
       if (!res) {
-        throw new Error('网络连接失败，请检查API地址是否正确或跨域代理是否可用: ' + (lastNetErr?.message || 'Failed to fetch'));
+        throw new Error('网络连接失败，未收到服务器响应');
       }
 
       if (!res.ok) {
@@ -7726,22 +7767,58 @@ code, pre {
       if (!useStreaming) {
         let rawText = '';
         try {
-          rawText = await res.text();
+          if (res.body && typeof res.body.getReader === 'function') {
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            while (true) {
+              const { value, done } = await reader.read();
+              if (typeof window.ensureBackgroundKeepAlive === 'function') {
+                window.ensureBackgroundKeepAlive();
+              }
+              if (done) {
+                rawText += decoder.decode();
+                break;
+              }
+              rawText += decoder.decode(value, { stream: true });
+              const trimmedSoFar = rawText.replace(/^\s*(?::[^\r\n]*\r?\n\s*)*/g, '').trim();
+              if (!trimmedSoFar) continue;
+              if (/(?:^|\n)\s*data:\s*\[DONE\]/i.test(trimmedSoFar) || trimmedSoFar.includes('"message_stop"')) {
+                try { await reader.cancel(); } catch (_) {}
+                break;
+              }
+              if (trimmedSoFar.startsWith('{') && trimmedSoFar.endsWith('}')) {
+                try {
+                  const probeJson = JSON.parse(trimmedSoFar);
+                  if (probeJson && typeof probeJson === 'object' && (probeJson.choices || probeJson.candidates || probeJson.content || probeJson.error)) {
+                    try { await reader.cancel(); } catch (_) {}
+                    break;
+                  }
+                } catch (_) {}
+              }
+            }
+          } else {
+            rawText = await res.text();
+          }
         } catch (readTxtErr) {
           if (readTxtErr && readTxtErr.name === 'AbortError') {
-            if (requestTimedOut) {
+            if (requestTimedOut && !rawText.trim()) {
               throw new Error('API读取响应超时，已等待超过8分钟无返回，请检查反代连接或切换流式模式');
             }
-            throw new Error('已手动停止生成');
+            if (!rawText.trim()) {
+              throw new Error('已手动停止生成');
+            }
+          } else if (!rawText.trim()) {
+            throw readTxtErr;
           }
-          throw readTxtErr;
         }
+
         let rawContent = '';
         let nativeReasoning = '';
         let refusalReason = null;
-        const trimmed = rawText.trim();
-        if (trimmed.startsWith('data:')) {
-          const lines = trimmed.split(/\r?\n/);
+        const strippedKeepAlive = rawText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
+
+        if (/^\s*data:\s*/m.test(strippedKeepAlive)) {
+          const lines = strippedKeepAlive.split(/\r?\n/);
           for (const rawLine of lines) {
             const line = rawLine.trim();
             if (!line.startsWith('data:')) continue;
@@ -7756,45 +7833,95 @@ code, pre {
             const apiErr = extractErrorFromJson(parsedChunk);
             if (apiErr) throw new Error('API返回错误: ' + apiErr);
             const choice = parsedChunk.choices && parsedChunk.choices[0];
-            if (!choice) continue;
-            const refErr = checkFinishReasonRefusal(choice, parsedChunk);
+            if (choice) {
+              const refErr = checkFinishReasonRefusal(choice, parsedChunk);
+              if (refErr) refusalReason = refErr;
+              const delta = choice.delta || choice.message || {};
+              if (typeof delta.content === 'string') {
+                rawContent += delta.content;
+              } else if (Array.isArray(delta.content)) {
+                delta.content.forEach(part => {
+                  if (typeof part === 'string') rawContent += part;
+                  else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
+                  else if (part && part.text) rawContent += part.text;
+                });
+              } else if (typeof choice.text === 'string') {
+                rawContent += choice.text;
+              }
+              const rDelta = delta.reasoning_content || delta.reasoning || delta.thinking || '';
+              if (rDelta) nativeReasoning += rDelta;
+            } else if (parsedChunk.delta || parsedChunk.content_block || Array.isArray(parsedChunk.content)) {
+              const dText = parsedChunk.delta?.text || parsedChunk.content_block?.text || parsedChunk.content?.[0]?.text || '';
+              const dThink = (parsedChunk.delta?.type === 'thinking_delta' ? parsedChunk.delta.thinking : '') || '';
+              if (dText) rawContent += dText;
+              if (dThink) nativeReasoning += dThink;
+            } else if (Array.isArray(parsedChunk.candidates) && parsedChunk.candidates[0]?.content?.parts) {
+              parsedChunk.candidates[0].content.parts.forEach(p => {
+                if (!p || typeof p.text !== 'string') return;
+                if (p.thought) nativeReasoning += p.text;
+                else rawContent += p.text;
+              });
+            }
+          }
+        } else {
+          let data = null;
+          try {
+            data = JSON.parse(strippedKeepAlive);
+          } catch (_) {
+            const firstBrace = strippedKeepAlive.indexOf('{');
+            const lastBrace = strippedKeepAlive.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+              try {
+                data = JSON.parse(strippedKeepAlive.slice(firstBrace, lastBrace + 1));
+              } catch (_) {}
+            }
+          }
+          if (!data || typeof data !== 'object') {
+            throw new Error('API返回了非JSON格式响应: ' + strippedKeepAlive.slice(0, 120));
+          }
+          const apiErr = extractErrorFromJson(data);
+          if (apiErr) throw new Error('API返回错误: ' + apiErr);
+
+          if (Array.isArray(data.choices) && data.choices[0]) {
+            const choice = data.choices[0];
+            const refErr = checkFinishReasonRefusal(choice, data);
             if (refErr) refusalReason = refErr;
-            const delta = choice.delta || choice.message || {};
-            if (typeof delta.content === 'string') {
-              rawContent += delta.content;
-            } else if (Array.isArray(delta.content)) {
-              delta.content.forEach(part => {
+            const msgObj = choice.message || choice.delta || {};
+            if (typeof msgObj.content === 'string') {
+              rawContent = msgObj.content;
+            } else if (Array.isArray(msgObj.content)) {
+              msgObj.content.forEach(part => {
                 if (typeof part === 'string') rawContent += part;
                 else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
                 else if (part && part.text) rawContent += part.text;
               });
+            } else if (typeof choice.text === 'string') {
+              rawContent = choice.text;
             }
-            const rDelta = delta.reasoning_content || delta.reasoning || '';
-            if (rDelta) nativeReasoning += rDelta;
-          }
-        } else {
-          let data;
-          try {
-            data = JSON.parse(trimmed);
-          } catch (_) {
-            throw new Error('API返回了非JSON格式响应: ' + trimmed.slice(0, 120));
-          }
-          const apiErr = extractErrorFromJson(data);
-          if (apiErr) throw new Error('API返回错误: ' + apiErr);
-          const choice = data.choices && data.choices[0];
-          const refErr = checkFinishReasonRefusal(choice, data);
-          if (refErr) refusalReason = refErr;
-          const msgObj = choice ? (choice.message || choice.delta || {}) : {};
-          if (typeof msgObj.content === 'string') {
-            rawContent = msgObj.content;
-          } else if (Array.isArray(msgObj.content)) {
-            msgObj.content.forEach(part => {
-              if (typeof part === 'string') rawContent += part;
-              else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
-              else if (part && part.text) rawContent += part.text;
+            nativeReasoning += (msgObj.reasoning_content || msgObj.reasoning || msgObj.thinking || '');
+          } else if (Array.isArray(data.content)) {
+            data.content.forEach(block => {
+              if (!block) return;
+              if (block.type === 'thinking' && (block.thinking || block.text)) {
+                nativeReasoning += (block.thinking || block.text);
+              } else if (typeof block.text === 'string') {
+                rawContent += block.text;
+              } else if (typeof block === 'string') {
+                rawContent += block;
+              }
             });
+          } else if (Array.isArray(data.candidates) && data.candidates[0]) {
+            const refErr = checkFinishReasonRefusal(null, data);
+            if (refErr) refusalReason = refErr;
+            const parts = data.candidates[0]?.content?.parts || [];
+            parts.forEach(p => {
+              if (!p || typeof p.text !== 'string') return;
+              if (p.thought) nativeReasoning += p.text;
+              else rawContent += p.text;
+            });
+          } else if (typeof data.content === 'string') {
+            rawContent = data.content;
           }
-          nativeReasoning += (msgObj.reasoning_content || msgObj.reasoning || '');
         }
 
         const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
@@ -7981,6 +8108,10 @@ code, pre {
     };
     } finally {
       clearTimeout(timeoutTimer);
+      clearInterval(keepAlivePulseTimer);
+      if (typeof releaseKeepAlive === 'function') {
+        releaseKeepAlive();
+      }
     }
   }
 
@@ -8028,7 +8159,7 @@ code, pre {
     const result = await callTavernAiCompletion([
       { role: 'system', content: '你是一个专业的RPG剧情归档助手。' },
       { role: 'user', content: prompt }
-    ]);
+    ], null, { isBackground: true });
     tavernState.memory.summaryText = result.content;
     await saveTavernStore();
     return result.content;
@@ -10133,7 +10264,7 @@ code, pre {
         </div>
 
         <label class="tavern-check-row" style="margin-top:4px;">
-          <input type="checkbox" data-preset-bool="stream_openai" ${(tavernState.apiConfig?.streamEnabled !== false && preset.stream_openai) ? 'checked' : ''} />
+          <input type="checkbox" data-preset-bool="stream_openai" ${isTavernStreamEnabled() ? 'checked' : ''} />
           <span>启用真实流式实时出字</span>
         </label>
         <div class="tavern-field-hint" style="margin-bottom:8px;">开启后AI一出字屏幕就实时同步显示，关闭则等待AI整段写完后一次性显示</div>
@@ -10279,7 +10410,7 @@ code, pre {
     const models = Array.isArray(cfg.availableModels) ? cfg.availableModels : [];
     const externalPresets = getExternalPhoneApiPresets();
     const savedBuiltInPresets = Array.isArray(cfg.savedPresets) ? cfg.savedPresets : [];
-    const isStreamOn = cfg.streamEnabled !== false && Boolean(preset.stream_openai);
+    const isStreamOn = isTavernStreamEnabled();
 
     return `
       <div class="tavern-section-card">
@@ -11863,7 +11994,7 @@ code, pre {
 
     syncTavernGeneratingUiState(true);
 
-    const isStreamOn = tavernState.apiConfig?.streamEnabled !== false && Boolean(preset.stream_openai);
+    const isStreamOn = isTavernStreamEnabled();
     showTavernToast(isImpersonate ? '正在帮写玩家回复...' : (isSwipeRegen ? '正在重新生成全新回复...' : '正在思考并生成回复...'));
 
     const genType = isImpersonate ? 'impersonate' : (isContinue ? 'continue' : (isSwipeRegen ? 'swipe' : 'normal'));
@@ -11904,6 +12035,9 @@ code, pre {
             clearInterval(nonStreamWaitTimer);
             nonStreamWaitTimer = null;
             return;
+          }
+          if (typeof window.ensureBackgroundKeepAlive === 'function') {
+            window.ensureBackgroundKeepAlive();
           }
           const sec = ((performance.now() - waitStart) / 1000).toFixed(0);
           const timerEl = document.querySelector(`#chat .mes[mesid="${floorIdx}"] .mes_timer`);
