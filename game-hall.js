@@ -2152,6 +2152,7 @@ code, pre {
     } catch (_) {}
     return {
       chat: sess ? sess.messages : [],
+      chatId: (sess && sess.chatId) ? sess.chatId : 'chat_default',
       characters: tavernState.cards,
       characterId: card ? String(cardIdx >= 0 ? cardIdx : 0) : null,
       groupId: null,
@@ -2173,6 +2174,29 @@ code, pre {
       power_user: {
         experimental_macro_engine: false,
         persona_description: getActivePersona()?.description || ''
+      },
+      powerUserSettings: {
+        personas: {},
+        persona_descriptions: {}
+      },
+      selectCharacterById: async (idx) => {
+        const target = (tavernState.cards || [])[Number(idx)];
+        if (target) {
+          tavernState.activeCardId = target.id;
+          await saveTavernStore();
+          renderTavernShell();
+        }
+      },
+      openCharacterChat: async (targetChatId) => {
+        const activeC = getActiveCard();
+        if (!activeC || !targetChatId) return;
+        const archives = (tavernState.chatArchivesByCardId && tavernState.chatArchivesByCardId[activeC.id]) || [];
+        const found = archives.find(a => a && a.chatId === targetChatId);
+        if (found) {
+          tavernState.chatsByCardId[activeC.id] = found;
+          await saveTavernStore();
+          renderTavernShell();
+        }
       },
       doNewChat: async () => {
         await startNewChatForActiveCard();
@@ -2616,6 +2640,25 @@ code, pre {
             ? reqUrl.replace(window.location.origin, '').split('?')[0].replace(/^\/+/, '')
             : '';
 
+          // 1a. SillyTavern /thumbnail?type=avatar|persona&file=... endpoint used by book-excerpt and other extensions
+          if (isSameOriginOrRel && cleanPath === 'thumbnail') {
+            const resolvedThumbUrl = await resolvePluginThumbnailUrlAsync(reqUrl);
+            if (resolvedThumbUrl) {
+              const thumbRes = await rawFetch(resolvedThumbUrl);
+              if (thumbRes.ok) return thumbRes;
+            }
+          }
+
+          // 1b. SillyTavern /user/files/... data directory endpoint used by book-excerpt mirrorStartupCheck
+          if (isSameOriginOrRel && cleanPath.startsWith('user/files/')) {
+            const fName = decodeURIComponent(cleanPath.slice('user/files/'.length));
+            const mirrorStore = tavernState.extensionSettings && tavernState.extensionSettings._userFilesMirror;
+            if (mirrorStore && mirrorStore[fName] !== undefined) {
+              return new Response(mirrorStore[fName], { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
+            }
+            return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
+          }
+
           // 1. SillyTavern Extension HTML/Template requests
           if (isSameOriginOrRel && (/scripts\/extensions\//i.test(reqUrl) || /\.(html|htm)$/i.test(reqUrl.split('?')[0]))) {
             const fileName = cleanPath.split('/').pop() || '';
@@ -2830,6 +2873,16 @@ code, pre {
               }
               const fileName = bodyObj.filename || bodyObj.name || ('file_' + Date.now() + '.' + (bodyObj.format || 'png'));
               const rawData = bodyObj.image || bodyObj.data || '';
+              if (cleanPath === 'api/files/upload' && /\.json$/i.test(fileName) && rawData) {
+                try {
+                  const decodedTxt = decodeLatin1ToUtf8(String(rawData).replace(/^data:[^,]+,/, ''));
+                  if (decodedTxt && /stamp\.json$/i.test(fileName)) {
+                    if (!tavernState.extensionSettings._userFilesMirror) tavernState.extensionSettings._userFilesMirror = {};
+                    tavernState.extensionSettings._userFilesMirror[fileName] = decodedTxt;
+                  }
+                } catch (_) {}
+                return new Response(JSON.stringify({ ok: true, path: '/user/files/' + fileName }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              }
               const mime = cleanPath === 'api/images/upload'
                 ? ('image/' + ((bodyObj.format === 'jpg' ? 'jpeg' : bodyObj.format) || 'png'))
                 : 'application/octet-stream';
@@ -3420,6 +3473,79 @@ code, pre {
     return /柏宝书|ST-BaiBai-Book/i.test(n) || /ST-BaiBai-Book/i.test(u);
   }
 
+  function isBookExcerptPlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    const c = String(plugin.code || plugin.content || '');
+    return /书摘|book-excerpt/i.test(n) || /book-excerpt/i.test(u) || /BookExcerpt|be-float-bar/i.test(c);
+  }
+
+  function isTextSelectionPluginEnabled() {
+    if (window.BookExcerpt || document.getElementById('be-style') || document.getElementById('be-menu-entry')) {
+      return true;
+    }
+    return (tavernState.plugins || []).some(p => p && p.enabled && (
+      isBookExcerptPlugin(p) ||
+      /excerpt|highlight|划线|书摘/i.test(String(p.name || ''))
+    ));
+  }
+  window.__isTavernSelectionPluginActive = isTextSelectionPluginEnabled;
+
+  function resolvePluginThumbnailUrlSync(rawThumbUrl) {
+    try {
+      const qIdx = String(rawThumbUrl || '').indexOf('?');
+      if (qIdx < 0) return '';
+      const params = new URLSearchParams(String(rawThumbUrl).slice(qIdx + 1));
+      const type = params.get('type') || 'avatar';
+      const file = params.get('file') || '';
+      if (type === 'persona') {
+        return resolveSafeAvatarUrl(getUserAvatarUrl(), true);
+      }
+      if (file) {
+        const matchedCard = (tavernState.cards || []).find(c => c && (c.avatar === file || c.name === file || c.id === file));
+        const rawTarget = matchedCard ? matchedCard.avatar : file;
+        return resolveSafeAvatarUrl(rawTarget, false);
+      }
+      return resolveSafeAvatarUrl(getActiveCard()?.avatar || '', false);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  async function resolvePluginThumbnailUrlAsync(rawThumbUrl) {
+    const syncUrl = resolvePluginThumbnailUrlSync(rawThumbUrl);
+    if (!syncUrl) return '';
+    if (String(syncUrl).startsWith('vault://') && typeof window.resolveVaultRefToUrl === 'function') {
+      try {
+        const unlocked = await window.resolveVaultRefToUrl(syncUrl);
+        if (unlocked) return unlocked;
+      } catch (_) {}
+    }
+    return syncUrl;
+  }
+
+  function syncBookExcerptDomAvatars() {
+    try {
+      const containers = document.querySelectorAll('#be-panel, #be-mask, #be-card, #be-source-mask, #be-viewer-mask, #be-daily-review');
+      containers.forEach(rootEl => {
+        rootEl.querySelectorAll('[style*="/thumbnail?"]').forEach(el => {
+          const st = el.getAttribute('style') || '';
+          const nextSt = st.replace(/\/thumbnail\?type=(avatar|persona)&file=([^'")&\s]+)/g, (full) => {
+            const resolved = resolvePluginThumbnailUrlSync(full);
+            return resolved || full;
+          });
+          if (nextSt !== st) el.setAttribute('style', nextSt);
+        });
+        rootEl.querySelectorAll('img[src*="/thumbnail?"]').forEach(img => {
+          const src = img.getAttribute('src') || '';
+          const resolved = resolvePluginThumbnailUrlSync(src);
+          if (resolved && resolved !== src) img.setAttribute('src', resolved);
+        });
+      });
+    } catch (_) {}
+  }
+
   function isBaiBaiPlugin(plugin) {
     return isBaiBaiImagePlugin(plugin) || isBaiBaiBookPlugin(plugin);
   }
@@ -3430,6 +3556,9 @@ code, pre {
     }
     if (isBaiBaiBookPlugin(plugin)) {
       return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.js';
+    }
+    if (isBookExcerptPlugin(plugin)) {
+      return 'https://raw.githubusercontent.com/Mshiyuan/book-excerpt/main/index.js';
     }
     if (plugin && plugin.repoBaseUrl) {
       const entry = (plugin.jsEntryPath || 'index.js').replace(/^\/+/, '');
@@ -3620,6 +3749,7 @@ code, pre {
           existingFpBeauty.remove();
         }
       });
+      syncBookExcerptDomAvatars();
     } catch (_) {}
   }
 
@@ -4894,11 +5024,13 @@ code, pre {
         -webkit-touch-callout: none !important;
       }
       body *, * {
-        -webkit-user-select: none !important;
-        user-select: none !important;
         -webkit-touch-callout: none !important;
       }
-      input, textarea, [contenteditable="true"] {
+      button, img, svg {
+        -webkit-user-select: none !important;
+        user-select: none !important;
+      }
+      div, span, p, li, td, th, dd, dt, font, b, i, em, strong, small, u, s, del, ins, mark, sub, sup, label, blockquote, pre, code, h1, h2, h3, h4, h5, h6, section, article, details, summary, q, cite, abbr, a, ruby, rb, rt, time, input, textarea, [contenteditable="true"] {
         -webkit-user-select: text !important;
         user-select: text !important;
       }
@@ -4978,11 +5110,27 @@ code, pre {
   document.addEventListener('touchstart', notifyParentGesture, { passive: true, capture: true });
   document.addEventListener('pointerdown', notifyParentGesture, { passive: true, capture: true });
   document.addEventListener('selectstart', function(e) {
-    var t = e.target;
-    if (!t || !t.closest || !t.closest('input, textarea, [contenteditable="true"]')) {
-      e.preventDefault();
+    var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+    if (t && t.closest && t.closest('input, textarea, [contenteditable="true"]')) {
+      return;
     }
+    var selActive = false;
+    try {
+      selActive = Boolean(window.parent && typeof window.parent.__isTavernSelectionPluginActive === 'function' && window.parent.__isTavernSelectionPluginActive());
+    } catch (err) {}
+    if (selActive && (!t || !t.closest || !t.closest('button, img, svg'))) {
+      return;
+    }
+    e.preventDefault();
   }, false);
+  document.addEventListener('contextmenu', function(e) {
+    var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+    if (t && t.closest && t.closest('input, textarea, [contenteditable="true"]')) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
   function syncAvatarCssVars() {
     try {
       if (!window.parent) return;
@@ -7197,6 +7345,14 @@ code, pre {
       #tavern-stage-root [contenteditable="true"] {
         -webkit-user-select: text !important;
         user-select: text !important;
+      }
+      #tavern-stage-root .mes_text,
+      #tavern-stage-root .mes_text :not(button):not(input):not(select):not(textarea),
+      .be-quote,
+      .be-quote * {
+        -webkit-user-select: text !important;
+        user-select: text !important;
+        -webkit-touch-callout: none !important;
       }
       #tavern-stage-root .extraMesButtons.tavern-extra-hidden {
         display: none !important;
@@ -11022,22 +11178,216 @@ code, pre {
     }
 
     root.addEventListener('selectstart', e => {
-      const tag = (e.target && e.target.tagName || '').toLowerCase();
-      if (tag !== 'input' && tag !== 'textarea' && !e.target.isContentEditable) {
-        e.preventDefault();
+      const t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+      const tag = (t && t.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) {
+        return;
       }
+      if (isTextSelectionPluginEnabled() && t && t.closest && t.closest('.mes_text, .be-quote')) {
+        return;
+      }
+      e.preventDefault();
     });
+
+    if (!document._tavernBookExcerptTouchBound) {
+      document._tavernBookExcerptTouchBound = true;
+
+      const getCaretPoint = (doc, x, y) => {
+        try {
+          if (typeof doc.caretRangeFromPoint === 'function') {
+            const r = doc.caretRangeFromPoint(x, y);
+            if (r && r.startContainer) return { node: r.startContainer, offset: r.startOffset };
+          }
+          if (typeof doc.caretPositionFromPoint === 'function') {
+            const p = doc.caretPositionFromPoint(x, y);
+            if (p && p.offsetNode) return { node: p.offsetNode, offset: p.offset };
+          }
+        } catch (_) {}
+        return null;
+      };
+
+      const buildClauseRangeAtCaret = (doc, caret) => {
+        if (!caret || !caret.node) return null;
+        let textNode = caret.node;
+        let offset = caret.offset || 0;
+        if (textNode.nodeType !== 3) {
+          const walker = doc.createTreeWalker(textNode, NodeFilter.SHOW_TEXT, null);
+          const firstTxt = walker.nextNode();
+          if (!firstTxt) return null;
+          textNode = firstTxt;
+          offset = 0;
+        }
+        const raw = textNode.nodeValue || '';
+        if (!raw.trim()) return null;
+        const stopRx = /[，。！？；：、“”‘’「」『』【】《》\r\n]/;
+        let s = Math.max(0, Math.min(offset, raw.length - 1));
+        let e = s;
+        while (s > 0 && !stopRx.test(raw[s - 1]) && (offset - s) < 18) s--;
+        while (e < raw.length && !stopRx.test(raw[e]) && (e - offset) < 18) e++;
+        if (e <= s) {
+          s = Math.max(0, offset - 2);
+          e = Math.min(raw.length, offset + 4);
+        }
+        if (e <= s) return null;
+        const range = doc.createRange();
+        range.setStart(textNode, s);
+        range.setEnd(textNode, e);
+        return range;
+      };
+
+      const notifyBookExcerptSelection = (doc) => {
+        try {
+          doc.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+          doc.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        } catch (_) {}
+      };
+
+      // Suppress native browser long-press context menu while preserving or creating selection for BookExcerpt
+      document.addEventListener('contextmenu', e => {
+        const t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+        if (!t || !t.closest) return;
+        if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
+        const inTavernOrBe = t.closest('#tavern-stage-root, #be-mask, #be-panel, #be-float-bar, #be-hl-bar, #be-card-hl-bar');
+        if (!inTavernOrBe) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (isTextSelectionPluginEnabled() && t.closest('.mes_text, .be-quote')) {
+          const sel = window.getSelection ? window.getSelection() : null;
+          if (sel && sel.isCollapsed && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+            const caret = getCaretPoint(document, e.clientX, e.clientY);
+            const clauseRange = buildClauseRangeAtCaret(document, caret);
+            if (clauseRange) {
+              try {
+                sel.removeAllRanges();
+                sel.addRange(clauseRange);
+                notifyBookExcerptSelection(document);
+              } catch (_) {}
+            }
+          } else if (sel && !sel.isCollapsed) {
+            notifyBookExcerptSelection(document);
+          }
+          return;
+        }
+        try {
+          if (window.getSelection) window.getSelection().removeAllRanges();
+        } catch (_) {}
+      }, true);
+
+      // Long-press + slide finger selection inside .mes_text and .be-quote so long-pressing always pops up BookExcerpt without the browser native menu
+      let lpTimer = null;
+      let lpActive = false;
+      let lpStartCaret = null;
+      let lpStartX = 0;
+      let lpStartY = 0;
+
+      const clearLpTimer = () => {
+        if (lpTimer) {
+          clearTimeout(lpTimer);
+          lpTimer = null;
+        }
+      };
+
+      document.addEventListener('touchstart', e => {
+        clearLpTimer();
+        lpActive = false;
+        lpStartCaret = null;
+        if (!isTextSelectionPluginEnabled()) return;
+        if (!e.touches || e.touches.length !== 1) return;
+        const t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+        if (!t || !t.closest) return;
+        if (t.closest('button, input, textarea, select, a, summary, #be-float-bar, #be-hl-bar, #be-card-hl-bar, #be-card-hl-pop, .be-highlight, .mes_buttons, .extraMesButtons')) {
+          return;
+        }
+        const selectableHost = t.closest('#tavern-stage-root .mes_text, .be-quote');
+        if (!selectableHost) return;
+        lpStartX = e.touches[0].clientX;
+        lpStartY = e.touches[0].clientY;
+        lpTimer = setTimeout(() => {
+          lpTimer = null;
+          const sel = window.getSelection ? window.getSelection() : null;
+          if (sel && !sel.isCollapsed) {
+            lpActive = true;
+            notifyBookExcerptSelection(document);
+            return;
+          }
+          const caret = getCaretPoint(document, lpStartX, lpStartY);
+          if (!caret) return;
+          lpStartCaret = caret;
+          lpActive = true;
+          const clauseRange = buildClauseRangeAtCaret(document, caret);
+          if (clauseRange && sel) {
+            try {
+              sel.removeAllRanges();
+              sel.addRange(clauseRange);
+              notifyBookExcerptSelection(document);
+            } catch (_) {}
+          }
+        }, 380);
+      }, { passive: true });
+
+      document.addEventListener('touchmove', e => {
+        if (!e.touches || e.touches.length !== 1) {
+          clearLpTimer();
+          return;
+        }
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        if (lpTimer) {
+          if (Math.abs(curX - lpStartX) > 10 || Math.abs(curY - lpStartY) > 10) {
+            clearLpTimer();
+          }
+          return;
+        }
+        if (lpActive && lpStartCaret) {
+          const endCaret = getCaretPoint(document, curX, curY);
+          if (endCaret && endCaret.node) {
+            try {
+              const dragRange = document.createRange();
+              const cmp = lpStartCaret.node === endCaret.node
+                ? (lpStartCaret.offset - endCaret.offset)
+                : (lpStartCaret.node.compareDocumentPosition(endCaret.node) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+              if (cmp <= 0) {
+                dragRange.setStart(lpStartCaret.node, lpStartCaret.offset);
+                dragRange.setEnd(endCaret.node, endCaret.offset);
+              } else {
+                dragRange.setStart(endCaret.node, endCaret.offset);
+                dragRange.setEnd(lpStartCaret.node, lpStartCaret.offset);
+              }
+              if (!dragRange.collapsed) {
+                if (e.cancelable) e.preventDefault();
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(dragRange);
+                notifyBookExcerptSelection(document);
+              }
+            } catch (_) {}
+          }
+        }
+      }, { passive: false });
+
+      const finishLpTouch = () => {
+        clearLpTimer();
+        if (lpActive) {
+          lpActive = false;
+          lpStartCaret = null;
+          setTimeout(() => notifyBookExcerptSelection(document), 30);
+        }
+      };
+      document.addEventListener('touchend', finishLpTouch, { passive: true });
+      document.addEventListener('touchcancel', finishLpTouch, { passive: true });
+    }
 
     root.addEventListener('click', async e => {
       const anchorLink = e.target.closest('a[href="#"]');
       if (anchorLink) {
         e.preventDefault();
-        if (anchorLink.closest('#extensionsMenu')) {
-          uiRuntime.showExtensionsPopup = false;
-          uiRuntime.showOptionsPopup = false;
-          refreshBottomPopupsOnly();
-          syncBaiBaiShadowDomCss();
-        }
+      }
+      const extMenuChild = e.target.closest('#extensionsMenu > *');
+      if (extMenuChild && !e.target.closest('[data-action]')) {
+        uiRuntime.showExtensionsPopup = false;
+        uiRuntime.showOptionsPopup = false;
+        refreshBottomPopupsOnly();
+        syncBaiBaiShadowDomCss();
       }
 
       const actionEl = e.target.closest('[data-action]');
@@ -11190,6 +11540,33 @@ code, pre {
           if (bbsMenu) {
             bbsMenu.click();
             return;
+          }
+        }
+        if (isBookExcerptPlugin(p)) {
+          const beMenu = document.getElementById('be-menu-entry');
+          if (beMenu) {
+            beMenu.click();
+            return;
+          }
+          if (window.BookExcerpt && typeof window.BookExcerpt.openNotebook === 'function') {
+            window.BookExcerpt.openNotebook();
+            return;
+          }
+        }
+        // Universal fallback: if any third-party plugin injected a matching menu item into #extensionsMenu, click it directly
+        if (p && p.name) {
+          const extMenuEl = document.getElementById('extensionsMenu');
+          if (extMenuEl) {
+            const cleanPName = String(p.name).replace(/^ST-/i, '').trim().toLowerCase();
+            const customItems = Array.from(extMenuEl.children).filter(el => !el.hasAttribute('data-action'));
+            const matchedItem = customItems.find(el => {
+              const txt = String(el.textContent || '').trim().toLowerCase();
+              return txt && (txt.includes(cleanPName) || cleanPName.includes(txt));
+            });
+            if (matchedItem) {
+              matchedItem.click();
+              return;
+            }
           }
         }
         uiRuntime.activePluginModalId = pid;
