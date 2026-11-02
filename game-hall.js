@@ -1374,8 +1374,12 @@ code, pre {
         uiRuntime.isGenerating = false;
         await saveTavernStore();
         if (sentUserMessageInBatch) {
+          sentUserMessageInBatch = false;
           const sess = getActiveChatSession();
-          appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: true });
+          const uIdx = sess ? Math.max(0, sess.messages.length - 1) : 0;
+          appendOrUpdateSingleFloorDom(uIdx, { scrollToBottom: true });
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, uIdx);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, uIdx);
         }
         await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
       } else if (/^\/continue\b/i.test(line)) {
@@ -3388,6 +3392,126 @@ code, pre {
   let baiBaiBookUpgradeInFlight = false;
   let baiBaiShadowObserverBound = false;
 
+  function buildBaiBaiBookBeautifyCss() {
+    const activeTheme = tavernState.themes.find(t => t.id === tavernState.activeThemeId) || tavernState.themes[0] || DEFAULT_GOUSU_THEME;
+    const mainText = activeTheme.main_text_color || '#4a4745';
+    const subText = activeTheme.italics_text_color || '#8c8580';
+    const quoteAccent = activeTheme.quote_text_color || '#b8948e';
+    const isNight = /night|dark|夜|暗|黑/i.test(activeTheme.name || '');
+    const bgBase = isNight ? '#232226' : '#f8f6f3';
+    const bgPanel = isNight ? '#2b292e' : '#fdfcfb';
+    const bgSubtle = isNight ? '#343238' : '#f1ede8';
+    const borderSoft = isNight ? 'rgba(255, 255, 255, 0.09)' : 'rgba(138, 128, 120, 0.16)';
+    return `
+      .bbs-root,
+      .bbs-root[data-theme="day"],
+      .bbs-root[data-theme="night"],
+      .bbs-root[data-theme="pastel"],
+      :host {
+        --bbs-bg-primary: ${bgBase} !important;
+        --bbs-bg-secondary: ${bgSubtle} !important;
+        --bbs-bg-tertiary: ${bgSubtle} !important;
+        --bbs-bg-panel: ${bgPanel} !important;
+        --bbs-bg-elevated: ${bgPanel} !important;
+        --bbs-bg-hover: ${bgSubtle} !important;
+        --bbs-text-primary: ${mainText} !important;
+        --bbs-text-secondary: ${subText} !important;
+        --bbs-text-muted: ${subText} !important;
+        --bbs-border: ${borderSoft} !important;
+        --bbs-border-strong: ${borderSoft} !important;
+        --bbs-accent: ${quoteAccent} !important;
+        --bbs-accent-hover: ${quoteAccent} !important;
+        --bbs-accent-soft: ${bgSubtle} !important;
+        --bbs-radius-sm: 10px !important;
+        --bbs-radius-md: 14px !important;
+        --bbs-radius-lg: 18px !important;
+        --bbs-shadow-sm: 0 2px 10px rgba(45, 40, 36, 0.04) !important;
+        --bbs-shadow-md: 0 6px 20px rgba(45, 40, 36, 0.06) !important;
+        --bbs-shadow-lg: 0 12px 32px rgba(45, 40, 36, 0.09) !important;
+        font-family: var(--app-font-family, inherit) !important;
+      }
+      .bbs-root *,
+      .bbs-fp-card,
+      .bbs-fp-card * {
+        font-family: var(--app-font-family, inherit) !important;
+        box-sizing: border-box !important;
+      }
+      .bbs-fp-card {
+        background: ${bgPanel} !important;
+        border: 1px solid ${borderSoft} !important;
+        border-radius: 16px !important;
+        box-shadow: 0 4px 16px rgba(45, 40, 36, 0.04) !important;
+        color: ${mainText} !important;
+        padding: 12px 14px !important;
+        margin: 8px 0 !important;
+      }
+      .bbs-fp-header,
+      .bbs-fp-section,
+      .bbs-fp-item,
+      .bbs-card,
+      .bbs-panel,
+      .bbs-modal-window {
+        background: ${bgPanel} !important;
+        border-color: ${borderSoft} !important;
+        color: ${mainText} !important;
+        border-radius: 14px !important;
+      }
+      .bbs-fp-badge,
+      .bbs-fp-chip,
+      .bbs-fp-tag,
+      .bbs-tag,
+      .bbs-badge {
+        background: ${bgSubtle} !important;
+        color: ${mainText} !important;
+        border: 1px solid ${borderSoft} !important;
+        border-radius: 10px !important;
+        padding: 3px 9px !important;
+        font-weight: 500 !important;
+      }
+      .bbs-fp-summary-box,
+      .bbs-fp-entity-box,
+      .bbs-fp-content {
+        background: ${bgBase} !important;
+        border: 1px solid ${borderSoft} !important;
+        border-radius: 12px !important;
+        color: ${mainText} !important;
+      }
+      .bbs-btn,
+      .bbs-fp-btn,
+      .bbs-root button {
+        border-radius: 10px !important;
+        border: 1px solid ${borderSoft} !important;
+        background: ${bgSubtle} !important;
+        color: ${mainText} !important;
+        box-shadow: none !important;
+        transition: all 0.16s ease !important;
+      }
+      .bbs-btn-primary,
+      .bbs-root button.primary {
+        background: ${quoteAccent} !important;
+        color: #ffffff !important;
+        border-color: transparent !important;
+      }
+      .bbs-root select,
+      .bbs-root input[type="text"],
+      .bbs-root input[type="number"],
+      .bbs-root textarea {
+        background: ${bgBase} !important;
+        color: ${mainText} !important;
+        border: 1px solid ${borderSoft} !important;
+        border-radius: 10px !important;
+        min-height: 36px !important;
+        line-height: 1.4 !important;
+      }
+      .bbs-orb {
+        border-radius: 14px !important;
+        border: 1px solid ${borderSoft} !important;
+        background: ${bgPanel} !important;
+        box-shadow: 0 4px 14px rgba(45, 40, 36, 0.08) !important;
+      }
+    `;
+  }
+
   function applyCachedBaiBaiCssToShadowRoots() {
     try {
       const bbiHost = document.getElementById('bbi-app-host');
@@ -3397,23 +3521,53 @@ code, pre {
         styleEl.textContent = cachedBaiBaiShadowCss;
         bbiHost.shadowRoot.appendChild(styleEl);
       }
+      const enableBbsBeautify = Boolean(tavernState.uiSettings && tavernState.uiSettings.enableBaiBaiBookBeautify);
+      const bbsBeautifyCss = enableBbsBeautify ? buildBaiBaiBookBeautifyCss() : '';
+
       const bbsHost = document.getElementById('bbs-app-host');
-      if (bbsHost && bbsHost.shadowRoot && cachedBaiBaiBookShadowCss && !bbsHost.shadowRoot.getElementById('bbs-inline-shadow-css')) {
-        const styleEl = document.createElement('style');
-        styleEl.id = 'bbs-inline-shadow-css';
-        styleEl.textContent = cachedBaiBaiBookShadowCss;
-        bbsHost.shadowRoot.appendChild(styleEl);
-      }
-      if (cachedBaiBaiBookShadowCss) {
-        document.querySelectorAll('.bbs-fp-host').forEach(fpHost => {
-          if (fpHost && fpHost.shadowRoot && !fpHost.shadowRoot.getElementById('bbs-fp-inline-shadow-css')) {
-            const styleEl = document.createElement('style');
-            styleEl.id = 'bbs-fp-inline-shadow-css';
-            styleEl.textContent = cachedBaiBaiBookShadowCss;
-            fpHost.shadowRoot.appendChild(styleEl);
+      if (bbsHost && bbsHost.shadowRoot) {
+        if (cachedBaiBaiBookShadowCss && !bbsHost.shadowRoot.getElementById('bbs-inline-shadow-css')) {
+          const styleEl = document.createElement('style');
+          styleEl.id = 'bbs-inline-shadow-css';
+          styleEl.textContent = cachedBaiBaiBookShadowCss;
+          bbsHost.shadowRoot.appendChild(styleEl);
+        }
+        const existingBeauty = bbsHost.shadowRoot.getElementById('bbs-custom-theme-beautify');
+        if (enableBbsBeautify) {
+          if (existingBeauty) {
+            existingBeauty.textContent = bbsBeautifyCss;
+          } else {
+            const bEl = document.createElement('style');
+            bEl.id = 'bbs-custom-theme-beautify';
+            bEl.textContent = bbsBeautifyCss;
+            bbsHost.shadowRoot.appendChild(bEl);
           }
-        });
+        } else if (existingBeauty) {
+          existingBeauty.remove();
+        }
       }
+      document.querySelectorAll('.bbs-fp-host').forEach(fpHost => {
+        if (!fpHost || !fpHost.shadowRoot) return;
+        if (cachedBaiBaiBookShadowCss && !fpHost.shadowRoot.getElementById('bbs-fp-inline-shadow-css')) {
+          const styleEl = document.createElement('style');
+          styleEl.id = 'bbs-fp-inline-shadow-css';
+          styleEl.textContent = cachedBaiBaiBookShadowCss;
+          fpHost.shadowRoot.appendChild(styleEl);
+        }
+        const existingFpBeauty = fpHost.shadowRoot.getElementById('bbs-custom-theme-beautify');
+        if (enableBbsBeautify) {
+          if (existingFpBeauty) {
+            existingFpBeauty.textContent = bbsBeautifyCss;
+          } else {
+            const bEl = document.createElement('style');
+            bEl.id = 'bbs-custom-theme-beautify';
+            bEl.textContent = bbsBeautifyCss;
+            fpHost.shadowRoot.appendChild(bEl);
+          }
+        } else if (existingFpBeauty) {
+          existingFpBeauty.remove();
+        }
+      });
     } catch (_) {}
   }
 
@@ -3468,6 +3622,19 @@ code, pre {
       .replace(
         /if\s*\(\s*!target\s*\)\s*\{\s*if\s*\(\s*!audio\.paused\s*\)\s*audio\.pause\(\)\s*;\s*statusMusicUrl\s*=\s*['"]['"]\s*;\s*statusMusicMessageId\s*=\s*null\s*;\s*statusMusicInitialized\s*=\s*true\s*;\s*return\s*;\s*\}/g,
         'if (!target) { statusMusicInitialized = true; updateMusicSettingsUI(); return; }'
+      )
+      // Allow ST-BaiBai-Book auto-summarization to summarize the latest floor even if earlier history has unsummarized gaps
+      .replace(
+        'if(o.length>1){console.log("[柏宝书] 多个摘要缺口,停止自动补摘,交由用户手动处理:",o);return}const i=Ox(s,e);if(i<0)return;const a=ni(s).find(c=>c<=i);',
+        'const i=Ox(s,e);if(i<0)return;const _uns=ni(s).filter(c=>c<=i);const a=_uns.length?_uns[_uns.length-1]:void 0;'
+      )
+      .replace(
+        'if(l.length<1)return nr(o),!1;',
+        'if(l.length>=0)return nr(o),!1;'
+      )
+      .replace(
+        'n.CHARACTER_MESSAGE_RENDERED&&t.on(n.CHARACTER_MESSAGE_RENDERED,()=>xt())',
+        'n.CHARACTER_MESSAGE_RENDERED&&t.on(n.CHARACTER_MESSAGE_RENDERED,()=>{xt();setTimeout(()=>nr(!1),180)})'
       );
   }
 
@@ -3533,9 +3700,14 @@ code, pre {
           .finally(() => { baiBaiBookUpgradeInFlight = false; });
         return;
       }
-      if (document.getElementById('bbs-app-host') && document.getElementById('bbs-menu-item')) {
+      const existingBbsHost = document.getElementById('bbs-app-host');
+      if (existingBbsHost && document.getElementById('bbs-menu-item') && existingBbsHost.getAttribute('data-bbs-auto-patched') === '1') {
         syncBaiBaiShadowDomCss();
         return;
+      }
+      if (existingBbsHost && existingBbsHost.getAttribute('data-bbs-auto-patched') !== '1') {
+        try { existingBbsHost.remove(); } catch (_) {}
+        try { document.getElementById('bbs-menu-item')?.remove(); } catch (_) {}
       }
     }
     const codeStr = String(plugin.code || plugin.content || '').trim();
@@ -3620,6 +3792,10 @@ code, pre {
         window.jQuery,
         window.$
       ).then(() => {
+        if (isBaiBaiBookPlugin(plugin)) {
+          const mountedBbs = document.getElementById('bbs-app-host');
+          if (mountedBbs) mountedBbs.setAttribute('data-bbs-auto-patched', '1');
+        }
         if (isBaiBaiPlugin(plugin)) {
           syncBaiBaiShadowDomCss();
           setTimeout(syncBaiBaiShadowDomCss, 120);
@@ -5605,6 +5781,34 @@ code, pre {
       #tavern-stage-root .swipes-counter:empty {
         display: none !important;
       }
+      #tavern-stage-root .tavern-lazy-load-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        margin: 8px var(--tavernPageMargin, 10px) 12px !important;
+        padding: 9px 14px !important;
+        border-radius: 14px !important;
+        background: var(--SmartThemeBlurTintColor, rgba(245, 243, 240, 0.92)) !important;
+        border: 1px solid var(--SmartThemeBorderColor, rgba(160, 150, 140, 0.22)) !important;
+        color: var(--SmartThemeBodyColor, #4a4745) !important;
+        font-size: 12.5px !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04) !important;
+      }
+      #tavern-stage-root .tavern-lazy-load-info {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        opacity: 0.86 !important;
+      }
+      #tavern-stage-root .tavern-lazy-load-actions {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex-shrink: 0 !important;
+      }
     `);
 
     if (uiCfg.enableQuoteColor === false) {
@@ -5665,6 +5869,7 @@ code, pre {
     } else {
       styleEl.textContent = scopeTavernThemeCss(theme.custom_css || '') + '\n' + buildTavernThemeOverridePatch(theme, uiCfg);
     }
+    applyCachedBaiBaiCssToShadowRoots();
   }
 
   // ============================================================================
@@ -6789,6 +6994,8 @@ code, pre {
     isGenerating: false,
     abortController: null,
     userScrolledUpDuringStream: false,
+    visibleFloorCount: 30,
+    lazyFloorChatId: null,
     toastTimer: null,
     errorTimer: null
   };
@@ -8515,8 +8722,36 @@ code, pre {
     const card = getActiveCard();
     const sess = getActiveChatSession();
     const messages = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+    const activeChatId = sess ? sess.id : null;
+    if (uiRuntime.lazyFloorChatId !== activeChatId) {
+      uiRuntime.lazyFloorChatId = activeChatId;
+      uiRuntime.visibleFloorCount = 30;
+    }
 
-    chatEl.innerHTML = messages.map((m, idx) => buildSingleFloorHtml(m, idx, messages, card)).join('');
+    const lazyEnabled = tavernState.uiSettings?.enableFloorLazyLoad !== false;
+    const limit = Math.max(10, Number(uiRuntime.visibleFloorCount) || 30);
+    const startIdx = (lazyEnabled && messages.length > limit) ? (messages.length - limit) : 0;
+    const hiddenCount = startIdx;
+
+    let topLazyBarHtml = '';
+    if (hiddenCount > 0) {
+      const nextStep = Math.min(30, hiddenCount);
+      topLazyBarHtml = `
+        <div id="tavern-lazy-load-bar" class="tavern-lazy-load-bar">
+          <span class="tavern-lazy-load-info">已隐藏早期 ${hiddenCount} 层对话以节省内存</span>
+          <div class="tavern-lazy-load-actions">
+            <button type="button" class="tavern-btn small" data-action="load-more-chat-floors">加载前${nextStep}层</button>
+            <button type="button" class="tavern-btn small" data-action="load-all-chat-floors">展开全部</button>
+          </div>
+        </div>
+      `;
+    }
+
+    const renderedFloors = [];
+    for (let idx = startIdx; idx < messages.length; idx++) {
+      renderedFloors.push(buildSingleFloorHtml(messages[idx], idx, messages, card));
+    }
+    chatEl.innerHTML = topLazyBarHtml + renderedFloors.join('');
     executeInlineMessageScripts(chatEl);
 
     if (keepTopOnSingleFloor && messages.length <= 1) {
@@ -9209,6 +9444,10 @@ code, pre {
           <input type="checkbox" data-ui-bool="enableThemeCustomCss" ${uiCfg.enableThemeCustomCss !== false ? 'checked' : ''} />
           <span>启用当前主题附加CSS样式美化</span>
         </label>
+        <label class="tavern-check-row" style="margin-top:6px;">
+          <input type="checkbox" data-ui-bool="enableBaiBaiBookBeautify" ${uiCfg.enableBaiBaiBookBeautify ? 'checked' : ''} />
+          <span>覆盖柏宝书界面美化</span>
+        </label>
       </div>
 
       <div class="tavern-section-card">
@@ -9297,6 +9536,10 @@ code, pre {
           <label class="tavern-check-row">
             <input type="checkbox" data-ui-bool="showSwipeCounter" ${uiCfg.showSwipeCounter !== false ? 'checked' : ''} />
             <span>显示分支页码计数器</span>
+          </label>
+          <label class="tavern-check-row">
+            <input type="checkbox" data-ui-bool="enableFloorLazyLoad" ${uiCfg.enableFloorLazyLoad !== false ? 'checked' : ''} />
+            <span>开启聊天楼层懒加载</span>
           </label>
         </div>
       </div>
@@ -10521,6 +10764,35 @@ code, pre {
         return;
       }
 
+      if (action === 'load-more-chat-floors') {
+        const chatEl = document.getElementById('chat');
+        const oldScrollHeight = chatEl ? chatEl.scrollHeight : 0;
+        const oldScrollTop = chatEl ? chatEl.scrollTop : 0;
+        uiRuntime.visibleFloorCount = (Number(uiRuntime.visibleFloorCount) || 30) + 30;
+        renderTavernChatFloors(false);
+        if (chatEl) {
+          const newScrollHeight = chatEl.scrollHeight;
+          chatEl.scrollTop = Math.max(0, oldScrollTop + (newScrollHeight - oldScrollHeight));
+        }
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.MORE_MESSAGES_LOADED);
+        return;
+      }
+
+      if (action === 'load-all-chat-floors') {
+        const chatEl = document.getElementById('chat');
+        const oldScrollHeight = chatEl ? chatEl.scrollHeight : 0;
+        const oldScrollTop = chatEl ? chatEl.scrollTop : 0;
+        const sess = getActiveChatSession();
+        uiRuntime.visibleFloorCount = Math.max(999999, (sess && Array.isArray(sess.messages)) ? sess.messages.length : 999999);
+        renderTavernChatFloors(false);
+        if (chatEl) {
+          const newScrollHeight = chatEl.scrollHeight;
+          chatEl.scrollTop = Math.max(0, oldScrollTop + (newScrollHeight - oldScrollHeight));
+        }
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.MORE_MESSAGES_LOADED);
+        return;
+      }
+
       if (action === 'open-helper-script') {
         const sid = actionEl.getAttribute('data-script-id');
         uiRuntime.showExtensionsPopup = false;
@@ -10664,6 +10936,14 @@ code, pre {
         const p = (tavernState.plugins || []).find(x => x.id === pid);
         if (p) {
           p.enabled = true;
+          if (isBaiBaiBookPlugin(p)) {
+            try { document.getElementById('bbs-app-host')?.remove(); } catch (_) {}
+            try { document.getElementById('bbs-menu-item')?.remove(); } catch (_) {}
+          }
+          if (isBaiBaiImagePlugin(p)) {
+            try { document.getElementById('bbi-app-host')?.remove(); } catch (_) {}
+            try { document.getElementById('bbi-menu-item')?.remove(); } catch (_) {}
+          }
           executeUserPluginScript(p);
           await saveTavernStore();
           refreshOpenDrawerOnly();
@@ -12374,7 +12654,9 @@ code, pre {
         tavernState.uiSettings[k] = Boolean(target.checked);
         await saveTavernStore();
         applyActiveTavernTheme();
-        renderTavernChatFloors(false);
+        if (k !== 'enableBaiBaiBookBeautify') {
+          renderTavernChatFloors(false);
+        }
         return;
       }
       if (target.hasAttribute('data-bg-bool')) {
