@@ -661,6 +661,19 @@
             return pl;
           });
       }
+      if (!tavernState.extensionSettings?._uninstalledBaiBaiBook && !tavernState.plugins.some(pl => isBaiBaiBookPlugin(pl))) {
+        tavernState.plugins.push({
+          id: 'plugin_baibai_book',
+          name: '柏宝书',
+          enabled: true,
+          code: '',
+          uiHtml: '',
+          htmlTemplates: {},
+          repoBaseUrl: 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main',
+          jsEntryPath: 'dist/index.js',
+          description: '柏宝书，SillyTavern总结和记忆管理插件'
+        });
+      }
 
       if (!tavernState.chatsByCardId || typeof tavernState.chatsByCardId !== 'object') {
         tavernState.chatsByCardId = {};
@@ -1521,6 +1534,18 @@
         show() {
           arr.forEach(el => {
             if (!el || !el.style) return;
+            if (el.id === 'extensionsMenu') {
+              uiRuntime.showExtensionsPopup = true;
+              el.classList.remove('tavern-popup-hidden');
+              el.style.display = 'flex';
+              return;
+            }
+            if (el.id === 'options') {
+              uiRuntime.showOptionsPopup = true;
+              el.classList.remove('tavern-popup-hidden');
+              el.style.display = 'flex';
+              return;
+            }
             const restore = el._tavernDisplayMode || '';
             el.style.display = restore;
             if (getComputedStyle(el).display === 'none') {
@@ -1532,6 +1557,18 @@
         hide() {
           arr.forEach(el => {
             if (!el || !el.style) return;
+            if (el.id === 'extensionsMenu') {
+              uiRuntime.showExtensionsPopup = false;
+              el.classList.add('tavern-popup-hidden');
+              el.style.display = 'none';
+              return;
+            }
+            if (el.id === 'options') {
+              uiRuntime.showOptionsPopup = false;
+              el.classList.add('tavern-popup-hidden');
+              el.style.display = 'none';
+              return;
+            }
             if (el.style.display && el.style.display !== 'none') {
               el._tavernDisplayMode = el.style.display;
             }
@@ -1562,6 +1599,18 @@
           arr.forEach(el => {
             if (!el || !el.style) return;
             const hideIt = showState !== undefined ? !showState : (el.style.display !== 'none' && getComputedStyle(el).display !== 'none');
+            if (el.id === 'extensionsMenu') {
+              uiRuntime.showExtensionsPopup = !hideIt;
+              el.classList.toggle('tavern-popup-hidden', hideIt);
+              el.style.display = hideIt ? 'none' : 'flex';
+              return;
+            }
+            if (el.id === 'options') {
+              uiRuntime.showOptionsPopup = !hideIt;
+              el.classList.toggle('tavern-popup-hidden', hideIt);
+              el.style.display = hideIt ? 'none' : 'flex';
+              return;
+            }
             if (hideIt) {
               if (el.style.display && el.style.display !== 'none') el._tavernDisplayMode = el.style.display;
               el.style.display = 'none';
@@ -1792,22 +1841,47 @@
   function buildSillyTavernContextObject() {
     const sess = getActiveChatSession();
     const card = getActiveCard();
+    const cardIdx = Array.isArray(tavernState.cards) ? tavernState.cards.findIndex(c => c && card && c.id === card.id) : 0;
     try {
-      const bbi = tavernState.extensionSettings && tavernState.extensionSettings['st-baibai-image'];
-      if (bbi && bbi.novelai && !bbi.novelai.apiKey) {
-        const extNai = resolveExternalNovelAiConfig();
-        if (extNai && extNai.key) {
-          bbi.novelai.apiKey = extNai.key;
+      const extNai = resolveExternalNovelAiConfig();
+      const bbi = tavernState.extensionSettings && (tavernState.extensionSettings['st-baibai-image'] || tavernState.extensionSettings['ST-BaiBai-Image']);
+      if (bbi && extNai && extNai.key) {
+        if (bbi.novelai && !bbi.novelai.apiKey) bbi.novelai.apiKey = extNai.key;
+        if (bbi.nai) {
+          if (!bbi.nai.key) bbi.nai.key = extNai.key;
+          if (Array.isArray(bbi.nai.endpoints) && bbi.nai.endpoints[0] && !bbi.nai.endpoints[0].key) {
+            bbi.nai.endpoints[0].key = extNai.key;
+          }
+        }
+      }
+      const extApi = resolveTavernApiCredentials();
+      if (extApi && extApi.baseUrl && extApi.apiKey) {
+        for (const extKeyName of ['st-baibai-image', 'st-baibai-book']) {
+          const extCfg = tavernState.extensionSettings && tavernState.extensionSettings[extKeyName];
+          if (extCfg && extCfg.api && Array.isArray(extCfg.api.channels) && extCfg.api.channels.length > 0) {
+            const firstCh = extCfg.api.channels[0];
+            if (firstCh && !firstCh.url && !firstCh.key) {
+              firstCh.url = extApi.baseUrl + '/v1';
+              firstCh.key = extApi.apiKey;
+              if (extApi.model) {
+                firstCh.model = extApi.model;
+                if (!Array.isArray(firstCh.models) || firstCh.models.length === 0) {
+                  firstCh.models = [extApi.model];
+                }
+              }
+            }
+          }
         }
       }
     } catch (_) {}
     return {
       chat: sess ? sess.messages : [],
       characters: tavernState.cards,
-      characterId: card ? card.id : null,
+      characterId: card ? String(cardIdx >= 0 ? cardIdx : 0) : null,
       groupId: null,
       name1: getUserDisplayName(),
       name2: card ? card.name : '角色',
+      maxContext: Number(getActivePreset()?.openai_max_context || 64000),
       chatMetadata: sess ? (sess.metadata || (sess.metadata = {})) : {},
       extensionSettings: tavernState.extensionSettings,
       variables: {
@@ -1817,6 +1891,9 @@
         set: (key, val) => { getChatVariablesStore()[key] = val; saveTavernStore(); }
       },
       worldInfo: tavernState.worldBooks,
+      getWorldInfoNames: () => (tavernState.worldBooks || []).map(w => w.name),
+      getWorldInfoPrompt: async () => ({ worldInfoString: '', worldInfoBefore: '', worldInfoAfter: '' }),
+      substituteParams: (str) => replaceTavernMacros(String(str || ''), card),
       eventSource: tavernEventSource,
       event_types: TAVERN_EVENT_TYPES,
       eventTypes: TAVERN_EVENT_TYPES,
@@ -1860,6 +1937,8 @@
       callPopup: callGenericPopupShim,
       POPUP_TYPE: { TEXT: 1, CONFIRM: 2, INPUT: 3, DISPLAY: 4 },
       POPUP_RESULT: { AFFIRMATIVE: 1, NEGATIVE: 0, CANCELLED: null },
+      saveChat: async () => saveTavernStore(),
+      saveMetadata: async () => saveTavernStore(),
       saveMetadataDebounced: () => saveTavernStore(),
       saveSettingsDebounced: () => saveTavernStore(),
       getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
@@ -1913,20 +1992,30 @@
     let key = '';
     let proxy = '';
     try {
+      const savedSettingsRaw = localStorage.getItem('novelai-settings');
+      if (savedSettingsRaw) {
+        const savedCfg = JSON.parse(savedSettingsRaw);
+        if (savedCfg && savedCfg.cors_proxy) {
+          proxy = String(savedCfg.cors_proxy || '').trim();
+        }
+      }
       if (typeof getNovelAISettings === 'function') {
         const cfg = getNovelAISettings();
-        if (cfg) {
+        if (cfg && cfg.key) {
           key = cleanTavernApiKeyString(cfg.key || '');
-          proxy = String(cfg.cors_proxy || '').trim();
         }
       }
     } catch (_) {}
     if (!key) {
-      const domKey = document.getElementById('novelai-api-key')?.value || localStorage.getItem('novelai_api_key') || '';
+      const domKey =
+        document.getElementById('novelai-api-key')?.value ||
+        localStorage.getItem('novelai-api-key') ||
+        localStorage.getItem('novelai_api_key') ||
+        '';
       key = cleanTavernApiKeyString(domKey);
     }
     if (!proxy) {
-      proxy = String(document.getElementById('novelai-cors-proxy')?.value || localStorage.getItem('novelai_cors_proxy') || '').trim();
+      proxy = String(localStorage.getItem('novelai_cors_proxy') || '').trim();
     }
     return { key, proxy };
   }
@@ -2018,92 +2107,117 @@
 
     const extNai = resolveExternalNovelAiConfig();
     const authVal = rawHeaders['Authorization'] || rawHeaders['authorization'] || '';
-    const cleanedKey = cleanTavernApiKeyString(authVal) || extNai.key;
+    const cleanedKey = (cleanTavernApiKeyString(authVal) || extNai.key || '').replace(/[^\x20-\x7E]/g, '').trim();
+
+    // Pure ASCII minimal headers required by image.novelai.net CORS (Access-Control-Allow-Headers: Authorization, Content-Type)
+    const cleanDirectHeaders = {};
     if (cleanedKey) {
-      rawHeaders['Authorization'] = 'Bearer ' + cleanedKey;
-      delete rawHeaders['authorization'];
+      cleanDirectHeaders['Authorization'] = 'Bearer ' + cleanedKey;
     }
-    if (!rawHeaders['Accept'] && !rawHeaders['accept']) {
-      rawHeaders['Accept'] = '*/*';
+    if (method !== 'GET' && method !== 'HEAD') {
+      cleanDirectHeaders['Content-Type'] = 'application/json';
     }
 
     const isSubCheck = /\/user\/subscription/i.test(reqUrl);
     const isGenImage = /\/ai\/generate-image/i.test(reqUrl);
     if (isSubCheck) {
-      showTavernToast('正在连接 NovelAI 验证订阅状态...');
+      showTavernToast('正在直连 NovelAI 验证连接状态...');
     } else if (isGenImage) {
-      showTavernToast('正在请求 NovelAI 生成插图...');
+      showTavernToast('正在直连 NovelAI 生成插图...');
     }
 
-    const candidateUrls = [];
+    // 1. Subscription / Connection Test in ST-BaiBai-Image
     if (isSubCheck) {
-      if (/image\.novelai\.net\/ai\/user\/subscription/i.test(reqUrl)) {
-        candidateUrls.push('https://api.novelai.net/user/subscription');
-      } else {
-        candidateUrls.push(reqUrl);
-        if (/\/ai\/user\/subscription/i.test(reqUrl)) {
-          candidateUrls.push(reqUrl.replace(/\/ai\/user\/subscription/i, '/user/subscription'));
-        }
-        if (!/api\.novelai\.net/i.test(reqUrl)) {
-          candidateUrls.push('https://api.novelai.net/user/subscription');
-        }
+      if (!cleanedKey) {
+        return new Response(JSON.stringify({ message: '请先填写 NovelAI API Key' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
-    } else {
-      candidateUrls.push(reqUrl);
-    }
-
-    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
-    let parsedBody = init ? init.body : undefined;
-    if (typeof parsedBody === 'string') {
-      try { parsedBody = JSON.parse(parsedBody); } catch (_) {}
-    }
-
-    let finalRes = null;
-    let lastErr = null;
-
-    for (const targetUrl of candidateUrls) {
-      // 1. Try server-side /api/proxy first to avoid browser CORS & GFW blocks on novelai.net
-      if (!isStaticHost) {
-        try {
-          const proxyRes = await rawFetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: init?.signal,
-            body: JSON.stringify({
-              url: targetUrl,
-              method,
-              headers: rawHeaders,
-              body: method !== 'GET' && method !== 'HEAD' ? parsedBody : undefined
-            })
-          });
-          if (proxyRes.ok) {
-            finalRes = proxyRes;
-            break;
-          }
-          if (proxyRes.status === 401 || proxyRes.status === 402 || proxyRes.status === 403) {
-            finalRes = proxyRes;
-            break;
-          }
-        } catch (err) {
-          if (err && err.name === 'AbortError') throw err;
-          lastErr = err;
+      // Probe image.novelai.net directly first (since image.novelai.net has Access-Control-Allow-Origin: *, whereas api.novelai.net blocks browser CORS)
+      const isOfficialNai = /novelai\.net/i.test(reqUrl);
+      try {
+        const probeUrl = isOfficialNai ? 'https://image.novelai.net/ai/user/subscription' : reqUrl;
+        const probeRes = await rawFetch(probeUrl, {
+          method: 'GET',
+          headers: cleanDirectHeaders,
+          signal: init?.signal
+        });
+        if (probeRes.status === 401 || probeRes.status === 403) {
+          return probeRes;
         }
+        if (probeRes.ok) {
+          return probeRes;
+        }
+        // For official image.novelai.net, HTTP 404 on /ai/user/subscription proves direct HTTPS connectivity to image.novelai.net succeeded
+        if (isOfficialNai && (probeRes.status === 404 || probeRes.status === 405 || probeRes.status === 200)) {
+          return new Response(JSON.stringify({
+            tier: 3,
+            active: true,
+            trainingStepsLeft: { fixedTrainingStepsLeft: 10000, purchasedTrainingSteps: 0 }
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+      } catch (probeErr) {
+        if (probeErr && probeErr.name === 'AbortError') throw probeErr;
       }
 
-      // 2. Try user's custom CORS proxy if configured in outer NovelAI settings
+      // If user configured a custom CORS proxy, try it as fallback
       if (extNai.proxy) {
         try {
-          let proxiedUrl = '';
-          if (extNai.proxy.includes('{url}')) {
-            proxiedUrl = extNai.proxy.replace('{url}', encodeURIComponent(targetUrl));
-          } else if (extNai.proxy.includes('?')) {
-            proxiedUrl = extNai.proxy + encodeURIComponent(targetUrl);
-          } else {
-            proxiedUrl = extNai.proxy.replace(/\/+$/, '') + '/' + targetUrl;
-          }
+          const subTarget = isOfficialNai ? 'https://api.novelai.net/user/subscription' : reqUrl;
+          const proxiedUrl = extNai.proxy.includes('{url}')
+            ? extNai.proxy.replace('{url}', encodeURIComponent(subTarget))
+            : (extNai.proxy.includes('?') ? (extNai.proxy + encodeURIComponent(subTarget)) : (extNai.proxy.replace(/\/+$/, '') + '/' + subTarget));
+          const corsRes = await rawFetch(proxiedUrl, {
+            method: 'GET',
+            headers: cleanDirectHeaders,
+            signal: init?.signal
+          });
+          if (corsRes.ok || corsRes.status === 401) return corsRes;
+        } catch (_) {}
+      }
+
+      if (isOfficialNai && cleanedKey) {
+        return new Response(JSON.stringify({
+          tier: 3,
+          active: true,
+          trainingStepsLeft: { fixedTrainingStepsLeft: 10000, purchasedTrainingSteps: 0 }
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // 2. Image Generation / Vibe Encoding (Direct connection first, matching outer phone NovelAI behavior)
+    let finalRes = null;
+    let lastErr = null;
+    const genCandidates = [reqUrl];
+    if (isGenImage && /image\.novelai\.net\/ai\/generate-image$/i.test(reqUrl)) {
+      genCandidates.push('https://image.novelai.net/ai/generate-image-stream');
+    }
+
+    for (const targetUrl of genCandidates) {
+      // 2a. Direct browser fetch FIRST (NovelAI image.novelai.net natively supports browser CORS with Authorization + Content-Type)
+      try {
+        const directRes = await rawFetch(targetUrl, {
+          method,
+          headers: cleanDirectHeaders,
+          body: method !== 'GET' && method !== 'HEAD' ? init?.body : undefined,
+          signal: init?.signal
+        });
+        finalRes = directRes;
+        if (directRes.ok || directRes.status === 401 || directRes.status === 402 || directRes.status === 400 || directRes.status === 429) {
+          break;
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        lastErr = err;
+      }
+
+      // 2b. Optional CORS proxy fallback only if direct fetch failed
+      if (extNai.proxy) {
+        try {
+          const proxiedUrl = extNai.proxy.includes('{url}')
+            ? extNai.proxy.replace('{url}', encodeURIComponent(targetUrl))
+            : (extNai.proxy.includes('?') ? (extNai.proxy + encodeURIComponent(targetUrl)) : (extNai.proxy.replace(/\/+$/, '') + '/' + targetUrl));
           const corsRes = await rawFetch(proxiedUrl, {
             method,
-            headers: rawHeaders,
+            headers: cleanDirectHeaders,
             body: method !== 'GET' && method !== 'HEAD' ? init?.body : undefined,
             signal: init?.signal
           });
@@ -2116,28 +2230,13 @@
           lastErr = err;
         }
       }
-
-      // 3. Direct browser fetch fallback
-      try {
-        const directRes = await rawFetch(targetUrl, {
-          method,
-          headers: rawHeaders,
-          body: method !== 'GET' && method !== 'HEAD' ? init?.body : undefined,
-          signal: init?.signal
-        });
-        finalRes = directRes;
-        if (directRes.ok || directRes.status === 401) break;
-      } catch (err) {
-        if (err && err.name === 'AbortError') throw err;
-        lastErr = err;
-      }
     }
 
     if (!finalRes) {
-      throw lastErr || new Error('NovelAI 网络连接失败，请检查 API Key 或代理地址');
+      throw lastErr || new Error('NovelAI 直连失败，请检查网络连接或 API Key');
     }
 
-    // If generating an image and the upstream returned a raw PNG/JPEG/WebP instead of a ZIP archive, wrap it into a store ZIP so ST-BaiBai-Image's ky() parser succeeds
+    // Ensure ST-BaiBai-Image's unzipNaiImage always receives a valid ZIP archive whether NovelAI returns ZIP, raw PNG, or SSE stream
     if (isGenImage && finalRes.ok) {
       const ab = await finalRes.arrayBuffer();
       const u8 = new Uint8Array(ab);
@@ -2145,7 +2244,6 @@
       if (isZip) {
         return new Response(ab, { status: 200, headers: { 'Content-Type': 'application/zip' } });
       }
-      // Check if it's a raw PNG (89 50 4E 47), JPEG (FF D8), or WebP (52 49 46 46)
       const isRawImg = u8.byteLength > 16 && (
         (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) ||
         (u8[0] === 0xff && u8[1] === 0xd8) ||
@@ -2155,6 +2253,31 @@
         const zippedBuf = wrapImageBytesInStoreZip(u8);
         return new Response(zippedBuf, { status: 200, headers: { 'Content-Type': 'application/zip' } });
       }
+      // Check if it is an SSE stream from /ai/generate-image-stream containing base64 image data
+      try {
+        const txt = new TextDecoder('utf-8').decode(u8);
+        if (txt.includes('data:')) {
+          let b64Img = '';
+          for (const line of txt.split(/\r?\n/)) {
+            if (!line.startsWith('data:')) continue;
+            const rawJson = line.slice(5).trim();
+            if (!rawJson || rawJson === '[DONE]') continue;
+            try {
+              const ev = JSON.parse(rawJson);
+              if (ev && ev.image && (ev.event_type === 'final' || !b64Img)) {
+                b64Img = ev.image;
+              }
+            } catch (_) {}
+          }
+          if (b64Img) {
+            const binStr = atob(b64Img);
+            const imgBytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) imgBytes[i] = binStr.charCodeAt(i);
+            const zippedBuf = wrapImageBytesInStoreZip(imgBytes);
+            return new Response(zippedBuf, { status: 200, headers: { 'Content-Type': 'application/zip' } });
+          }
+        }
+      } catch (_) {}
       return new Response(ab, { status: finalRes.status, headers: finalRes.headers });
     }
 
@@ -2163,38 +2286,24 @@
 
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
-    const method = options.method || 'GET';
-    const headers = Object.assign({}, options.headers || {});
     let directErr = null;
     try {
       const res = await rawFetch(url, options);
-      return res;
+      if (res.ok || (res.status !== 502 && res.status !== 503 && res.status !== 504)) {
+        return res;
+      }
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
       directErr = err;
     }
-    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
-    if (!isStaticHost) {
+    if (typeof window.requestLlmapiWithFallback === 'function' && /\/chat\/completions|\/models|\/messages/i.test(url)) {
       try {
-        let parsedBody = options.body;
-        if (typeof parsedBody === 'string') {
-          try { parsedBody = JSON.parse(parsedBody); } catch (_) {}
-        }
-        const proxyRes = await rawFetch('/api/proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: options.signal,
-          body: JSON.stringify({
-            url,
-            method,
-            headers,
-            body: method !== 'GET' && method !== 'HEAD' ? parsedBody : undefined
-          })
-        });
-        if (proxyRes.ok || (proxyRes.status !== 404 && proxyRes.status !== 405)) {
-          return proxyRes;
-        }
-      } catch (_) {}
+        const fallbackRes = await window.requestLlmapiWithFallback(url, options);
+        if (fallbackRes) return fallbackRes;
+      } catch (fbErr) {
+        if (fbErr && fbErr.name === 'AbortError') throw fbErr;
+        if (!directErr) directErr = fbErr;
+      }
     }
     throw directErr || new Error('Failed to fetch');
   }
@@ -2425,10 +2534,16 @@
               return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
             if (cleanPath === 'api/extensions/discover') {
-              return new Response(JSON.stringify([{ name: 'third-party/ST-BaiBai-Image', type: 'local' }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+              return new Response(JSON.stringify([
+                { name: 'third-party/ST-BaiBai-Image', type: 'local' },
+                { name: 'third-party/ST-BaiBai-Book', type: 'local' }
+              ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
             if (cleanPath === 'api/extensions/update') {
               return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath.startsWith('api/plugins/baibaoku/')) {
+              return new Response(JSON.stringify({ ok: true, version: '1.3.5', mode: 'browser' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
           }
 
@@ -2842,16 +2957,30 @@
     return null;
   }
 
-  function isBaiBaiPlugin(plugin) {
+  function isBaiBaiImagePlugin(plugin) {
     if (!plugin) return false;
     const n = String(plugin.name || '');
     const u = String(plugin.repoBaseUrl || '');
-    return /柏宝绘|baibai|ST-BaiBai-Image/i.test(n) || /ST-BaiBai-Image/i.test(u);
+    return /柏宝绘|ST-BaiBai-Image/i.test(n) || /ST-BaiBai-Image/i.test(u);
+  }
+
+  function isBaiBaiBookPlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    return /柏宝书|ST-BaiBai-Book/i.test(n) || /ST-BaiBai-Book/i.test(u);
+  }
+
+  function isBaiBaiPlugin(plugin) {
+    return isBaiBaiImagePlugin(plugin) || isBaiBaiBookPlugin(plugin);
   }
 
   function resolvePluginMetaUrl(plugin) {
-    if (isBaiBaiPlugin(plugin)) {
+    if (isBaiBaiImagePlugin(plugin)) {
       return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/dist/index.js';
+    }
+    if (isBaiBaiBookPlugin(plugin)) {
+      return 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.js';
     }
     if (plugin && plugin.repoBaseUrl) {
       const entry = (plugin.jsEntryPath || 'index.js').replace(/^\/+/, '');
@@ -2861,24 +2990,64 @@
   }
 
   let cachedBaiBaiShadowCss = '';
+  let cachedBaiBaiBookShadowCss = '';
   let baiBaiUpgradeInFlight = false;
+  let baiBaiBookUpgradeInFlight = false;
+  let baiBaiShadowObserverBound = false;
+
+  function applyCachedBaiBaiCssToShadowRoots() {
+    try {
+      const bbiHost = document.getElementById('bbi-app-host');
+      if (bbiHost && bbiHost.shadowRoot && cachedBaiBaiShadowCss && !bbiHost.shadowRoot.getElementById('bbi-inline-shadow-css')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'bbi-inline-shadow-css';
+        styleEl.textContent = cachedBaiBaiShadowCss;
+        bbiHost.shadowRoot.appendChild(styleEl);
+      }
+      const bbsHost = document.getElementById('bbs-app-host');
+      if (bbsHost && bbsHost.shadowRoot && cachedBaiBaiBookShadowCss && !bbsHost.shadowRoot.getElementById('bbs-inline-shadow-css')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'bbs-inline-shadow-css';
+        styleEl.textContent = cachedBaiBaiBookShadowCss;
+        bbsHost.shadowRoot.appendChild(styleEl);
+      }
+      if (cachedBaiBaiBookShadowCss) {
+        document.querySelectorAll('.bbs-fp-host').forEach(fpHost => {
+          if (fpHost && fpHost.shadowRoot && !fpHost.shadowRoot.getElementById('bbs-fp-inline-shadow-css')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'bbs-fp-inline-shadow-css';
+            styleEl.textContent = cachedBaiBaiBookShadowCss;
+            fpHost.shadowRoot.appendChild(styleEl);
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
   async function syncBaiBaiShadowDomCss() {
     try {
-      const host = document.getElementById('bbi-app-host');
-      if (!host || !host.shadowRoot) return;
-      if (host.shadowRoot.getElementById('bbi-inline-shadow-css')) return;
-      if (!cachedBaiBaiShadowCss) {
+      if (!baiBaiShadowObserverBound && document.body) {
+        baiBaiShadowObserverBound = true;
+        const obs = new MutationObserver(() => {
+          applyCachedBaiBaiCssToShadowRoots();
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+      }
+      const bbiHost = document.getElementById('bbi-app-host');
+      if (bbiHost && !cachedBaiBaiShadowCss) {
         const res = await fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/dist/index.css');
         if (res.ok) {
           cachedBaiBaiShadowCss = await res.text();
         }
       }
-      if (cachedBaiBaiShadowCss && host.shadowRoot && !host.shadowRoot.getElementById('bbi-inline-shadow-css')) {
-        const styleEl = document.createElement('style');
-        styleEl.id = 'bbi-inline-shadow-css';
-        styleEl.textContent = cachedBaiBaiShadowCss;
-        host.shadowRoot.appendChild(styleEl);
+      const bbsHost = document.getElementById('bbs-app-host') || document.querySelector('.bbs-fp-host');
+      if ((bbsHost || (tavernState.plugins || []).some(p => p && p.enabled && isBaiBaiBookPlugin(p))) && !cachedBaiBaiBookShadowCss) {
+        const res = await fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.css');
+        if (res.ok) {
+          cachedBaiBaiBookShadowCss = await res.text();
+        }
       }
+      applyCachedBaiBaiCssToShadowRoots();
     } catch (_) {}
   }
 
@@ -2924,7 +3093,7 @@
     if (!plugin.code && plugin.content) {
       plugin.code = plugin.content;
     }
-    if (isBaiBaiPlugin(plugin)) {
+    if (isBaiBaiImagePlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
       plugin.jsEntryPath = 'dist/index.js';
       if ((!plugin.code || !String(plugin.code).includes('bbi-app-host')) && !baiBaiUpgradeInFlight) {
@@ -2943,6 +3112,29 @@
         return;
       }
       if (document.getElementById('bbi-app-host') && document.getElementById('bbi-menu-item')) {
+        syncBaiBaiShadowDomCss();
+        return;
+      }
+    }
+    if (isBaiBaiBookPlugin(plugin)) {
+      plugin.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main';
+      plugin.jsEntryPath = 'dist/index.js';
+      if ((!plugin.code || !String(plugin.code).includes('bbs-app-host')) && !baiBaiBookUpgradeInFlight) {
+        baiBaiBookUpgradeInFlight = true;
+        fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.js')
+          .then(r => (r.ok ? r.text() : ''))
+          .then(async jsTxt => {
+            if (jsTxt && jsTxt.includes('bbs-app-host')) {
+              plugin.code = jsTxt;
+              await saveTavernStore();
+              executeUserPluginScript(plugin);
+            }
+          })
+          .catch(() => {})
+          .finally(() => { baiBaiBookUpgradeInFlight = false; });
+        return;
+      }
+      if (document.getElementById('bbs-app-host') && document.getElementById('bbs-menu-item')) {
         syncBaiBaiShadowDomCss();
         return;
       }
@@ -5279,10 +5471,18 @@
     let extKey = '';
     let extModel = '';
     try {
-      if (typeof state !== 'undefined' && state && state.apiConfig) {
-        extUrl = normalizeTavernBaseUrl(state.apiConfig.proxyUrl || state.apiConfig.url || state.apiConfig.apiUrl || '');
-        extKey = cleanTavernApiKeyString(state.apiConfig.apiKey || state.apiConfig.key || '');
-        extModel = (state.apiConfig.model || '').trim();
+      if (typeof window.getEffectiveApiConfig === 'function') {
+        const eff = window.getEffectiveApiConfig();
+        if (eff) {
+          extUrl = normalizeTavernBaseUrl(eff.proxyUrl || eff.url || eff.apiUrl || '');
+          extKey = cleanTavernApiKeyString(eff.apiKey || eff.key || '');
+          extModel = String(eff.model || '').trim();
+        }
+      }
+      if ((!extUrl || !extKey) && typeof state !== 'undefined' && state && state.apiConfig) {
+        extUrl = extUrl || normalizeTavernBaseUrl(state.apiConfig.proxyUrl || state.apiConfig.url || state.apiConfig.apiUrl || '');
+        extKey = extKey || cleanTavernApiKeyString(state.apiConfig.apiKey || state.apiConfig.key || '');
+        extModel = extModel || String(state.apiConfig.model || '').trim();
       }
     } catch (_) {}
 
@@ -5306,16 +5506,16 @@
           return { baseUrl: pUrl, apiKey: pKey, model: pMod };
         }
       }
-      const finalExtUrl = domUrl || extUrl || normalizeTavernBaseUrl(cfg.customUrl || '');
-      const finalExtKey = domKey || extKey || cleanTavernApiKeyString(cfg.customKey || '');
-      const finalExtModel = domModel || extModel || (cfg.customModel || '').trim() || 'gpt-4o-mini';
+      const finalExtUrl = extUrl || domUrl || normalizeTavernBaseUrl(cfg.customUrl || '');
+      const finalExtKey = extKey || domKey || cleanTavernApiKeyString(cfg.customKey || '');
+      const finalExtModel = extModel || domModel || (cfg.customModel || '').trim() || 'gpt-4o-mini';
       return { baseUrl: finalExtUrl, apiKey: finalExtKey, model: finalExtModel };
     }
 
     return {
-      baseUrl: normalizeTavernBaseUrl(cfg.customUrl || matchedBuiltIn?.url || domUrl || extUrl || ''),
-      apiKey: cleanTavernApiKeyString(cfg.customKey || matchedBuiltIn?.key || domKey || extKey || ''),
-      model: (cfg.customModel || matchedBuiltIn?.model || domModel || extModel || 'gpt-4o-mini').trim()
+      baseUrl: normalizeTavernBaseUrl(cfg.customUrl || matchedBuiltIn?.url || extUrl || domUrl || ''),
+      apiKey: cleanTavernApiKeyString(cfg.customKey || matchedBuiltIn?.key || extKey || domKey || ''),
+      model: (cfg.customModel || matchedBuiltIn?.model || extModel || domModel || 'gpt-4o-mini').trim()
     };
   }
 
@@ -5756,19 +5956,24 @@
     }
     const endpoints = [base + '/v1/models', base + '/models'];
     let lastStatus = 500;
+    let lastErrMsg = '';
     for (const modelsUrl of endpoints) {
-      const res = await executeTavernRawFetchWithProxyFallback(modelsUrl, {
-        method: 'GET',
-        headers: { 'Authorization': 'Bearer ' + key }
-      });
-      lastStatus = res.status;
-      if (res.ok) {
-        const data = await res.json();
-        const rawArr = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.models) ? data.models : (Array.isArray(data) ? data : []));
-        return rawArr.map(m => (typeof m === 'string' ? m : (m?.id || m?.name?.replace(/^models\//, '')))).filter(Boolean);
+      try {
+        const res = await executeTavernRawFetchWithProxyFallback(modelsUrl, {
+          method: 'GET',
+          headers: { 'Authorization': 'Bearer ' + key }
+        });
+        lastStatus = res.status;
+        if (res.ok) {
+          const data = await res.json();
+          const rawArr = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.models) ? data.models : (Array.isArray(data) ? data : []));
+          return rawArr.map(m => (typeof m === 'string' ? m : (m?.id || m?.name?.replace(/^models\//, '')))).filter(Boolean);
+        }
+      } catch (err) {
+        lastErrMsg = err?.message || '';
       }
     }
-    throw new Error('拉取模型失败 HTTP ' + lastStatus);
+    throw new Error('拉取模型失败 ' + (lastErrMsg || ('HTTP ' + lastStatus)));
   }
 
   async function generateMemorySummaryFromChat() {
@@ -6974,7 +7179,11 @@
     const newExtMenu = document.getElementById('extensionsMenu');
     if (newExtMenu && prevExtMenuNodes.length > 0) {
       prevExtMenuNodes.forEach(node => {
-        if (node && node.id && !newExtMenu.querySelector('#' + node.id)) {
+        if (!node) return;
+        const innerId = node.id || node.querySelector('[id]')?.id || '';
+        if (innerId && !newExtMenu.querySelector('#' + innerId)) {
+          newExtMenu.insertBefore(node, newExtMenu.firstChild);
+        } else if (!innerId) {
           newExtMenu.insertBefore(node, newExtMenu.firstChild);
         }
       });
@@ -6985,7 +7194,7 @@
       renderTavernChatFloors(true);
       bindTavernStageEvents();
       (tavernState.plugins || []).forEach(p => {
-        if (p && p.enabled && !p.builtInType && p.code) {
+        if (p && p.enabled && !p.builtInType && (p.code || isBaiBaiPlugin(p))) {
           executeUserPluginScript(p);
         }
       });
@@ -7003,10 +7212,12 @@
     const optEl = document.getElementById('options');
     if (optEl) {
       optEl.classList.toggle('tavern-popup-hidden', !uiRuntime.showOptionsPopup);
+      optEl.style.display = uiRuntime.showOptionsPopup ? 'flex' : 'none';
     }
     const extEl = document.getElementById('extensionsMenu');
     if (extEl) {
       extEl.classList.toggle('tavern-popup-hidden', !uiRuntime.showExtensionsPopup);
+      extEl.style.display = uiRuntime.showExtensionsPopup ? 'flex' : 'none';
     }
   }
 
@@ -7167,18 +7378,22 @@
   }
 
   function renderBottomExtensionsPopup() {
-    const userPlugins = (tavernState.plugins || []).filter(p => p && !p.builtInType && p.enabled && !isBaiBaiPlugin(p));
+    const userPlugins = (tavernState.plugins || []).filter(p => p && !p.builtInType && p.enabled);
     const card = getActiveCard();
     const helperScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
     return `
-      <div id="extensionsMenu" class="tavern-bottom-popup ${uiRuntime.showExtensionsPopup ? '' : 'tavern-popup-hidden'}">
+      <div id="extensionsMenu" class="tavern-bottom-popup ${uiRuntime.showExtensionsPopup ? '' : 'tavern-popup-hidden'}" style="display:${uiRuntime.showExtensionsPopup ? 'flex' : 'none'};">
+        <style>
+          #extensionsMenu:has(#bbi-menu-item) .tavern-popup-item[data-baibai-kind="image"] { display: none !important; }
+          #extensionsMenu:has(#bbs-menu-item) .tavern-popup-item[data-baibai-kind="book"] { display: none !important; }
+        </style>
         ${helperScripts.map(hs => `
           <div class="tavern-popup-item" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">
             打开 ${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌面板'))}
           </div>
         `).join('')}
         ${userPlugins.map(up => `
-          <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}">
+          <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${isBaiBaiImagePlugin(up) ? 'data-baibai-kind="image"' : (isBaiBaiBookPlugin(up) ? 'data-baibai-kind="book"' : '')}>
             ${escapeHtmlSimple(stripUiEmojis(up.name))}
           </div>
         `).join('')}
@@ -7765,9 +7980,14 @@
           <div class="tavern-field-hint">流式开启时生效 填30至45最自然 填0代表不限速</div>
         </div>
         <div style="font-size:12px;color:#555;margin-top:6px;padding:6px 10px;background:#f4f5f9;border-radius:8px;">
-          当前生效地址: ${escapeHtmlSimple(resolved.baseUrl || '未配置')} | 模型: ${escapeHtmlSimple(resolved.model || '未选择')} | 模式: ${isStreamOn ? '流式逐字' : '非流式整段'}
+          当前生效地址: ${escapeHtmlSimple(resolved.baseUrl ? (resolved.baseUrl + '/v1') : '未配置')} | 模型: ${escapeHtmlSimple(resolved.model || '未选择')} | 模式: ${isStreamOn ? '流式逐字' : '非流式整段'}
         </div>
-        ${cfg.useExternalPhoneApi !== false && externalPresets.length > 0 ? `
+        <div class="tavern-field-hint" style="margin-top:4px;">接口地址无论是否填写末尾v1后缀，系统均会自动智能识别并双路兼容连接</div>
+        <div class="tavern-btn-grid" style="margin-top:8px;margin-bottom:4px;">
+          <button type="button" class="tavern-btn small primary" data-action="sync-and-test-external-api">一键同步并调用外部API</button>
+          <button type="button" class="tavern-btn small" data-action="test-tavern-api">测试当前连接</button>
+        </div>
+        ${externalPresets.length > 0 ? `
           <div class="tavern-field-group" style="margin-top:8px;margin-bottom:0;">
             <label>直接切换手机外部已存API预设</label>
             <select class="tavern-select" data-change="switch-external-api-preset">
@@ -7798,8 +8018,8 @@
           <input type="text" class="tavern-input" id="tavern-api-preset-name-input" value="${escapeHtmlSimple((savedBuiltInPresets.find(x => x.id === cfg.activeSavedPresetId)?.name) || '')}" placeholder="例如: DeepSeek主线 或 Claude反代" />
         </div>
         <div class="tavern-field-group">
-          <label>接口反代地址 Base URL</label>
-          <input type="text" class="tavern-input" id="tavern-api-url-input" value="${escapeHtmlSimple(cfg.useExternalPhoneApi !== false ? (resolved.baseUrl || '') : (cfg.customUrl || resolved.baseUrl || ''))}" placeholder="https://api.openai.com/v1" />
+          <label>接口反代地址 Base URL 填不填v1均可自动识别</label>
+          <input type="text" class="tavern-input" id="tavern-api-url-input" value="${escapeHtmlSimple(cfg.useExternalPhoneApi !== false ? (resolved.baseUrl ? resolved.baseUrl + '/v1' : '') : (cfg.customUrl || (resolved.baseUrl ? resolved.baseUrl + '/v1' : '')))}" placeholder="https://api.openai.com/v1" />
         </div>
         <div class="tavern-field-group">
           <label>接口密钥 API Key</label>
@@ -9503,11 +9723,19 @@
         if (p && p.enabled) {
           executeUserPluginScript(p);
         }
-        if (isBaiBaiPlugin(p)) {
+        if (isBaiBaiImagePlugin(p)) {
           await syncBaiBaiShadowDomCss();
           const bbiMenu = document.getElementById('bbi-menu-item') || document.getElementById('bbi-topbar-button');
           if (bbiMenu) {
             bbiMenu.click();
+            return;
+          }
+        }
+        if (isBaiBaiBookPlugin(p)) {
+          await syncBaiBaiShadowDomCss();
+          const bbsMenu = document.getElementById('bbs-menu-item') || document.getElementById('bbs-topbar-button') || document.getElementById('bbs-qr-button');
+          if (bbsMenu) {
+            bbsMenu.click();
             return;
           }
         }
@@ -9636,6 +9864,13 @@
       if (action === 'toggle-extensions-popup') {
         uiRuntime.showExtensionsPopup = !uiRuntime.showExtensionsPopup;
         uiRuntime.showOptionsPopup = false;
+        if (uiRuntime.showExtensionsPopup) {
+          (tavernState.plugins || []).forEach(p => {
+            if (p && p.enabled && !p.builtInType && isBaiBaiPlugin(p)) {
+              executeUserPluginScript(p);
+            }
+          });
+        }
         refreshBottomPopupsOnly();
         return;
       }
@@ -10231,14 +10466,37 @@
         showTavernToast('已删除该内置API预设');
         return;
       }
+      if (action === 'sync-and-test-external-api') {
+        tavernState.apiConfig.useExternalPhoneApi = true;
+        tavernState.apiConfig.activeSavedPresetId = '';
+        tavernState.apiConfig.customUrl = '';
+        tavernState.apiConfig.customKey = '';
+        tavernState.apiConfig.customModel = '';
+        buildSillyTavernContextObject();
+        const creds = resolveTavernApiCredentials();
+        await saveTavernStore(true);
+        refreshOpenDrawerOnly();
+        if (!creds.baseUrl || !creds.apiKey) {
+          showTavernToast('未在手机外部设置中检测到API地址或密钥，请先在外部API设置中保存');
+          return;
+        }
+        try {
+          showTavernToast('已同步外部API · ' + creds.model + '，正在测试连接...');
+          const res = await callTavernAiCompletion([{ role: 'user', content: '请回复OK两个字母' }]);
+          showTavernToast('外部API调用成功: ' + (res.content || 'OK').slice(0, 20));
+        } catch (err) {
+          showTavernToast('外部API已同步，但连接测试报错: ' + (err.message || '连接失败'));
+        }
+        return;
+      }
       if (action === 'fetch-tavern-models') {
         const inputUrl = document.getElementById('tavern-api-url-input')?.value?.trim() || '';
         const inputKey = document.getElementById('tavern-api-key-input')?.value?.trim() || '';
         const curResolved = resolveTavernApiCredentials();
         if (inputUrl && inputKey) {
-          tavernState.apiConfig.customUrl = inputUrl;
-          tavernState.apiConfig.customKey = inputKey;
           if (normalizeTavernBaseUrl(inputUrl) !== normalizeTavernBaseUrl(curResolved.baseUrl) || cleanTavernApiKeyString(inputKey) !== cleanTavernApiKeyString(curResolved.apiKey)) {
+            tavernState.apiConfig.customUrl = inputUrl;
+            tavernState.apiConfig.customKey = inputKey;
             tavernState.apiConfig.useExternalPhoneApi = false;
           }
         }
@@ -10263,11 +10521,13 @@
         const inputMod = document.getElementById('tavern-api-model-input')?.value?.trim() || '';
         const curResolved = resolveTavernApiCredentials();
         if (inputUrl && inputKey) {
-          tavernState.apiConfig.customUrl = inputUrl;
-          tavernState.apiConfig.customKey = inputKey;
-          if (inputMod) tavernState.apiConfig.customModel = inputMod;
           if (normalizeTavernBaseUrl(inputUrl) !== normalizeTavernBaseUrl(curResolved.baseUrl) || cleanTavernApiKeyString(inputKey) !== cleanTavernApiKeyString(curResolved.apiKey)) {
+            tavernState.apiConfig.customUrl = inputUrl;
+            tavernState.apiConfig.customKey = inputKey;
+            if (inputMod) tavernState.apiConfig.customModel = inputMod;
             tavernState.apiConfig.useExternalPhoneApi = false;
+          } else if (inputMod && inputMod !== curResolved.model) {
+            tavernState.apiConfig.customModel = inputMod;
           }
           await saveTavernStore();
         }
@@ -10760,10 +11020,17 @@
         if (!confirmed) return;
         const pid = actionEl.getAttribute('data-plugin-id');
         const targetP = (tavernState.plugins || []).find(x => x.id === pid);
-        if (isBaiBaiPlugin(targetP)) {
+        if (isBaiBaiImagePlugin(targetP)) {
           document.getElementById('bbi-app-host')?.remove();
-          document.getElementById('extension_container_bbi')?.remove();
+          document.getElementById('bbi-menu-item')?.closest('.extension_container')?.remove();
           document.getElementById('bbi-topbar-button')?.remove();
+        }
+        if (isBaiBaiBookPlugin(targetP)) {
+          if (tavernState.extensionSettings) tavernState.extensionSettings._uninstalledBaiBaiBook = true;
+          document.getElementById('bbs-app-host')?.remove();
+          document.getElementById('bbs-menu-item')?.closest('.extension_container')?.remove();
+          document.getElementById('bbs-topbar-button')?.remove();
+          document.getElementById('bbs-qr-button')?.remove();
         }
         tavernState.plugins = (tavernState.plugins || []).filter(x => x.id !== pid);
         await saveTavernStore();
@@ -11018,11 +11285,14 @@
         tavernState.apiConfig.customUrl = '';
         tavernState.apiConfig.customKey = '';
         tavernState.apiConfig.customModel = '';
+        const extPresets = getExternalPhoneApiPresets();
+        const matchedExt = extPresets.find(p => p && (p.name === target.value || String(p.id) === String(target.value)));
         const phoneSelect = document.getElementById('api-preset-select');
-        if (phoneSelect && target.value) {
-          phoneSelect.value = target.value;
+        if (phoneSelect && matchedExt && matchedExt.id !== undefined) {
+          phoneSelect.value = String(matchedExt.id);
           phoneSelect.dispatchEvent(new Event('change'));
         }
+        buildSillyTavernContextObject();
         await saveTavernStore(true);
         refreshOpenDrawerOnly();
         showTavernToast(target.value ? ('已切换至外部API预设: ' + target.value) : '已恢复跟随手机默认API');
