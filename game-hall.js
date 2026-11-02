@@ -304,7 +304,8 @@ code, pre {
       fit: 'cover',
       blur: 0,
       opacity: 1,
-      syncWithCard: false
+      syncWithCard: false,
+      gallery: []
     },
     quickReplies: [
       { id: 'qr_1', label: '观察四周', message: '我仔细观察周围的环境与人物动向。', enabled: true },
@@ -693,6 +694,9 @@ code, pre {
       tavernState.authorNote = Object.assign({}, tavernState.authorNote, loaded.authorNote || {});
       tavernState.memory = Object.assign({}, tavernState.memory, loaded.memory || {});
       tavernState.background = Object.assign({}, tavernState.background, loaded.background || {});
+      if (!Array.isArray(tavernState.background.gallery)) {
+        tavernState.background.gallery = [];
+      }
       tavernState.extensionSettings = Object.assign({}, tavernState.extensionSettings, loaded.extensionSettings || {});
 
       if (!Array.isArray(tavernState.cards) || tavernState.cards.length === 0) {
@@ -3110,7 +3114,13 @@ code, pre {
     }
 
     window.TavernHelper = {
+      isFrontendRenderEnabled: () => true,
       getCurrentMessageId: () => {
+        const sess = getActiveChatSession();
+        const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+        return Math.max(0, msgs.length - 1);
+      },
+      getLastMessageId: () => {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
         return Math.max(0, msgs.length - 1);
@@ -3132,17 +3142,32 @@ code, pre {
           }
           return Object.assign({}, m, {
             message_id: m.mesid !== undefined ? m.mesid : idx,
+            name: m.name || (m.is_user ? getUserDisplayName() : (getActiveCard()?.name || '角色')),
             role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
+            is_user: Boolean(m.is_user),
+            is_system: Boolean(m.is_system),
+            is_hidden: Boolean(m.is_hidden),
             message: text,
-            mes: text
+            mes: text,
+            swipe_id: sIdx,
+            swipes,
+            data: (m.data && typeof m.data === 'object') ? m.data : {},
+            extra: (m.extra && typeof m.extra === 'object') ? m.extra : {}
           });
         };
+        if (Array.isArray(rangeOrId)) {
+          return rangeOrId.flatMap(item => window.TavernHelper.getChatMessages(item));
+        }
         if (typeof rangeOrId === 'number') {
           const idx = rangeOrId < 0 ? msgs.length + rangeOrId : rangeOrId;
           return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
         }
         if (typeof rangeOrId === 'string') {
           const trimmed = rangeOrId.trim();
+          if (trimmed === '{{lastMessageId}}' || trimmed === 'last' || trimmed === 'current') {
+            const lastIdx = Math.max(0, msgs.length - 1);
+            return msgs[lastIdx] ? [wrapMsg(msgs[lastIdx], lastIdx)] : [];
+          }
           if (/^-?\d+$/.test(trimmed)) {
             const num = Number(trimmed);
             const idx = num < 0 ? msgs.length + num : num;
@@ -3165,6 +3190,17 @@ code, pre {
         }
         return msgs.map((m, idx) => wrapMsg(m, idx));
       },
+      getChatMessage: (messageId) => {
+        const list = window.TavernHelper.getChatMessages(messageId ?? -1);
+        return list[0] ? list[0].message : '';
+      },
+      setChatMessage: async (textOrObj, messageId, opts = {}) => {
+        const sess = getActiveChatSession();
+        const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+        const targetId = messageId !== undefined ? (messageId < 0 ? msgs.length + messageId : Number(messageId)) : Math.max(0, msgs.length - 1);
+        const newText = (textOrObj && typeof textOrObj === 'object') ? (textOrObj.message ?? textOrObj.mes ?? '') : String(textOrObj ?? '');
+        await window.TavernHelper.setChatMessages([{ message_id: targetId, message: newText }], opts);
+      },
       setChatMessages: async (msgs, opts = {}) => {
         const sess = getActiveChatSession();
         if (!sess || !Array.isArray(msgs)) return;
@@ -3172,12 +3208,21 @@ code, pre {
         if (isPartialUpdate) {
           msgs.forEach(u => {
             const target = sess.messages[u.message_id];
-            if (target && u.message !== undefined) {
-              target.mes = u.message;
-              if (Array.isArray(target.swipes) && target.swipes.length > 0) {
-                target.swipes[target.swipe_id || 0] = u.message;
-              } else {
-                target.swipes = [u.message];
+            if (target) {
+              const nextMsgText = u.message !== undefined ? u.message : u.mes;
+              if (nextMsgText !== undefined) {
+                target.mes = nextMsgText;
+                if (Array.isArray(target.swipes) && target.swipes.length > 0) {
+                  target.swipes[target.swipe_id || 0] = nextMsgText;
+                } else {
+                  target.swipes = [nextMsgText];
+                }
+              }
+              if (u.data && typeof u.data === 'object') {
+                target.data = Object.assign({}, target.data || {}, u.data);
+              }
+              if (u.extra && typeof u.extra === 'object') {
+                target.extra = Object.assign({}, target.extra || {}, u.extra);
               }
             }
           });
@@ -3254,6 +3299,7 @@ code, pre {
       injectPrompts: window.injectPrompts,
       uninjectPrompts: window.uninjectPrompts,
       triggerSlash: executeTavernSlashCommand,
+      triggerSlashWithResult: executeTavernSlashCommand,
       triggerSlashWithOptions: executeTavernSlashCommand,
       eventOn: window.eventOn,
       eventOnce: window.eventOnce,
@@ -3279,9 +3325,15 @@ code, pre {
       }
     };
     window.getCurrentMessageId = window.TavernHelper.getCurrentMessageId;
+    window.getLastMessageId = window.TavernHelper.getLastMessageId;
     window.getChatMessages = window.TavernHelper.getChatMessages;
+    window.getChatMessage = window.TavernHelper.getChatMessage;
+    window.setChatMessage = window.TavernHelper.setChatMessage;
     window.setChatMessages = window.TavernHelper.setChatMessages;
     window.createChatMessages = window.TavernHelper.createChatMessages;
+    window.triggerSlash = executeTavernSlashCommand;
+    window.triggerSlashWithResult = executeTavernSlashCommand;
+    window.triggerSlashWithOptions = executeTavernSlashCommand;
     window.checkWorldInfo = runTavernCheckWorldInfo;
     window.getWorldInfoPrompt = runTavernCheckWorldInfo;
     window.doNewChat = async () => { await startNewChatForActiveCard(); };
@@ -4110,11 +4162,13 @@ code, pre {
       : [];
 
     const depthPromptObj = ext.depth_prompt || {};
+    const cardEmbeddedBg = String(ext.background || data.background || rawJson.background || '').trim();
 
     const newCard = {
       id: cardId,
       name: cardName,
       avatar: avatarUrl || data.avatar || DEFAULT_AVATAR_SVG,
+      backgroundUrl: cardEmbeddedBg,
       description: data.description || rawJson.description || '',
       personality: data.personality || rawJson.personality || '',
       scenario: data.scenario || rawJson.scenario || '',
@@ -4146,8 +4200,8 @@ code, pre {
     }
 
     tavernState.activeCardId = newCard.id;
-    if (tavernState.background?.syncWithCard && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
-      tavernState.background.url = resolveSafeAvatarUrl(newCard.avatar, false);
+    if ((tavernState.background?.syncWithCard || tavernState.background?.syncCardAvatarAsBg) && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
+      tavernState.background.url = newCard.backgroundUrl || newCard.avatar;
     }
     const existingSess = tavernState.chatsByCardId[newCard.id];
     if (!existingSess || !Array.isArray(existingSess.messages) || existingSess.messages.length <= 1) {
@@ -4791,6 +4845,13 @@ code, pre {
               replaced = replaced.split('$' + g).join(groupVal);
             }
           }
+          if (!isPrompt && (/<script\b[\s\S]*?<\/script>/i.test(replaced) || /需要酒馆助手的前端渲染/i.test(replaced)) && !/<html\b/i.test(replaced) && !/<html\b/i.test(output)) {
+            const cleanBlock = replaced
+              .replace(/^\s*```(?:html|HTML|xml)?[ \t]*\r?\n?/i, '')
+              .replace(/\r?\n?[ \t]*```\s*$/i, '')
+              .trim();
+            return '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + cleanBlock + '</body></html>';
+          }
           return replaced;
         });
       } catch (err) {
@@ -5036,16 +5097,6 @@ code, pre {
   }
   try {
     if (window.parent) {
-      window.SillyTavern = window.parent.SillyTavern;
-      window.TavernHelper = window.parent.TavernHelper;
-      window.getContext = window.parent.getContext;
-      window.getVariables = window.parent.getVariables;
-      window.insertOrAssignVariables = window.parent.insertOrAssignVariables;
-      window.replaceVariables = window.parent.replaceVariables;
-      window.updateVariablesWith = window.parent.updateVariablesWith;
-      window.getChatMessages = window.parent.getChatMessages;
-      window.setChatMessages = window.parent.setChatMessages;
-      window.createChatMessages = window.parent.createChatMessages;
       window.getCurrentMessageId = function() {
         try {
           var f = window.frameElement;
@@ -5059,9 +5110,34 @@ code, pre {
         } catch (e) {}
         return 0;
       };
+      window.getLastMessageId = window.parent.getLastMessageId || window.getCurrentMessageId;
+      window.SillyTavern = window.parent.SillyTavern;
+      window.TavernHelper = Object.assign({}, window.parent.TavernHelper || {}, {
+        isFrontendRenderEnabled: function() { return true; },
+        getCurrentMessageId: window.getCurrentMessageId,
+        getLastMessageId: window.getLastMessageId
+      });
+      window.getContext = window.parent.getContext;
+      window.getVariables = window.parent.getVariables;
+      window.insertOrAssignVariables = window.parent.insertOrAssignVariables;
+      window.replaceVariables = window.parent.replaceVariables;
+      window.updateVariablesWith = window.parent.updateVariablesWith;
+      window.deleteVariable = window.parent.deleteVariable;
+      window.getChatMessages = window.parent.getChatMessages;
+      window.getChatMessage = window.parent.getChatMessage;
+      window.setChatMessage = window.parent.setChatMessage;
+      window.setChatMessages = window.parent.setChatMessages;
+      window.createChatMessages = window.parent.createChatMessages;
+      window.getButtonEvent = window.parent.getButtonEvent;
+      window.getScriptButtons = window.parent.getScriptButtons;
+      window.replaceScriptButtons = window.parent.replaceScriptButtons;
+      window.appendInexistentScriptButtons = window.parent.appendInexistentScriptButtons;
+      window.injectPrompts = window.parent.injectPrompts;
+      window.uninjectPrompts = window.parent.uninjectPrompts;
       window.eventOn = window.parent.eventOn;
       window.eventOnce = window.parent.eventOnce;
       window.eventEmit = window.parent.eventEmit;
+      window.eventRemoveListener = window.parent.eventRemoveListener;
       window.toastr = window.parent.toastr;
       if (window.parent.$) {
         window.$ = wrapJQueryInstance(window.parent.$);
@@ -5195,7 +5271,10 @@ code, pre {
     // 1. Unwrap markdown code fences (```html ... ``` or ``` ... ```) that wrap HTML documents or UI blocks
     let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?([\s\S]*?)```/g, (full, inner) => {
       const trimmed = inner.trim();
-      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b)/i.test(trimmed)) {
+      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b|<script\b)/i.test(trimmed)) {
+        if ((/<script\b[\s\S]*?<\/script>/i.test(trimmed) || /^<(?:head|body)\b/i.test(trimmed) || /需要酒馆助手的前端渲染/i.test(trimmed)) && !/<html\b/i.test(trimmed)) {
+          return '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + trimmed + '</body></html>';
+        }
         return trimmed;
       }
       return full;
@@ -5205,6 +5284,10 @@ code, pre {
     working = working
       .replace(/```(?:html|HTML)\s*(?=<)/g, '')
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
+
+    if (!/<html\b/i.test(working) && /<script\b[\s\S]*?<\/script>/i.test(working) && (/<body\b/i.test(working) || /需要酒馆助手的前端渲染/i.test(working))) {
+      working = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + working + '</body></html>';
+    }
 
     // 2. Extract full HTML documents (<!DOCTYPE html>...</html> or <html...>...</html>) into sandboxed iframes
     const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
@@ -6996,9 +7079,33 @@ code, pre {
     userScrolledUpDuringStream: false,
     visibleFloorCount: 30,
     lazyFloorChatId: null,
+    showDebugConsole: false,
+    debugConsoleLogs: [],
     toastTimer: null,
     errorTimer: null
   };
+
+  function recordTavernDebugConsoleLog(entry) {
+    if (!entry || typeof entry !== 'object') return;
+    if (!Array.isArray(uiRuntime.debugConsoleLogs)) {
+      uiRuntime.debugConsoleLogs = [];
+    }
+    const formattedPrompt = Array.isArray(entry.apiMessages)
+      ? entry.apiMessages.map((m, idx) => `[#${idx + 1} ${m.role || 'system'}]\n${String(m.content || '')}`).join('\n\n')
+      : String(entry.sentPromptText || '');
+    const logItem = {
+      id: 'dbg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      time: new Date().toLocaleTimeString(),
+      floorIdx: entry.floorIdx !== undefined && entry.floorIdx !== null ? entry.floorIdx : 0,
+      cardName: String(entry.cardName || getActiveCard()?.name || '角色'),
+      sentPromptText: formattedPrompt,
+      rawReplyText: String(entry.rawReplyText || '')
+    };
+    uiRuntime.debugConsoleLogs.unshift(logItem);
+    if (uiRuntime.debugConsoleLogs.length > 5) {
+      uiRuntime.debugConsoleLogs.length = 5;
+    }
+  }
 
   function stripUiEmojis(str) {
     return String(str || '').trim();
@@ -8079,8 +8186,9 @@ code, pre {
     injectTavernShellCss();
 
     const bg = tavernState.background || {};
-    const bgStyle = bg.url
-      ? `background-image: url('${bg.url}'); background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`
+    const resolvedBgUrl = bg.url ? resolveSafeAvatarUrl(bg.url, false) : '';
+    const bgStyle = resolvedBgUrl
+      ? `background-image: url('${resolvedBgUrl}'); background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`
       : 'opacity: 0;';
 
     const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
@@ -8172,7 +8280,7 @@ code, pre {
         <input type="file" id="tavern-file-themes" accept=".json,.css,application/json,text/css" multiple style="display:none" />
         <input type="file" id="tavern-file-plugins" accept=".js,.json,.html,.css,application/javascript,text/javascript,application/json,text/html,text/css" multiple style="display:none" />
         <input type="file" id="tavern-file-chats" accept=".json,.jsonl,application/json" multiple style="display:none" />
-        <input type="file" id="tavern-file-bg" accept="image/*" style="display:none" />
+        <input type="file" id="tavern-file-bg" accept="image/*" multiple style="display:none" />
         <input type="file" id="tavern-file-persona-avatar" accept="image/*" style="display:none" />
         <input type="file" id="tavern-file-card-avatar" accept="image/*" style="display:none" />
       </div>
@@ -8778,8 +8886,69 @@ code, pre {
       try {
         const code = oldScript.textContent || '';
         if (code.trim()) {
-          const fn = new Function('SillyTavern', 'TavernHelper', 'getContext', code);
-          fn(window.SillyTavern, window.TavernHelper, buildSillyTavernContextObject);
+          const mesEl = oldScript.closest ? oldScript.closest('.mes') : (containerEl.classList?.contains('mes') ? containerEl : null);
+          const floorId = (mesEl && mesEl.hasAttribute('mesid')) ? Number(mesEl.getAttribute('mesid')) : window.TavernHelper.getCurrentMessageId();
+          const localGetCurId = () => floorId;
+          const localHelper = Object.assign({}, window.TavernHelper, {
+            isFrontendRenderEnabled: () => true,
+            getCurrentMessageId: localGetCurId
+          });
+          const origDocAdd = document.addEventListener.bind(document);
+          const origWinAdd = window.addEventListener.bind(window);
+          const pendingDomCbs = [];
+          document.addEventListener = function (type, listener, options) {
+            if (type === 'DOMContentLoaded' && typeof listener === 'function') {
+              pendingDomCbs.push(listener);
+              return;
+            }
+            return origDocAdd(type, listener, options);
+          };
+          window.addEventListener = function (type, listener, options) {
+            if ((type === 'DOMContentLoaded' || type === 'load') && typeof listener === 'function') {
+              pendingDomCbs.push(listener);
+              return;
+            }
+            return origWinAdd(type, listener, options);
+          };
+          try {
+            const fn = new Function(
+              'SillyTavern',
+              'TavernHelper',
+              'getContext',
+              'getCurrentMessageId',
+              'getLastMessageId',
+              'getChatMessages',
+              'getChatMessage',
+              'setChatMessage',
+              'setChatMessages',
+              'triggerSlash',
+              'triggerSlashWithResult',
+              '$',
+              'jQuery',
+              code
+            );
+            fn(
+              window.SillyTavern,
+              localHelper,
+              buildSillyTavernContextObject,
+              localGetCurId,
+              window.TavernHelper.getLastMessageId,
+              window.TavernHelper.getChatMessages,
+              window.TavernHelper.getChatMessage,
+              window.TavernHelper.setChatMessage,
+              window.TavernHelper.setChatMessages,
+              executeTavernSlashCommand,
+              executeTavernSlashCommand,
+              window.$,
+              window.jQuery
+            );
+            pendingDomCbs.forEach(cb => {
+              try { cb(); } catch (_) {}
+            });
+          } finally {
+            document.addEventListener = origDocAdd;
+            window.addEventListener = origWinAdd;
+          }
         }
       } catch (err) {
         console.warn('Floor inline script warning:', err);
@@ -9573,15 +9742,64 @@ code, pre {
     `;
   }
 
-  // Drawer 6: fa-panorama (Background Gallery & Blur)
+  // Drawer 6: fa-panorama (Background Gallery, Blur & Debug Console)
   function renderDrawerPanorama() {
     const bg = tavernState.background || {};
+    const customGallery = Array.isArray(bg.gallery) ? bg.gallery : [];
+    const cards = Array.isArray(tavernState.cards) ? tavernState.cards : [];
+    const cardBgItems = [];
+    const seenUrls = new Set(customGallery.map(g => g && g.url).filter(Boolean));
+    cards.forEach(c => {
+      if (!c) return;
+      const cBg = c.backgroundUrl || c.avatar || '';
+      if (!cBg || cBg === DEFAULT_AVATAR_SVG || String(cBg).startsWith('data:image/svg')) return;
+      if (seenUrls.has(cBg)) return;
+      seenUrls.add(cBg);
+      cardBgItems.push({
+        id: 'cardbg_' + c.id,
+        name: c.name || '角色背景',
+        url: cBg,
+        isCardBg: true
+      });
+    });
+    const allGalleryItems = [
+      ...customGallery.map(g => ({ ...g, isCardBg: false })),
+      ...cardBgItems
+    ];
+
+    const activeCard = getActiveCard();
+    const sess = getActiveChatSession();
+    const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+    let consoleEntries = Array.isArray(uiRuntime.debugConsoleLogs) ? uiRuntime.debugConsoleLogs.slice(0, 5) : [];
+    if (consoleEntries.length === 0 && msgs.length > 0) {
+      const startFloor = Math.max(0, msgs.length - 5);
+      const fallbackList = [];
+      for (let i = msgs.length - 1; i >= startFloor; i--) {
+        const m = msgs[i];
+        if (!m) continue;
+        const prevUserMsg = (i > 0 && msgs[i - 1] && msgs[i - 1].is_user) ? msgs[i - 1].mes : (m.is_user ? m.mes : '');
+        const rawSwipes = Array.isArray(m.swipes) && m.swipes.length > 0 ? m.swipes : [m.mes || ''];
+        const sIdx = Math.min(rawSwipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
+        const rawText = rawSwipes[sIdx] !== undefined ? rawSwipes[sIdx] : (m.mes || '');
+        const fullReply = (m.reasoning ? `[思考过程]\n${m.reasoning}\n\n` : '') + String(rawText || '');
+        fallbackList.push({
+          id: 'hist_' + i,
+          time: m.gen_time || '历史楼层',
+          floorIdx: i,
+          cardName: activeCard?.name || m.name || '角色',
+          sentPromptText: String(prevUserMsg || '本层无单独发送文本记录，新生成回复后将在此显示完整上下文提示词'),
+          rawReplyText: fullReply
+        });
+      }
+      consoleEntries = fallbackList.slice(0, 5);
+    }
+
     return `
       <div class="tavern-section-card">
         <div class="tavern-section-label">背景图片上传与角色卡立绘联动</div>
         <div class="tavern-btn-grid cols-3" style="margin-bottom:8px;">
-          <button type="button" class="tavern-btn small primary" data-action="trigger-upload-bg">上传背景图</button>
-          <button type="button" class="tavern-btn small" data-action="use-card-avatar-as-bg">用当前角色卡立绘</button>
+          <button type="button" class="tavern-btn small primary" data-action="trigger-upload-bg">多选上传背景</button>
+          <button type="button" class="tavern-btn small" data-action="use-card-avatar-as-bg">用当前角色立绘</button>
           <button type="button" class="tavern-btn small danger" data-action="clear-tavern-bg">清除背景</button>
         </div>
         <label class="tavern-check-row" style="margin-bottom:8px;">
@@ -9613,6 +9831,76 @@ code, pre {
             <input type="number" class="tavern-input" data-bg-setting="opacity" value="${bg.opacity ?? 1}" min="0" max="1" step="0.05" />
           </div>
         </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>背景图库 含上传背景与角色自带立绘 共${allGalleryItems.length}张</span>
+        </div>
+        ${allGalleryItems.length === 0 ? `
+          <div style="font-size:12px;color:#777;padding:8px 0;">暂无背景图，点击上方多选上传背景或导入角色卡后会自动收录在此处，点击任意缩略图即可随时来回切换。</div>
+        ` : `
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:240px;overflow-y:auto;padding:2px;">
+            ${allGalleryItems.map(item => {
+              const resolvedThumb = resolveSafeAvatarUrl(item.url, false);
+              const isCurrent = bg.url && (bg.url === item.url || resolveSafeAvatarUrl(bg.url, false) === resolvedThumb);
+              return `
+                <div style="position:relative;border-radius:10px;overflow:hidden;border:2px solid ${isCurrent ? '#48484a' : 'rgba(200,200,210,0.7)'};background:#f2f2f5;display:flex;flex-direction:column;">
+                  <div data-action="select-bg-gallery-item" data-bg-url="${escapeHtmlSimple(item.url)}" style="cursor:pointer;position:relative;width:100%;height:78px;overflow:hidden;background:#e5e5ea;">
+                    <img src="${resolvedThumb}" ${String(item.url).startsWith('vault://') ? `data-vault-ref="${escapeHtmlSimple(item.url)}"` : ''} alt="bg" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR_SVG}';" />
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;gap:4px;background:rgba(255,255,255,0.94);">
+                    <span data-action="select-bg-gallery-item" data-bg-url="${escapeHtmlSimple(item.url)}" style="font-size:11px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer;">${escapeHtmlSimple(stripUiEmojis(item.name || '背景图'))}</span>
+                    ${!item.isCardBg ? `
+                      <button type="button" class="tavern-btn small danger" data-action="delete-bg-gallery-item" data-bg-id="${escapeHtmlSimple(item.id)}" style="min-height:20px !important;padding:1px 5px !important;font-size:10px !important;flex-shrink:0;">删</button>
+                    ` : `
+                      <span style="font-size:10px;color:#888;flex-shrink:0;">角色</span>
+                    `}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>控制台 仅保留最近5层记录</span>
+          <div style="display:flex;gap:6px;">
+            ${uiRuntime.showDebugConsole ? `<button type="button" class="tavern-btn small" data-action="clear-tavern-debug-console">清空记录</button>` : ''}
+            <button type="button" class="tavern-btn small primary" data-action="toggle-tavern-debug-console">${uiRuntime.showDebugConsole ? '收起控制台' : '打开控制台'}</button>
+          </div>
+        </div>
+        ${uiRuntime.showDebugConsole ? `
+          <div style="display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;margin-top:6px;">
+            ${consoleEntries.length === 0 ? `
+              <div style="font-size:12px;color:#777;padding:6px 0;">暂无最近楼层调试记录，发送消息或生成回复后会自动记录最近5层内容。</div>
+            ` : consoleEntries.map(log => {
+              const isMashu = /麻薯|mashu/i.test(String(log.cardName || activeCard?.name || ''));
+              return `
+                <div style="border:1px solid rgba(205,205,215,0.85);border-radius:10px;padding:8px 10px;background:#fafafc;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:700;color:#444;margin-bottom:6px;">
+                    <span>楼层 #${escapeHtmlSimple(String(log.floorIdx))} · ${escapeHtmlSimple(stripUiEmojis(log.cardName || '角色'))}</span>
+                    <span style="font-weight:400;color:#888;">${escapeHtmlSimple(String(log.time || ''))}</span>
+                  </div>
+                  ${!isMashu ? `
+                    <details style="margin-bottom:6px;">
+                      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">发送完整内容 点击展开</summary>
+                      <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#f1f2f6;padding:8px;border-radius:8px;max-height:180px;overflow-y:auto;margin:4px 0 0 0;color:#333;">${escapeHtmlSimple(log.sentPromptText || '')}</pre>
+                    </details>
+                  ` : ''}
+                  <details open>
+                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#555;padding:4px 0;">回复完整内容 点击展开或收起</summary>
+                    <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;background:#f1f2f6;padding:8px;border-radius:8px;max-height:200px;overflow-y:auto;margin:4px 0 0 0;color:#333;">${escapeHtmlSimple(log.rawReplyText || '')}</pre>
+                  </details>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : `
+          <div class="tavern-field-hint">点击打开控制台可查看最近5层对话的完整上下文与AI原始回复文本</div>
+        `}
       </div>
     `;
   }
@@ -9767,8 +10055,8 @@ code, pre {
           ${uiRuntime.openExtensionAcc.memory ? `
             <div class="inline-drawer-content">
               <label class="tavern-check-row">
-                <input type="checkbox" id="mem-enabled-check" ${mem.enabled !== false ? 'checked' : ''} />
-                <span>向AI上下文自动注入剧情记忆摘要</span>
+                <input type="checkbox" id="mem-enabled-check" data-memory-bool="enabled" ${mem.enabled !== false ? 'checked' : ''} />
+                <span>启用内置记忆总结 使用柏宝书时建议取消勾选</span>
               </label>
               <div class="tavern-grid-2" style="margin-top:6px;">
                 <div class="tavern-field-group">
@@ -10476,6 +10764,12 @@ code, pre {
         lastMsg.token_count = estimateTokens(combined);
         lastMsg.gen_time = result.genTime;
         recordMessageToSwipeInfo(lastMsg, curSwipe);
+        recordTavernDebugConsoleLog({
+          floorIdx: lastIdx,
+          cardName: card?.name || '角色',
+          apiMessages,
+          rawReplyText: result.rawContent || result.content || ''
+        });
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(lastIdx);
       } else if (isSwipeRegen && targetMesIndex !== null && sess.messages[targetMesIndex]) {
@@ -10524,6 +10818,12 @@ code, pre {
         targetMsg.gen_time = result.genTime;
         targetMsg.token_count = estimateTokens(result.content);
         recordMessageToSwipeInfo(targetMsg, newSwipeIdx);
+        recordTavernDebugConsoleLog({
+          floorIdx: targetMesIndex,
+          cardName: card?.name || '角色',
+          apiMessages,
+          rawReplyText: result.rawContent || ((result.reasoning ? `[思考过程]\n${result.reasoning}\n\n` : '') + (result.content || ''))
+        });
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(targetMesIndex);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
@@ -10581,6 +10881,12 @@ code, pre {
         botMsg.gen_time = result.genTime;
         botMsg.token_count = estimateTokens(result.content);
         recordMessageToSwipeInfo(botMsg, 0);
+        recordTavernDebugConsoleLog({
+          floorIdx: newFloorIdx,
+          cardName: card?.name || '角色',
+          apiMessages,
+          rawReplyText: result.rawContent || ((result.reasoning ? `[思考过程]\n${result.reasoning}\n\n` : '') + (result.content || ''))
+        });
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, newFloorIdx, genType);
@@ -11987,9 +12293,55 @@ code, pre {
         return;
       }
       if (action === 'apply-bg-url') {
-        tavernState.background.url = document.getElementById('tavern-bg-url-input')?.value?.trim() || '';
+        const inputUrl = document.getElementById('tavern-bg-url-input')?.value?.trim() || '';
+        tavernState.background.url = inputUrl;
+        if (inputUrl) {
+          if (!Array.isArray(tavernState.background.gallery)) tavernState.background.gallery = [];
+          if (!tavernState.background.gallery.some(g => g && g.url === inputUrl)) {
+            tavernState.background.gallery.unshift({
+              id: 'bg_' + Date.now(),
+              name: '自定义直链背景',
+              url: inputUrl
+            });
+          }
+        }
         await saveTavernStore();
         renderTavernShell();
+        return;
+      }
+      if (action === 'select-bg-gallery-item') {
+        const rawUrl = actionEl.getAttribute('data-bg-url') || '';
+        if (rawUrl) {
+          tavernState.background.url = rawUrl;
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('已切换背景图');
+        }
+        return;
+      }
+      if (action === 'delete-bg-gallery-item') {
+        const bgId = actionEl.getAttribute('data-bg-id') || '';
+        if (bgId && Array.isArray(tavernState.background.gallery)) {
+          const targetItem = tavernState.background.gallery.find(g => g && g.id === bgId);
+          tavernState.background.gallery = tavernState.background.gallery.filter(g => g && g.id !== bgId);
+          if (targetItem && tavernState.background.url === targetItem.url) {
+            tavernState.background.url = tavernState.background.gallery[0]?.url || '';
+          }
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('已从背景图库删除');
+        }
+        return;
+      }
+      if (action === 'toggle-tavern-debug-console') {
+        uiRuntime.showDebugConsole = !uiRuntime.showDebugConsole;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'clear-tavern-debug-console') {
+        uiRuntime.debugConsoleLogs = [];
+        refreshOpenDrawerOnly();
+        showTavernToast('已清空控制台临时记录');
         return;
       }
 
@@ -12582,6 +12934,15 @@ code, pre {
         refreshOpenDrawerOnly();
         return;
       }
+      if (target.hasAttribute('data-memory-bool')) {
+        const k = target.getAttribute('data-memory-bool');
+        const checked = Boolean(target.checked);
+        tavernState.memory[k] = checked;
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        showTavernToast(checked ? '已开启内置记忆总结' : '已关闭内置记忆总结');
+        return;
+      }
       if (target.hasAttribute('data-api-bool')) {
         const k = target.getAttribute('data-api-bool');
         const checked = Boolean(target.checked);
@@ -12716,13 +13077,32 @@ code, pre {
         target.value = '';
         return;
       }
-      if (target.id === 'tavern-file-bg' && target.files?.[0]) {
-        const url = await offloadImageToVault(target.files[0], 'tavern_bg_' + Date.now() + '.png');
-        if (url) {
-          tavernState.background.url = resolveSafeAvatarUrl(url, false);
+      if (target.id === 'tavern-file-bg' && target.files?.length) {
+        if (!Array.isArray(tavernState.background.gallery)) {
+          tavernState.background.gallery = [];
+        }
+        const files = Array.from(target.files);
+        let lastVaultRef = '';
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const url = await offloadImageToVault(f, 'tavern_bg_' + Date.now() + '_' + i + '.png');
+          if (url) {
+            lastVaultRef = url;
+            const cleanName = String(f.name || ('背景图' + (i + 1))).replace(/\.[^.]+$/, '');
+            if (!tavernState.background.gallery.some(g => g && g.url === url)) {
+              tavernState.background.gallery.unshift({
+                id: 'bg_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5),
+                name: cleanName,
+                url
+              });
+            }
+          }
+        }
+        if (lastVaultRef) {
+          tavernState.background.url = lastVaultRef;
           await saveTavernStore();
           renderTavernShell();
-          showTavernToast('背景图已存入Termux本地并应用');
+          showTavernToast('已将 ' + files.length + ' 张背景图存入Termux本地图库并应用');
         }
         target.value = '';
         return;
