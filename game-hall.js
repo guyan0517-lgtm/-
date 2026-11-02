@@ -503,6 +503,8 @@
         const gousuIdx = tavernState.themes.findIndex(t => t.id === 'theme_gousu_default');
         if (gousuIdx === -1) {
           tavernState.themes.unshift(Object.assign({ id: 'theme_gousu_default', builtin: true }, DEFAULT_GOUSU_THEME));
+        } else {
+          tavernState.themes[gousuIdx].custom_css = DEFAULT_GOUSU_THEME.custom_css;
         }
         if (!tavernState.themes.some(t => t.id === 'theme_ins_minimal')) {
           tavernState.themes.push(INS_MINIMAL_THEME);
@@ -547,9 +549,6 @@
           if (!Array.isArray(p.regexScripts)) p.regexScripts = [];
           if (!Array.isArray(p.prompts) || p.prompts.length === 0) {
             p.prompts = getDefaultPromptOrderItems();
-          } else if (!p.builtin) {
-            // Remove unlinked prompts that were previously appended with fallback injection_order >= 200
-            p.prompts = p.prompts.filter((item, idx) => !(idx > 5 && Number(item.injection_order) >= 200 && !item.marker && item.identifier !== 'chatHistory'));
           }
         });
       }
@@ -1106,22 +1105,26 @@
           clearTimeout(pendingAutoTriggerTimer);
           pendingAutoTriggerTimer = null;
         }
+        uiRuntime.isGenerating = false;
         await saveTavernStore();
         renderTavernChatFloors(false);
         await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
       } else if (/^\/continue\b/i.test(line)) {
         triggeredGenerationInBatch = true;
+        uiRuntime.isGenerating = false;
         await saveTavernStore();
         renderTavernChatFloors(false);
         await triggerCharacterReplyGeneration({ isContinue: true, isSwipeRegen: false });
       } else if (/^\/impersonate\b/i.test(line)) {
         triggeredGenerationInBatch = true;
+        uiRuntime.isGenerating = false;
         await saveTavernStore();
         await triggerCharacterReplyGeneration({ isImpersonate: true });
       } else if (/^\/(?:del|delete|cut)\b/i.test(line)) {
         const countMatch = line.match(/(\d+)/);
         const delCount = countMatch ? Math.max(1, Number(countMatch[1])) : 1;
         const sess = getActiveChatSession();
+        uiRuntime.isGenerating = false;
         if (sess && sess.messages.length > 1) {
           sess.messages.splice(Math.max(1, sess.messages.length - delCount));
           renderTavernChatFloors(false);
@@ -1133,19 +1136,16 @@
 
     if (sentUserMessageInBatch) {
       const sess = getActiveChatSession();
-      renderTavernChatFloors(false);
+      renderTavernChatFloors(false, { scrollToBottom: true });
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
 
-      // If /send was called from an HTML card button or script without an explicit /trigger in the same line,
-      // wait 90ms (in case the script calls triggerSlash('/trigger') on the next JS statement) and then auto-trigger AI reply!
       if (!triggeredGenerationInBatch && !suppressAutoTrigger) {
         if (pendingAutoTriggerTimer) clearTimeout(pendingAutoTriggerTimer);
         pendingAutoTriggerTimer = setTimeout(async () => {
           pendingAutoTriggerTimer = null;
-          if (!uiRuntime.isGenerating) {
-            await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
-          }
+          uiRuntime.isGenerating = false;
+          await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
         }, 90);
       }
     }
@@ -1825,6 +1825,13 @@
 
   function transpilePluginImports(codeStr) {
     return String(codeStr || '')
+      .replace(/\bimport\.meta\.url\b/g, 'window.location.href')
+      .replace(/\bimport\.meta\b/g, '({ url: window.location.href, env: {} })')
+      .replace(/\bimport\s*\(/g, '(async (u) => window.__ST_BRIDGE__)(')
+      .replace(/^\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s+['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
+        const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
+        return `const ${defName} = window.__ST_BRIDGE__; const { ${mapped} } = window.__ST_BRIDGE__;`;
+      })
       .replace(/^\s*import\s+\*\s+as\s+([a-zA-Z0-9_$]+)\s+from\s+['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
       .replace(/^\s*import\s+\{([\s\S]*?)\}\s*from\s+['"][^'"]+['"]\s*;?/gm, (_, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
@@ -1833,6 +1840,7 @@
       .replace(/^\s*import\s+([a-zA-Z0-9_$]+)\s+from\s+['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
       .replace(/^\s*import\s+['"][^'"]+['"]\s*;?/gm, '')
       .replace(/^\s*export\s+default\s+/gm, '')
+      .replace(/^\s*export\s+\{[^}]*\}\s*;?/gm, '')
       .replace(/^\s*export\s+/gm, '');
   }
 
@@ -2368,28 +2376,25 @@
       });
     });
 
-    // Only fall back to rawPrompts when the preset JSON has no prompt_order array at all.
-    // In SillyTavern, prompts in rawJson.prompts that are NOT in prompt_order[100001].order are unlinked prompts and must NOT appear in the prompt manager list.
-    if (orderList.length === 0) {
-      rawPrompts.forEach((p, rawIdx) => {
-        if (!p || !p.identifier || usedIds.has(p.identifier)) return;
-        usedIds.add(p.identifier);
-        const resolvedContent = p.content || '';
-        const isMarker = structuralMarkers.includes(p.identifier) || (Boolean(p.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(p.identifier));
-        promptItems.push({
-          identifier: p.identifier,
-          name: p.name || p.identifier,
-          enabled: Boolean(p.enabled ?? true),
-          role: p.role || 'system',
-          content: resolvedContent,
-          marker: isMarker,
-          injection_position: normalizeInjPos(p.injection_position ?? 0),
-          injection_depth: Number(p.injection_depth ?? 4),
-          injection_order: Number(p.injection_order ?? (100 + rawIdx)),
-          forbid_overrides: Boolean(p.forbid_overrides)
-        });
+    // Preserve all prompts from rawPrompts even if not referenced in orderList (keep unreferenced prompts disabled by default, or enabled if orderList was empty)
+    rawPrompts.forEach((p, rawIdx) => {
+      if (!p || !p.identifier || usedIds.has(p.identifier)) return;
+      usedIds.add(p.identifier);
+      const resolvedContent = p.content || '';
+      const isMarker = structuralMarkers.includes(p.identifier) || (Boolean(p.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(p.identifier));
+      promptItems.push({
+        identifier: p.identifier,
+        name: p.name || p.identifier,
+        enabled: orderList.length === 0 ? Boolean(p.enabled ?? true) : false,
+        role: p.role || 'system',
+        content: resolvedContent,
+        marker: isMarker,
+        injection_position: normalizeInjPos(p.injection_position ?? 0),
+        injection_depth: Number(p.injection_depth ?? 4),
+        injection_order: Number(p.injection_order ?? (100 + rawIdx)),
+        forbid_overrides: Boolean(p.forbid_overrides)
       });
-    }
+    });
 
     if (promptItems.length === 0) {
       promptItems.push(...getDefaultPromptOrderItems());
@@ -2701,6 +2706,15 @@
     window.parent.postMessage({ type: 'TAVERN_IFRAME_SLASH', command: cmd }, '*');
   };
   window.triggerSlashWithResult = window.triggerSlash;
+  window.triggerSlashWithOptions = window.triggerSlash;
+  window.executeSlashCommands = window.triggerSlash;
+  window.executeSlashCommandsWithOptions = window.triggerSlash;
+  window.sendMessageAsUser = function(text) {
+    window.parent.postMessage({ type: 'TAVERN_IFRAME_SEND', text: String(text || ''), trigger: true }, '*');
+  };
+  window.Generate = function() {
+    window.parent.postMessage({ type: 'TAVERN_IFRAME_GENERATE' }, '*');
+  };
   try {
     if (window.parent) {
       window.SillyTavern = window.parent.SillyTavern;
@@ -3032,10 +3046,12 @@
           right: -7px !important;
         }
         #tavern-stage-root .mes_block {
+          position: static !important;
           background: radial-gradient(circle at 34px 22px, transparent 41px, var(--msg-bg-color, #e6e6e6) 42px) !important;
-          padding: 58px 12px 14px 12px !important;
+          padding: 64px 12px 14px 12px !important;
         }
         #tavern-stage-root .mes[is_user="true"] .mes_block {
+          position: static !important;
           background: radial-gradient(circle at calc(100% - 34px) 22px, transparent 41px, var(--msg-bg-color, #e6e6e6) 42px) !important;
         }
         #tavern-stage-root .mes_block::before {
@@ -3047,10 +3063,12 @@
           -webkit-mask-image: radial-gradient(circle at calc(100% - 34px) 22px, transparent 41px, black 42px) !important;
           mask-image: radial-gradient(circle at calc(100% - 34px) 22px, transparent 41px, black 42px) !important;
         }
-        #tavern-stage-root .mes .name_text {
+        #tavern-stage-root .mes .name_text,
+        #tavern-stage-root .mes[is_user="false"] .name_text {
           position: absolute !important;
           left: 88px !important;
-          top: 12px !important;
+          right: auto !important;
+          top: 10px !important;
           z-index: 25 !important;
           max-width: calc(100% - 205px) !important;
           overflow: hidden !important;
@@ -3058,18 +3076,23 @@
           white-space: nowrap !important;
           display: inline-flex !important;
           align-items: center !important;
-          font-size: 14.5px !important;
-          padding: 3px 12px !important;
+          font-size: 14px !important;
+          padding: 2px 12px !important;
         }
         #tavern-stage-root .mes[is_user="true"] .name_text {
+          position: absolute !important;
           left: auto !important;
           right: 88px !important;
+          top: 10px !important;
+          z-index: 25 !important;
         }
-        /* Keep .ch_name static so .name_text is anchored to .mes top (above #0 3995t), while .mes_buttons stays elevated */
+        /* Keep .ch_name static so .name_text is anchored to .mes top (above #0 3995t), while .mes_buttons sits on its own row below */
         #tavern-stage-root .mes[is_user="false"] .ch_name.flex-container.justifySpaceBetween {
           position: static !important;
           padding-left: 72px !important;
           padding-right: 2px !important;
+          min-height: 28px !important;
+          margin-bottom: 4px !important;
         }
         #tavern-stage-root .mes[is_user="true"] .ch_name.flex-container.justifySpaceBetween {
           position: static !important;
@@ -3077,6 +3100,8 @@
           justify-content: flex-start !important;
           padding-left: 4px !important;
           padding-right: 72px !important;
+          min-height: 28px !important;
+          margin-bottom: 4px !important;
         }
         #tavern-stage-root .mes .mes_buttons {
           position: relative !important;
@@ -3095,7 +3120,7 @@
         #tavern-stage-root .mesIDDisplay,
         #tavern-stage-root .mes_timer,
         #tavern-stage-root .tokenCounterDisplay {
-          top: 32px !important;
+          top: 38px !important;
           height: 20px !important;
           font-size: 10.5px !important;
           z-index: 20 !important;
@@ -4084,16 +4109,27 @@
       const parseSseLines = (linesArr) => {
         for (const rawLine of linesArr) {
           const line = rawLine.trim();
-          if (!line || !line.startsWith('data:')) continue;
-          const dataStr = line.slice(5).trim();
+          if (!line) continue;
+          let dataStr = '';
+          if (line.startsWith('data:')) {
+            dataStr = line.slice(5).trim();
+          } else if (line.startsWith('{') && line.endsWith('}')) {
+            dataStr = line;
+          } else {
+            continue;
+          }
           if (!dataStr || dataStr === '[DONE]') continue;
           try {
             const parsedChunk = JSON.parse(dataStr);
             const choice = parsedChunk.choices && parsedChunk.choices[0];
             if (!choice) continue;
             const delta = choice.delta || choice.message || {};
-            if (delta.content) {
+            if (typeof delta.content === 'string' && delta.content) {
               networkContent += delta.content;
+            } else if (Array.isArray(delta.content)) {
+              networkContent += delta.content.map(part => (typeof part === 'string' ? part : (part?.text || ''))).join('');
+            } else if (typeof choice.text === 'string' && choice.text) {
+              networkContent += choice.text;
             }
             const rDelta = delta.reasoning_content || delta.reasoning || '';
             if (rDelta) {
@@ -4496,11 +4532,12 @@
         background: #f0ece9;
       }
       .mes_block {
-        position: relative;
+        position: static;
         width: 100%;
         box-sizing: border-box;
       }
       .ch_name {
+        position: static;
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
@@ -4640,15 +4677,6 @@
       }
       details.mes_reasoning_details > summary.mes_reasoning_summary::-webkit-details-marker {
         display: none;
-      }
-      details.mes_reasoning_details > summary.mes_reasoning_summary::after {
-        content: "点击展开";
-        font-size: 11px;
-        color: #888;
-        margin-left: 8px;
-      }
-      details.mes_reasoning_details[open] > summary.mes_reasoning_summary::after {
-        content: "点击收起";
       }
       details.mes_reasoning_details:not([open]) > .mes_reasoning_content {
         display: none !important;
@@ -5524,16 +5552,20 @@
       const isEditingThis = uiRuntime.editingFloorMesId === idx;
       const isExtraOpen = uiRuntime.openExtraMenuMesId === idx;
 
+      const inlineExtracted = extractReasoningAndCleanReply(currentRawText, { hasPrefill: false, isLiveStream: false });
+      const effectiveReasoning = (m.reasoning && String(m.reasoning).trim()) ? String(m.reasoning).trim() : inlineExtracted.reasoning;
+      const effectiveCleanText = (m.reasoning && String(m.reasoning).trim()) ? currentRawText : inlineExtracted.cleanReply;
+
       const renderedHtml = isEditingThis
         ? ''
-        : renderTavernMessageHtml(currentRawText, {
+        : renderTavernMessageHtml(effectiveCleanText, {
             isUser,
             isPrompt: false,
             depth: messages.length - 1 - idx,
             card
           });
 
-      const hasReasoning = Boolean(m.reasoning && String(m.reasoning).trim());
+      const hasReasoning = Boolean(effectiveReasoning);
       const openReasoningAttr = fmtCfg.autoCollapseReasoning === false ? 'open' : '';
       const hasTranslation = Boolean(m.translation && String(m.translation).trim());
 
@@ -5550,9 +5582,11 @@
 
           <div class="mes_block">
             <div class="ch_name flex-container justifySpaceBetween">
-              <span class="name_text">${escapeHtmlSimple(displayName)}</span>
+              <div class="flex-container alignItemsBaseline">
+                <span class="name_text">${escapeHtmlSimple(displayName)}</span>
+              </div>
               ${isEditingThis ? `
-                <div class="mes_buttons mes_edit_buttons">
+                <div class="flex-container mes_buttons mes_edit_buttons">
                   <button type="button" class="tavern-mes-icon-btn" data-action="floor-edit-save" data-mesid="${idx}" title="确认保存修改">
                     <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
                   </button>
@@ -5576,7 +5610,7 @@
                   </button>
                 </div>
               ` : `
-                <div class="mes_buttons mes_edit_buttons">
+                <div class="flex-container mes_buttons mes_edit_buttons">
                   <div class="extraMesButtons ${isExtraOpen ? '' : 'tavern-extra-hidden'}">
                     <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制原文">
                       <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
@@ -5604,10 +5638,11 @@
               <details class="mes_reasoning_details" ${openReasoningAttr}>
                 <summary class="mes_reasoning_summary flex-container">
                   <div class="mes_reasoning_header flex-container">
-                    <span class="mes_reasoning_header_title">思维链推理过程</span>
+                    <span class="mes_reasoning_header_title">思考过程</span>
                   </div>
+                  <div class="mes_reasoning_arrow"></div>
                 </summary>
-                <div class="mes_reasoning mes_reasoning_content">${escapeHtmlSimple(m.reasoning)}</div>
+                <div class="mes_reasoning mes_reasoning_content">${escapeHtmlSimple(effectiveReasoning)}</div>
               </details>
             ` : ''}
 
@@ -6988,7 +7023,7 @@
         if (tavernState.formatting?.autoCollapseReasoning === false) {
           detailsEl.setAttribute('open', '');
         }
-        detailsEl.innerHTML = `<summary class="mes_reasoning_summary flex-container"><div class="mes_reasoning_header flex-container"><span class="mes_reasoning_header_title">思维链推理过程</span></div></summary><div class="mes_reasoning mes_reasoning_content"></div>`;
+        detailsEl.innerHTML = `<summary class="mes_reasoning_summary flex-container"><div class="mes_reasoning_header flex-container"><span class="mes_reasoning_header_title">思考过程</span></div><div class="mes_reasoning_arrow"></div></summary><div class="mes_reasoning mes_reasoning_content"></div>`;
         textEl.parentNode.insertBefore(detailsEl, textEl);
       }
       const rContent = detailsEl && detailsEl.querySelector('.mes_reasoning_content');
@@ -7195,13 +7230,23 @@
         sess.messages.push(botMsg);
         renderTavernChatFloors(false, { scrollToBottom: true });
 
-        const result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
-          botMsg.mes = partial.content;
-          botMsg.swipes[0] = partial.content;
-          botMsg.reasoning = partial.reasoning || '';
-          botMsg.gen_time = partial.genTime;
-          updateStreamingFloorDom(newFloorIdx);
-        } : null);
+        let result;
+        try {
+          result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
+            botMsg.mes = partial.content;
+            botMsg.swipes[0] = partial.content;
+            botMsg.reasoning = partial.reasoning || '';
+            botMsg.gen_time = partial.genTime;
+            updateStreamingFloorDom(newFloorIdx);
+          } : null);
+        } catch (genErr) {
+          if (!botMsg.mes && sess.messages[newFloorIdx] === botMsg) {
+            sess.messages.splice(newFloorIdx, 1);
+            await saveTavernStore();
+            renderTavernChatFloors(false);
+          }
+          throw genErr;
+        }
 
         botMsg.mes = result.content;
         botMsg.swipes[0] = result.content;
@@ -7277,6 +7322,21 @@
     const root = document.getElementById('tavern-stage-root');
     if (!root || root._tavernBound) return;
     root._tavernBound = true;
+
+    if (!document._tavernOutsidePopupBound) {
+      document._tavernOutsidePopupBound = true;
+      document.addEventListener('pointerdown', e => {
+        if (!uiRuntime.showOptionsPopup && !uiRuntime.showExtensionsPopup) return;
+        const t = e.target;
+        if (!t || !t.closest) return;
+        if (t.closest('#options') || t.closest('#extensionsMenu') || t.closest('#options_button') || t.closest('#extensionsMenuButton')) {
+          return;
+        }
+        uiRuntime.showOptionsPopup = false;
+        uiRuntime.showExtensionsPopup = false;
+        refreshBottomPopupsOnly();
+      }, true);
+    }
 
     root.addEventListener('selectstart', e => {
       const tag = (e.target && e.target.tagName || '').toLowerCase();
@@ -7671,6 +7731,7 @@
       if (action === 'floor-regen') {
         const idx = Number(actionEl.getAttribute('data-mesid'));
         uiRuntime.openExtraMenuMesId = null;
+        uiRuntime.isGenerating = false;
         await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: idx });
         return;
       }
@@ -7721,6 +7782,7 @@
       if (action === 'floor-del-one' || action === 'floor-del-below') {
         const idx = Number(actionEl.getAttribute('data-mesid'));
         const sess = getActiveChatSession();
+        uiRuntime.isGenerating = false;
         if (sess && sess.messages.length > 1) {
           if (action === 'floor-del-one') {
             sess.messages.splice(idx, 1);
@@ -7749,6 +7811,7 @@
         tavernState.chatArchivesByCardId[card.id].unshift(newSess);
         tavernState.chatsByCardId[card.id] = newSess;
         uiRuntime.showOptionsPopup = false;
+        uiRuntime.isGenerating = false;
         await saveTavernStore();
         renderTavernShell();
         showTavernToast('已开启新对话存档');
@@ -7757,6 +7820,7 @@
 
       if (action === 'chat-regenerate-last') {
         uiRuntime.showOptionsPopup = false;
+        uiRuntime.isGenerating = false;
         const sess = getActiveChatSession();
         if (sess && sess.messages.length > 0) {
           const lastIdx = sess.messages.length - 1;
