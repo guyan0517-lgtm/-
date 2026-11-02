@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -33115,30 +33115,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return "酒馆模块尚未初始化或暂无角色卡数据";
             }
             if (targetType === "qq_chat" || targetType === "chat") {
-              const allChats = state && state.chats ? Object.values(state.chats) : [];
-              let found = allChats.find(c => c && !window.isMashuChat(c) && (c.id === qName || c.name === qName || (c.settings && c.settings.remarkName === qName)));
-              if (!found && qName) {
-                found = allChats.find(c => c && !window.isMashuChat(c) && (String(c.name || "").includes(qName) || String(c.settings?.remarkName || "").includes(qName)));
-              }
-              if (!found && qName) {
-                found = allChats.find(c => c && !window.isMashuChat(c) && Array.isArray(c.members) && c.members.some(m => String(m.name || m.originalName || m.remarkName || "").includes(qName)));
-              }
-              if (!found) {
-                found = allChats.find(c => c && !window.isMashuChat(c) && Array.isArray(c.history) && c.history.length > 0) || allChats.find(c => c && !window.isMashuChat(c));
-              }
+              const found = typeof window.resolveMashuTargetChat === "function"
+                ? window.resolveMashuTargetChat(qName, "")
+                : null;
               if (!found) return "未找到对应的聊天、群聊或KPC档案";
-              const recentMsgs = Array.isArray(found.history)
-                ? found.history.filter(m => m && !m.isHidden).slice(-35).map((m, i) => ({
-                    index: i + 1,
-                    role: m.role,
-                    sender: m.senderName || (m.role === "user" ? (found.settings?.myName || "玩家") : found.name),
-                    type: m.type || "text",
-                    content: String(m.content || m.message || "").slice(0, 480)
-                  }))
-                : [];
+              const foundHist = (Array.isArray(found.history) && found.history.length > 0)
+                ? found.history
+                : (Array.isArray(found.mainLineHistory) ? found.mainLineHistory : []);
+              const effTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(found) : "") || found.mainGroupName || found.name;
+              const recentMsgs = foundHist
+                .filter(m => m && !m.isHidden)
+                .slice(-35)
+                .map((m, i) => ({
+                  index: i + 1,
+                  role: m.role,
+                  sender: m.senderName || (m.role === "user" ? (found.settings?.myName || "玩家") : effTitle),
+                  type: m.type || "text",
+                  content: String(m.content || m.message || "").slice(0, 480)
+                }));
               const memberList = Array.isArray(found.members)
                 ? found.members.map(m => ({
-                    name: m.name || m.originalName || "成员",
+                    name: m.groupNickname || m.originalName || m.name || m.remarkName || "成员",
                     roleType: m.roleType || "member",
                     persona: String(m.persona || m.aiPersona || "").slice(0, 360)
                   }))
@@ -33172,6 +33169,128 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         };
 
+        window.getAllNonMashuChatsSorted = function () {
+          try {
+            const rawValues = state && state.chats ? Object.values(state.chats) : [];
+            const uniqMap = new Map();
+            for (const c of rawValues) {
+              if (!c || !c.id) continue;
+              if (window.isMashuChat && window.isMashuChat(c)) continue;
+              uniqMap.set(String(c.id), c);
+            }
+            const getChatHist = (c) => {
+              if (Array.isArray(c.history) && c.history.length > 0) return c.history;
+              if (Array.isArray(c.mainLineHistory) && c.mainLineHistory.length > 0) return c.mainLineHistory;
+              return Array.isArray(c.history) ? c.history : [];
+            };
+            const getLastTs = (c) => {
+              const h = getChatHist(c);
+              if (!h.length) return 0;
+              return Number(h[h.length - 1]?.timestamp) || 0;
+            };
+            const sortFn = (a, b) => {
+              const aHas = getChatHist(a).length > 0 ? 1 : 0;
+              const bHas = getChatHist(b).length > 0 ? 1 : 0;
+              if (aHas !== bHas) return bHas - aHas;
+              const tsDiff = getLastTs(b) - getLastTs(a);
+              if (tsDiff !== 0) return tsDiff;
+              return getChatHist(b).length - getChatHist(a).length;
+            };
+            const allArr = Array.from(uniqMap.values());
+            const groupChats = allArr.filter(c => Boolean(c.isGroup)).sort(sortFn);
+            const singleChats = allArr.filter(c => !c.isGroup).sort(sortFn);
+            return {
+              groupChats,
+              singleChats,
+              allSorted: [...groupChats, ...singleChats],
+              getChatHist
+            };
+          } catch (_) {
+            return { groupChats: [], singleChats: [], allSorted: [], getChatHist: () => [] };
+          }
+        };
+
+        window.resolveMashuTargetChat = function (rawQuery, contextText = "") {
+          const { groupChats, singleChats, allSorted, getChatHist } = window.getAllNonMashuChatsSorted();
+          if (allSorted.length === 0) return null;
+          const cleanQ = String(rawQuery || "")
+            .replace(/^(chat|qq_chat|group|scroll|peek):/i, "")
+            .replace(/^[\[【「『《"']+|[】\]」』》"']+$/g, "")
+            .replace(/(?:的)?(?:群聊|跑团群|聊天记录|聊天|单聊|窗口)$/g, "")
+            .trim();
+          const ctx = String(contextText || "").trim();
+
+          const getTitle = (c) =>
+            (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(c) : "") ||
+            c.mainGroupName ||
+            c.settings?.remarkName ||
+            c.name ||
+            String(c.id);
+
+          if (cleanQ) {
+            const exactById = allSorted.find(c => String(c.id) === cleanQ);
+            if (exactById) return exactById;
+          }
+
+          const wantsGroup = /群|跑团|kp|模组|调查员|团/i.test(String(rawQuery || "") + " " + ctx);
+
+          let bestChat = null;
+          let bestScore = -1;
+
+          for (const c of allSorted) {
+            let score = 0;
+            const title = String(getTitle(c) || "").trim();
+            const rawName = String(c.name || "").trim();
+            const mainGName = String(c.mainGroupName || "").trim();
+            const remark = String(c.settings?.remarkName || "").trim();
+            const hist = getChatHist(c);
+            const memNames = Array.isArray(c.members)
+              ? c.members.map(m => String(m.groupNickname || m.originalName || m.name || m.remarkName || "").trim()).filter(Boolean)
+              : [];
+
+            if (cleanQ && !/^(群聊|群|跑团群|聊天|那个群|这个群)$/.test(cleanQ)) {
+              if (title === cleanQ || rawName === cleanQ || mainGName === cleanQ || remark === cleanQ) {
+                score += 2000;
+              } else if (
+                (title && (title.includes(cleanQ) || cleanQ.includes(title))) ||
+                (rawName && (rawName.includes(cleanQ) || cleanQ.includes(rawName))) ||
+                (mainGName && (mainGName.includes(cleanQ) || cleanQ.includes(mainGName))) ||
+                (remark && (remark.includes(cleanQ) || cleanQ.includes(remark)))
+              ) {
+                score += 1100;
+              }
+              if (memNames.some(mn => mn === cleanQ || mn.includes(cleanQ) || cleanQ.includes(mn))) {
+                score += c.isGroup ? 950 : 600;
+              }
+            }
+
+            if (ctx) {
+              if (title && title.length >= 2 && ctx.includes(title)) score += 900;
+              if (mainGName && mainGName.length >= 2 && ctx.includes(mainGName)) score += 900;
+              if (rawName && rawName.length >= 2 && ctx.includes(rawName)) score += 850;
+              if (remark && remark.length >= 2 && ctx.includes(remark)) score += 850;
+              if (memNames.some(mn => mn.length >= 2 && ctx.includes(mn))) {
+                score += c.isGroup ? 700 : 450;
+              }
+            }
+
+            if (wantsGroup && c.isGroup) {
+              score += 350;
+            }
+            if (hist.length > 0) {
+              score += 220 + Math.min(180, hist.length * 2);
+            }
+            if (score > bestScore) {
+              bestScore = score;
+              bestChat = c;
+            }
+          }
+
+          if (bestChat && bestScore > 0) return bestChat;
+          if (wantsGroup && groupChats.length > 0) return groupChats[0];
+          return groupChats[0] || singleChats[0] || allSorted[0];
+        };
+
         window.mashuMousePeekedSnapshot = window.mashuMousePeekedSnapshot || null;
 
         window.buildMashuAuthorSystemPrompt = function (chat) {
@@ -33195,30 +33314,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const availableChatsSummary = (() => {
             try {
-              const all = state && state.chats ? Object.values(state.chats) : [];
-              const items = all
-                .filter(c => c && !(window.isMashuChat && window.isMashuChat(c)))
-                .slice(0, 18)
-                .map(c => {
-                  const label = c.settings?.remarkName || c.name || c.id;
-                  const typeStr = c.isGroup ? "群聊" : "单聊或KPC";
-                  const memNames = Array.isArray(c.members) && c.members.length > 0
-                    ? " 含成员:" + c.members.map(m => m.name || m.originalName).filter(Boolean).slice(0, 6).join("、")
-                    : "";
-                  const hist = Array.isArray(c.history) ? c.history : [];
-                  const msgLen = hist.length;
-                  const recentSnippets = hist
-                    .filter(m => m && !m.isHidden && typeof m.content === "string" && m.content.trim())
-                    .slice(-4)
-                    .map(m => {
-                      const sName = m.senderName || (m.role === "user" ? (c.settings?.myName || "用户") : (c.name || "角色"));
-                      const cleanTxt = m.content.replace(/\s+/g, " ").trim().slice(0, 65);
-                      return `${sName}:"${cleanTxt}"`;
-                    })
-                    .join(" / ");
-                  return `${label}[${typeStr},记录${msgLen}条${memNames}${recentSnippets ? " | 翻看可见近期片段:" + recentSnippets : ""}]`;
-                });
-              return items.length > 0 ? items.join("；\n") : "暂无其他聊天";
+              const { groupChats, singleChats, getChatHist } = window.getAllNonMashuChatsSorted();
+              const formatChatLine = (c, idx) => {
+                const effTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(c) : "") || c.mainGroupName || c.settings?.remarkName || c.name || c.id;
+                const subName = (c.name && c.name !== effTitle) ? `（原名:${c.name}）` : "";
+                const memNames = Array.isArray(c.members) && c.members.length > 0
+                  ? " | 群成员:" + c.members.map(m => m.groupNickname || m.originalName || m.name || m.remarkName).filter(Boolean).slice(0, 8).join("、")
+                  : "";
+                const hist = getChatHist(c);
+                const msgLen = hist.length;
+                const recentSnippets = hist
+                  .filter(m => m && !m.isHidden && typeof m.content === "string" && m.content.trim())
+                  .slice(-4)
+                  .map(m => {
+                    const sName = m.senderName || (m.role === "user" ? (c.settings?.myNickname || c.settings?.myName || "玩家") : (effTitle || "角色"));
+                    const cleanTxt = m.content.replace(/\s+/g, " ").trim().slice(0, 65);
+                    return `${sName}:"${cleanTxt}"`;
+                  })
+                  .join(" / ");
+                return `  ${idx + 1}. 「${effTitle}」${subName}[ID=${c.id}, ${c.isGroup ? "群聊" : "单聊/KPC"}, 记录${msgLen}条${memNames}${recentSnippets ? " | 翻看可见近期片段: " + recentSnippets : ""}]`;
+              };
+              const groupBlock = groupChats.length > 0
+                ? `【小手机内全部QQ群聊列表（共${groupChats.length}个群聊，调用鼠标时填 "target": "chat:群聊名称"）】：\n` + groupChats.slice(0, 25).map((c, i) => formatChatLine(c, i)).join("\n")
+                : "【小手机内全部QQ群聊列表】：当前暂无群聊";
+              const activeSingles = singleChats.slice(0, 18);
+              const singleBlock = activeSingles.length > 0
+                ? `【小手机内单聊与KPC列表（共${singleChats.length}个，以下为近期活跃项）】：\n` + activeSingles.map((c, i) => formatChatLine(c, i)).join("\n")
+                : "【小手机内单聊与KPC列表】：当前暂无单聊";
+              return groupBlock + "\n" + singleBlock;
             } catch (_) {
               return "暂无其他聊天";
             }
@@ -33524,17 +33647,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const openChatByName = async (rawChatQuery) => {
             const q = String(rawChatQuery || "").replace(/^chat:/i, "").trim();
-            if (!q || !state || !state.chats) return null;
-            const all = Object.values(state.chats).filter(c => c && !(window.isMashuChat && window.isMashuChat(c)));
-            let targetChat = all.find(c => c.id === q || c.name === q || c.settings?.remarkName === q);
-            if (!targetChat) {
-              targetChat = all.find(c => String(c.name || "").includes(q) || String(c.settings?.remarkName || "").includes(q));
-            }
-            if (!targetChat) {
-              targetChat = all.find(c => Array.isArray(c.members) && c.members.some(m => String(m.name || m.originalName || "").includes(q)));
-            }
-            if (!targetChat && all.length > 0) targetChat = all[0];
+            if (!state || !state.chats) return null;
+            const targetChat = typeof window.resolveMashuTargetChat === "function"
+              ? window.resolveMashuTargetChat(q, "")
+              : null;
             if (!targetChat) return null;
+
+            if (targetChat.inMessageList === false) {
+              targetChat.inMessageList = true;
+            }
 
             const chatInterfaceScreen = document.getElementById("chat-interface-screen");
             if (
@@ -52340,11 +52461,12 @@ ${chat.settings.aiPersona || "暂无设定"}
 ${npcContext ? `- 世界观/NPC: ${npcContext}\n` : ""}${usedMashuCanonicalKeys.has("statusRule") ? "" : systemStatusPromptBlock}
 `);
 
+              const isMashuFormatTurn = Boolean(chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor));
               const singleFormatBlock = window.formatPromptSection("格式", `
 你的每一次回复都必须是一个单一且完整的JSON对象。绝对禁止返回JSON数组或纯文本。
 
 ${isSingleThinkingActive ? `1. JSON对象结构:
-该JSON对象必须包含三个顶级键: "thinking"、"chatResponse" 和 "innerVoice"。
+该JSON对象包含顶级键: "thinking"、"chatResponse"${isMashuFormatTurn ? `、"mouseActions"` : ""} 和 "innerVoice"。
 
 2. "thinking" 键:
 - 字段位置与格式定义: 根JSON对象包含 thinking 键与位于其后的 chatResponse 键。思维链是位于聊天气泡之前的独立内容，必须且只能完整写在顶级 "thinking" 键后面的英文双引号内部，类型为纯文本字符串。思考分析与规则自检必须全程使用中文书写。双引号内部直接书写你的思考推演文本，绝对禁止输出在JSON外部，绝对禁止写在消息正文气泡中，禁止在双引号内部嵌套额外的引号、冒号或多余符号，严禁混入任何聊天气泡，绝对禁止填写 null。
@@ -52355,13 +52477,15 @@ ${isSingleThinkingActive ? `1. JSON对象结构:
 3. "chatResponse" 键:
 - 类型: JSON数组 []。
 - 格式: 消息对象的具体格式见指令规范。
-
-4. "innerVoice" 键:
+${isMashuFormatTurn ? `
+4. "mouseActions" 键（麻薯虚拟鼠标动作数组）:
+- 类型: JSON数组 []。当你本回合出于好奇心想自己调鼠标去点开某个QQ群聊、KPC单聊或小手机页面并滚轮翻看，或者对方让你用鼠标演示/查看时，在此数组中填入动作步骤，例如 [{"target": "chat:精确的群聊或KPC名称", "action": "open", "tip": "我自己移鼠标过去瞅两眼"}, {"target": "chat:精确的群聊或KPC名称", "action": "peek_scroll", "screens": 3, "tip": "翻两页看看聊了啥"}]；若本回合纯闲聊不需要动鼠标，则填 []。` : ""}
+${isMashuFormatTurn ? "5" : "4"}. "innerVoice" 键:
 ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
 - 必含字段:
   - "thoughts": (字符串) 对应标签【心声】。你的内心独白和感受。` : `- 类型: null。当前心声功能未开启，请填写 null。`}
 
-5. 标准输出格式示例:
+${isMashuFormatTurn ? "6" : "5"}. 标准输出格式示例:
 {
   "thinking": "1.规则自检：确认符合人设与当前语境；2.交互判定：保持单回合互动，留出对话气口；3.自检通过，开始输出。",
   "chatResponse": [
@@ -52369,10 +52493,10 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
       "type": "text",
       "content": "你好呀！"
     }
-  ],
+  ],${isMashuFormatTurn ? `\n  "mouseActions": [],` : ""}
   "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n    "thoughts": "心声内容..."\n  }` : `null`}
 }` : `1. JSON对象结构:
-该JSON对象必须包含两个顶级键: "chatResponse" 和 "innerVoice"。
+该JSON对象必须包含顶级键: "chatResponse"${isMashuFormatTurn ? `、"mouseActions"` : ""} 和 "innerVoice"。
 
 2. "chatResponse" 键:
 - 类型: JSON数组 []。
@@ -52390,7 +52514,7 @@ ${chat.settings?.innerVoiceEnabled ? `- 类型: JSON对象 {}。
       "type": "text",
       "content": "你好呀！"
     }
-  ],
+  ],${isMashuFormatTurn ? `\n  "mouseActions": [],` : ""}
   "innerVoice": ${chat.settings?.innerVoiceEnabled ? `{\n    "thoughts": "心声内容..."\n  }` : `null`}
 }`}`);
 
@@ -53428,13 +53552,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               var pendingMashuMouseActions = null;
               var pendingMashuAfterMouseMessages = null;
+              const rawMouseArr = fullResponse.mouseActions || fullResponse.mouse_actions || fullResponse.actions;
               if (
                 (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
-                Array.isArray(fullResponse.mouseActions) &&
-                fullResponse.mouseActions.length > 0 &&
+                Array.isArray(rawMouseArr) &&
+                rawMouseArr.length > 0 &&
                 typeof window.runMashuVirtualMouse === "function"
               ) {
-                pendingMashuMouseActions = fullResponse.mouseActions;
+                pendingMashuMouseActions = rawMouseArr;
                 if (Array.isArray(fullResponse.afterMouseMessages) && fullResponse.afterMouseMessages.length > 0) {
                   pendingMashuAfterMouseMessages = fullResponse.afterMouseMessages;
                 } else if (Array.isArray(fullResponse.postPeekMessages) && fullResponse.postPeekMessages.length > 0) {
@@ -53458,7 +53583,49 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (e) {
               console.warn("AI回复不是有效的JSON，退回到标准解析模式。", e);
               messagesArray = parseAiResponse(aiResponseContent);
+              if (
+                (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
+                !pendingMashuMouseActions
+              ) {
+                const mActMatch = String(aiResponseContent || "").match(/"mouseActions"\s*:\s*(\[[\s\S]*?\])/i);
+                if (mActMatch) {
+                  try {
+                    const parsedMAct = JSON.parse(mActMatch[1]);
+                    if (Array.isArray(parsedMAct) && parsedMAct.length > 0) {
+                      pendingMashuMouseActions = parsedMAct;
+                    }
+                  } catch (_) {}
+                }
+              }
               console.log(messagesArray);
+            }
+
+            if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
+              const collectedInlineMouseSteps = [];
+              const filteredMsgsForMouse = [];
+              for (const mItem of messagesArray) {
+                if (!mItem || typeof mItem !== "object") continue;
+                if (Array.isArray(mItem.mouseActions) && mItem.mouseActions.length > 0) {
+                  collectedInlineMouseSteps.push(...mItem.mouseActions);
+                }
+                const mType = String(mItem.type || "").toLowerCase().trim();
+                if (mType === "mouseactions" || mType === "mouse_action" || mType === "mouse" || mType === "peek_scroll") {
+                  if (mItem.target) {
+                    collectedInlineMouseSteps.push({
+                      target: mItem.target,
+                      action: mItem.action || (mType === "peek_scroll" ? "peek_scroll" : "open"),
+                      screens: mItem.screens || 3,
+                      tip: mItem.tip || "麻薯"
+                    });
+                  }
+                  if (!mItem.content && !mItem.message) continue;
+                }
+                filteredMsgsForMouse.push(mItem);
+              }
+              messagesArray = filteredMsgsForMouse;
+              if ((!pendingMashuMouseActions || pendingMashuMouseActions.length === 0) && collectedInlineMouseSteps.length > 0) {
+                pendingMashuMouseActions = collectedInlineMouseSteps;
+              }
             }
 
             // 提取并聚合所有思维链内容，消除独立思考气泡
@@ -54197,54 +54364,90 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             let mashuMouseExecuted = false;
             let isMashuSelfPeek = false;
-            if (
-              (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
-              Array.isArray(pendingMashuMouseActions) &&
-              pendingMashuMouseActions.length > 0
-            ) {
+            if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
               const lastUserTxt = Array.isArray(chat.history)
                 ? String([...chat.history].reverse().find(m => m && m.role === "user")?.content || "")
                 : "";
-              const isUserAskingTutorial = /怎么|在哪|哪里|如何|教我|帮我点|帮我开|带我去|指给我/.test(lastUserTxt);
-              const hasPeekActionOrChat = pendingMashuMouseActions.some(s => {
-                if (!s) return false;
-                const act = String(s.action || "").toLowerCase().trim();
-                const tgt = String(s.target || "").toLowerCase().trim();
-                return (
-                  tgt.startsWith("chat:") ||
-                  tgt.startsWith("peek:") ||
-                  tgt.startsWith("scroll:") ||
-                  act === "peek_scroll" ||
-                  act === "scroll" ||
-                  act === "peek" ||
-                  act === "open_and_scroll" ||
-                  s.returnToMashu === true
-                );
-              });
-              isMashuSelfPeek = Boolean(
-                hasPeekActionOrChat ||
-                (Array.isArray(pendingMashuAfterMouseMessages) && pendingMashuAfterMouseMessages.length > 0) ||
-                !isUserAskingTutorial
-              );
+              const allAiBubblesTxt = messagesArray
+                .map(m => String(m?.content || m?.message || m?.text || ""))
+                .join(" ");
+              const hasRequestTagInReply = /(?:\[|【)申请连接[：:]/i.test(allAiBubblesTxt);
 
-              if (Array.isArray(pendingMashuAfterMouseMessages) && pendingMashuAfterMouseMessages.length > 0) {
-                pendingMashuAfterMouseMessages.forEach(item => {
-                  if (item && typeof item === "object") {
-                    item._sendAfterMouse = true;
-                    messagesArray.push(item);
-                  }
-                });
-              } else if (isMashuSelfPeek && messagesArray.length >= 2) {
-                for (let mi = 1; mi < messagesArray.length; mi++) {
-                  if (messagesArray[mi] && typeof messagesArray[mi] === "object") {
-                    messagesArray[mi]._sendAfterMouse = true;
+              if (!Array.isArray(pendingMashuMouseActions) || pendingMashuMouseActions.length === 0) {
+                const aiMentionsUsingMouseOrPeeking =
+                  /移鼠标|调鼠标|用鼠标|挪鼠标|我自己去瞅|我自己去看|我去看看|我去翻|去瞅两眼|去翻翻|翻两页|看看你们聊了啥|瞅瞅你们|点进去看/i.test(allAiBubblesTxt) ||
+                  /调用虚拟鼠标|移过去打开|mouseActions|自己移鼠标/i.test(String(extractedThinking || ""));
+                const userAskedMouseOrPeek =
+                  /鼠标|你自己去看|你自己看|你去看|你去翻|去看看.*群|去看.*群|翻.*群|演示|指给我看|帮我点|帮我打开/i.test(lastUserTxt);
+
+                if ((aiMentionsUsingMouseOrPeeking || userAskedMouseOrPeek) && !hasRequestTagInReply) {
+                  const combinedContext = allAiBubblesTxt + " " + lastUserTxt + " " + String(extractedThinking || "");
+                  const screenMatch = combinedContext.match(/(世界书|酒馆|微博|书柜|论坛|API设置|外观设置|壁纸|字体|人设|写模|法则)/i);
+                  const explicitlyWantsChat = /群|聊|KPC|记录|他们|你们/i.test(combinedContext);
+                  if (screenMatch && !explicitlyWantsChat) {
+                    const scrName = screenMatch[1];
+                    pendingMashuMouseActions = [
+                      { target: "screen:" + scrName, action: "open", tip: "打开" + scrName + "看看" }
+                    ];
+                  } else if (typeof window.resolveMashuTargetChat === "function") {
+                    const recentPendingReq = Array.isArray(chat.history)
+                      ? [...chat.history].slice(-8).reverse().find(m => m && m.type === "mashu_inspect_request_card" && !m.isExecuted)
+                      : null;
+                    const hintQuery = recentPendingReq?.pendingData?.targetName || "";
+                    const resolvedTarget = window.resolveMashuTargetChat(hintQuery, combinedContext);
+                    if (resolvedTarget) {
+                      const tTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(resolvedTarget) : "") || resolvedTarget.mainGroupName || resolvedTarget.name || resolvedTarget.id;
+                      pendingMashuMouseActions = [
+                        { target: "chat:" + resolvedTarget.id, action: "open", tip: "去看看「" + String(tTitle).slice(0, 10) + "」" },
+                        { target: "chat:" + resolvedTarget.id, action: "peek_scroll", screens: 3, tip: "翻两页看看聊了啥" }
+                      ];
+                    }
                   }
                 }
-              } else if (isMashuSelfPeek && messagesArray.length === 1 && messagesArray[0] && typeof messagesArray[0] === "object") {
-                const singleTxt = String(messagesArray[0].content || messagesArray[0].message || "").trim();
-                const isPreAnnounce = /我去|我移鼠标|我过去|我先看|我去翻|去瞅|去看看|瞅两眼/.test(singleTxt);
-                if (!isPreAnnounce) {
-                  messagesArray[0]._sendAfterMouse = true;
+              }
+
+              if (Array.isArray(pendingMashuMouseActions) && pendingMashuMouseActions.length > 0) {
+                const isUserAskingTutorial = /怎么|在哪|哪里|如何|教我|帮我点|帮我开|带我去|指给我/.test(lastUserTxt) && !/群|聊天记录|聊了啥/.test(lastUserTxt);
+                const hasPeekActionOrChat = pendingMashuMouseActions.some(s => {
+                  if (!s) return false;
+                  const act = String(s.action || "").toLowerCase().trim();
+                  const tgt = String(s.target || "").toLowerCase().trim();
+                  return (
+                    tgt.startsWith("chat:") ||
+                    tgt.startsWith("peek:") ||
+                    tgt.startsWith("scroll:") ||
+                    act === "peek_scroll" ||
+                    act === "scroll" ||
+                    act === "peek" ||
+                    act === "open_and_scroll" ||
+                    s.returnToMashu === true
+                  );
+                });
+                isMashuSelfPeek = Boolean(
+                  hasPeekActionOrChat ||
+                  (Array.isArray(pendingMashuAfterMouseMessages) && pendingMashuAfterMouseMessages.length > 0) ||
+                  !isUserAskingTutorial
+                );
+
+                if (Array.isArray(pendingMashuAfterMouseMessages) && pendingMashuAfterMouseMessages.length > 0) {
+                  pendingMashuAfterMouseMessages.forEach(item => {
+                    if (item && typeof item === "object") {
+                      item._sendAfterMouse = true;
+                      messagesArray.push(item);
+                    }
+                  });
+                } else if (isMashuSelfPeek && messagesArray.length >= 2) {
+                  for (let mi = 1; mi < messagesArray.length; mi++) {
+                    if (messagesArray[mi] && typeof messagesArray[mi] === "object") {
+                      messagesArray[mi]._sendAfterMouse = true;
+                    }
+                  }
+                } else if (isMashuSelfPeek && messagesArray.length === 1 && messagesArray[0] && typeof messagesArray[0] === "object") {
+                  const singleTxt = String(messagesArray[0].content || messagesArray[0].message || "").trim();
+                  const isPreAnnounce = /我去|我移鼠标|我过去|我先看|我去翻|去瞅|去看看|瞅两眼/.test(singleTxt);
+                  if (!isPreAnnounce) {
+                    messagesArray[0]._sendAfterMouse = true;
+                  }
                 }
               }
             }
