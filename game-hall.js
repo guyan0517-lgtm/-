@@ -2222,21 +2222,33 @@
       }
     }
 
+    const normalizeInjPos = (val) => {
+      if (val === 1 || val === '1') return 1;
+      if (typeof val === 'string') {
+        const lower = val.trim().toLowerCase();
+        if (lower === 'in_chat' || lower === 'in-chat' || lower === 'depth' || lower === '@d') return 1;
+      }
+      return 0;
+    };
+
+    const structuralMarkers = ['worldInfoBefore', 'worldInfoAfter', 'personaDescription', 'charDescription', 'charPersonality', 'scenario', 'dialogueExamples', 'chatHistory'];
+
     const usedIds = new Set();
     orderList.forEach((item, seqIdx) => {
       if (!item || !item.identifier) return;
       if (usedIds.has(item.identifier)) return;
       usedIds.add(item.identifier);
       const base = promptMap[item.identifier] || {};
-      const isMarker = Boolean(base.marker) || ['worldInfoBefore', 'worldInfoAfter', 'personaDescription', 'charDescription', 'charPersonality', 'scenario', 'dialogueExamples', 'chatHistory'].includes(item.identifier);
+      const resolvedContent = base.content !== undefined ? base.content : (item.content || '');
+      const isMarker = structuralMarkers.includes(item.identifier) || (Boolean(base.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(item.identifier));
       promptItems.push({
         identifier: item.identifier,
         name: base.name || item.name || item.identifier,
         enabled: item.enabled !== undefined ? Boolean(item.enabled) : Boolean(base.enabled ?? true),
         role: base.role || item.role || 'system',
-        content: base.content !== undefined ? base.content : (item.content || ''),
+        content: resolvedContent,
         marker: isMarker,
-        injection_position: Number(base.injection_position ?? item.injection_position ?? 0),
+        injection_position: normalizeInjPos(base.injection_position ?? item.injection_position ?? 0),
         injection_depth: Number(base.injection_depth ?? item.injection_depth ?? 4),
         injection_order: Number(base.injection_order ?? item.injection_order ?? (100 + seqIdx)),
         forbid_overrides: Boolean(base.forbid_overrides ?? item.forbid_overrides)
@@ -2246,15 +2258,16 @@
     rawPrompts.forEach((p, rawIdx) => {
       if (!p || !p.identifier || usedIds.has(p.identifier)) return;
       usedIds.add(p.identifier);
-      const isMarker = Boolean(p.marker) || ['worldInfoBefore', 'worldInfoAfter', 'personaDescription', 'charDescription', 'charPersonality', 'scenario', 'dialogueExamples', 'chatHistory'].includes(p.identifier);
+      const resolvedContent = p.content || '';
+      const isMarker = structuralMarkers.includes(p.identifier) || (Boolean(p.marker) && !String(resolvedContent || '').trim() && !['main', 'jailbreak', 'nsfw', 'enhanceDefinitions'].includes(p.identifier));
       promptItems.push({
         identifier: p.identifier,
         name: p.name || p.identifier,
         enabled: orderList.length > 0 ? false : Boolean(p.enabled ?? true),
         role: p.role || 'system',
-        content: p.content || '',
+        content: resolvedContent,
         marker: isMarker,
-        injection_position: Number(p.injection_position ?? 0),
+        injection_position: normalizeInjPos(p.injection_position ?? 0),
         injection_depth: Number(p.injection_depth ?? 4),
         injection_order: Number(p.injection_order ?? (200 + rawIdx)),
         forbid_overrides: Boolean(p.forbid_overrides)
@@ -2320,6 +2333,7 @@
   function replaceTavernMacros(rawText, cardObj) {
     if (!rawText) return '';
     const card = cardObj || getActiveCard();
+    const preset = getActivePreset();
     const userName = getUserDisplayName();
     const charName = card ? card.name : '角色';
     const persona = getActivePersona();
@@ -2333,6 +2347,8 @@
     const now = new Date();
 
     return String(rawText)
+      .replace(/\{\{\/\/[\s\S]*?\}\}/g, '')
+      .replace(/\{\{\/\*[\s\S]*?\*\/\}\}/g, '')
       .replace(/\{\{setvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
         localVars[k.trim()] = v;
         return '';
@@ -2383,6 +2399,8 @@
       })
       .replace(/\{\{user\}\}/gi, userName)
       .replace(/\{\{char\}\}/gi, charName)
+      .replace(/\{\{charIfNotGroup\}\}/gi, charName)
+      .replace(/\{\{group\}\}/gi, '')
       .replace(/<USER>/g, userName)
       .replace(/<BOT>/g, charName)
       .replace(/\{\{persona\}\}/gi, persona ? (persona.description || '') : '')
@@ -2392,6 +2410,9 @@
       .replace(/\{\{mesExamples\}\}/gi, card ? (card.mes_example || '') : '')
       .replace(/\{\{charPrompt\}\}/gi, card ? (card.system_prompt || '') : '')
       .replace(/\{\{charInstruction\}\}/gi, card ? (card.post_history_instructions || '') : '')
+      .replace(/\{\{maxPrompt\}\}/gi, String(preset ? (preset.openai_max_context || 64000) : 64000))
+      .replace(/\{\{idle_duration\}\}/gi, '刚刚')
+      .replace(/\{\{lastGenerationType\}\}/gi, 'normal')
       .replace(/\{\{lastMessage\}\}/gi, lastMsg)
       .replace(/\{\{lastMessageId\}\}/gi, String(Math.max(0, msgs.length - 1)))
       .replace(/\{\{lastUserMessage\}\}/gi, lastUserMsgObj ? (lastUserMsgObj.mes || '') : '')
@@ -2400,6 +2421,8 @@
       .replace(/\{\{trim\}\}/gi, '')
       .replace(/\{\{time\}\}/gi, now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       .replace(/\{\{date\}\}/gi, now.toLocaleDateString())
+      .replace(/\{\{isodate\}\}/gi, now.toISOString().slice(0, 10))
+      .replace(/\{\{isotime\}\}/gi, now.toTimeString().slice(0, 8))
       .replace(/\{\{weekday\}\}/gi, ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()])
       .replace(/\{\{roll:(\d+)d(\d+)\}\}/gi, (_, countStr, sidesStr) => {
         const c = Math.min(20, Math.max(1, parseInt(countStr, 10) || 1));
@@ -2441,13 +2464,20 @@
     const {
       isUser = false,
       isPrompt = false,
+      isChatFloor = false,
+      isWorldInfo = false,
       depth = 0,
       card = getActiveCard()
     } = options;
 
-    const targetPlacement = isUser ? 1 : 2;
+    const targetPlacement = isWorldInfo ? 5 : (isUser ? 1 : 2);
     const scripts = getActiveRegexScriptsForCard(card);
     let output = replaceTavernMacros(String(rawText), card);
+
+    // If formatting a system preset prompt or character definition (not a chat floor and not world info), only run macro replacement so display/chat regexes never corrupt system prompt templates
+    if (isPrompt && !isChatFloor && !isWorldInfo) {
+      return output;
+    }
 
     for (const script of scripts) {
       if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
@@ -3223,7 +3253,7 @@
     });
 
     if (activeBooks.length === 0) {
-      return { beforeChar: [], afterChar: [], atDepth: [], beforeExample: [], afterExample: [] };
+      return { beforeChar: [], afterChar: [], beforeAN: [], afterAN: [], atDepth: [], beforeExample: [], afterExample: [], outlets: {} };
     }
 
     const defaultDepth = Math.max(1, Number(activeBooks[0].scanDepth || 4));
@@ -3271,11 +3301,11 @@
       if (!addedInPass) break;
     }
 
-    // Apply token budget
+    // Apply token budget and World Info regex placement (placement 5)
     let usedTokens = 0;
     const budgetedEntries = [];
     for (const entry of triggeredEntries) {
-      const formatted = replaceTavernMacros(entry.content, card);
+      const formatted = applyTavernRegexPipeline(entry.content, { isPrompt: true, isWorldInfo: true, card });
       const tCount = estimateTokens(formatted);
       if (usedTokens + tCount > maxBudget && !entry.constant) continue;
       usedTokens += tCount;
@@ -3285,18 +3315,27 @@
     const buckets = {
       beforeChar: [],
       afterChar: [],
+      beforeAN: [],
+      afterAN: [],
       beforeExample: [],
       afterExample: [],
-      atDepth: []
+      atDepth: [],
+      outlets: {}
     };
 
     budgetedEntries.forEach(entry => {
       const pos = Number(entry.position || 0);
       if (pos === 0) buckets.beforeChar.push(entry.resolvedContent);
       else if (pos === 1) buckets.afterChar.push(entry.resolvedContent);
-      else if (pos === 2) buckets.beforeExample.push(entry.resolvedContent);
-      else if (pos === 3) buckets.afterExample.push(entry.resolvedContent);
-      else {
+      else if (pos === 2) buckets.beforeAN.push(entry.resolvedContent);
+      else if (pos === 3) buckets.afterAN.push(entry.resolvedContent);
+      else if (pos === 5) buckets.beforeExample.push(entry.resolvedContent);
+      else if (pos === 6) buckets.afterExample.push(entry.resolvedContent);
+      else if (pos === 7) {
+        const outletKey = String(entry.group || entry.comment || 'default').trim();
+        if (!buckets.outlets[outletKey]) buckets.outlets[outletKey] = [];
+        buckets.outlets[outletKey].push(entry.resolvedContent);
+      } else {
         buckets.atDepth.push({
           role: entry.role === 1 ? 'user' : (entry.role === 2 ? 'assistant' : 'system'),
           depth: Math.max(0, Number(entry.depth ?? 4)),
@@ -3307,6 +3346,20 @@
     });
 
     return buckets;
+  }
+
+  function stripHistoricalReasoningFromText(rawMes) {
+    if (!rawMes) return '';
+    let text = String(rawMes);
+    const startTag = (tavernState.formatting?.reasoningStartTag || '<think>').trim();
+    const endTag = (tavernState.formatting?.reasoningEndTag || '</think>').trim();
+    if (startTag && endTag) {
+      const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      text = text.replace(new RegExp(escStart + '[\\s\\S]*?' + escEnd, 'gi'), '');
+    }
+    text = text.replace(/<(?:think|thinking|thought|reasoning|cot)>[\s\S]*?<\/(?:think|thinking|thought|reasoning|cot)>/gi, '');
+    return text.trim();
   }
 
   function buildTavernApiMessages(options = {}) {
@@ -3348,14 +3401,32 @@
       }
     }
 
-    // Author's Note injection
+    // Author's Note and World Info Before/After Author's Note (pos 2 & pos 3) injection
     const an = tavernState.authorNote || {};
+    const anDepth = Math.max(0, Number(an.depth ?? 4));
+    const anRole = an.role || 'system';
+    if (wiBuckets.beforeAN && wiBuckets.beforeAN.length > 0) {
+      depthInjections.push({
+        role: anRole,
+        depth: anDepth,
+        order: 108,
+        content: wiBuckets.beforeAN.join('\n\n')
+      });
+    }
     if (an.text && an.text.trim()) {
       depthInjections.push({
-        role: an.role || 'system',
-        depth: Math.max(0, Number(an.depth ?? 4)),
+        role: anRole,
+        depth: anDepth,
         order: 110,
         content: replaceTavernMacros(an.text.trim(), card)
+      });
+    }
+    if (wiBuckets.afterAN && wiBuckets.afterAN.length > 0) {
+      depthInjections.push({
+        role: anRole,
+        depth: anDepth,
+        order: 112,
+        content: wiBuckets.afterAN.join('\n\n')
       });
     }
 
@@ -3394,10 +3465,21 @@
       }
     });
 
+    const isItemInChatDepth = (p) => {
+      if (!p) return false;
+      const pos = p.injection_position;
+      if (pos === 1 || pos === '1') return true;
+      if (typeof pos === 'string') {
+        const lower = pos.trim().toLowerCase();
+        if (lower === 'in_chat' || lower === 'in-chat' || lower === 'depth' || lower === '@d') return true;
+      }
+      return false;
+    };
+
     // Relative and In-Chat custom prompts from preset (preserve exact prompt_order sequence via seqIdx)
     const enabledPresetPrompts = (preset.prompts || []).filter(p => p && p.enabled);
     enabledPresetPrompts.forEach((p, seqIdx) => {
-      if (!p.marker && Number(p.injection_position) === 1 && p.content && p.content.trim()) {
+      if (!p.marker && isItemInChatDepth(p) && p.content && p.content.trim()) {
         depthInjections.push({
           role: p.role || 'system',
           depth: Math.max(0, Number(p.injection_depth ?? 4)),
@@ -3408,14 +3490,16 @@
       }
     });
 
-    // Build chat history slice with depth injections
+    // Build chat history slice and strip any residual reasoning blocks from historical floors
     const maxFloors = Math.max(4, Number(tavernState.memory?.contextFloors || 40));
     const slicedChat = rawChat.slice(-maxFloors);
     const chatHistoryMessages = slicedChat.map((m, idx) => {
       const depthFromEnd = slicedChat.length - 1 - idx;
-      const cleanedContent = applyTavernRegexPipeline(m.mes || '', {
+      const baseMes = m.is_user ? (m.mes || '') : stripHistoricalReasoningFromText(m.mes || '');
+      const cleanedContent = applyTavernRegexPipeline(baseMes, {
         isUser: Boolean(m.is_user),
         isPrompt: true,
+        isChatFloor: true,
         depth: depthFromEnd,
         card
       });
@@ -3425,20 +3509,30 @@
       };
     });
 
-    // Sort depth injections by depth descending, then order ascending, then exact preset prompt_order sequence (seqIdx)
-    depthInjections.sort((a, b) => {
-      if (b.depth !== a.depth) return b.depth - a.depth;
-      const ordDiff = (a.order ?? 100) - (b.order ?? 100);
-      if (ordDiff !== 0) return ordDiff;
-      return (a.seqIdx ?? 0) - (b.seqIdx ?? 0);
+    // Group @D depth injections by depth relative to the original chatHistoryMessages length so multiple items at the same depth stay together in exact (order, seqIdx) sequence without shifting subsequent depths
+    const originalChatLen = chatHistoryMessages.length;
+    const depthGroupsMap = new Map();
+    depthInjections.forEach(inj => {
+      const d = Math.max(0, Number(inj.depth ?? 0));
+      if (!depthGroupsMap.has(d)) depthGroupsMap.set(d, []);
+      depthGroupsMap.get(d).push(inj);
     });
 
-    depthInjections.forEach(inj => {
-      const targetIdx = Math.max(0, chatHistoryMessages.length - inj.depth);
-      chatHistoryMessages.splice(targetIdx, 0, {
+    // Sort depths ascending (0, 1, 2, ...): splicing at originalChatLen - d from bottom (d=0) to top (larger d) never shifts indices of earlier messages at <= originalChatLen - d
+    const sortedDepthsAsc = Array.from(depthGroupsMap.keys()).sort((a, b) => a - b);
+    sortedDepthsAsc.forEach(d => {
+      const group = depthGroupsMap.get(d);
+      group.sort((a, b) => {
+        const ordDiff = (a.order ?? 100) - (b.order ?? 100);
+        if (ordDiff !== 0) return ordDiff;
+        return (a.seqIdx ?? 0) - (b.seqIdx ?? 0);
+      });
+      const targetIdx = Math.max(0, originalChatLen - d);
+      const formattedGroup = group.map(inj => ({
         role: inj.role || 'system',
         content: inj.content
-      });
+      }));
+      chatHistoryMessages.splice(targetIdx, 0, ...formattedGroup);
     });
 
     // Assemble top-level prompt order
@@ -3521,7 +3615,7 @@
             content: applyTavernRegexPipeline(content, { isPrompt: true, card })
           });
         }
-      } else if (!item.marker && Number(item.injection_position) !== 1) {
+      } else if (!item.marker && !isItemInChatDepth(item)) {
         if (item.content && item.content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
@@ -3545,20 +3639,21 @@
 
     const filtered = finalMessages.filter(m => m && m.content && String(m.content).trim().length > 0);
 
-    if (preset.squash_system_messages && filtered.length > 1) {
-      const squashed = [];
-      for (const msg of filtered) {
-        const prev = squashed[squashed.length - 1];
-        if (prev && prev.role === 'system' && msg.role === 'system') {
-          prev.content += '\n\n' + msg.content;
-        } else {
-          squashed.push({ ...msg });
-        }
+    // Merge consecutive trailing assistant messages (e.g. multiple CoT prefill items at the end) and optionally squash consecutive system messages
+    const mergedList = [];
+    for (let i = 0; i < filtered.length; i++) {
+      const msg = filtered[i];
+      const prev = mergedList[mergedList.length - 1];
+      if (prev && prev.role === 'system' && msg.role === 'system' && preset.squash_system_messages) {
+        prev.content += '\n\n' + msg.content;
+      } else if (prev && prev.role === 'assistant' && msg.role === 'assistant' && i >= filtered.length - 2) {
+        prev.content += '\n' + msg.content;
+      } else {
+        mergedList.push({ ...msg });
       }
-      return squashed;
     }
 
-    return filtered;
+    return mergedList;
   }
 
   function getExternalPhoneApiPresets() {
@@ -3640,8 +3735,32 @@
     };
   }
 
-  function extractReasoningAndCleanReply(rawReply) {
+  function detectAssistantReasoningPrefill(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) return false;
+    const startTag = (tavernState.formatting?.reasoningStartTag || '<think>').trim();
+    const endTag = (tavernState.formatting?.reasoningEndTag || '</think>').trim();
+    const escStart = startTag ? startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+    const escEnd = endTag ? endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+
+    for (let i = messages.length - 1; i >= Math.max(0, messages.length - 3); i--) {
+      const m = messages[i];
+      if (!m || m.role !== 'assistant' || !m.content) continue;
+      const txt = String(m.content);
+      const hasStdOpen = /<(?:think|thinking|thought|reasoning|cot)>/i.test(txt);
+      const hasStdClose = /<\/(?:think|thinking|thought|reasoning|cot)>/i.test(txt);
+      if (hasStdOpen && !hasStdClose) return true;
+      if (escStart && escEnd) {
+        const hasCustomOpen = new RegExp(escStart, 'i').test(txt);
+        const hasCustomClose = new RegExp(escEnd, 'i').test(txt);
+        if (hasCustomOpen && !hasCustomClose) return true;
+      }
+    }
+    return false;
+  }
+
+  function extractReasoningAndCleanReply(rawReply, options = {}) {
     if (!rawReply) return { reasoning: '', cleanReply: '' };
+    const { hasPrefill = false, isLiveStream = false } = options;
     let text = String(rawReply);
     const reasoningChunks = [];
 
@@ -3666,18 +3785,21 @@
     });
 
     // 3. Prefill closing tag without opening tag (e.g. preset prefill ended with <thinking> or <think>, so model output starts with reasoning and closes with </thinking> or </think>)
+    let matchedPrefillClose = false;
     if (endTag) {
       const prefillCustomRx = new RegExp('^([\\s\\S]*?)' + escEnd, 'i');
       const mCustom = text.match(prefillCustomRx);
       if (mCustom && !new RegExp(escStart, 'i').test(mCustom[1])) {
         if (mCustom[1].trim()) reasoningChunks.push(mCustom[1].trim());
         text = text.slice(mCustom[0].length);
+        matchedPrefillClose = true;
       }
     }
     const prefillStdMatch = text.match(/^([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot)>/i);
     if (prefillStdMatch && !/<(?:think|thinking|thought|reasoning|cot)>/i.test(prefillStdMatch[1])) {
       if (prefillStdMatch[1].trim()) reasoningChunks.push(prefillStdMatch[1].trim());
       text = text.slice(prefillStdMatch[0].length);
+      matchedPrefillClose = true;
     }
 
     // 4. Unclosed opening tag during live streaming
@@ -3693,6 +3815,12 @@
     if (unclosedStdMatch) {
       if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
       text = text.slice(0, unclosedStdMatch.index);
+    }
+
+    // 5. If preset had an unclosed assistant reasoning prefill (e.g. <thinking>) and we are still streaming before the closing tag arrives, keep the in-progress text inside reasoning so it never flashes in the main chat bubble
+    if (hasPrefill && isLiveStream && !matchedPrefillClose && reasoningChunks.length === 0 && text.trim()) {
+      reasoningChunks.push(text.trim());
+      text = '';
     }
 
     let cleanReply = text.trim();
@@ -3717,6 +3845,7 @@
       ? Boolean(tavernState.apiConfig.streamEnabled)
       : Boolean(preset.stream_openai);
     const useStreaming = isStreamSettingOn && typeof onStreamUpdate === 'function';
+    const hasPrefill = detectAssistantReasoningPrefill(messages);
 
     const endpoint = creds.baseUrl.endsWith('/chat/completions')
       ? creds.baseUrl
@@ -3804,7 +3933,7 @@
         nativeReasoning += (msgObj.reasoning_content || msgObj.reasoning || '');
       }
 
-      const parsed = extractReasoningAndCleanReply(rawContent);
+      const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
       const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
       const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
       return {
@@ -3877,7 +4006,7 @@
       let inlineReasoning = '';
 
       while (!networkDone || displayedLen < cleanTarget.length) {
-        const liveParsed = extractReasoningAndCleanReply(networkContent);
+        const liveParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: !networkDone });
         cleanTarget = liveParsed.cleanReply;
         inlineReasoning = liveParsed.reasoning;
         const liveReasoning = [nativeReasoningAccum, inlineReasoning].filter(Boolean).join('\n\n');
@@ -3913,7 +4042,7 @@
       await readerPromise;
 
       const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-      const finalParsed = extractReasoningAndCleanReply(networkContent);
+      const finalParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
       const finalReasoning = [nativeReasoningAccum, finalParsed.reasoning].filter(Boolean).join('\n\n');
       return {
         content: finalParsed.cleanReply,
@@ -3929,7 +4058,7 @@
     const rawContent = msgObj.content || '';
     const nativeReasoning = msgObj.reasoning_content || msgObj.reasoning || '';
 
-    const parsed = extractReasoningAndCleanReply(rawContent);
+    const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
     const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
 
     if (useStreaming && parsed.cleanReply && typeof onStreamUpdate === 'function') {
