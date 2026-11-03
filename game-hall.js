@@ -684,14 +684,14 @@ code, pre {
         const baseUrl = getTermuxBaseUrl();
         const candidateUrls = Array.from(new Set([
           baseUrl + '/tavern_store.json',
-          'http://127.0.0.1:8765/tavern_store.json',
-          'http://localhost:8765/tavern_store.json'
+          'http://127.0.0.1:8765/tavern_store.json'
         ]));
 
         for (const tUrl of candidateUrls) {
+          let timerId = null;
           try {
             const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-            const timerId = ctrl ? setTimeout(() => ctrl.abort(), 800) : null;
+            timerId = ctrl ? setTimeout(() => ctrl.abort(), 420) : null;
             const res = await fetch(tUrl, {
               method: 'GET',
               cache: 'no-store',
@@ -709,7 +709,9 @@ code, pre {
                 }
               }
             }
-          } catch (_) {}
+          } catch (_) {
+            if (timerId) clearTimeout(timerId);
+          }
         }
 
         if (!loaded) {
@@ -4761,12 +4763,19 @@ code, pre {
     } catch (_) {}
   }
 
+  let baiBaiShadowSyncTimer = null;
   async function syncBaiBaiShadowDomCss() {
     try {
       if (!baiBaiShadowObserverBound && document.body) {
         baiBaiShadowObserverBound = true;
         const obs = new MutationObserver(() => {
-          applyCachedBaiBaiCssToShadowRoots();
+          if (baiBaiShadowSyncTimer) return;
+          baiBaiShadowSyncTimer = setTimeout(() => {
+            baiBaiShadowSyncTimer = null;
+            if (document.getElementById('bbi-app-host') || document.getElementById('bbs-app-host') || document.querySelector('.bbs-fp-host')) {
+              applyCachedBaiBaiCssToShadowRoots();
+            }
+          }, 120);
         });
         obs.observe(document.body, { childList: true, subtree: true });
       }
@@ -6527,7 +6536,7 @@ code, pre {
       return escapedSrcDoc;
     }
 
-    return `<iframe class="tavern-html-sandbox-frame" scrolling="no" frameborder="0" style="width:100%;height:320px;min-height:56px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
+    return `<iframe class="tavern-html-sandbox-frame" loading="lazy" scrolling="no" frameborder="0" style="width:100%;height:320px;min-height:56px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
   }
 
   function renderTavernMessageHtml(rawText, options = {}) {
@@ -10220,7 +10229,42 @@ code, pre {
     { key: 'address', iconClass: 'fa-address-card', title: '角色档案与聊天分支' }
   ];
 
-  function renderTavernShell() {
+  let pendingTavernHeavyRenderTimer = null;
+
+  function runTavernFloorsAndPluginsNow() {
+    try {
+      renderTavernChatFloors(true);
+    } catch (err) {
+      console.error('renderTavernChatFloors error:', err);
+    }
+    try {
+      bindTavernStageEvents();
+    } catch (_) {}
+    (tavernState.plugins || []).forEach(p => {
+      if (p && p.enabled && !p.builtInType && (p.code || isBaiBaiPlugin(p))) {
+        try {
+          executeUserPluginScript(p);
+        } catch (err) {
+          console.error('executeUserPluginScript error:', err);
+        }
+      }
+    });
+    const activeCard = getActiveCard();
+    if (activeCard) {
+      try {
+        executeCardHelperScripts(activeCard);
+      } catch (err) {
+        console.error('executeCardHelperScripts error:', err);
+      }
+      try {
+        ensureCardEmbeddedScriptsLoaded(activeCard);
+      } catch (err) {
+        console.error('ensureCardEmbeddedScriptsLoaded error:', err);
+      }
+    }
+  }
+
+  function renderTavernShell(options = {}) {
     const shell = document.getElementById('tavern-app-shell');
     if (!shell) return;
     injectTavernShellCss();
@@ -10357,22 +10401,29 @@ code, pre {
       });
     }
 
-    applyActiveTavernTheme();
+    try {
+      applyActiveTavernTheme();
+    } catch (_) {}
+    try {
+      bindTavernStageEvents();
+    } catch (_) {}
+
+    if (pendingTavernHeavyRenderTimer) {
+      clearTimeout(pendingTavernHeavyRenderTimer);
+      pendingTavernHeavyRenderTimer = null;
+    }
+
     if (isTavernActive() || !document.querySelector('#chat .mes')) {
-      renderTavernChatFloors(true);
-      bindTavernStageEvents();
-      (tavernState.plugins || []).forEach(p => {
-        if (p && p.enabled && !p.builtInType && (p.code || isBaiBaiPlugin(p))) {
-          executeUserPluginScript(p);
-        }
-      });
-      const activeCard = getActiveCard();
-      if (activeCard) {
-        executeCardHelperScripts(activeCard);
-        ensureCardEmbeddedScriptsLoaded(activeCard);
+      if (options && options.deferHeavyWork) {
+        requestAnimationFrame(() => {
+          pendingTavernHeavyRenderTimer = setTimeout(() => {
+            pendingTavernHeavyRenderTimer = null;
+            runTavernFloorsAndPluginsNow();
+          }, 0);
+        });
+      } else {
+        runTavernFloorsAndPluginsNow();
       }
-    } else {
-      bindTavernStageEvents();
     }
   }
 
@@ -17223,6 +17274,7 @@ code, pre {
   }
 
   let hasRenderedTavernOnOpen = false;
+  let isOpeningTavernViaDirectCall = false;
 
   function isTavernActive() {
     const screenEl = document.getElementById('game-hall-screen');
@@ -17234,7 +17286,6 @@ code, pre {
     if (!screenEl || screenEl._tavernVisibilityObserved) return;
     screenEl._tavernVisibilityObserved = true;
     const obs = new MutationObserver(() => {
-      applyActiveTavernTheme();
       const isTavernVisible = screenEl.classList.contains('active');
       const bbiHost = document.getElementById('bbi-app-host');
       if (bbiHost) {
@@ -17253,21 +17304,22 @@ code, pre {
       });
       if (!isTavernVisible) {
         stopAllTavernAudioAndMedia();
-      } else if (!hasRenderedTavernOnOpen || !document.getElementById('tavern-stage-root') || !document.querySelector('#chat .mes')) {
+        return;
+      }
+      if (isOpeningTavernViaDirectCall) {
+        return;
+      }
+      try {
+        applyActiveTavernTheme();
+      } catch (_) {}
+      if (!hasRenderedTavernOnOpen || !document.getElementById('tavern-stage-root')) {
         hasRenderedTavernOnOpen = true;
         injectTavernShellCss();
-        renderTavernShell();
-        if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState)) {
-          loadTavernStore().then(() => {
-            if (isTavernActive()) renderTavernShell();
-          }).catch(() => {});
-        }
-      } else {
+        renderTavernShell({ deferHeavyWork: true });
+      } else if (typeof uiRuntime.pendingStreamFloorIndex === 'number') {
         const sess = getActiveChatSession();
-        if (sess && Array.isArray(sess.messages) && sess.messages.length > 0) {
-          const targetIdx = (typeof uiRuntime.pendingStreamFloorIndex === 'number' && sess.messages[uiRuntime.pendingStreamFloorIndex])
-            ? uiRuntime.pendingStreamFloorIndex
-            : (sess.messages.length - 1);
+        if (sess && Array.isArray(sess.messages) && sess.messages[uiRuntime.pendingStreamFloorIndex]) {
+          const targetIdx = uiRuntime.pendingStreamFloorIndex;
           uiRuntime.pendingStreamFloorIndex = null;
           uiRuntime._streamShownChars = String(sess.messages[targetIdx]?.mes || '').length;
           if (uiRuntime.isGenerating) {
@@ -17278,7 +17330,7 @@ code, pre {
         }
       }
     });
-    obs.observe(screenEl, { attributes: true, attributeFilter: ['class', 'style'] });
+    obs.observe(screenEl, { attributes: true, attributeFilter: ['class'] });
   }
 
   window.exitTavernToHome = function () {
@@ -17511,25 +17563,35 @@ code, pre {
 
   window.openTavernApp = async function () {
     hasRenderedTavernOnOpen = true;
-    injectTavernShellCss();
-    if (typeof window.showScreen === 'function') {
-      window.showScreen('game-hall-screen');
-    } else {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-      document.getElementById('game-hall-screen')?.classList.add('active');
+    isOpeningTavernViaDirectCall = true;
+    try {
+      injectTavernShellCss();
+      if (typeof window.showScreen === 'function') {
+        window.showScreen('game-hall-screen');
+      } else {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById('game-hall-screen')?.classList.add('active');
+      }
+      renderTavernShell({ deferHeavyWork: true });
+    } finally {
+      setTimeout(() => {
+        isOpeningTavernViaDirectCall = false;
+      }, 60);
     }
-    renderTavernShell();
-    if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState) || inflightTavernLoadPromise) {
+
+    if (!hasLoadedTavernStoreOnce || inflightTavernLoadPromise) {
       loadTavernStore().then(() => {
         if (isTavernActive()) {
-          renderTavernShell();
+          renderTavernShell({ deferHeavyWork: true });
         }
         tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
       }).catch(() => {
         tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
       });
     } else {
-      tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+      setTimeout(() => {
+        tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+      }, 20);
     }
   };
 

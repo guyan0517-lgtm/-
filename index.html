@@ -2515,7 +2515,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -116539,13 +116539,21 @@ ${specificRules}`;
             const styleTags = document.querySelectorAll("style");
             styleTags.forEach((stEl) => {
               const cssText = stEl.textContent || "";
-              if (!cssText.includes("vault://")) return;
+              if (!cssText || stEl._vaultCheckedLen === cssText.length) return;
+              if (!cssText.includes("vault://")) {
+                stEl._vaultCheckedLen = cssText.length;
+                return;
+              }
               const matches = cssText.match(/vault:\/\/[a-zA-Z0-9._-]+/g);
-              if (!matches) return;
+              if (!matches) {
+                stEl._vaultCheckedLen = cssText.length;
+                return;
+              }
               matches.forEach((ref) => {
                 resolveVaultRefToUrl(ref).then((resolved) => {
                   if (resolved && resolved !== ref && stEl.textContent && stEl.textContent.includes(ref)) {
                     stEl.textContent = stEl.textContent.split(ref).join(resolved);
+                    stEl._vaultCheckedLen = stEl.textContent.length;
                   }
                 });
               });
@@ -117421,6 +117429,20 @@ ${specificRules}`;
             }, 200);
 
             let hydrateTimer = null;
+            function nodeContainsVaultRef(n) {
+              if (!n || n.nodeType !== 1) return false;
+              const srcVal = n.getAttribute && (n.getAttribute("src") || n.getAttribute("style") || "");
+              if (srcVal && srcVal.includes("vault://")) return true;
+              if (n.tagName === "STYLE") {
+                return Boolean(n.textContent && n.textContent.includes("vault://"));
+              }
+              if (n.querySelector) {
+                return Boolean(
+                  n.querySelector('img[src^="vault://"], audio[src^="vault://"], [style*="vault://"]')
+                );
+              }
+              return false;
+            }
             const obs = new MutationObserver((mutations) => {
               if (hydrateTimer) return;
               let mayContainVaultImg = false;
@@ -117438,8 +117460,7 @@ ${specificRules}`;
                   }
                 } else if (m.type === "childList" && m.addedNodes && m.addedNodes.length > 0) {
                   for (let j = 0; j < m.addedNodes.length; j++) {
-                    const n = m.addedNodes[j];
-                    if (n.nodeType === 1) {
+                    if (nodeContainsVaultRef(m.addedNodes[j])) {
                       mayContainVaultImg = true;
                       break;
                     }
@@ -117451,7 +117472,7 @@ ${specificRules}`;
               hydrateTimer = setTimeout(() => {
                 hydrateTimer = null;
                 hydrateDomVaultImages();
-              }, 80);
+              }, 160);
             });
             obs.observe(document.body, {
               childList: true,
@@ -117769,154 +117790,6 @@ ${specificRules}`;
                 window.location.reload();
               }
             });
-          }
-        });
-      })();
-
-      // 3. 原生风格长按全选/复制/剪切/粘贴悬浮按键栏
-      (function () {
-        let barEl = null;
-        let activeInputEl = null;
-        let longPressTimer = null;
-
-        function ensureSelectionBar() {
-          if (barEl) return barEl;
-          barEl = document.createElement("div");
-          barEl.id = "ephone-native-edit-bar";
-          barEl.style.cssText = "position: fixed; z-index: 99999; display: none; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 4px 14px rgba(0,0,0,0.12);";
-          barEl.innerHTML = `
-            <button type="button" data-act="selectAll" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">全选</button>
-            <button type="button" data-act="copy" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">复制</button>
-            <button type="button" data-act="cut" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">剪切</button>
-            <button type="button" data-act="paste" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">粘贴</button>
-          `;
-          document.body.appendChild(barEl);
-
-          barEl.addEventListener("pointerdown", (e) => {
-            e.stopPropagation();
-          });
-
-          barEl.addEventListener("click", async (e) => {
-            const btn = e.target.closest("button[data-act]");
-            if (!btn) return;
-            const act = btn.getAttribute("data-act");
-            const el = activeInputEl;
-            const isEditable = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-
-            if (act === "selectAll") {
-              if (isEditable && typeof el.select === "function") {
-                el.focus();
-                el.select();
-              } else {
-                document.execCommand("selectAll");
-              }
-            } else if (act === "copy") {
-              let text = "";
-              if (isEditable && typeof el.selectionStart === "number") {
-                text = el.value.substring(el.selectionStart, el.selectionEnd) || el.value;
-              } else if (window.getSelection) {
-                text = String(window.getSelection().toString() || "");
-              }
-              if (text && navigator.clipboard && navigator.clipboard.writeText) {
-                try { await navigator.clipboard.writeText(text); } catch (_) { document.execCommand("copy"); }
-              } else {
-                document.execCommand("copy");
-              }
-              hideSelectionBar();
-            } else if (act === "cut") {
-              if (isEditable && typeof el.selectionStart === "number" && !el.readOnly && !el.disabled) {
-                const start = el.selectionStart;
-                const end = el.selectionEnd;
-                const cutText = (start !== end) ? el.value.substring(start, end) : el.value;
-                if (cutText && navigator.clipboard && navigator.clipboard.writeText) {
-                  try { await navigator.clipboard.writeText(cutText); } catch (_) {}
-                }
-                if (start !== end) {
-                  el.value = el.value.slice(0, start) + el.value.slice(end);
-                  el.selectionStart = el.selectionEnd = start;
-                } else {
-                  el.value = "";
-                }
-                el.dispatchEvent(new Event("input", { bubbles: true }));
-              } else {
-                document.execCommand("cut");
-              }
-              hideSelectionBar();
-            } else if (act === "paste") {
-              if (isEditable && !el.readOnly && !el.disabled) {
-                try {
-                  const clipText = await navigator.clipboard.readText();
-                  if (typeof clipText === "string") {
-                    if (typeof el.selectionStart === "number") {
-                      const start = el.selectionStart;
-                      const end = el.selectionEnd;
-                      el.value = el.value.slice(0, start) + clipText + el.value.slice(end);
-                      el.selectionStart = el.selectionEnd = start + clipText.length;
-                      el.dispatchEvent(new Event("input", { bubbles: true }));
-                    } else {
-                      document.execCommand("insertText", false, clipText);
-                    }
-                  }
-                } catch (_) {
-                  document.execCommand("paste");
-                }
-              }
-              hideSelectionBar();
-            }
-          });
-          return barEl;
-        }
-
-        function showSelectionBarAt(x, y, targetEl) {
-          const bar = ensureSelectionBar();
-          activeInputEl = targetEl || null;
-          const isEditable = targetEl && ((targetEl.tagName === "INPUT" && !targetEl.readOnly && !targetEl.disabled) || (targetEl.tagName === "TEXTAREA" && !targetEl.readOnly && !targetEl.disabled) || targetEl.isContentEditable);
-          const cutBtn = bar.querySelector('button[data-act="cut"]');
-          const pasteBtn = bar.querySelector('button[data-act="paste"]');
-          if (cutBtn) cutBtn.style.display = isEditable ? "inline-flex" : "none";
-          if (pasteBtn) pasteBtn.style.display = isEditable ? "inline-flex" : "none";
-
-          bar.style.display = "flex";
-          const rectW = 228;
-          const left = Math.max(10, Math.min(window.innerWidth - rectW - 10, x - rectW / 2));
-          const top = Math.max(12, y - 52);
-          bar.style.left = left + "px";
-          bar.style.top = top + "px";
-        }
-
-        function hideSelectionBar() {
-          if (barEl) barEl.style.display = "none";
-        }
-
-        document.addEventListener("pointerdown", (e) => {
-          if (barEl && barEl.contains(e.target)) return;
-          hideSelectionBar();
-          if (longPressTimer) clearTimeout(longPressTimer);
-          const target = e.target;
-          if (!target) return;
-          if (target.closest(".message-bubble, .message-wrapper, .chat-message-wrapper, .module-map-node, .mod-map-avatar-container, .chat-map-strip-row")) {
-            return;
-          }
-          const editableTarget = target.closest('input[type="text"], input[type="search"], input[type="url"], input[type="password"], input:not([type]), textarea, [contenteditable="true"]');
-          if (!editableTarget) return;
-          const clientX = e.clientX || (e.touches && e.touches[0]?.clientX) || window.innerWidth / 2;
-          const clientY = e.clientY || (e.touches && e.touches[0]?.clientY) || window.innerHeight / 2;
-          longPressTimer = setTimeout(() => {
-            showSelectionBarAt(clientX, clientY, editableTarget);
-          }, 460);
-        });
-
-        document.addEventListener("pointermove", () => {
-          if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-          }
-        });
-
-        document.addEventListener("pointerup", () => {
-          if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
           }
         });
       })();
