@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -36510,8 +36510,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (!file) return;
 
           const confirmed = await showCustomConfirm(
-            "严重警告！",
-            "导入备份将完全覆盖您当前的所有数据，包括聊天、设置等。此操作不可撤销！您确定要继续吗？",
+            "导入并智能合并备份",
+            "即将导入备份数据包，并自动与本地最新进度、人设、思维链、世界书及Termux本地图片智能合并，保留最新进度不丢失。是否继续？",
             { confirmButtonClass: "btn-danger" },
           );
 
@@ -36520,6 +36520,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           try {
             const text = await file.text();
             const data = JSON.parse(text);
+
+            // 0. 在清空前先保存当前浏览器内已有的非初始最新数据，以便导入旧包后按最新进度合并
+            const preImportSnapshot = {
+              chats: [],
+              worldBooks: [],
+              thoughtChainPresets: [],
+              personaPresets: [],
+              userStickers: [],
+              charStickers: [],
+              apiPresets: [],
+              apiConfig: null,
+              qqbotLocalRaw: localStorage.getItem("tukey_qqbot_persistent_config_v3") || "",
+            };
+            try {
+              if (db.chats) {
+                const curChats = await db.chats.toArray();
+                // 仅保留非空白初始玛修的真实会话或已产生新对话的会话
+                preImportSnapshot.chats = curChats.filter((c) => {
+                  if (!c || typeof c !== "object") return false;
+                  const isDefaultMashu =
+                    (c.name === "玛修" || c.id === "chat_default" || c.id === 1) &&
+                    (!Array.isArray(c.history) || c.history.length <= 2);
+                  return !isDefaultMashu;
+                });
+              }
+              if (db.worldBooks) preImportSnapshot.worldBooks = await db.worldBooks.toArray();
+              if (db.thoughtChainPresets) preImportSnapshot.thoughtChainPresets = await db.thoughtChainPresets.toArray();
+              if (db.personaPresets) preImportSnapshot.personaPresets = await db.personaPresets.toArray();
+              if (db.userStickers) preImportSnapshot.userStickers = await db.userStickers.toArray();
+              if (db.charStickers) preImportSnapshot.charStickers = await db.charStickers.toArray();
+              if (db.apiPresets) preImportSnapshot.apiPresets = await db.apiPresets.toArray();
+              if (db.apiConfig) preImportSnapshot.apiConfig = await db.apiConfig.get("main");
+            } catch (_) {}
 
             await db.transaction("rw", db.tables, async () => {
               // 1. 清空所有现有表格
@@ -36666,11 +36699,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (lsSnap && typeof lsSnap === "object") {
                 for (const [k, v] of Object.entries(lsSnap)) {
                   if (typeof k === "string" && typeof v === "string") {
+                    if (k === "ephone_local_vault_config") continue;
                     try {
                       localStorage.setItem(k, v);
                     } catch (_) {}
                   }
                 }
+              }
+              if (preImportSnapshot.qqbotLocalRaw) {
+                try {
+                  const prevQq = JSON.parse(preImportSnapshot.qqbotLocalRaw);
+                  const prevGroups = Object.keys((prevQq && prevQq.groups) || {});
+                  if (prevGroups.some((gk) => gk !== "88482026")) {
+                    localStorage.setItem("tukey_qqbot_persistent_config_v3", preImportSnapshot.qqbotLocalRaw);
+                  }
+                } catch (_) {}
               }
 
               if (data.novelaiSettings) {
@@ -36762,6 +36805,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               console.log("已成功导入主屏幕样式数据。");
             }
 
+            // 将导入前已有的非初始最新进度及 Termux 本地最新数据智能合并进来，确保同名群聊/角色保留最新进度
+            if (typeof window.mergeNewerSnapshotAndTermuxIntoDb === "function") {
+              try {
+                await window.mergeNewerSnapshotAndTermuxIntoDb(preImportSnapshot);
+              } catch (mergeErr) {
+                console.warn("智能合并本地最新进度时出现非致命警告:", mergeErr);
+              }
+            }
+
             try {
               const finalGlobalSettings = await db.globalSettings.get("main");
               if (finalGlobalSettings && typeof finalGlobalSettings.fontUrl === "string" && typeof applyCustomFont === "function") {
@@ -36773,13 +36825,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (_) {}
 
             await showCustomAlert(
-              "导入成功",
-              "所有数据已成功恢复！应用即将刷新以应用所有更改。",
+              "导入与合并成功",
+              "旧备份包与本地最新进度、人设、思维链、世界书及Termux本地图片已全部智能合并恢复！应用即将刷新。",
             );
 
             setTimeout(() => {
               window.location.reload();
-            }, 1500);
+            }, 1200);
           } catch (error) {
             console.error("导入数据时出错:", error);
             await showCustomAlert(
@@ -114643,6 +114695,566 @@ ${specificRules}`;
             }
           }
 
+          function mergeChatHistoriesChronologically(oldHist, newHist) {
+            const listA = Array.isArray(oldHist) ? oldHist.filter(Boolean) : [];
+            const listB = Array.isArray(newHist) ? newHist.filter(Boolean) : [];
+            if (listA.length === 0) return listB;
+            if (listB.length === 0) return listA;
+            const merged = listA.slice();
+            const seenExact = new Set();
+            const seenLoose = new Set();
+            for (const m of listA) {
+              const txt = String(m.content || m.text || "").trim();
+              const sender = String(m.senderName || m.sender || m.role || "").trim();
+              const tsSec = m.timestamp ? Math.floor(Number(m.timestamp) / 1000) : "";
+              if (txt) {
+                seenExact.add(sender + "::" + txt + "::" + tsSec);
+                seenLoose.add(sender + "::" + txt);
+              }
+            }
+            for (const m of listB) {
+              const txt = String(m.content || m.text || "").trim();
+              const sender = String(m.senderName || m.sender || m.role || "").trim();
+              const tsSec = m.timestamp ? Math.floor(Number(m.timestamp) / 1000) : "";
+              if (!txt && !m.imageUrl && !m.stickerUrl) continue;
+              const exactKey = sender + "::" + txt + "::" + tsSec;
+              const looseKey = sender + "::" + txt;
+              if (txt && (seenExact.has(exactKey) || seenLoose.has(looseKey))) {
+                continue;
+              }
+              if (txt) {
+                seenExact.add(exactKey);
+                seenLoose.add(looseKey);
+              }
+              merged.push(m);
+            }
+            merged.sort((a, b) => {
+              const ta = Number(a && a.timestamp) || 0;
+              const tb = Number(b && b.timestamp) || 0;
+              if (ta > 0 && tb > 0 && ta !== tb) return ta - tb;
+              return 0;
+            });
+            return merged;
+          }
+
+          function mergeChatObjectsKeepNewest(olderChat, newerChat) {
+            if (!olderChat) return newerChat;
+            if (!newerChat) return olderChat;
+            const out = {
+              ...olderChat,
+              ...newerChat,
+              id: olderChat.id !== undefined ? olderChat.id : newerChat.id,
+              name: newerChat.name || olderChat.name,
+            };
+            const oldSet = (olderChat && olderChat.settings) || {};
+            const newSet = (newerChat && newerChat.settings) || {};
+            out.settings = {
+              ...oldSet,
+              ...newSet,
+            };
+            // 保留旧包中已绑定好的 vault:// 头像或壁纸（若新记录使用的是默认占位头像）
+            const isPlaceholderAva = (v) =>
+              !v ||
+              typeof v !== "string" ||
+              v.includes("anime-avatar.jpg") ||
+              v.includes("lucide:user") ||
+              v.startsWith("data:image/svg");
+            if (isPlaceholderAva(newSet.aiAvatar) && !isPlaceholderAva(oldSet.aiAvatar)) {
+              out.settings.aiAvatar = oldSet.aiAvatar;
+            }
+            if (isPlaceholderAva(newSet.myAvatar) && !isPlaceholderAva(oldSet.myAvatar)) {
+              out.settings.myAvatar = oldSet.myAvatar;
+            }
+            if (!newSet.aiPersona && oldSet.aiPersona) out.settings.aiPersona = oldSet.aiPersona;
+            if (!newSet.myPersona && oldSet.myPersona) out.settings.myPersona = oldSet.myPersona;
+            if (Array.isArray(oldSet.stickerLibrary) && oldSet.stickerLibrary.length > 0) {
+              const newLib = Array.isArray(newSet.stickerLibrary) ? newSet.stickerLibrary : [];
+              const libMap = new Map();
+              oldSet.stickerLibrary.forEach((s) => {
+                if (s && s.url) libMap.set(s.name || s.url, s);
+              });
+              newLib.forEach((s) => {
+                if (s && s.url) libMap.set(s.name || s.url, s);
+              });
+              out.settings.stickerLibrary = Array.from(libMap.values());
+            }
+            if (Array.isArray(olderChat.members) || Array.isArray(newerChat.members)) {
+              const oldMems = Array.isArray(olderChat.members) ? olderChat.members : [];
+              const newMems = Array.isArray(newerChat.members) ? newerChat.members : [];
+              if (oldMems.length > 0 && newMems.length > 0) {
+                out.members = newMems.map((nm) => {
+                  const matchedOld = oldMems.find(
+                    (om) =>
+                      om &&
+                      ((nm.id && om.id === nm.id) ||
+                        (nm.originalName && om.originalName === nm.originalName) ||
+                        (nm.groupNickname && om.groupNickname === nm.groupNickname)),
+                  );
+                  if (matchedOld && isPlaceholderAva(nm.avatar) && !isPlaceholderAva(matchedOld.avatar)) {
+                    return { ...matchedOld, ...nm, avatar: matchedOld.avatar };
+                  }
+                  return matchedOld ? { ...matchedOld, ...nm } : nm;
+                });
+                for (const om of oldMems) {
+                  const exists = out.members.some(
+                    (nm) =>
+                      nm &&
+                      ((om.id && nm.id === om.id) ||
+                        (om.originalName && nm.originalName === om.originalName) ||
+                        (om.groupNickname && nm.groupNickname === om.groupNickname)),
+                  );
+                  if (!exists) out.members.push(om);
+                }
+              } else {
+                out.members = newMems.length > 0 ? newMems : oldMems;
+              }
+            }
+            out.history = mergeChatHistoriesChronologically(olderChat.history, newerChat.history);
+            return out;
+          }
+
+          async function mergeNewerSnapshotAndTermuxIntoDb(preImportSnapshot = null) {
+            let restoredItemsCount = 0;
+            const cfg = loadVaultConfig();
+            const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+
+            // 1. 先将 preImportSnapshot 中比旧备份包更新的会话、世界书、思维链、人设、表情包合并回 db
+            if (preImportSnapshot && typeof db !== "undefined") {
+              try {
+                if (Array.isArray(preImportSnapshot.chats) && preImportSnapshot.chats.length > 0 && db.chats) {
+                  const currentDbChats = await db.chats.toArray();
+                  for (const newerChat of preImportSnapshot.chats) {
+                    if (!newerChat) continue;
+                    const matchedOld = currentDbChats.find(
+                      (c) =>
+                        c &&
+                        (String(c.id) === String(newerChat.id) ||
+                          (c.name && newerChat.name && String(c.name).trim() === String(newerChat.name).trim() && Boolean(c.isGroup) === Boolean(newerChat.isGroup))),
+                    );
+                    if (matchedOld) {
+                      const mergedChat = mergeChatObjectsKeepNewest(matchedOld, newerChat);
+                      await db.chats.put(mergedChat);
+                      restoredItemsCount++;
+                    } else {
+                      await db.chats.put(newerChat);
+                      restoredItemsCount++;
+                    }
+                  }
+                }
+                const mergeTableByIdOrName = async (tableName, rows) => {
+                  if (!Array.isArray(rows) || rows.length === 0 || !db[tableName]) return;
+                  const existing = await db[tableName].toArray();
+                  for (const item of rows) {
+                    if (!item || typeof item !== "object") continue;
+                    const match = existing.find(
+                      (e) =>
+                        e &&
+                        ((item.id !== undefined && String(e.id) === String(item.id)) ||
+                          (item.name && e.name && String(e.name).trim() === String(item.name).trim())),
+                    );
+                    if (match) {
+                      await db[tableName].put({ ...match, ...item, id: match.id });
+                    } else {
+                      await db[tableName].put(item);
+                    }
+                    restoredItemsCount++;
+                  }
+                };
+                await mergeTableByIdOrName("worldBooks", preImportSnapshot.worldBooks);
+                await mergeTableByIdOrName("thoughtChainPresets", preImportSnapshot.thoughtChainPresets);
+                await mergeTableByIdOrName("personaPresets", preImportSnapshot.personaPresets);
+                await mergeTableByIdOrName("userStickers", preImportSnapshot.userStickers);
+                await mergeTableByIdOrName("charStickers", preImportSnapshot.charStickers);
+                await mergeTableByIdOrName("apiPresets", preImportSnapshot.apiPresets);
+              } catch (e) {
+                console.warn("合并导入前快照异常:", e);
+              }
+            }
+
+            // 2. 从 Termux 本地服务 (qqbot_store.json, qqbot_thoughts_*.json, tavern_store.json) 逆向提取并合并今日最新数据
+            let qqStore = null;
+            let tavernStore = null;
+            const termuxReachable = await checkTermuxEndpointReachable(baseUrl, true);
+            if (termuxReachable) {
+              try {
+                const qRes = await fetch(baseUrl + "/load", { cache: "no-store" });
+                if (qRes && qRes.ok) {
+                  const qTxt = await qRes.text();
+                  if (qTxt && qTxt.trim().startsWith("{")) {
+                    qqStore = JSON.parse(qTxt);
+                  }
+                }
+              } catch (_) {}
+              try {
+                const tRes = await fetch(baseUrl + "/tavern_store.json", { cache: "no-store" });
+                if (tRes && tRes.ok) {
+                  const tTxt = await tRes.text();
+                  if (tTxt && tTxt.trim().startsWith("{")) {
+                    tavernStore = JSON.parse(tTxt);
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // 2A. 恢复并合并 qqbot_store.json 中的群控配置、人设、思维链、表情包、API 与同名群聊记录
+            if (qqStore && typeof qqStore === "object") {
+              const qCfg = qqStore.config || {};
+              const qLogs = qqStore.logs || {};
+              const qMem = qqStore.memory || {};
+              const gMap = qCfg.groups || {};
+              const gIds = Object.keys(gMap);
+              const hasRealQqContent =
+                gIds.some((k) => k !== "88482026") ||
+                Object.keys(qCfg.privateChats || {}).length > 0 ||
+                Boolean(qCfg.mainApi && (qCfg.mainApi.apiKey || qCfg.mainApi.url));
+
+              if (hasRealQqContent) {
+                try {
+                  const snapForLs = {
+                    ...qCfg,
+                    savedAt: Date.now(),
+                  };
+                  localStorage.setItem("tukey_qqbot_persistent_config_v3", JSON.stringify(snapForLs));
+                  restoredItemsCount++;
+                  fetch("/api/qqbot/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(qCfg),
+                  }).catch(() => {});
+                } catch (_) {}
+              }
+
+              if (typeof db !== "undefined") {
+                // 恢复 API 配置
+                if (qCfg.mainApi && (qCfg.mainApi.apiKey || qCfg.mainApi.url) && db.apiConfig) {
+                  try {
+                    const curApi = (await db.apiConfig.get("main")) || { id: "main" };
+                    if (!curApi.apiKey && qCfg.mainApi.apiKey) {
+                      curApi.apiKey = qCfg.mainApi.apiKey;
+                      curApi.proxyUrl = qCfg.mainApi.url || curApi.proxyUrl || "";
+                      curApi.model = qCfg.mainApi.model || curApi.model || "";
+                      await db.apiConfig.put(curApi);
+                      restoredItemsCount++;
+                    }
+                  } catch (_) {}
+                }
+
+                // 恢复自定义表情包
+                if (Array.isArray(qCfg.customStickers) && qCfg.customStickers.length > 0 && db.userStickers) {
+                  try {
+                    const existingStks = await db.userStickers.toArray();
+                    for (const stk of qCfg.customStickers) {
+                      if (!stk || !(stk.url || stk.dataUrl)) continue;
+                      const sUrl = stk.url || stk.dataUrl;
+                      const exists = existingStks.some((e) => e && (e.id === stk.id || e.url === sUrl));
+                      if (!exists) {
+                        await db.userStickers.put({
+                          id: stk.id || "stk_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                          name: stk.name || stk.meaning || "表情",
+                          url: sUrl,
+                          categoryId: stk.categoryId || "CUSTOM",
+                        });
+                        restoredItemsCount++;
+                      }
+                    }
+                  } catch (_) {}
+                }
+
+                // 遍历所有群聊：提取思维链预设、玩家与AI人设、以及群聊消息并合并到 db.chats
+                const candidateGids = Array.from(new Set([...gIds, "2163069348"]));
+                const existingThoughts = db.thoughtChainPresets ? await db.thoughtChainPresets.toArray() : [];
+                const existingPersonas = db.personaPresets ? await db.personaPresets.toArray() : [];
+                const existingChats = db.chats ? await db.chats.toArray() : [];
+
+                for (const gid of candidateGids) {
+                  const g = gMap[gid];
+                  const safeGid = String(gid).replace(/[^a-zA-Z0-9_-]/g, "_");
+                  let diskThoughts = [];
+                  if (termuxReachable) {
+                    try {
+                      const thRes = await fetch(baseUrl + `/qqbot_thoughts_${safeGid}.json`, { cache: "no-store" });
+                      if (thRes && thRes.ok) {
+                        const thJson = await thRes.json();
+                        if (Array.isArray(thJson)) diskThoughts = thJson;
+                      }
+                    } catch (_) {}
+                  }
+
+                  if (!g && diskThoughts.length === 0) continue;
+                  if (gid === "88482026" && gIds.length > 1 && (!qLogs[gid] || qLogs[gid].length === 0)) {
+                    continue;
+                  }
+
+                  const gName = (g && g.groupName) || "群聊 " + gid;
+
+                  // A. 提取群控中的思维链条目写入 db.thoughtChainPresets
+                  if (g && Array.isArray(g.thoughtItems) && g.thoughtItems.length > 0 && db.thoughtChainPresets) {
+                    const tcName = gName + " 思维链";
+                    const matchedTc = existingThoughts.find(
+                      (t) =>
+                        t &&
+                        ((g.thoughtChainId && String(t.id) === String(g.thoughtChainId)) ||
+                          t.name === tcName ||
+                          t.name === gName),
+                    );
+                    const tcEntries = g.thoughtItems.map((it, idx) => ({
+                      id: String(it.id || "tc_ent_" + idx),
+                      key: it.key || it.title || "条目" + (idx + 1),
+                      title: it.title || it.key || "条目" + (idx + 1),
+                      groupId: it.groupId ? String(it.groupId) : "",
+                      content: String(it.content || ""),
+                      enabled: it.enabled !== false,
+                    }));
+                    const tcObj = {
+                      ...(matchedTc || {}),
+                      name: (matchedTc && matchedTc.name) || tcName,
+                      headerContent: g.thoughtHeaderContent || (matchedTc && matchedTc.headerContent) || "",
+                      generalContent: g.thoughtGeneralContent || (matchedTc && matchedTc.generalContent) || "",
+                      cocContent: g.thoughtCocContent || (matchedTc && matchedTc.cocContent) || "",
+                      groups: Array.isArray(g.thoughtGroups) ? g.thoughtGroups : (matchedTc && matchedTc.groups) || [],
+                      entries: tcEntries,
+                      content: tcEntries.map((e) => `${e.title}：${e.content}`).join("\n"),
+                    };
+                    if (matchedTc && matchedTc.id !== undefined) {
+                      tcObj.id = matchedTc.id;
+                    } else if (g.thoughtChainId && !isNaN(Number(g.thoughtChainId))) {
+                      tcObj.id = Number(g.thoughtChainId);
+                    }
+                    await db.thoughtChainPresets.put(tcObj);
+                    restoredItemsCount++;
+                  }
+
+                  // B. 提取群控中的 AI 人设与玩家绑定人设写入 db.personaPresets
+                  if (g && db.personaPresets) {
+                    if (g.aiPersona && g.aiPersona.trim().length > 10) {
+                      const hasAiP = existingPersonas.some(
+                        (p) => p && String(p.persona || "").trim() === g.aiPersona.trim(),
+                      );
+                      if (!hasAiP) {
+                        const newPid = g.personaId || "persona_qq_" + gid;
+                        const pObj = {
+                          id: newPid,
+                          name: gName + " 守秘人人设",
+                          persona: g.aiPersona.trim(),
+                          avatar: "",
+                        };
+                        await db.personaPresets.put(pObj);
+                        existingPersonas.push(pObj);
+                        restoredItemsCount++;
+                      }
+                    }
+                    if (Array.isArray(g.playerBindings)) {
+                      for (const pb of g.playerBindings) {
+                        if (!pb || !pb.persona || pb.persona.trim().length < 5) continue;
+                        const pName = pb.cardName || pb.qqRemark || pb.alias || pb.qq || "调查员";
+                        const hasPb = existingPersonas.some(
+                          (p) => p && String(p.persona || "").trim() === pb.persona.trim(),
+                        );
+                        if (!hasPb) {
+                          const pObj = {
+                            id: pb.cardId || "persona_pb_" + gid + "_" + (pb.qq || pName),
+                            name: pName,
+                            persona: pb.persona.trim(),
+                            avatar: "",
+                          };
+                          await db.personaPresets.put(pObj);
+                          existingPersonas.push(pObj);
+                          restoredItemsCount++;
+                        }
+                      }
+                    }
+                  }
+
+                  // C. 将群聊记录 (qLogs[gid] + diskThoughts) 转换并合并进 db.chats 中的同名或同ID群聊
+                  if (db.chats) {
+                    const reconstructedMsgs = [];
+                    const rawLogArr = Array.isArray(qLogs[gid]) ? qLogs[gid] : [];
+                    for (const lm of rawLogArr) {
+                      if (!lm || !(lm.text || lm.content)) continue;
+                      const isBot = Boolean(lm.isSelf || lm.role === "assistant");
+                      reconstructedMsgs.push({
+                        role: isBot ? "assistant" : "user",
+                        senderName: lm.senderName || lm.nickname || (isBot ? gName : "群友"),
+                        senderId: String(lm.userId || lm.senderId || ""),
+                        content: String(lm.text || lm.content || ""),
+                        timestamp: Number(lm.timestamp || lm.time) || Date.now(),
+                      });
+                    }
+                    // 从 qqbot_thoughts_<gid>.json 逆向恢复 AI 回复与思维链记录
+                    const sortedThoughts = diskThoughts.slice().sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
+                    for (const th of sortedThoughts) {
+                      if (!th) continue;
+                      const gMsgs = Array.isArray(th.groupMessages) ? th.groupMessages.filter(Boolean) : [];
+                      if (gMsgs.length > 0) {
+                        const combinedText = gMsgs.join("\n");
+                        reconstructedMsgs.push({
+                          role: "assistant",
+                          senderName: gName,
+                          content: combinedText,
+                          thoughtChain: th.thinking || "",
+                          timestamp: Number(th.timestamp) || Date.now(),
+                        });
+                      }
+                    }
+
+                    const matchedChat = existingChats.find(
+                      (c) =>
+                        c &&
+                        (String(c.id) === String(gid) ||
+                          String(c.id) === "qqgroup_" + String(gid) ||
+                          String(c.groupId) === String(gid) ||
+                          (c.name && String(c.name).trim() === String(gName).trim())),
+                    );
+
+                    if (matchedChat) {
+                      if (reconstructedMsgs.length > 0) {
+                        matchedChat.history = mergeChatHistoriesChronologically(
+                          matchedChat.history,
+                          reconstructedMsgs,
+                        );
+                      }
+                      if (!matchedChat.settings) matchedChat.settings = {};
+                      if (g) {
+                        if (g.aiPersona) matchedChat.settings.aiPersona = g.aiPersona;
+                        if (g.customPrompt) matchedChat.settings.customPrompt = g.customPrompt;
+                        if (qMem[gid]) matchedChat.settings.summary = qMem[gid];
+                      }
+                      await db.chats.put(matchedChat);
+                      restoredItemsCount++;
+                    } else if (g || reconstructedMsgs.length > 0) {
+                      const members =
+                        g && Array.isArray(g.playerBindings)
+                          ? g.playerBindings.map((pb, idx) => ({
+                              id: pb.qq || "mem_" + idx,
+                              originalName: pb.cardName || pb.qqRemark || pb.qq || "成员" + (idx + 1),
+                              groupNickname: pb.qqRemark || pb.cardName || "成员" + (idx + 1),
+                              persona: pb.persona || "",
+                              avatar: "",
+                            }))
+                          : [];
+                      const newGroupChat = {
+                        id: "qqgroup_" + gid,
+                        groupId: String(gid),
+                        name: gName,
+                        isGroup: true,
+                        unreadCount: 0,
+                        members,
+                        settings: {
+                          aiPersona: (g && g.aiPersona) || "",
+                          myPersona: "",
+                          customPrompt: (g && g.customPrompt) || "",
+                          summary: qMem[gid] || "",
+                        },
+                        history: reconstructedMsgs,
+                      };
+                      await db.chats.put(newGroupChat);
+                      existingChats.push(newGroupChat);
+                      restoredItemsCount++;
+                    }
+                  }
+                }
+
+                // D. 提取私聊配置 privateChats
+                if (qCfg.privateChats && typeof qCfg.privateChats === "object" && db.personaPresets) {
+                  for (const [uid, pCfg] of Object.entries(qCfg.privateChats)) {
+                    if (!pCfg || typeof pCfg !== "object") continue;
+                    const pText = pCfg.aiPersona || pCfg.userPersona || pCfg.persona || "";
+                    if (pText && pText.trim().length > 5) {
+                      const hasPrivP = existingPersonas.some(
+                        (p) => p && String(p.persona || "").trim() === pText.trim(),
+                      );
+                      if (!hasPrivP) {
+                        const pObj = {
+                          id: "persona_priv_" + uid,
+                          name: pCfg.nickname || pCfg.name || "私聊设定 " + uid,
+                          persona: pText.trim(),
+                          avatar: "",
+                        };
+                        await db.personaPresets.put(pObj);
+                        existingPersonas.push(pObj);
+                        restoredItemsCount++;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // 2B. 从 tavern_store.json 合并世界书、角色人设与 API 配置
+            if (tavernStore && typeof tavernStore === "object" && typeof db !== "undefined") {
+              try {
+                if (Array.isArray(tavernStore.worldBooks) && tavernStore.worldBooks.length > 0 && db.worldBooks) {
+                  const existingWbs = await db.worldBooks.toArray();
+                  for (const twb of tavernStore.worldBooks) {
+                    if (!twb || !twb.name) continue;
+                    const entriesArr = Array.isArray(twb.entries) ? twb.entries : [];
+                    const formattedContent = entriesArr
+                      .map((ent) => {
+                        const parts = [];
+                        if (ent.comment) parts.push(`[备注: ${ent.comment}]`);
+                        if (Array.isArray(ent.keys) && ent.keys.length > 0) {
+                          parts.push(`[关键词: ${ent.keys.join(", ")}]`);
+                        }
+                        if (ent.content) parts.push(ent.content);
+                        return parts.join("\n");
+                      })
+                      .join("\n\n---\n\n");
+                    const matchedWb = existingWbs.find(
+                      (w) => w && (String(w.id) === String(twb.id) || String(w.name).trim() === String(twb.name).trim()),
+                    );
+                    if (!matchedWb && formattedContent) {
+                      await db.worldBooks.put({
+                        id: String(twb.id || "wb_tavern_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+                        name: twb.name,
+                        content: formattedContent,
+                        entries: entriesArr,
+                        categoryId: null,
+                      });
+                      restoredItemsCount++;
+                    }
+                  }
+                }
+                if (Array.isArray(tavernStore.cards) && tavernStore.cards.length > 0 && db.personaPresets) {
+                  const existingPersonas = await db.personaPresets.toArray();
+                  for (const card of tavernStore.cards) {
+                    if (!card || card.id === "card_default_starter" || !card.name) continue;
+                    const desc = [card.description, card.personality, card.scenario].filter(Boolean).join("\n");
+                    if (!desc || desc.trim().length < 5) continue;
+                    const exists = existingPersonas.some(
+                      (p) => p && (String(p.id) === String(card.id) || String(p.name || "").trim() === String(card.name).trim()),
+                    );
+                    if (!exists) {
+                      await db.personaPresets.put({
+                        id: String(card.id),
+                        name: card.name,
+                        persona: desc.trim(),
+                        avatar: card.avatar || "",
+                      });
+                      restoredItemsCount++;
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn("从酒馆存档合并世界书与人设时出现非致命警告:", e);
+              }
+            }
+
+            // 3. 合并完成后，如果当前 Termux 在线，立即将合并后的全量快照同步写入 Termux backup.json
+            if (termuxReachable) {
+              try {
+                const mergedSnap = await collectFullDatabaseSnapshot();
+                await fetch(baseUrl + "/backup.json", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json; charset=utf-8" },
+                  body: JSON.stringify(mergedSnap),
+                });
+              } catch (_) {}
+            }
+
+            return restoredItemsCount;
+          }
+          window.mergeNewerSnapshotAndTermuxIntoDb = mergeNewerSnapshotAndTermuxIntoDb;
+
           async function runVaultRestore() {
             const ok = await testVaultConnection(true);
             if (!ok) {
@@ -114653,15 +115265,18 @@ ${specificRules}`;
             }
             const cfg = getCurrentFormVaultConfig();
             const mode = normalizeVaultMode(cfg.mode);
-            setVaultInfoText("正在从外部存储读取备份并恢复...");
+            setVaultInfoText("正在从外部存储读取备份并合并本地最新进度...");
             try {
               let jsonStr = "";
+              const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
               if (mode === "server" || mode === "folder") {
-                const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
                 if (await checkTermuxEndpointReachable(baseUrl)) {
                   try {
-                    const res = await fetch(baseUrl + "/backup.json", { method: "GET" });
-                    if (res.ok) jsonStr = await res.text();
+                    const res = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
+                    if (res.ok) {
+                      const txt = await res.text();
+                      if (txt && txt.trim().startsWith("{")) jsonStr = txt;
+                    }
                   } catch (_) {}
                 }
                 if (!jsonStr) {
@@ -114670,17 +115285,20 @@ ${specificRules}`;
                     if (handle) {
                       const fileHandle = await handle.getFileHandle("EPhoneBackup.json", { create: false });
                       const file = await fileHandle.getFile();
-                      jsonStr = await file.text();
+                      const txt = await file.text();
+                      if (txt && txt.trim().startsWith("{")) jsonStr = txt;
                     }
                   } catch (_) {}
                 }
                 if (!jsonStr && !isStaticPagesHost() && _builtInServerAvailable === true) {
                   try {
-                    const apiRes = await fetch("/api/local-vault/backup.json", { method: "GET" });
-                    if (apiRes.ok) jsonStr = await apiRes.text();
+                    const apiRes = await fetch("/api/local-vault/backup.json", { method: "GET", cache: "no-store" });
+                    if (apiRes.ok) {
+                      const txt = await apiRes.text();
+                      if (txt && txt.trim().startsWith("{")) jsonStr = txt;
+                    }
                   } catch (_) {}
                 }
-                if (!jsonStr) throw new Error("未找到备份文件，请先点击一次备份");
               } else if (mode === "webdav") {
                 const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/backup.json";
                 const res = await fetch("/api/webdav-proxy", {
@@ -114694,16 +115312,30 @@ ${specificRules}`;
                   }),
                 });
                 const data = await res.json();
-                if (!data || !data.ok || !data.contentBase64) {
-                  throw new Error("未找到网盘中的备份文件");
+                if (data && data.ok && data.contentBase64) {
+                  jsonStr = decodeURIComponent(escape(atob(data.contentBase64)));
                 }
-                jsonStr = decodeURIComponent(escape(atob(data.contentBase64)));
               }
-              const snap = JSON.parse(jsonStr);
-              await applyFullDatabaseSnapshot(snap);
-              setVaultInfoText("恢复成功，正在刷新页面加载数据...");
+
+              if (jsonStr) {
+                const snap = JSON.parse(jsonStr);
+                await applyFullDatabaseSnapshot(snap);
+              }
+
+              // 无论是否存在 backup.json，均从 Termux 本地实时存储 (qqbot_store.json / qqbot_thoughts / tavern_store.json) 提取并合并最新进度
+              const recoveredCount = await mergeNewerSnapshotAndTermuxIntoDb(null);
+              if (!jsonStr && recoveredCount === 0) {
+                throw new Error("未找到备份文件，请先导入旧备份包或确认 Termux 已连接");
+              }
+
+              setVaultInfoText("恢复并合并成功，正在刷新页面加载数据...");
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", "恢复成功，即将重新加载页面");
+                window.showCustomAlert(
+                  "提示",
+                  jsonStr
+                    ? "全量备份与Termux本地最新进度已合并恢复成功，即将重新加载页面"
+                    : "已从Termux本地存档逆向提取并恢复最新群聊、人设、思维链与世界书，即将重新加载页面",
+                );
               }
               setTimeout(() => window.location.reload(), 900);
             } catch (err) {

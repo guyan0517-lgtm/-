@@ -4598,30 +4598,48 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
       } catch (_) {}
 
-      if (!synced) {
-        try {
-          const tRes = await fetch("http://127.0.0.1:8765/load", {
-            signal: AbortSignal.timeout(1200),
-          });
-          if (tRes.ok) {
-            this.termuxDiskAvailable = true;
-            const parsed = await tRes.json();
-            if (parsed && parsed.memory && typeof parsed.memory === "object") {
-              this.staticFallbackMemory = {
-                ...this.staticFallbackMemory,
-                ...parsed.memory,
-              };
+      const isBlankStarterConfig = (cfg) => {
+        if (!cfg || typeof cfg !== "object") return true;
+        const gKeys = Object.keys(cfg.groups || {});
+        const hasRealGroup = gKeys.some((k) => k !== "88482026");
+        const hasPriv = Object.keys(cfg.privateChats || {}).length > 0;
+        const hasApi = Boolean(
+          (cfg.mainApi && (cfg.mainApi.apiKey || cfg.mainApi.url)) ||
+            (cfg.subApi && (cfg.subApi.apiKey || cfg.subApi.url)),
+        );
+        return !hasRealGroup && !hasPriv && !hasApi;
+      };
+
+      try {
+        const tRes = await fetch("http://127.0.0.1:8765/load", {
+          signal: AbortSignal.timeout(1500),
+        });
+        if (tRes.ok) {
+          this.termuxDiskAvailable = true;
+          const parsed = await tRes.json();
+          if (parsed && parsed.memory && typeof parsed.memory === "object") {
+            this.staticFallbackMemory = {
+              ...parsed.memory,
+              ...this.staticFallbackMemory,
+            };
+          }
+          if (parsed && parsed.logs && typeof parsed.logs === "object") {
+            const mergedLogs = { ...parsed.logs };
+            for (const [lgKey, lgArr] of Object.entries(this.staticFallbackLogs || {})) {
+              if (Array.isArray(lgArr) && lgArr.length > 0) {
+                const diskArr = Array.isArray(mergedLogs[lgKey]) ? mergedLogs[lgKey] : [];
+                mergedLogs[lgKey] = lgArr.length >= diskArr.length ? lgArr : diskArr;
+              }
             }
-            if (parsed && parsed.logs && typeof parsed.logs === "object") {
-              this.staticFallbackLogs = {
-                ...this.staticFallbackLogs,
-                ...parsed.logs,
-              };
-            }
-            if (parsed && parsed.config) {
+            this.staticFallbackLogs = mergedLogs;
+          }
+          if (parsed && parsed.config && !isBlankStarterConfig(parsed.config)) {
+            const existingLocal = this.loadLocalPersistentConfig();
+            const localIsBlank = isBlankStarterConfig(existingLocal);
+            if (!synced || !this.serverState || isBlankStarterConfig(this.serverState.config)) {
               this.serverState = {
                 ok: true,
-                runtime: {
+                runtime: (this.serverState && this.serverState.runtime) || {
                   connected: this.directWsConnected,
                   statusText: this.directWsConnected
                     ? "Termux直连已就绪"
@@ -4631,10 +4649,24 @@ function createExpenditureLineChart(data, daysInMonth) {
                 config: parsed.config,
               };
               synced = true;
+            } else if (this.serverState && this.serverState.config) {
+              const sCfg = this.serverState.config;
+              const pCfg = parsed.config;
+              sCfg.groups = { ...(pCfg.groups || {}), ...(sCfg.groups || {}) };
+              if (
+                !pCfg.groups?.["88482026"] &&
+                Object.keys(pCfg.groups || {}).some((k) => k !== "88482026")
+              ) {
+                delete sCfg.groups["88482026"];
+              }
+              sCfg.privateChats = { ...(pCfg.privateChats || {}), ...(sCfg.privateChats || {}) };
+            }
+            if (localIsBlank) {
+              this.saveLocalPersistentConfig(parsed.config);
             }
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
 
       if (!this.serverState || !this.serverState.config) {
         const defaultGid = "88482026";
@@ -6735,22 +6767,39 @@ function createExpenditureLineChart(data, daysInMonth) {
         }
       } catch (_) {}
 
-      // 3. 同时同步到手机 Termux 8765 磁盘减负服务
-      if (!savedBackend || this.termuxDiskAvailable) {
-        try {
-          await fetch("http://127.0.0.1:8765/save", {
-            method: "POST",
-            body: JSON.stringify({
-              config: this.serverState.config,
-              memory: this.staticFallbackMemory,
-              logs: this.staticFallbackLogs,
-            }),
-            signal: AbortSignal.timeout(1500),
+      // 3. 同时同步到手机 Termux 8765 磁盘减负服务，且防止空白初始配置覆盖 Termux 已有存档
+      try {
+        const curCfg = this.serverState.config || {};
+        const gKeys = Object.keys(curCfg.groups || {});
+        const isCurrentlyBlankStarter =
+          !gKeys.some((k) => k !== "88482026") &&
+          Object.keys(curCfg.privateChats || {}).length === 0 &&
+          !(curCfg.mainApi && (curCfg.mainApi.apiKey || curCfg.mainApi.url));
+        if (isCurrentlyBlankStarter) {
+          const checkRes = await fetch("http://127.0.0.1:8765/load", {
+            signal: AbortSignal.timeout(1200),
           });
-          this.termuxDiskAvailable = true;
-          savedBackend = true;
-        } catch (_) {}
-      }
+          if (checkRes && checkRes.ok) {
+            const diskData = await checkRes.json();
+            const diskGroups = Object.keys((diskData && diskData.config && diskData.config.groups) || {});
+            if (diskGroups.some((k) => k !== "88482026")) {
+              await this.syncFromServer(true);
+              return;
+            }
+          }
+        }
+        await fetch("http://127.0.0.1:8765/save", {
+          method: "POST",
+          body: JSON.stringify({
+            config: this.serverState.config,
+            memory: this.staticFallbackMemory,
+            logs: this.staticFallbackLogs,
+          }),
+          signal: AbortSignal.timeout(1500),
+        });
+        this.termuxDiskAvailable = true;
+        savedBackend = true;
+      } catch (_) {}
 
       if (showToast) {
         this.notify(savedBackend ? "全部设定已永久保存" : "已永久保存在本机");
