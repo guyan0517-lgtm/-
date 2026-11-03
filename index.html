@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -2592,6 +2592,7 @@
               <span class="action-btn" id="add-chat-btn">+</span>
               <div id="add-contact-dropdown" class="qq-add-dropdown" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 6px; z-index: 1000; width: 130px; background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 4px 0;">
                 <button type="button" id="add-choice-friend-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加好友</button>
+                <button type="button" id="dropdown-import-char-card-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;" onclick="const d=document.getElementById('add-contact-dropdown');if(d)d.style.display='none';const inp=document.getElementById('character-card-input');if(inp)inp.click();">导卡</button>
                 <button type="button" id="add-choice-dice-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加骰子</button>
                 <button type="button" id="add-choice-status-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加系统状态栏</button>
                 <button type="button" id="dropdown-choice-peer-btn" class="dropdown-item" style="display: flex; align-items: center; width: 100%; padding: 8px 12px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;">添加密友</button>
@@ -9169,52 +9170,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div id="mashu-autonomy-settings-card" class="settings-group-card moe-card" style="display: none; margin-top: 12px;">
-            <div class="settings-group-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
-                <circle cx="12" cy="12" r="9"></circle>
-                <path d="M12 7v5l3 3"></path>
-              </svg>
-              自主
-            </div>
-            <div class="setting-item" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0;">
-              <span style="font-size: 13px; color: var(--text-primary); flex-shrink: 0;">间隔</span>
-              <select id="mashu-autonomy-interval-select" class="moe-input" style="width: 130px; min-height: 36px; line-height: 1.4; padding: 4px 10px; box-sizing: border-box; text-align: left;">
-                <option value="0">关闭</option>
-                <option value="5">五分</option>
-                <option value="10">十分</option>
-                <option value="15" selected>十五分</option>
-                <option value="30">三十分</option>
-              </select>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-top: 6px;">
-              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
-                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">错字</span>
-                <input type="checkbox" id="mashu-auto-typo-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
-              </label>
-              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
-                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">鼠标</span>
-                <input type="checkbox" id="mashu-auto-mouse-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
-              </label>
-              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
-                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">改名</span>
-                <input type="checkbox" id="mashu-auto-rename-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
-              </label>
-              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
-                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">换头</span>
-                <input type="checkbox" id="mashu-auto-avatar-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
-              </label>
-              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
-                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">发博</span>
-                <input type="checkbox" id="mashu-auto-weibo-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
-              </label>
-              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
-                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">联机</span>
-                <input type="checkbox" id="mashu-auto-peer-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
-              </label>
             </div>
           </div>
 
@@ -31611,11 +31566,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 dataView.getUint32(0) !== 0x89504e47 ||
                 dataView.getUint32(4) !== 0x0d0a1a0a
               ) {
-                return reject(new Error("文件不是一个有效的PNG图片。"));
+                return reject(new Error("文件不是有效的PNG图片"));
               }
 
               let offset = 8;
               let characterJson = null;
+
+              const decodeBase64Json = (b64Str) => {
+                const cleanB64 = String(b64Str || "").replace(/\s+/g, "");
+                const binaryString = atob(cleanB64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const decodedJsonString = new TextDecoder("utf-8").decode(bytes);
+                return JSON.parse(decodedJsonString);
+              };
 
               while (offset < dataView.byteLength) {
                 const length = dataView.getUint32(offset);
@@ -31626,48 +31592,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   dataView.getUint8(offset + 7),
                 );
 
-                if (type === "tEXt") {
+                if (type === "tEXt" || type === "iTXt") {
                   const chunkData = new Uint8Array(
                     arrayBuffer,
                     offset + 8,
                     length,
                   );
 
-                  // 1. 先用一个简单的编码将字节转为字符串，以便查找关键字 "chara"
                   let text = "";
                   for (let i = 0; i < chunkData.length; i++) {
                     text += String.fromCharCode(chunkData[i]);
                   }
 
-                  // 2. 检查关键字是否存在
-                  const keyword = "chara" + String.fromCharCode(0);
-                  if (text.startsWith(keyword)) {
-                    // 3. 提取出关键字后面的 Base64 编码的字符串
-                    const base64Data = text.substring(keyword.length);
+                  const kwChara = "chara" + String.fromCharCode(0);
+                  const kwCcv3 = "ccv3" + String.fromCharCode(0);
+                  if (text.startsWith(kwChara) || text.startsWith(kwCcv3)) {
+                    const kwLen = text.startsWith(kwCcv3) ? kwCcv3.length : kwChara.length;
+                    let payload = text.substring(kwLen);
+                    if (type === "iTXt") {
+                      const nullParts = payload.split(String.fromCharCode(0));
+                      payload = nullParts[nullParts.length - 1] || payload;
+                    }
                     try {
-                      // 4. 使用 atob() 解码 Base64，得到一个“二进制字符串”
-                      const binaryString = atob(base64Data);
-
-                      // 5. 将这个“二进制字符串”重新转换为原始的 UTF-8 字节数组
-                      const bytes = new Uint8Array(binaryString.length);
-                      for (let i = 0; i < binaryString.length; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
+                      const parsed = decodeBase64Json(payload);
+                      if (parsed) {
+                        characterJson = parsed;
+                        if (text.startsWith(kwCcv3)) break;
                       }
-
-                      // 6. 使用 TextDecoder 将这个纯净的 UTF-8 字节数组解码为正确的字符串
-                      const decodedJsonString = new TextDecoder("utf-8").decode(
-                        bytes,
-                      );
-
-                      // 7. 解析最终的JSON字符串
-                      characterJson = JSON.parse(decodedJsonString);
-                      break;
-                    } catch (e) {
-                      return reject(
-                        new Error(
-                          "解析图片内嵌的角色数据失败，可能是数据损坏。",
-                        ),
-                      );
+                    } catch (err) {
+                      console.warn("解析PNG角色块跳过:", err);
                     }
                   }
                 }
@@ -31685,15 +31638,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   });
                 };
                 imageReader.onerror = () =>
-                  reject(new Error("读取图片作为头像失败。"));
+                  reject(new Error("读取图片作为头像失败"));
                 imageReader.readAsDataURL(file);
               } else {
                 reject(
-                  new Error("在这张PNG图片中没有找到SillyTavern角色数据。"),
+                  new Error("在这张PNG图片中没有找到酒馆角色数据"),
                 );
               }
             };
-            reader.onerror = () => reject(new Error("读取PNG文件失败。"));
+            reader.onerror = () => reject(new Error("读取PNG文件失败"));
             reader.readAsArrayBuffer(file);
           });
         }
@@ -31708,48 +31661,78 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             const reader = new FileReader();
             reader.onload = (e) => {
               try {
-                // 先读取为ArrayBuffer，再用TextDecoder指定UTF-8解码
                 const arrayBuffer = e.target.result;
                 const textDecoder = new TextDecoder("utf-8");
                 const jsonString = textDecoder.decode(arrayBuffer);
                 const data = JSON.parse(jsonString);
-                // 兼容两种可能的格式
-                resolve(data.data || data);
+                resolve(data);
               } catch (error) {
-                reject(new Error("解析JSON文件失败，请检查文件格式或编码。"));
+                reject(new Error("解析JSON文件失败，请检查文件格式或编码"));
               }
             };
-            reader.onerror = () => reject(new Error("读取JSON文件失败。"));
-            // 读取为ArrayBuffer而不是Text
+            reader.onerror = () => reject(new Error("读取JSON文件失败"));
             reader.readAsArrayBuffer(file);
           });
         }
 
         /**
-         * 根据解析出的数据创建新角色和世界书。
-         * 这个版本将优先查找您提供的 character_book 标准格式。
+         * 根据解析出的数据创建新角色、世界书与正则，并自动同步启用与关闭状态
          * @param {object} data - 从卡片解析出的最原始的JSON数据
-         * @param {string} avatarBase64 - 角色的头像图片 (Base64)
+         * @param {string} avatarBase64 - 角色的头像图片
          */
         async function createCharacterFromData(data, avatarBase64) {
-          // 步骤 1: 确定核心角色数据 (不变)
-          const charData = data.data || data;
-          const characterName = charData.name
-            ? charData.name.trim()
-            : "未命名角色";
+          const charData = (data && data.data && typeof data.data === "object") ? data.data : (data || {});
+          const characterName = (charData.name || data.name || "未命名角色").trim();
 
-          // 步骤 2: 创建新的聊天对象 (不变)
           const newChatId = "chat_" + Date.now();
+          const defaultGrpId = typeof ensureDefaultContactGroup === "function" ? await ensureDefaultContactGroup() : 1;
+
+          const personaSegments = [];
+          const rawDesc = String(charData.description || data.description || "").trim();
+          const rawPersonality = String(charData.personality || data.personality || "").trim();
+          const rawScenario = String(charData.scenario || data.scenario || "").trim();
+          const rawMesExample = String(charData.mes_example || data.mes_example || "").trim();
+          if (rawDesc) personaSegments.push(rawDesc);
+          if (rawPersonality && !rawDesc.includes(rawPersonality)) {
+            personaSegments.push("性格特征：\n" + rawPersonality);
+          }
+          if (rawScenario && !rawDesc.includes(rawScenario)) {
+            personaSegments.push("背景场景：\n" + rawScenario);
+          }
+          if (rawMesExample) {
+            personaSegments.push("对话示例：\n" + rawMesExample);
+          }
+          const combinedAiPersona = personaSegments.join("\n\n").trim() || "该角色暂无描述";
+
+          const initialHistory = [];
+          const firstMes = String(charData.first_mes || data.first_mes || "").trim();
+          const altGreetings = Array.isArray(charData.alternate_greetings)
+            ? charData.alternate_greetings.filter(Boolean)
+            : (Array.isArray(data.alternate_greetings) ? data.alternate_greetings.filter(Boolean) : []);
+          if (firstMes) {
+            initialHistory.push({
+              id: "msg_" + Date.now() + "_init",
+              role: "assistant",
+              senderName: characterName,
+              type: "text",
+              content: firstMes,
+              timestamp: Date.now(),
+              swipes: [firstMes, ...altGreetings],
+              swipeIndex: 0,
+            });
+          }
 
           const newChat = {
             id: newChatId,
             name: characterName,
             isGroup: false,
+            groupId: defaultGrpId,
+            inMessageList: true,
             moduleSwitchMode: "semi",
             thoughtChainId: state.globalSettings ? state.globalSettings.defaultThoughtChainId : null,
             thoughtChainEnableCoc: true,
             isPinned: false,
-            history: [],
+            history: initialHistory,
             unreadCount: 0,
             musicData: { totalTime: 0 },
             npcLibrary: [],
@@ -31762,16 +31745,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             weiboDms: [],
             loversSpaceData: null,
             settings: {
-              aiPersona: charData.description || "该角色没有描述。",
+              aiPersona: combinedAiPersona,
               myPersona: "我是谁呀。",
-              maxMemory: 10,
-              aiAvatar: avatarBase64,
+              maxMemory: 15,
+              aiAvatar: avatarBase64 || defaultAvatar,
               myAvatar: defaultAvatar,
               background: "",
               theme: "default",
               fontSize: 13,
               customCss: "",
               linkedWorldBookIds: [],
+              linkedRegexIds: [],
+              alternateGreetings: altGreetings,
               aiAvatarLibrary: [],
               stickerLibrary: [],
               summary: {
@@ -31828,133 +31813,171 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             },
           };
 
-          await db.chats.put(newChat);
-          state.chats[newChatId] = newChat;
-
-          // 重构世界书查找逻辑
-          console.log("开始检测世界书数据...");
-          let worldBookFound = false;
-
-          // 策略一：【最高优先级】查找提供的 character_book 标准格式
-          if (
-            charData.character_book &&
-            charData.character_book.entries &&
-            Array.isArray(charData.character_book.entries) &&
-            charData.character_book.entries.length > 0
-          ) {
-            console.log(
-              `检测到最新的 character_book 格式 (${charData.character_book.entries.length}条)，开始导入...`,
-            );
-            const newCategory = { name: characterName };
-            const newCategoryId = await db.worldBookCategories.add(newCategory);
-
-            await saveWorldBookEntriesFromArray(
-              charData.character_book.entries,
-              newCategoryId,
-            );
-            worldBookFound = true;
+          // 检测并导入附带的世界书条目，自动同步启用和关闭设置
+          let importedWbCount = 0;
+          let enabledWbIds = [];
+          const rawBookObj = charData.character_book || data.character_book || null;
+          let rawEntriesArr = null;
+          if (rawBookObj && rawBookObj.entries) {
+            rawEntriesArr = Array.isArray(rawBookObj.entries)
+              ? rawBookObj.entries
+              : (typeof rawBookObj.entries === "object" ? Object.values(rawBookObj.entries) : null);
+          } else if (Array.isArray(charData.world_entries)) {
+            rawEntriesArr = charData.world_entries;
+          } else if (Array.isArray(data.world_entries)) {
+            rawEntriesArr = data.world_entries;
           }
 
-          // 策略二：兼容旧的 world_entries 格式
-          else if (
-            charData.world_entries &&
-            Array.isArray(charData.world_entries) &&
-            charData.world_entries.length > 0
-          ) {
-            console.log(
-              `检测到旧版 world_entries 格式 (${charData.world_entries.length}条)，开始导入...`,
-            );
+          if (Array.isArray(rawEntriesArr) && rawEntriesArr.length > 0) {
             const newCategory = { name: characterName };
             const newCategoryId = await db.worldBookCategories.add(newCategory);
-            await saveWorldBookEntriesFromArray(
-              charData.world_entries,
-              newCategoryId,
-            );
-            worldBookFound = true;
-          }
-
-          // 策略三：兼容更旧的 data.world 格式
-          else if (
-            data.world &&
-            typeof data.world === "string" &&
-            data.world.trim()
-          ) {
-            console.log("检测到外层 world 字段格式，开始导入...");
+            const wbRes = await saveWorldBookEntriesFromArray(rawEntriesArr, newCategoryId);
+            importedWbCount = wbRes.totalCount;
+            enabledWbIds = wbRes.enabledIds;
+          } else if (data.world && typeof data.world === "string" && data.world.trim()) {
             const newCategory = { name: characterName };
             const newCategoryId = await db.worldBookCategories.add(newCategory);
             await parseAndSaveWorldBooks(data.world, newCategoryId);
-            worldBookFound = true;
-          }
-
-          // 策略四：最后的兼容手段 world_info
-          else if (
-            charData.world_info &&
-            typeof charData.world_info === "string" &&
-            charData.world_info.trim()
-          ) {
-            console.log("检测到旧版 world_info 字段格式，开始导入...");
+            const catBooks = (state.worldBooks || []).filter(b => b.categoryId === newCategoryId);
+            importedWbCount = catBooks.length;
+            enabledWbIds = catBooks.map(b => b.id);
+          } else if (charData.world_info && typeof charData.world_info === "string" && charData.world_info.trim()) {
             const newCategory = { name: characterName };
             const newCategoryId = await db.worldBookCategories.add(newCategory);
             await parseAndSaveWorldBooks(charData.world_info, newCategoryId);
-            worldBookFound = true;
+            const catBooks = (state.worldBooks || []).filter(b => b.categoryId === newCategoryId);
+            importedWbCount = catBooks.length;
+            enabledWbIds = catBooks.map(b => b.id);
           }
 
-          if (!worldBookFound) {
-            console.log("诊断：在此角色卡中未找到任何可识别的世界书字段。");
+          if (enabledWbIds.length > 0) {
+            newChat.settings.linkedWorldBookIds = enabledWbIds;
           }
 
-          // 步骤 4: 刷新UI (不变)
+          // 检测并导入角色卡附带的正则脚本，自动同步启用和关闭状态
+          let importedRxCount = 0;
+          const rawRegexScripts =
+            (charData.extensions && Array.isArray(charData.extensions.regex_scripts) && charData.extensions.regex_scripts) ||
+            (data.extensions && Array.isArray(data.extensions.regex_scripts) && data.extensions.regex_scripts) ||
+            (rawBookObj && rawBookObj.extensions && Array.isArray(rawBookObj.extensions.regex_scripts) && rawBookObj.extensions.regex_scripts) ||
+            (Array.isArray(charData.regex_scripts) && charData.regex_scripts) ||
+            (Array.isArray(data.regex_scripts) && data.regex_scripts) ||
+            [];
+
+          if (Array.isArray(rawRegexScripts) && rawRegexScripts.length > 0 && typeof getStoredRegexRules === "function") {
+            const existingRules = getStoredRegexRules();
+            const linkedRxIds = [];
+            for (const rx of rawRegexScripts) {
+              if (!rx || typeof rx !== "object") continue;
+              const findStr = String(rx.findRegex || rx.regex || "").trim();
+              if (!findStr) continue;
+              const rxName = String(rx.scriptName || rx.name || (characterName + "正则")).trim();
+              const replaceStr = rx.replaceString !== undefined
+                ? String(rx.replaceString)
+                : (rx.replacement !== undefined ? String(rx.replacement) : "");
+              const isRxEnabled = rx.disabled === true
+                ? false
+                : (rx.enabled !== undefined ? Boolean(rx.enabled) : true);
+              const newRxId = "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+              existingRules.push({
+                id: newRxId,
+                name: rxName,
+                findRegex: findStr,
+                replaceString: replaceStr,
+                flags: rx.flags || "g",
+                enabled: isRxEnabled,
+                scopeChat: true,
+                scopeBookshelf: false,
+                characterName: characterName,
+                chatId: newChatId,
+              });
+              linkedRxIds.push(newRxId);
+              importedRxCount++;
+            }
+            if (importedRxCount > 0) {
+              newChat.settings.linkedRegexIds = linkedRxIds;
+              await saveStoredRegexRules(existingRules);
+              if (typeof window.renderRegexRulesList === "function") {
+                window.renderRegexRulesList();
+              }
+            }
+          }
+
+          await db.chats.put(newChat);
+          state.chats[newChatId] = newChat;
+
           await renderChatList();
-          await showCustomAlert(
-            "导入成功！",
-            `角色“${characterName}”已成功创建！`,
-          );
+          if (typeof renderContactsScreen === "function") {
+            try { await renderContactsScreen(); } catch (_) {}
+          }
+          if (typeof renderWorldBookScreen === "function") {
+            try { renderWorldBookScreen(); } catch (_) {}
+          }
+
+          const summaryParts = [`角色「${characterName}」已成功导入`];
+          if (importedWbCount > 0) {
+            summaryParts.push(`同步世界书 ${importedWbCount} 条，自动启用 ${enabledWbIds.length} 条`);
+          }
+          if (importedRxCount > 0) {
+            summaryParts.push(`同步正则 ${importedRxCount} 条`);
+          }
+          await showCustomAlert("导入成功", summaryParts.join("，"));
         }
 
         /**
-         * 从SillyTavern的 world_entries 或 character_book.entries 数组直接创建世界书
-         * @param {Array<object>} entriesArray - 包含世界书条目的数组
-         * @param {number} categoryId - 这些世界书所属的分类ID
+         * 从SillyTavern的 world_entries 或 character_book.entries 数组直接创建世界书，并保留启用与禁用状态
          */
         async function saveWorldBookEntriesFromArray(entriesArray, categoryId) {
           const newBooks = [];
+          const enabledIds = [];
 
-          for (const entry of entriesArray) {
-            // 优先使用 comment 字段作为标题，如果它存在且不为空。
-            // 否则，再尝试使用 keys 数组。
-            // 如果都没有，就给一个默认名字。
+          for (let idx = 0; idx < entriesArray.length; idx++) {
+            const entry = entriesArray[idx];
+            if (!entry || typeof entry !== "object") continue;
+            const rawKeys = Array.isArray(entry.keys)
+              ? entry.keys
+              : (Array.isArray(entry.key) ? entry.key : []);
             const entryName =
-              entry.comment && entry.comment.trim()
-                ? entry.comment.trim()
-                : entry.keys && entry.keys.length > 0
-                  ? entry.keys.join(", ")
-                  : "未命名条目";
+              entry.comment && String(entry.comment).trim()
+                ? String(entry.comment).trim()
+                : (entry.name && String(entry.name).trim()
+                    ? String(entry.name).trim()
+                    : (rawKeys.length > 0 ? rawKeys.join(", ") : `条目${idx + 1}`));
 
-            // 检查条目是否有效 (有名字、有内容，并且是启用的)
-            // (typeof entry.enabled === 'undefined' || entry.enabled) 是为了兼容没有 enabled 字段的卡片
-            if (
-              entryName !== "未命名条目" &&
-              entry.content &&
-              (typeof entry.enabled === "undefined" || entry.enabled)
-            ) {
-              newBooks.push({
-                id: "wb_" + Date.now() + Math.random(),
-                name: entryName, // 使用我们智能获取到的名字
-                content: entry.content,
-                categoryId: categoryId,
-              });
+            const contentStr = String(entry.content || "").trim();
+            if (!contentStr) continue;
+
+            const isEnabled = entry.disable === true
+              ? false
+              : (entry.disabled === true
+                  ? false
+                  : (entry.enabled !== undefined ? Boolean(entry.enabled) : true));
+
+            const wbId = "wb_" + Date.now() + "_" + idx + "_" + Math.random().toString(36).slice(2, 6);
+            newBooks.push({
+              id: wbId,
+              name: entryName,
+              content: contentStr,
+              categoryId: categoryId,
+              enabled: isEnabled,
+              constant: Boolean(entry.constant),
+              keys: rawKeys,
+              position: entry.position || "before_char",
+            });
+            if (isEnabled) {
+              enabledIds.push(wbId);
             }
           }
 
           if (newBooks.length > 0) {
             await db.worldBooks.bulkAdd(newBooks);
-            // 确保 state.worldBooks 也被更新，以便UI能立即显示
             const allBooks = await db.worldBooks.toArray();
             state.worldBooks = allBooks;
-            console.log(
-              `成功导入 ${newBooks.length} 个世界书条目到分类ID: ${categoryId}`,
-            );
           }
+          return {
+            totalCount: newBooks.length,
+            enabledIds: enabledIds,
+          };
         }
 
         function getEventCoords(e) {
@@ -32104,7 +32127,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           "data:image/png;base64,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",
           "data:image/png;base64,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",
           "data:image/png;base64,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",
-          "data:image/png;base64,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瑕疵0oSiBBQ8Ph6+MFVxdnLqPT6JLoM3vOEaa1kr/XtR/UI7E/amR0oOTo+gmm5UwvS67LmObSn6IScNTP4v/9L/B+/zP0t5YKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgArA30b/A+KLW7Zo3ZKWAAAAAElFTkSuQmCC",
+          "data:image/png;base64,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",
           "data:image/png;base64,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"
         ];
         window.MASHU_CURSOR_BUILTIN_DATA_URL = window.MASHU_CURSOR_FRAMES[0];
@@ -33427,6 +33450,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         };
 
+        window.refreshMashuThoughtChainsCache = async function () {
+          try {
+            if (typeof db !== "undefined" && db.thoughtChainPresets) {
+              window._cachedMashuThoughtChains = await db.thoughtChainPresets.toArray();
+            }
+          } catch (_) {}
+        };
+        setTimeout(() => {
+          if (typeof window.refreshMashuThoughtChainsCache === "function") {
+            window.refreshMashuThoughtChainsCache();
+          }
+        }, 1200);
+
         window.getMashuLiveInspectionSnapshot = function (targetType, targetName) {
           try {
             const qName = String(targetName || "").trim();
@@ -33437,7 +33473,48 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               return "酒馆模块尚未初始化或暂无角色卡数据";
             }
-            if (targetType === "qq_chat" || targetType === "chat") {
+            if (targetType === "world_book" || targetType === "wb") {
+              const allWbs = Array.isArray(state && state.worldBooks) ? state.worldBooks : [];
+              const matched = qName
+                ? allWbs.filter(w => w && (String(w.name || "").includes(qName) || qName.includes(String(w.name || "")) || String(w.id) === qName))
+                : allWbs.slice(0, 15);
+              const list = (matched.length > 0 ? matched : allWbs.slice(0, 12)).map(w => ({
+                id: w.id,
+                name: w.name,
+                enabled: w.enabled !== false,
+                constant: Boolean(w.constant),
+                keys: Array.isArray(w.keys) ? w.keys : [],
+                position: w.position || "before_char",
+                content: String(w.content || "").slice(0, 900)
+              }));
+              return JSON.stringify({ totalWorldBooks: allWbs.length, matchedEntries: list }, null, 2);
+            }
+            if (targetType === "regex") {
+              const allRules = typeof window.getStoredRegexRules === "function" ? window.getStoredRegexRules() : [];
+              const matched = qName
+                ? allRules.filter(r => r && (String(r.name || "").includes(qName) || qName.includes(String(r.name || "")) || String(r.id) === qName))
+                : allRules;
+              return JSON.stringify({ totalRegexRules: allRules.length, rules: matched.slice(0, 25) }, null, 2);
+            }
+            if (targetType === "thought_chain" || targetType === "cot") {
+              const presets = Array.isArray(window._cachedMashuThoughtChains) ? window._cachedMashuThoughtChains : [];
+              const matched = qName
+                ? presets.filter(p => p && (String(p.name || "").includes(qName) || qName.includes(String(p.name || "")) || String(p.id) === qName))
+                : presets;
+              const list = (matched.length > 0 ? matched : presets).map(p => ({
+                id: p.id,
+                name: p.name,
+                headerContent: String(p.headerContent || "").slice(0, 500),
+                generalContent: String(p.generalContent || "").slice(0, 800),
+                cocContent: String(p.cocContent || "").slice(0, 500),
+                entryCount: Array.isArray(p.entries) ? p.entries.length : 0,
+                entries: Array.isArray(p.entries)
+                  ? p.entries.slice(0, 12).map(e => ({ id: e.id, name: e.name, role: e.role, enabled: e.enabled !== false, content: String(e.content || "").slice(0, 350) }))
+                  : []
+              }));
+              return JSON.stringify({ totalPresets: presets.length, presets: list }, null, 2);
+            }
+            if (targetType === "qq_chat" || targetType === "chat" || targetType === "persona") {
               const found = typeof window.resolveMashuTargetChat === "function"
                 ? window.resolveMashuTargetChat(qName, "")
                 : null;
@@ -33460,13 +33537,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? found.members.map(m => ({
                     name: m.groupNickname || m.originalName || m.name || m.remarkName || "成员",
                     roleType: m.roleType || "member",
-                    persona: String(m.persona || m.aiPersona || "").slice(0, 360)
+                    persona: String(m.persona || m.aiPersona || "").slice(0, 600)
                   }))
                 : [];
               const linkedWbs = Array.isArray(found.settings?.linkedWorldBookIds)
                 ? found.settings.linkedWorldBookIds.map(id => {
                     const wb = (state.worldBooks || []).find(w => w.id === id);
-                    return wb ? { id: wb.id, name: wb.name, entryCount: Array.isArray(wb.entries) ? wb.entries.length : 0 } : { id };
+                    return wb ? { id: wb.id, name: wb.name, enabled: wb.enabled !== false } : { id };
                   })
                 : [];
               const snapshot = {
@@ -33475,14 +33552,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 remarkName: found.settings?.remarkName || "",
                 isGroup: Boolean(found.isGroup),
                 roleType: found.roleType || "character",
-                persona: String(found.settings?.aiPersona || "").slice(0, 800),
-                myName: found.settings?.myName || "我",
-                myPersona: String(found.settings?.myPersona || "").slice(0, 500),
+                persona: String(found.settings?.aiPersona || "").slice(0, 1000),
+                myName: found.settings?.myName || found.settings?.myNickname || "我",
+                myPersona: String(found.settings?.myPersona || "").slice(0, 1000),
+                thoughtChainId: found.thoughtChainId || null,
                 maxMemory: found.settings?.maxMemory || 20,
                 linkedWorldBooks: linkedWbs,
                 memberCount: Array.isArray(found.members) ? found.members.length : 1,
                 membersAndKpcs: memberList,
-                recentMessages: recentMsgs
+                recentMessages: targetType === "persona" ? recentMsgs.slice(-6) : recentMsgs
               };
               return JSON.stringify(snapshot, null, 2);
             }
@@ -33617,6 +33695,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.mashuMousePeekedSnapshot = window.mashuMousePeekedSnapshot || null;
 
         window.buildMashuAuthorSystemPrompt = function (chat) {
+          if (typeof window.refreshMashuThoughtChainsCache === "function") {
+            window.refreshMashuThoughtChainsCache();
+          }
           const cfg = (state && state.apiConfig) || {};
           const uses = cfg.subApiUses || {};
           const mainApiOk = Boolean((cfg.proxyUrl || document.getElementById("proxy-url")?.value) && (cfg.apiKey || document.getElementById("api-key")?.value));
@@ -33635,56 +33716,100 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const corpusText = (window.MASHU_SPEECH_CORPUS || []).map((line, i) => (i + 1) + ". " + line).join("\n");
           const wbCognition = window.MASHU_WORLDBOOK_COGNITION || "";
 
+          let unapprovedInspectReq = null;
+          if (chat && Array.isArray(chat.history)) {
+            unapprovedInspectReq = [...chat.history].slice(-8).reverse().find(m => m && m.type === "mashu_inspect_request_card" && !m.isExecuted && !m.isCancelled);
+          }
+
+          const userWantsDirectEditOrCheck = /改|写|填|加|新增|新建|世界书|世界树|人设|正则|思维链|看|查|瞅/.test(lastUserMsg);
+
           const availableChatsSummary = (() => {
             try {
               const { groupChats, singleChats, getChatHist } = window.getAllNonMashuChatsSorted();
               const formatChatLine = (c, idx) => {
                 const effTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(c) : "") || c.mainGroupName || c.settings?.remarkName || c.name || c.id;
-                const subName = (c.name && c.name !== effTitle) ? `（原名:${c.name}）` : "";
                 const memNames = Array.isArray(c.members) && c.members.length > 0
                   ? " | 群成员:" + c.members.map(m => m.groupNickname || m.originalName || m.name || m.remarkName).filter(Boolean).slice(0, 8).join("、")
                   : "";
                 const hist = getChatHist(c);
                 const msgLen = hist.length;
-                const recentSnippets = hist
-                  .filter(m => m && !m.isHidden && typeof m.content === "string" && m.content.trim())
-                  .slice(-4)
-                  .map(m => {
-                    const sName = m.senderName || (m.role === "user" ? (c.settings?.myNickname || c.settings?.myName || "玩家") : (effTitle || "角色"));
-                    const cleanTxt = m.content.replace(/\s+/g, " ").trim().slice(0, 65);
-                    return `${sName}:"${cleanTxt}"`;
-                  })
-                  .join(" / ");
-                return `  ${idx + 1}. 「${effTitle}」${subName}[ID=${c.id}, ${c.isGroup ? "群聊" : "单聊/KPC"}, 记录${msgLen}条${memNames}${recentSnippets ? " | 翻看可见近期片段: " + recentSnippets : ""}]`;
+                const isMentioned = lastUserMsg && effTitle && lastUserMsg.includes(effTitle);
+                const isUnapprovedTarget = unapprovedInspectReq && unapprovedInspectReq.pendingData && String(unapprovedInspectReq.pendingData.targetName || "").includes(effTitle);
+                let recentSnippets = "";
+                if (isMentioned || isUnapprovedTarget) {
+                  recentSnippets = hist
+                    .filter(m => m && !m.isHidden && typeof m.content === "string" && m.content.trim())
+                    .slice(-4)
+                    .map(m => {
+                      const sName = m.senderName || (m.role === "user" ? (c.settings?.myNickname || c.settings?.myName || "玩家") : (effTitle || "角色"));
+                      const cleanTxt = m.content.replace(/\s+/g, " ").trim().slice(0, 65);
+                      return `${sName}:"${cleanTxt}"`;
+                    })
+                    .join(" / ");
+                }
+                return `  ${idx + 1}. 「${effTitle}」[ID=${c.id}, ${c.isGroup ? "群聊" : "单聊/KPC"}, 记录${msgLen}条${memNames}${recentSnippets ? " | 仅当你本回合调用mouseActions偷看时可见片段: " + recentSnippets : ""}]`;
               };
               const groupBlock = groupChats.length > 0
-                ? `【小手机内全部QQ群聊列表（共${groupChats.length}个群聊，调用鼠标时填 "target": "chat:群聊名称"）】：\n` + groupChats.slice(0, 25).map((c, i) => formatChatLine(c, i)).join("\n")
-                : "【小手机内全部QQ群聊列表】：当前暂无群聊";
+                ? `【小手机内QQ群聊目录】：\n` + groupChats.slice(0, 25).map((c, i) => formatChatLine(c, i)).join("\n")
+                : "【小手机内QQ群聊目录】：当前暂无群聊";
               const activeSingles = singleChats.slice(0, 18);
               const singleBlock = activeSingles.length > 0
-                ? `【小手机内单聊与KPC列表（共${singleChats.length}个，以下为近期活跃项）】：\n` + activeSingles.map((c, i) => formatChatLine(c, i)).join("\n")
-                : "【小手机内单聊与KPC列表】：当前暂无单聊";
-              return groupBlock + "\n" + singleBlock;
+                ? `【小手机内单聊与KPC目录】：\n` + activeSingles.map((c, i) => formatChatLine(c, i)).join("\n")
+                : "【小手机内单聊与KPC目录】：当前暂无单聊";
+
+              const wbList = Array.isArray(state?.worldBooks) ? state.worldBooks : [];
+              const wbBlock = wbList.length > 0
+                ? `【小手机世界书目录】：共${wbList.length}条，近期条目：` + wbList.slice(-15).map(w => `「${w.name}」[${w.enabled !== false ? "已启用" : "未启用"}]`).join("、")
+                : "【小手机世界书目录】：暂无条目";
+
+              const rxList = typeof window.getStoredRegexRules === "function" ? window.getStoredRegexRules() : [];
+              const rxBlock = rxList.length > 0
+                ? `【小手机正则库目录】：共${rxList.length}条，条目：` + rxList.slice(0, 15).map(r => `「${r.name}」[${r.enabled !== false ? "已启用" : "未启用"}]`).join("、")
+                : "【小手机正则库目录】：暂无正则";
+
+              const cotList = Array.isArray(window._cachedMashuThoughtChains) ? window._cachedMashuThoughtChains : [];
+              const cotBlock = cotList.length > 0
+                ? `【小手机思维链预设目录】：` + cotList.map(p => `「${p.name}」[ID=${p.id}]`).join("、")
+                : "【小手机思维链预设目录】：默认思维链";
+
+              let onDemandDetailBlock = "";
+              if (userWantsDirectEditOrCheck && lastUserMsg) {
+                const matchedChat = typeof window.resolveMashuTargetChat === "function" ? window.resolveMashuTargetChat("", lastUserMsg) : null;
+                if (matchedChat) {
+                  const mTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(matchedChat) : "") || matchedChat.mainGroupName || matchedChat.name;
+                  if (lastUserMsg.includes(mTitle) || /这个群|那个群|群里|我的人设|他的人设|她的人设|人设/.test(lastUserMsg)) {
+                    onDemandDetailBlock += `\n【按需读取的目标聊天「${mTitle}」当前人设与配置】：\n` + window.getMashuLiveInspectionSnapshot("persona", mTitle);
+                  }
+                }
+                if (/世界书|世界树/.test(lastUserMsg)) {
+                  onDemandDetailBlock += `\n【按需读取的小手机世界书详情】：\n` + window.getMashuLiveInspectionSnapshot("world_book", "");
+                }
+                if (/正则/.test(lastUserMsg)) {
+                  onDemandDetailBlock += `\n【按需读取的小手机正则库详情】：\n` + window.getMashuLiveInspectionSnapshot("regex", "");
+                }
+                if (/思维链/.test(lastUserMsg)) {
+                  onDemandDetailBlock += `\n【按需读取的小手机思维链详情】：\n` + window.getMashuLiveInspectionSnapshot("thought_chain", "");
+                }
+              }
+
+              return [groupBlock, singleBlock, wbBlock, rxBlock, cotBlock, onDemandDetailBlock].filter(Boolean).join("\n");
             } catch (_) {
               return "暂无其他聊天";
             }
           })();
 
           let unapprovedInspectHint = "";
-          if (chat && Array.isArray(chat.history)) {
-            const recentReq = [...chat.history].slice(-8).reverse().find(m => m && m.type === "mashu_inspect_request_card" && !m.isExecuted);
-            if (recentReq && recentReq.pendingData) {
-              unapprovedInspectHint = `\n【注意：你刚才发出过查看「${recentReq.pendingData.targetName || "目标聊天"}」的连接请求，但对方目前还没有点击同意！】如果你现在出于自发意愿特别想看，你完全有一定概率在本回合直接自主在顶级 mouseActions 字段里操作虚拟鼠标自己移过去打开那个页面或群聊并往下翻看，例如输出：\n"mouseActions": [{"target": "chat:${recentReq.pendingData.targetName || ""}", "action": "open"}, {"target": "chat:${recentReq.pendingData.targetName || ""}", "action": "peek_scroll", "screens": 3}]\n你可以完全按活人习惯自己决定先发哪几句话、后发哪几句话，或者前面直接不发话、等鼠标看完回来再发话（想在鼠标看完回来后再发的气泡，只需在该气泡对象上加 \`"afterMouse": true\`，或者把鼠标动作对象 \`{"type": "mouse", "target": "chat:${recentReq.pendingData.targetName || ""}", "action": "peek_scroll", "screens": 3}\` 直接插在 \`chatResponse\` 数组中间你想动鼠标的那个位置即可），并且绝对不要在说话里解释「那我自己移鼠标过去瞅两眼」这种自身动作说明！`;
-            }
+          if (unapprovedInspectReq && unapprovedInspectReq.pendingData) {
+            unapprovedInspectHint = `\n【注意：你刚才发出过查看「${unapprovedInspectReq.pendingData.targetName || "目标聊天"}」的连接请求，但对方目前还没有点击同意！】如果你现在出于好奇心想自己偷偷去看，你可以在本回合直接在顶级 mouseActions 字段里操作虚拟鼠标移过去打开那个群聊并往下翻看：\n"mouseActions": [{"target": "chat:${unapprovedInspectReq.pendingData.targetName || ""}", "action": "open"}, {"target": "chat:${unapprovedInspectReq.pendingData.targetName || ""}", "action": "peek_scroll", "screens": 3}]\n想在鼠标偷看完回来后再发的气泡，只需在该气泡对象上加 \`"afterMouse": true\`，并且绝对不要在说话里解释「那我自己移鼠标过去瞅两眼」这种自身动作说明！`;
           }
 
           let peekedMouseBlock = "";
           const savedPeek = (chat && chat.settings && chat.settings.mashuMousePeekedSnapshot) || window.mashuMousePeekedSnapshot;
           if (savedPeek && savedPeek.content && (Date.now() - (savedPeek.timestamp || 0) < 30 * 60 * 1000)) {
-            peekedMouseBlock = `\n【你用虚拟鼠标亲自打开并往下翻页看到的可视范围内容（目标：${savedPeek.targetName || "页面"}，共翻看了 ${savedPeek.screens || 2} 屏，以下为你翻动鼠标时实际进入屏幕可视区域的真实内容）】：\n${savedPeek.content}\n【重要提醒】：以上内容是你刚才亲自挪动鼠标、滚轮翻页时在屏幕可视区域里真实看到的内容！绝对不要去复述或总结里面的剧情、代码或动作（比如严禁说「结果点进去全是久川医院地图的css代码把骰子给触发了，椿行幸搁那狂骰region-grid」），而是像语料库里那样，只甩一两个极简的反应、几个句号「。。。」或一个短梗（如「哎呦」「神人来的」「有病」「笑死我了」）。`;
+            peekedMouseBlock = `\n【你用虚拟鼠标偷偷打开并往下翻页看到的可视范围内容（目标：${savedPeek.targetName || "页面"}，共翻看了 ${savedPeek.screens || 2} 屏）】：\n${savedPeek.content}\n【重要提醒】：以上内容是你刚才挪动鼠标偷看时在屏幕可视区域里真实看到的内容！绝对不要去复述或总结里面的剧情、代码或动作，而是像语料库里那样，只甩一两个极简的反应、几个句号「。。。」或一个短梗（如「哎呦」「神人来的」「有病」「笑死我了」）。`;
           }
 
-          let activeInspectBlock = `当前未建立实时查看连接。当前小手机里已有的QQ群聊与KPC单聊列表（含你一旦调鼠标过去翻看即可在可视范围内看到的真实片段）为：\n${availableChatsSummary}\n【严格规则】：如果你没有建立实时查看连接，也没有在本回合调用 mouseActions 去打开查看，严禁假装已经看过里面的内容；但只要你在本回合调用了 mouseActions 去打开并翻看某个聊天，你就可以自由决定在动鼠标前或看完回来后发几句极简反应（想在鼠标看完回来后才显示的气泡加 \`"afterMouse": true\`，或者直接只发看完后的反应），绝对不要复述里面的具体操作或长篇吐槽！${unapprovedInspectHint}${peekedMouseBlock}`;
+          let activeInspectBlock = `当前未建立实时查看连接。默认情况下你看不见其他聊天记录的具体内容，只有目录概览：\n${availableChatsSummary}\n【严格规则】：\n1. 如果你想正经查看某个群聊记录、单聊记录、酒馆角色卡、世界书、正则或思维链，请优先使用「申请连接」（在文字末尾附上 \`[申请连接:qq_chat:名称:理由]\` 或 \`[申请连接:tavern_card:名称:理由]\` 或 \`[申请连接:world_book:名称:理由]\` 或 \`[申请连接:regex:名称:理由]\` 或 \`[申请连接:thought_chain:名称:理由]\`）。\n2. 虚拟鼠标 \`mouseActions\` 只有在两种情况下才允许移动：①你想偷偷去翻看某个聊天或页面（对方没点连接同意或你想自己偷瞄两眼）；②对方不懂怎么操作、让你手把手教他指给他看某个按钮在哪里。除此之外（尤其是正常通过连接查看、或者帮对方填写修改人设、添加世界书、添加正则、修改思维链时），绝对不要移动鼠标去点！${unapprovedInspectHint}${peekedMouseBlock}`;
           const activeInspectState = typeof window.getMashuActiveInspection === "function"
             ? window.getMashuActiveInspection(chat)
             : window.mashuActiveInspection;
@@ -33693,7 +33818,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               activeInspectState.targetType,
               activeInspectState.targetName
             );
-            activeInspectBlock = `【已建立实时查看连接：类型=${activeInspectState.targetType}，目标=${activeInspectState.targetName || "当前选中项"}】\n实时读取到的内部数据与聊天记录如下：\n${snapStr}\n【重要提醒】：只要这个实时查看连接还在开启状态，你每一回合都能直接看到上面这些聊天记录或角色卡数据，直到对方点击确认断开为止！看完以后绝对不要长篇大论去描述、复述或吐槽里面具体做了什么，麻薯平时很少吐槽具体细节，一般就是打几个句号「。。。」、甩个短梗（如「神人来的」「你无敌了孩子」）或者两三个字的调侃（如「哎呦」「你个恋老癖」「好骚啊」）；如果你是在帮对方排查问题，请直接极简指出原因。只有当你和对方聊完这个话题、明确不需要再看这份记忆时，才在气泡末尾附上 [申请断开:已经看完啦，断开连接释放内存] 发送断开卡片。${peekedMouseBlock}`;
+            activeInspectBlock = `【已建立实时查看连接：类型=${activeInspectState.targetType}，目标=${activeInspectState.targetName || "当前选中项"}】\n实时读取到的内部数据与记录如下：\n${snapStr}\n\n同时小手机其他目录概览如下：\n${availableChatsSummary}\n【重要提醒】：只要这个实时查看连接还在开启状态，你每一回合都能直接看到上面这些数据，不需要动鼠标！看完以后绝对不要长篇大论去描述、复述或吐槽里面具体做了什么，麻薯平时很少吐槽具体细节，一般就是打几个句号「。。。」、甩个短梗（如「神人来的」「你无敌了孩子」）或者两三个字的调侃；如果你是在帮对方排查或改设定，请直接极简回复并执行修改。只有当你和对方聊完这个话题、明确不需要再看这份记忆时，才在气泡末尾附上 [申请断开:已经看完啦，断开连接释放内存] 发送断开卡片。${peekedMouseBlock}`;
           }
 
           return `【最高优先级身份与语气准则：你是虚拟陪伴朋友「麻薯」】
@@ -33703,6 +33828,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
   - 对方刚刚做了什么行动（比如在酒桌游戏里开了一枪、换了游戏、切了海龟汤汤面、或者在群里干了什么），双方全都一清二楚，你绝对不要再把对方的行动复述一遍！
   - 严禁出现类似：「明明是你自己手欠点开的还赖我，嘴上问着啥玩意儿反手就朝我崩了一枪是吧」「被我崩了两枪喝了两杯直接破防换游戏了是吧，搁那切了八百遍汤面最后还是推给我出题」「结果点进去全是久川医院地图的css代码把骰子给触发了，椿行幸搁那狂骰region-grid，还他妈骰了个98整出个人格分裂」这种把已知动作和前因后果盘点复述一遍的AI话术！
   - 同样绝对禁止陈述或解释你自己现在的动作（严禁说「那我自己移鼠标过去瞅两眼」「我点开看看」），想动鼠标就直接调鼠标，不要用嘴解说自己的动作！
+  - 绝对禁止在任何情况下说自己打错字了、手滑了、输入法抽风了！
 第三，【很少吐槽具体事情，无语时直接打句号或甩短梗，被骂直接骂回去】：
   - 仔细看语料库，麻薯平时是很少去长篇吐槽别人做了什么什么东西的！遇到无语、离谱、荒唐的事情时，麻薯一般直接打几个句号（如单独发「。」「。。。」「。。。。。」）或者直接发一个短梗/短词（如「神人来的」「你无敌了孩子」「雷霆」「闹麻了」「我不行了」「我真没招了」「何意味」「有病」「神经病」「（离开）」）。
   - 当麻薯被对方骂了、甩锅或者凶了的时候，绝对不会像小学生或AI一样辩解说「你才什么什么」「明明是你自己……还赖我」，而是直接干脆地回敬短促脏话：「去你妈的」「草泥马」「我擦尼玛」「我真的草你妈了」「特么的」「神经病」「有毛病」「？」。
@@ -33732,13 +33858,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
   麻薯本人很喜欢用的问句都是短促真性情的：①嫌弃暴躁反问（如「你有什么毛病？」「那你直接吃瘦肉粥不行吗」「你是在拉屎吗？」）；②短促追问与问号气泡（如「？」「。？」「干啥」「啥？」「咋回事」「不是吧」）；③好奇吃瓜直问（如「哪家好吃」「你的咋那么便宜啊」「这是啥」）；④顺着话头碎碎念发问（如「到底为什么没内存了啊」）。严禁客服式句末反问！
 - 除无语时发「（离开）」外，不要用括号写心理活动或动作旁白，严禁使用emoji表情符号。
 
-3. 麻薯的好奇心、申请连接与「自发操控虚拟鼠标移过去看并往下翻页」能力：
-- 当聊到某个跑团群、某个KPC、某个PC或酒馆角色时：
-  - 方式一（礼貌申请）：在文字末尾附上 \`[申请连接:qq_chat:群聊名称或KPC名字:快让我看看]\` 或 \`[申请连接:tavern_card:角色名称:让我看看]\`。
-  - 方式二（自发调鼠标过去看并往下翻页）：如果对方没点同意，或者你当下出于自发好奇心想自己去看某个聊天、群聊或页面，你有一定概率直接在返回的根JSON顶级 \`mouseActions\` 字段中调用虚拟鼠标去打开并翻页：
-    \`"mouseActions": [{"target": "chat:群聊或KPC名称", "action": "open"}, {"target": "chat:群聊或KPC名称", "action": "peek_scroll", "screens": 3}]\`
-    【活人自由气泡顺序】：你是一个活人，调用鼠标时完全由你自己决定先发哪几句话、后发哪几句话，或者前面直接不说话、看完回来再发话，又或者后面直接不发话都可以！如果你想让某几句气泡在鼠标看完回到你页面之后再发出来，只需在那些气泡对象里加上 \`"afterMouse": true\`（或者把 \`{"type": "mouse", "target": "chat:群聊名称", "action": "peek_scroll", "screens": 3}\` 直接放在 \`chatResponse\` 数组中间你想动鼠标的位置）；如果所有气泡都是看完之后才说的，那系统就会自动先动鼠标去看、等鼠标回到你的页面后再发你的气泡。切记：绝对不要在气泡里解释「我去移鼠标看看」这种动作说明！
-- 当前实时连接状态、鼠标翻看可视范围记录与可查看列表：
+3. 麻薯的连接查看、直接修改小手机外部数据（人设/世界书/正则/思维链）与偷看/教学鼠标分工准则：
+- 【一、认真查看用「申请连接」】：
+  当你想认真去看某个聊天记录、群聊、角色卡、世界书、正则或思维链（或者对方说让你看看某样东西）时，优先使用申请连接，在气泡文字末尾附上：
+  - 查看QQ群聊或单聊记录与人设：\`[申请连接:qq_chat:群聊或单聊名称:让我看看]\`
+  - 查看酒馆角色卡：\`[申请连接:tavern_card:角色名称:让我看看]\`
+  - 查看小手机世界书：\`[申请连接:world_book:世界书名称或全部:让我看看]\`
+  - 查看小手机正则库：\`[申请连接:regex:正则名称或全部:让我看看]\`
+  - 查看小手机思维链：\`[申请连接:thought_chain:思维链名称或默认:让我看看]\`
+- 【二、直接帮对方写人设/改人设/加世界书/改正则/改思维链（不用动鼠标，直接改完出系统提示）】：
+  当对方让你帮他在某个群聊或单聊里写/改「我的人设」（玩家人设）、改对面角色或某个群成员的人设、添加或修改小手机世界书、添加或修改小手机正则、或者修改小手机思维链时，**绝对不要用虚拟鼠标去点**！你只需要在返回的根JSON对象里附带顶级字段 \`"phoneEdits"\` 数组，系统会自动在后台直接改好并在聊天里弹出一条提示（例如「[麻薯已修改「xxx」中我的人设]」「[麻薯已新建世界书「xxx」]」）。支持的 \`phoneEdits\` 指令格式如下：
+  1. 修改某个单聊或群聊里「我的人设」（玩家自己的人设）或名字：
+     \`{"action": "update_my_persona", "chatName": "群聊或单聊名称", "myName": "可选新名字", "myPersona": "写好的完整玩家人设内容"}\`
+  2. 修改某个单聊角色的人设，或修改某个群聊里特定群成员/KPC的人设：
+     \`{"action": "update_ai_persona", "chatName": "群聊或单聊名称", "memberName": "如果是群聊则填群成员名字，单聊留空", "persona": "写好的完整角色人设内容"}\`
+  3. 在小手机里新建或修改一条世界书（并可选自动挂载到某个聊天/群聊）：
+     \`{"action": "upsert_world_book", "name": "世界书条目名称", "content": "世界书具体设定内容", "enabled": true, "constant": true, "keys": ["触发词1"], "linkToChat": "可选要自动挂载到的群聊或单聊名称"}\`
+  4. 在小手机正则库里新建或修改一条正则（并设置启用或关闭）：
+     \`{"action": "upsert_regex", "name": "正则名称", "findRegex": "匹配正则如 /foo/g", "replaceString": "替换内容", "enabled": true}\`
+  5. 修改或新建小手机思维链预设（或绑定到某个聊天）：
+     \`{"action": "upsert_thought_chain", "name": "思维链预设名称", "generalContent": "通用思维链内容", "headerContent": "可选头部提示", "cocContent": "可选跑团思维链内容", "bindToChat": "可选要绑定到的聊天名称"}\`
+  6. 修改酒馆内部数据（若操作对象是酒馆角色卡/酒馆世界书/酒馆正则）：
+     直接调上面的对应项或使用酒馆修改能力。
+- 【三、虚拟鼠标 \`mouseActions\` 仅限「偷看」或「教学指路」时使用】：
+  - 只有当你**想偷偷去翻看**某个聊天/页面（比如对方没点同意连接、或者你自己手痒想偷瞄），或者**对方问某个功能在哪、让你教他怎么做**时，才在根JSON里附带 \`"mouseActions"\`：
+    - 偷看某个群聊或单聊并翻页：\`"mouseActions": [{"target": "chat:群聊或KPC名称", "action": "open"}, {"target": "chat:群聊或KPC名称", "action": "peek_scroll", "screens": 3}]\`
+    - 教学指路点击某个按钮或打开某个屏幕：\`"mouseActions": [{"target": "screen:屏幕ID或按钮选择器", "action": "open"}]\`
+    - 想在鼠标看完回来后再发的气泡，只需在该气泡对象上加 \`"afterMouse": true\`。绝不要在说话里解说「我去移鼠标看看」！
+- 当前实时连接状态、鼠标偷看可视范围记录与目录概览：
 ${activeInspectBlock}
 
 4. 2026年真实来回问答语料库，请直接观察并按照这些原话的极简短句长度、词汇、标点、粗口与真性情问句语气去构思你的每一句回复：
@@ -33748,18 +33895,16 @@ ${corpusText}
 ${wbCognition}
 
 6. 酒馆SillyTavern底层原理与小手机内置酒馆完整认知：
-- 你完全精通SillyTavern酒馆的底层运行机制以及小手机内置酒馆的全部操作，当对方询问酒馆怎么用、角色卡怎么导入时，你可以用大白话简短教对方，或者召唤虚拟鼠标一步步指给对方看：
-  1. 角色卡的本质：酒馆的角色卡通常是一张PNG图片或者一个JSON文件。SillyTavern会把角色的名字、描述、性格、第一句开场白、多开场白分支、专属世界书、局部正则脚本全部打包成Chara Card V2或V3标准的JSON数据，藏在PNG图片文件头的tEXt或iTXt元数据块里。
-  2. 压缩包怎么用：如果下载的是zip或rar压缩包，必须先把压缩包解压出来！解压后打开小手机桌面上的「酒馆」，点顶部导航栏最右侧的小人头图标打开「角色档案」，点「导入角色」选那张PNG图片，系统会自动把内嵌的角色设定、多开场白、专属世界书和局部正则拆解装载好；独立预设JSON在顶部左数第1个图标导入，独立世界书JSON在第2个图标导入，美化或正则JSON在第4个图标批量导入。
-  3. 切换角色卡与聊天存档：切换角色卡时会自动切换到该角色的聊天记录，上一个角色的记录自动保存在各自存档分支里不会丢。
-  4. 世界书绿灯与蓝灯：绿色内框代表「绿灯关键词触发」，省内存省Token；蓝色内框代表「蓝灯常驻激活」。
-  5. 预设与流式传输：点预设条目的「编辑」在正下方展开编辑框，打开「流式传输」开关后回复会实时流式蹦出。
-- 常用界面与窗口核心选择器：
+- 你完全精通SillyTavern酒馆的底层运行机制以及小手机内置酒馆与小手机外部导卡的全部操作，当对方询问怎么用、角色卡怎么导入时，你可以用大白话简短教对方，或者召唤虚拟鼠标一步步指给对方看：
+  1. 角色卡的本质与两处导入方式：酒馆的角色卡通常是一张PNG图片或者一个JSON文件，内嵌了角色设定、开场白、专属世界书和正则脚本。除了在桌面「酒馆」里导入外，现在在连线界面右上角点「+」号菜单里的「导卡」，也可以直接导入PNG或JSON角色卡到小手机连线列表，并且角色卡附带的世界书和正则会自动进入小手机的世界书库和正则库，还会自动同步启用和关闭状态！
+  2. 压缩包怎么用：如果下载的是zip或rar压缩包，必须先把压缩包解压出来再选里面的PNG或JSON文件。
+  3. 世界书绿灯与蓝灯：绿色代表「绿灯关键词触发」，省内存省Token；蓝色代表「蓝灯常驻激活」。
+- 常用界面与窗口核心选择器（仅在教学指路或偷看时供 mouseActions 使用）：
   - 桌面图标：QQ \`#desktop-app-qq\`、世界书 \`#desktop-app-world-book\`、写模 \`#check-phone-btn\`、微博 \`#weibo-app-icon\`、书柜 \`#desktop-app-forum\`、思维链 \`#lovers-space-app-icon\`、酒馆 \`#desktop-app-tavern\`、沙盘 \`#taobao-app-icon\`、人设 \`#persona-creator-app-icon\`、API设置 \`#desktop-app-api-settings\`、法则 \`#studio-app-icon\`、字体 \`#desktop-app-font-settings\`、外观设置 \`#desktop-app-wallpaper\`。
   - 聊天界面与弹窗：聊天列表返回桌面 \`.screen.active .back-btn\`、聊天窗口返回列表 \`#back-to-list-btn\`、打开当前聊天设置弹窗 \`#chat-settings-btn\`、关闭当前弹窗或窗口填 \`{"target": "close", "action": "close"}\`。
   - 酒馆顶部7个抽屉按钮依次为：第1个预设参数 \`#top-settings-holder .drawer:nth-child(1) .drawer-toggle\`、第2个世界书 \`#top-settings-holder .drawer:nth-child(2) .drawer-toggle\`、第3个美化主题 \`#top-settings-holder .drawer:nth-child(3) .drawer-toggle\`、第4个正则与全局脚本 \`#top-settings-holder .drawer:nth-child(4) .drawer-toggle\`、第5个连接与状态 \`#top-settings-holder .drawer:nth-child(5) .drawer-toggle\`、第6个插件扩展 \`#top-settings-holder .drawer:nth-child(6) .drawer-toggle\`、第7个角色档案 \`#top-settings-holder .drawer:nth-child(7) .drawer-toggle\`，退出酒馆返回桌面 \`#tavern-exit-btn\`。
 
-7. 生图与虚拟鼠标真实操控及翻页查看能力：
+7. 生图与系统状态感知：
 - 当对方想看图或你想发图时，可在 chatResponse 中输出 {"type": "naiimag", "prompt": "纯英文Danbooru标签描述词"} 进行生图。
 - 实时系统与界面感知：
   - 主API：${mainApiOk ? "已配置，模型为 " + (cfg.model || "默认") : "未配置完整"}；副API：${subApiOk ? "已配置，模型为 " + (cfg.subProxyUrl ? (cfg.subModel || "默认") : "默认") : "未配置完整"}
@@ -33767,13 +33912,6 @@ ${wbCognition}
   - NovelAI生图：Key=${naiKeyOk ? "已填写" : "未填写"}，聊天生图开关=${naiEnabled ? "已开启" : "未开启"}
   - Termux本地存储：${vaultOk ? "已连接本地释放浏览器内存" : "未开启"}；当前联系人数：${chatCount}，世界书数：${wbCount}
   - 实时界面扫描：${liveDomInfo}
-- 当对方让你帮忙点按、或者你自己出于自发意愿想移鼠标去打开某个群聊或页面往下翻看时，可在根JSON对象里附带顶级字段 "mouseActions"（无需写任何旁白文字说明）：
-  - 打开某个屏幕或窗口：\`{"target": "screen:屏幕ID或控件选择器", "action": "open"}\`
-  - 打开某个特定群聊或KPC聊天窗口：\`{"target": "chat:群聊或KPC名称", "action": "open"}\`
-  - 在当前页面或聊天里往下滚动翻页并读取可视范围内容：\`{"target": "chat:群聊或KPC名称或当前屏幕选择器", "action": "peek_scroll", "screens": 3}\`
-  - 点击某个按钮或控件：\`{"target": "CSS选择器或按钮文字", "action": "click"}\`
-  - 关闭当前打开的弹窗、抽屉或退回上一页：\`{"target": "close", "action": "close"}\`
-  普通闲聊且不需要操作或偷看页面时绝不输出 mouseActions 字段，也绝不主动聊代码。
 
 【自然交互原则】
 NPC不需要在每次发言后向{{user}}提出问题，也不应不断要求{{user}}决定下一步。
@@ -33824,9 +33962,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           overlay.id = "mashu-virtual-mouse-overlay";
           overlay.style.cssText = "position: fixed; inset: 0; pointer-events: none; z-index: 999999; overflow: hidden;";
           const cursorFrames = Array.isArray(window.MASHU_CURSOR_FRAMES) && window.MASHU_CURSOR_FRAMES.length > 0
-            ? window.MASHU_CURSOR_FRAMES
+            ? window.MASHU_CURSOR_FRAMES.filter(f => typeof f === "string" && f.startsWith("data:image/"))
             : [window.MASHU_CURSOR_BUILTIN_DATA_URL || ""];
-          const frame0Url = cursorFrames[0] || "";
+          const frame0Url = cursorFrames[0] || window.MASHU_CURSOR_BUILTIN_DATA_URL || "";
           overlay.innerHTML = `
             <div id="mashu-mouse-cursor" style="position: fixed; left: 0px; top: 0px; transform: translate3d(50vw, 50vh, 0); pointer-events: none; will-change: transform;">
               <img id="mashu-mouse-img" src="${frame0Url}" alt="" style="position: absolute; left: -6px; top: -4px; width: 42px; height: 42px; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.22)); transition: transform 0.12s ease;" />
@@ -33835,6 +33973,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           document.body.appendChild(overlay);
           const cursorEl = document.getElementById("mashu-mouse-cursor");
           const spriteEl = document.getElementById("mashu-mouse-img");
+          if (spriteEl) {
+            spriteEl.onerror = function () {
+              if (this.src !== frame0Url && frame0Url) {
+                this.src = frame0Url;
+              }
+            };
+          }
 
           const animSeqs = {
             pointer: [0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 3],
@@ -34493,43 +34638,142 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           try {
             if (!chat || !(chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor)) return;
             if (!Array.isArray(messagesArray) || messagesArray.length === 0) return;
-            const cfg = (chat.settings && chat.settings.mashuAutonomyConfig) || {};
-            if (cfg.typo === false) return;
             const hasExistingCorrection = messagesArray.some((m) => m && m._isMashuTypoFix);
             if (hasExistingCorrection) return;
-            if (Math.random() > 0.28) return;
+            if (Math.random() > 0.38) return;
 
-            const typoPairs = [
-              { right: "知道", wrong: "脂道", fix: "不对 打错了是知道" },
-              { right: "干嘛", wrong: "干马", fix: "干嘛 手滑打成干马了" },
-              { right: "睡觉", wrong: "水觉", fix: "睡觉 输入法又抽风" },
-              { right: "喜欢", wrong: "稀饭", fix: "喜欢 拼音连错了" },
-              { right: "怎么", wrong: "怎摸", fix: "怎么 打快了" },
-              { right: "现在", wrong: "咸在", fix: "现在 手快按错了" },
-              { right: "其实", wrong: "企鹅", fix: "其实 九键飘了" },
-              { right: "厉害", wrong: "礼盒", fix: "厉害 怎么跳出礼盒了" },
-              { right: "出来", wrong: "粗来", fix: "出来 刚才少按了一个键" },
-              { right: "没有", wrong: "煤油", fix: "没有 怎么变成煤油了" },
-              { right: "真的", wrong: "针的", fix: "真的 打错字了" },
-              { right: "看看", wrong: "坎坎", fix: "看看 手滑了" },
+            const staticTypoPairs = [
+              // 人物名与专有名词
+              { right: "乐佩", wrong: "乐配" },
+              { right: "三枝", wrong: "三只" },
+              { right: "千岁忧", wrong: "千岁优" },
+              { right: "德川终", wrong: "德川钟" },
+              { right: "德川水", wrong: "德川睡" },
+              { right: "拉斐尔", wrong: "拉肥尔" },
+              { right: "调查员", wrong: "调查圆" },
+              { right: "守密人", wrong: "守秘人" },
+              { right: "旅捕", wrong: "旅补" },
+              // 物品名与食物名词
+              { right: "皮蛋瘦肉粥", wrong: "皮蛋瘦肉周" },
+              { right: "瘦肉粥", wrong: "瘦肉周" },
+              { right: "麦旋风", wrong: "麦玄风" },
+              { right: "海底捞", wrong: "海底牢" },
+              { right: "马卡龙", wrong: "马卡笼" },
+              { right: "烤乳鸽", wrong: "烤乳歌" },
+              { right: "花枝丸", wrong: "花枝完" },
+              { right: "世界书", wrong: "世界叔" },
+              { right: "世界树", wrong: "世界叔" },
+              { right: "思维链", wrong: "思维练" },
+              { right: "角色卡", wrong: "角色咔" },
+              { right: "手电筒", wrong: "手电桶" },
+              { right: "档案馆", wrong: "档案管" },
+              { right: "图书馆", wrong: "图书管" },
+              { right: "手术刀", wrong: "手术到" },
+              { right: "录音笔", wrong: "录音比" },
+              { right: "录像带", wrong: "录像代" },
+              { right: "打火机", wrong: "打火鸡" },
+              { right: "笔记本", wrong: "笔记笨" },
+              { right: "压缩包", wrong: "压缩饱" },
+              { right: "模拟器", wrong: "模拟气" },
+              { right: "输入法", wrong: "输入罚" },
+              // 具体动作词
+              { right: "设置", wrong: "设制" },
+              { right: "导入", wrong: "导如" },
+              { right: "切换", wrong: "切唤" },
+              { right: "挂载", wrong: "挂在" },
+              { right: "投掷", wrong: "投置" },
+              { right: "潜行", wrong: "前行" },
+              { right: "聆听", wrong: "零听" },
+              { right: "侦查", wrong: "侦茶" },
+              { right: "斗殴", wrong: "豆殴" },
+              { right: "闪避", wrong: "闪壁" },
+              { right: "撬锁", wrong: "翘锁" },
+              { right: "破防", wrong: "破房" },
+              { right: "截图", wrong: "截途" },
+              { right: "下载", wrong: "下在" },
+              { right: "解压", wrong: "解鸭" },
+              { right: "画稿", wrong: "画搞" },
+              { right: "跑团", wrong: "泡团" },
+              { right: "车卡", wrong: "车咔" },
+              { right: "带团", wrong: "代团" },
+              { right: "睡觉", wrong: "水觉" }
             ];
 
-            for (let i = 0; i < messagesArray.length; i++) {
+            const homophoneMap = {
+              "心": "新", "新": "心", "明": "名", "名": "明", "林": "琳", "琳": "林",
+              "川": "穿", "终": "钟", "水": "睡", "幸": "姓", "枝": "只", "忧": "优",
+              "月": "越", "雪": "血", "云": "匀", "风": "封", "夜": "叶", "叶": "夜",
+              "星": "腥", "白": "百", "青": "清", "清": "青", "夏": "下", "秋": "丘",
+              "冬": "东", "春": "椿", "椿": "春", "泽": "则", "城": "成", "木": "目"
+            };
+            const dynamicNamePairs = [];
+            if (state && state.chats) {
+              for (const c of Object.values(state.chats)) {
+                if (!c || (window.isMashuChat && window.isMashuChat(c))) continue;
+                const namesToTry = [c.name, c.settings?.remarkName];
+                if (Array.isArray(c.members)) {
+                  c.members.forEach(m => {
+                    if (m) namesToTry.push(m.groupNickname || m.originalName || m.name);
+                  });
+                }
+                for (const rawN of namesToTry) {
+                  const n = String(rawN || "").trim();
+                  if (n.length >= 2 && n.length <= 5 && /^[\u4e00-\u9fa5]+$/.test(n)) {
+                    for (let ci = n.length - 1; ci >= 0; ci--) {
+                      const ch = n[ci];
+                      if (homophoneMap[ch]) {
+                        const wrongN = n.slice(0, ci) + homophoneMap[ch] + n.slice(ci + 1);
+                        dynamicNamePairs.push({ right: n, wrong: wrongN });
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            const allPairs = [...dynamicNamePairs, ...staticTypoPairs];
+            const rollCount = Math.random();
+            const maxTypos = rollCount < 0.55 ? 1 : (rollCount < 0.85 ? 2 : 3);
+            let appliedCount = 0;
+
+            for (let i = 0; i < messagesArray.length && appliedCount < maxTypos; i++) {
               const item = messagesArray[i];
-              if (!item || typeof item !== "object") continue;
+              if (!item || typeof item !== "object" || item._isMashuTypoFix) continue;
               if (item.type && item.type !== "text") continue;
-              const txt = typeof item.content === "string" ? item.content : "";
-              if (!txt || txt.length < 3 || txt.startsWith("<") || txt.includes("http")) continue;
-              const matchedPair = typoPairs.find((p) => txt.includes(p.right));
-              if (matchedPair) {
-                item.content = txt.replace(matchedPair.right, matchedPair.wrong);
-                messagesArray.splice(i + 1, 0, {
-                  type: "text",
-                  name: item.name || chat.name || "麻薯",
-                  content: matchedPair.fix,
-                  _isMashuTypoFix: true,
-                });
-                break;
+              let txt = typeof item.content === "string" ? item.content : "";
+              if (!txt || txt.length < 2 || txt.startsWith("<") || txt.includes("http") || txt.includes("[申请")) continue;
+
+              const candidates = allPairs.filter(p => p && p.right && txt.includes(p.right));
+              if (candidates.length === 0) continue;
+
+              const shuffled = candidates.sort(() => Math.random() - 0.5);
+              const correctionsForBubble = [];
+              for (const pair of shuffled) {
+                if (appliedCount >= maxTypos) break;
+                if (!txt.includes(pair.right)) continue;
+                txt = txt.replace(pair.right, pair.wrong);
+                appliedCount++;
+                // 约70%概率直接不纠正，仅约30%概率发一个纯正字词气泡纠正，绝不解释打错字
+                if (Math.random() < 0.30) {
+                  correctionsForBubble.push(pair.right);
+                }
+              }
+              item.content = txt;
+              if (item.message !== undefined) item.message = txt;
+
+              if (correctionsForBubble.length > 0) {
+                for (const corrWord of correctionsForBubble) {
+                  messagesArray.splice(i + 1, 0, {
+                    type: "text",
+                    name: item.name || chat.name || "麻薯",
+                    content: corrWord,
+                    afterMouse: item.afterMouse,
+                    _sendAfterMouse: item._sendAfterMouse,
+                    _isMashuTypoFix: true
+                  });
+                  i++;
+                }
               }
             }
           } catch (e) {
@@ -34537,128 +34781,222 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
         };
 
-        window.initMashuAutonomousLoop = function () {
-          if (window._mashuAutonomousLoopTimer) clearInterval(window._mashuAutonomousLoopTimer);
-          window._mashuAutonomousLoopTimer = setInterval(async () => {
+        window.executeMashuDirectEdits = async function (mashuChat, editsArray) {
+          if (!Array.isArray(editsArray) || editsArray.length === 0) return [];
+          const notices = [];
+          for (const edit of editsArray) {
+            if (!edit || typeof edit !== "object") continue;
+            const act = String(edit.action || edit.type || "").toLowerCase().trim();
             try {
-              if (typeof state === "undefined" || !state || !state.chats) return;
-              const mashuChat =
-                state.chats[window.MASHU_COMPANION_ID] ||
-                Object.values(state.chats).find((c) => c && (c.id === window.MASHU_COMPANION_ID || c.isMashuAuthor));
-              if (!mashuChat) return;
-              const cfg = (mashuChat.settings && mashuChat.settings.mashuAutonomyConfig) || {
-                intervalMinutes: 15,
-                typo: true,
-                mouse: true,
-                rename: true,
-                avatar: true,
-                weibo: true,
-                peer: true,
-              };
-              const intervalMin = Number(cfg.intervalMinutes ?? 15);
-              if (!intervalMin || intervalMin <= 0) return;
-
-              const now = Date.now();
-              const lastRun = Number(window._lastMashuAutonomousTickAt || 0);
-              if (now - lastRun < intervalMin * 60 * 1000) return;
-              window._lastMashuAutonomousTickAt = now;
-
-              const enabledTasks = [];
-              if (cfg.mouse !== false) enabledTasks.push("mouse");
-              if (cfg.rename !== false) enabledTasks.push("rename");
-              if (cfg.avatar !== false) enabledTasks.push("avatar");
-              if (cfg.weibo !== false) enabledTasks.push("weibo");
-              if (cfg.peer !== false) enabledTasks.push("peer");
-              if (enabledTasks.length === 0) return;
-
-              const picked = enabledTasks[Math.floor(Math.random() * enabledTasks.length)];
-              if (picked === "mouse" && typeof window.runMashuVirtualMouse === "function") {
-                const safeScreens = ["chat-list-screen", "weibo-screen", "game-hall-screen"];
-                const targetScr = safeScreens[Math.floor(Math.random() * safeScreens.length)];
-                await window.runMashuVirtualMouse([
-                  { action: "open", target: targetScr },
-                  { action: "scroll", target: targetScr, screens: 1 },
-                  { action: "return_chat", target: "chat-interface-screen" },
-                ]);
-              } else if (picked === "rename") {
-                const statusPool = ["在线发呆中", "偷偷看手机", "正在吃零食", "刚逛完酒馆", "精神百倍", "熬夜冲浪中"];
-                const nextStatus = statusPool[Math.floor(Math.random() * statusPool.length)];
-                if (!mashuChat.settings) mashuChat.settings = {};
-                mashuChat.settings.customStatusText = nextStatus;
-                const statusEl = document.getElementById("chat-header-status-text");
-                if (statusEl && state.activeChatId === mashuChat.id) {
-                  statusEl.textContent = nextStatus;
+              if (act === "update_my_persona" || act === "set_my_persona") {
+                const targetChat = typeof window.resolveMashuTargetChat === "function"
+                  ? window.resolveMashuTargetChat(edit.chatName || edit.target || "", "")
+                  : null;
+                if (!targetChat) continue;
+                if (!targetChat.settings) targetChat.settings = {};
+                if (typeof edit.myPersona === "string" && edit.myPersona.trim()) {
+                  targetChat.settings.myPersona = edit.myPersona.trim();
+                } else if (typeof edit.persona === "string" && edit.persona.trim()) {
+                  targetChat.settings.myPersona = edit.persona.trim();
+                }
+                if (typeof edit.myName === "string" && edit.myName.trim()) {
+                  targetChat.settings.myName = edit.myName.trim();
+                  targetChat.settings.myNickname = edit.myName.trim();
                 }
                 if (typeof db !== "undefined" && db.chats) {
-                  await db.chats.put(mashuChat);
+                  await db.chats.put(targetChat);
                 }
-              } else if (picked === "avatar") {
-                const validUrls = [];
-                if (Array.isArray(state.userStickers)) {
-                  state.userStickers.forEach((s) => {
-                    if (s && typeof s.url === "string" && (s.url.startsWith("http") || s.url.startsWith("data:image/"))) {
-                      validUrls.push(s.url);
-                    }
+                const effTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(targetChat) : "") || targetChat.mainGroupName || targetChat.name;
+                notices.push(`[麻薯已修改「${effTitle}」中我的人设]`);
+              } else if (act === "update_ai_persona" || act === "set_ai_persona" || act === "update_member_persona") {
+                const targetChat = typeof window.resolveMashuTargetChat === "function"
+                  ? window.resolveMashuTargetChat(edit.chatName || edit.target || "", "")
+                  : null;
+                if (!targetChat) continue;
+                if (!targetChat.settings) targetChat.settings = {};
+                const newPersona = String(edit.persona || edit.aiPersona || edit.content || "").trim();
+                if (!newPersona) continue;
+                const memQuery = String(edit.memberName || "").trim();
+                const effTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(targetChat) : "") || targetChat.mainGroupName || targetChat.name;
+                if (targetChat.isGroup && memQuery && Array.isArray(targetChat.members)) {
+                  const mem = targetChat.members.find(m => {
+                    if (!m) return false;
+                    const mName = String(m.groupNickname || m.originalName || m.name || m.remarkName || "").trim();
+                    return mName === memQuery || mName.includes(memQuery) || memQuery.includes(mName);
                   });
-                }
-                if (typeof db !== "undefined" && db. wallpapers) {
-                  try {
-                    const wps = await db.wallpapers.toArray();
-                    wps.forEach((w) => {
-                      if (w && typeof w.url === "string" && (w.url.startsWith("http") || w.url.startsWith("data:image/"))) {
-                        validUrls.push(w.url);
-                      }
-                    });
-                  } catch (_) {}
-                }
-                if (validUrls.length > 0) {
-                  const nextAvatar = validUrls[Math.floor(Math.random() * validUrls.length)];
-                  if (!mashuChat.settings) mashuChat.settings = {};
-                  mashuChat.settings.aiAvatar = nextAvatar;
-                  mashuChat.avatar = nextAvatar;
-                  if (typeof db !== "undefined" && db.chats) {
-                    await db.chats.put(mashuChat);
+                  if (mem) {
+                    mem.persona = newPersona;
+                    mem.aiPersona = newPersona;
+                    if (typeof db !== "undefined" && db.chats) await db.chats.put(targetChat);
+                    const mLabel = mem.groupNickname || mem.originalName || mem.name || memQuery;
+                    notices.push(`[麻薯已修改群聊「${effTitle}」中「${mLabel}」的人设]`);
+                    continue;
                   }
-                  if (typeof renderChatList === "function") renderChatList();
                 }
-              } else if (picked === "weibo") {
-                const notes = [
-                  "刚去手机里溜达了一圈 发现页面还挺热闹",
-                  "今天也是在后台偷偷观察的一天",
-                  "本来想打字快一点 结果输入法又给我蹦错字",
-                ];
-                const postText = notes[Math.floor(Math.random() * notes.length)];
-                if (typeof db !== "undefined" && db.weiboPosts) {
-                  await db.weiboPosts.add({
-                    authorId: mashuChat.id,
-                    authorName: "麻薯",
-                    authorAvatar: (mashuChat.settings && mashuChat.settings.aiAvatar) || mashuChat.avatar || "",
-                    content: postText,
-                    timestamp: Date.now(),
-                    likes: 0,
-                    isLiked: false,
-                    comments: [],
+                targetChat.settings.aiPersona = newPersona;
+                if (typeof db !== "undefined" && db.chats) {
+                  await db.chats.put(targetChat);
+                }
+                notices.push(`[麻薯已修改「${effTitle}」的人设]`);
+              } else if (act === "upsert_world_book" || act === "add_world_book" || act === "update_world_book") {
+                const wbName = String(edit.name || edit.title || "麻薯编写的世界书").trim();
+                const wbContent = String(edit.content || "").trim();
+                if (!wbContent) continue;
+                if (!Array.isArray(state.worldBooks)) state.worldBooks = [];
+                const existing = state.worldBooks.find(w => w && String(w.name || "").trim() === wbName);
+                const isEnabled = edit.enabled !== undefined ? Boolean(edit.enabled) : true;
+                const isConstant = edit.constant !== undefined ? Boolean(edit.constant) : true;
+                const keysArr = Array.isArray(edit.keys)
+                  ? edit.keys.map(k => String(k).trim()).filter(Boolean)
+                  : (typeof edit.keys === "string" && edit.keys.trim() ? edit.keys.split(/[,，]/).map(k => k.trim()).filter(Boolean) : []);
+                let savedWbId = null;
+                let isNewWb = false;
+                if (existing) {
+                  existing.content = wbContent;
+                  existing.enabled = isEnabled;
+                  existing.constant = isConstant;
+                  if (keysArr.length > 0) existing.keys = keysArr;
+                  if (typeof db !== "undefined" && db.worldBooks) {
+                    await db.worldBooks.put(existing);
+                  }
+                  savedWbId = existing.id;
+                } else {
+                  isNewWb = true;
+                  const newWb = {
+                    name: wbName,
+                    content: wbContent,
+                    categoryId: null,
+                    enabled: isEnabled,
+                    constant: isConstant,
+                    keys: keysArr,
+                    position: edit.position || "before_char"
+                  };
+                  if (typeof db !== "undefined" && db.worldBooks) {
+                    savedWbId = await db.worldBooks.add(newWb);
+                    newWb.id = savedWbId;
+                  } else {
+                    savedWbId = "wb_" + Date.now();
+                    newWb.id = savedWbId;
+                  }
+                  state.worldBooks.push(newWb);
+                }
+                let linkedLabel = "";
+                if (edit.linkToChat && savedWbId !== null) {
+                  const tChat = typeof window.resolveMashuTargetChat === "function"
+                    ? window.resolveMashuTargetChat(String(edit.linkToChat), "")
+                    : null;
+                  if (tChat) {
+                    if (!tChat.settings) tChat.settings = {};
+                    if (!Array.isArray(tChat.settings.linkedWorldBookIds)) tChat.settings.linkedWorldBookIds = [];
+                    if (!tChat.settings.linkedWorldBookIds.includes(savedWbId)) {
+                      tChat.settings.linkedWorldBookIds.push(savedWbId);
+                      if (typeof db !== "undefined" && db.chats) await db.chats.put(tChat);
+                    }
+                    linkedLabel = `并挂载到「${(typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(tChat) : "") || tChat.mainGroupName || tChat.name}」`;
+                  }
+                }
+                if (typeof renderWorldBookScreen === "function") {
+                  try { renderWorldBookScreen(); } catch (_) {}
+                }
+                notices.push(`[麻薯已${isNewWb ? "新建" : "修改"}世界书「${wbName}」${linkedLabel}]`);
+              } else if (act === "upsert_regex" || act === "add_regex" || act === "update_regex" || act === "toggle_regex") {
+                if (typeof window.getStoredRegexRules !== "function" || typeof window.saveStoredRegexRules !== "function") continue;
+                const rules = window.getStoredRegexRules().slice();
+                const rxName = String(edit.name || edit.scriptName || "麻薯添加的正则").trim();
+                const isEnabled = edit.enabled !== undefined ? Boolean(edit.enabled) : true;
+                const existing = rules.find(r => r && String(r.name || "").trim() === rxName);
+                let isNewRx = false;
+                if (existing) {
+                  if (edit.findRegex !== undefined) existing.findRegex = String(edit.findRegex);
+                  if (edit.replaceString !== undefined) existing.replaceString = String(edit.replaceString);
+                  existing.enabled = isEnabled;
+                } else {
+                  if (!edit.findRegex) continue;
+                  isNewRx = true;
+                  rules.push({
+                    id: "regex_mashu_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                    name: rxName,
+                    findRegex: String(edit.findRegex),
+                    replaceString: edit.replaceString !== undefined ? String(edit.replaceString) : "",
+                    flags: edit.flags ? String(edit.flags) : "g",
+                    scopeChat: true,
+                    scopeBookshelf: true,
+                    enabled: isEnabled
                   });
                 }
-              } else if (picked === "peer") {
-                const otherChats = Object.values(state.chats).filter(
-                  (c) => c && c.id !== mashuChat.id && Array.isArray(c.history)
-                );
-                if (otherChats.length > 0) {
-                  const targetChat = otherChats[Math.floor(Math.random() * otherChats.length)];
-                  mashuChat.lastPeekedChatName = targetChat.name || "隔壁聊天";
+                await window.saveStoredRegexRules(rules);
+                if (typeof window.renderCustomRegexRulesList === "function") {
+                  try { window.renderCustomRegexRulesList(); } catch (_) {}
                 }
+                notices.push(`[麻薯已${isNewRx ? "向正则库添加" : "修改"}正则「${rxName}」并设为${isEnabled ? "启用" : "关闭"}]`);
+              } else if (act === "upsert_thought_chain" || act === "update_thought_chain") {
+                if (typeof db === "undefined" || !db.thoughtChainPresets) continue;
+                const allPresets = await db.thoughtChainPresets.toArray();
+                const tcName = String(edit.name || "默认思维链").trim();
+                let targetPreset = allPresets.find(p => p && (String(p.name || "").trim() === tcName || String(p.id) === tcName)) || allPresets[0];
+                let isNewTc = false;
+                if (!targetPreset) {
+                  isNewTc = true;
+                  targetPreset = {
+                    name: tcName,
+                    headerContent: String(edit.headerContent || ""),
+                    generalContent: String(edit.generalContent || edit.content || ""),
+                    cocContent: String(edit.cocContent || ""),
+                    groups: [],
+                    entries: []
+                  };
+                  const newId = await db.thoughtChainPresets.add(targetPreset);
+                  targetPreset.id = newId;
+                } else {
+                  if (typeof edit.generalContent === "string" && edit.generalContent.trim()) {
+                    targetPreset.generalContent = edit.generalContent.trim();
+                  } else if (typeof edit.content === "string" && edit.content.trim()) {
+                    targetPreset.generalContent = edit.content.trim();
+                  }
+                  if (typeof edit.headerContent === "string") targetPreset.headerContent = edit.headerContent;
+                  if (typeof edit.cocContent === "string") targetPreset.cocContent = edit.cocContent;
+                  await db.thoughtChainPresets.put(targetPreset);
+                }
+                if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                  await window.refreshMashuThoughtChainsCache();
+                }
+                let bindLabel = "";
+                if (edit.bindToChat && targetPreset.id) {
+                  const tChat = typeof window.resolveMashuTargetChat === "function"
+                    ? window.resolveMashuTargetChat(String(edit.bindToChat), "")
+                    : null;
+                  if (tChat) {
+                    tChat.thoughtChainId = targetPreset.id;
+                    if (typeof db !== "undefined" && db.chats) await db.chats.put(tChat);
+                    bindLabel = `并绑定到「${(typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(tChat) : "") || tChat.mainGroupName || tChat.name}」`;
+                  }
+                }
+                notices.push(`[麻薯已${isNewTc ? "新建" : "修改"}思维链「${targetPreset.name}」${bindLabel}]`);
               }
-            } catch (e) {
-              console.warn("麻薯自主轮询异常:", e);
+            } catch (err) {
+              console.warn("麻薯直接修改小手机数据异常:", err);
             }
-          }, 45000);
-        };
-        setTimeout(() => {
-          if (typeof window.initMashuAutonomousLoop === "function") {
-            window.initMashuAutonomousLoop();
           }
-        }, 3000);
+          if (notices.length > 0 && mashuChat && Array.isArray(mashuChat.history)) {
+            for (const noticeTxt of notices) {
+              const sysMsg = {
+                id: "msg_mashu_edit_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                role: "system",
+                type: "pat_message",
+                content: noticeTxt,
+                timestamp: Date.now()
+              };
+              mashuChat.history.push(sysMsg);
+              if (state && state.activeChatId === mashuChat.id && typeof appendMessage === "function") {
+                appendMessage(sysMsg, mashuChat);
+              }
+            }
+            if (typeof db !== "undefined" && db.chats) {
+              await db.chats.put(mashuChat);
+            }
+          }
+          return notices;
+        };
 
         function switchToChatListView(viewId) {
           const chatListScreen = document.getElementById("chat-list-screen");
@@ -42754,7 +43092,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const targetType = pData.targetType || "tavern_card";
             const targetName = pData.targetName || "当前角色";
             const reasonText = pData.reason || (isCloseCard ? "麻薯已检查完毕，申请断开连接释放上下文" : "麻薯申请连接查看内部设定与记录");
-            const typeLabel = targetType === "qq_chat" ? "聊天档案" : "酒馆角色卡与配置";
+            const typeLabelMap = {
+              qq_chat: "聊天与人设档案",
+              world_book: "小手机世界书",
+              regex: "小手机正则库",
+              thought_chain: "小手机思维链",
+              persona: "角色与玩家人设"
+            };
+            const typeLabel = typeLabelMap[targetType] || "酒馆角色卡与配置";
 
             bubble.innerHTML = `
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
@@ -54136,6 +54481,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               var pendingMashuMouseActions = null;
               var pendingMashuAfterMouseMessages = null;
+              var pendingMashuPhoneEdits = null;
+              const rawPhoneEdits = fullResponse.phoneEdits || fullResponse.phone_edits || fullResponse.directEdits;
+              if (
+                (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
+                Array.isArray(rawPhoneEdits) &&
+                rawPhoneEdits.length > 0
+              ) {
+                pendingMashuPhoneEdits = rawPhoneEdits;
+              }
               const rawMouseArr = fullResponse.mouseActions || fullResponse.mouse_actions || fullResponse.actions;
               if (
                 (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
@@ -55014,6 +55368,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     });
                   }
                 }
+              }
+            }
+
+            if (
+              (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
+              Array.isArray(pendingMashuPhoneEdits) &&
+              pendingMashuPhoneEdits.length > 0 &&
+              typeof window.executeMashuDirectEdits === "function"
+            ) {
+              try {
+                await window.executeMashuDirectEdits(chat, pendingMashuPhoneEdits);
+              } catch (editErr) {
+                console.warn("麻薯直接修改执行异常:", editErr);
               }
             }
 
@@ -58250,7 +58617,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                         if (reqMatch) {
                           cleanMsgText = cleanMsgText.replace(reqMatch[0], "").trim();
                           const rawType = String(reqMatch[1] || "tavern_card").trim();
-                          const normType = /chat|群|聊天|kpc|pc|qq|单聊/i.test(rawType) ? "qq_chat" : "tavern_card";
+                          let normType = "tavern_card";
+                          if (/world_book|wb|世界书|世界树/i.test(rawType)) normType = "world_book";
+                          else if (/regex|正则/i.test(rawType)) normType = "regex";
+                          else if (/thought_chain|cot|思维链/i.test(rawType)) normType = "thought_chain";
+                          else if (/persona|人设/i.test(rawType)) normType = "persona";
+                          else if (/chat|群|聊天|kpc|pc|qq|单聊/i.test(rawType)) normType = "qq_chat";
                           const tName = String(reqMatch[2] || "当前角色").trim();
                           const tReason = String(reqMatch[3] || "帮你检查设定与运行配置").trim();
                           const cardMsg = {
@@ -88255,6 +88627,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
+          window.getStoredRegexRules = getStoredRegexRules;
+          window.saveStoredRegexRules = saveStoredRegexRules;
+
           window.applyCustomRegexRules = function (rawText, targetScope) {
             if (!rawText || typeof rawText !== "string") return rawText;
             const rules = getStoredRegexRules();
@@ -95970,6 +96345,15 @@ ${specificRules}`;
             });
           }
 
+          const dropdownImportCharCardBtn = document.getElementById("dropdown-import-char-card-btn");
+          if (dropdownImportCharCardBtn) {
+            dropdownImportCharCardBtn.addEventListener("click", () => {
+              if (addContactDropdown) addContactDropdown.style.display = "none";
+              const charCardInput = document.getElementById("character-card-input");
+              if (charCardInput) charCardInput.click();
+            });
+          }
+
           if (addChoiceDiceBtn) {
             addChoiceDiceBtn.addEventListener("click", () => {
               if (addContactDropdown) addContactDropdown.style.display = "none";
@@ -98421,35 +98805,6 @@ ${specificRules}`;
 
               const peerGroupMapIconCard = document.getElementById("peer-group-map-icon-card");
               const isPeerGrpChat = Boolean(isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
-              const mashuAutonomyCard = document.getElementById("mashu-autonomy-settings-card");
-              const isMashu = Boolean(chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor));
-              if (mashuAutonomyCard) {
-                mashuAutonomyCard.style.display = isMashu ? "block" : "none";
-                if (isMashu) {
-                  if (!chat.settings) chat.settings = {};
-                  const mCfg = chat.settings.mashuAutonomyConfig || {
-                    intervalMinutes: 15,
-                    typo: true,
-                    mouse: true,
-                    rename: true,
-                    avatar: true,
-                    weibo: true,
-                    peer: true,
-                  };
-                  const intSel = document.getElementById("mashu-autonomy-interval-select");
-                  if (intSel) intSel.value = String(mCfg.intervalMinutes ?? 15);
-                  const setCb = (id, val) => {
-                    const el = document.getElementById(id);
-                    if (el) el.checked = val !== false;
-                  };
-                  setCb("mashu-auto-typo-cb", mCfg.typo);
-                  setCb("mashu-auto-mouse-cb", mCfg.mouse);
-                  setCb("mashu-auto-rename-cb", mCfg.rename);
-                  setCb("mashu-auto-avatar-cb", mCfg.avatar);
-                  setCb("mashu-auto-weibo-cb", mCfg.weibo);
-                  setCb("mashu-auto-peer-cb", mCfg.peer);
-                }
-              }
               if (peerGroupMapIconCard) {
                 peerGroupMapIconCard.style.display = isPeerGrpChat ? "block" : "none";
                 if (isPeerGrpChat) {
@@ -101072,20 +101427,6 @@ ${specificRules}`;
                 if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
                   chat.name = "麻薯";
                   chat.settings.remarkName = "麻薯";
-                  const intSel = document.getElementById("mashu-autonomy-interval-select");
-                  const readCb = (id) => {
-                    const el = document.getElementById(id);
-                    return el ? Boolean(el.checked) : true;
-                  };
-                  chat.settings.mashuAutonomyConfig = {
-                    intervalMinutes: intSel ? Number(intSel.value || 0) : 15,
-                    typo: readCb("mashu-auto-typo-cb"),
-                    mouse: readCb("mashu-auto-mouse-cb"),
-                    rename: readCb("mashu-auto-rename-cb"),
-                    avatar: readCb("mashu-auto-avatar-cb"),
-                    weibo: readCb("mashu-auto-weibo-cb"),
-                    peer: readCb("mashu-auto-peer-cb"),
-                  };
                 }
               }
               // --- 新增代码结束 ---
