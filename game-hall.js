@@ -425,10 +425,12 @@ code, pre {
 
   function getTermuxBaseUrl() {
     try {
-      const raw = localStorage.getItem('ephone_local_vault_config_v1');
+      const raw = localStorage.getItem('ephone_local_vault_config') || localStorage.getItem('ephone_local_vault_config_v1');
       if (raw) {
         const cfg = JSON.parse(raw);
-        if (cfg && cfg.url) return String(cfg.url).replace(/\/+$/, '');
+        if (cfg && cfg.url && (String(cfg.url).includes('127.0.0.1') || String(cfg.url).includes('localhost'))) {
+          return String(cfg.url).replace(/\/+$/, '');
+        }
       }
     } catch (_) {}
     return 'http://127.0.0.1:8765';
@@ -560,7 +562,7 @@ code, pre {
       }
       const baseUrl = getTermuxBaseUrl();
       // Guard against overwriting an existing Termux tavern_store.json with a blank starter state
-      if (!hasLoadedFromExternalOrIdb && isDefaultStarterOnlyState(tavernState)) {
+      if (isDefaultStarterOnlyState(tavernState)) {
         try {
           const checkRes = await fetch(baseUrl + '/tavern_store.json', { method: 'GET', cache: 'no-store' });
           if (checkRes && checkRes.ok) {
@@ -641,12 +643,11 @@ code, pre {
 
         let loaded = null;
         const baseUrl = getTermuxBaseUrl();
-        const candidateUrls = [baseUrl + '/tavern_store.json'];
-        if (baseUrl.includes('127.0.0.1')) {
-          candidateUrls.push(baseUrl.replace('127.0.0.1', 'localhost') + '/tavern_store.json');
-        } else if (baseUrl.includes('localhost')) {
-          candidateUrls.push(baseUrl.replace('localhost', '127.0.0.1') + '/tavern_store.json');
-        }
+        const candidateUrls = Array.from(new Set([
+          baseUrl + '/tavern_store.json',
+          'http://127.0.0.1:8765/tavern_store.json',
+          'http://localhost:8765/tavern_store.json'
+        ]));
 
         for (const tUrl of candidateUrls) {
           try {

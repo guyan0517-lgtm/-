@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -36694,12 +36694,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
 
-              // 完整恢复 localStorage 快照（含字体、NovelAI、自定义预设、主题、密友等全部本地项）
+            });
+
+            // 在数据库事务顺利提交之后再恢复 localStorage，防止任何 QuotaExceededError 导致数据库事务回滚失败
+            try {
               const lsSnap = data.localStorageSnapshot || data.localStorageData || null;
               if (lsSnap && typeof lsSnap === "object") {
                 for (const [k, v] of Object.entries(lsSnap)) {
                   if (typeof k === "string" && typeof v === "string") {
-                    if (k === "ephone_local_vault_config") continue;
+                    if (
+                      k === "ephone_local_vault_config" ||
+                      k === "ephone_local_vault_config_v1" ||
+                      k === "tavern_state_v2" ||
+                      k === "tavern_state_v1" ||
+                      k === "tukey_peer_friends_backup"
+                    ) {
+                      continue;
+                    }
                     try {
                       localStorage.setItem(k, v);
                     } catch (_) {}
@@ -36717,39 +36728,43 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
 
               if (data.novelaiSettings) {
-                if (data.novelaiSettings.enabled !== undefined && data.novelaiSettings.enabled !== null) {
-                  localStorage.setItem("novelai-enabled", String(data.novelaiSettings.enabled));
-                }
-                if (data.novelaiSettings.model) {
-                  localStorage.setItem("novelai-model", data.novelaiSettings.model);
-                }
-                if (data.novelaiSettings.apiKey) {
-                  localStorage.setItem("novelai-api-key", data.novelaiSettings.apiKey);
-                }
-                if (data.novelaiSettings.settings) {
-                  localStorage.setItem(
-                    "novelai-settings",
-                    typeof data.novelaiSettings.settings === "object"
-                      ? JSON.stringify(data.novelaiSettings.settings)
-                      : data.novelaiSettings.settings
-                  );
-                }
+                try {
+                  if (data.novelaiSettings.enabled !== undefined && data.novelaiSettings.enabled !== null) {
+                    localStorage.setItem("novelai-enabled", String(data.novelaiSettings.enabled));
+                  }
+                  if (data.novelaiSettings.model) {
+                    localStorage.setItem("novelai-model", data.novelaiSettings.model);
+                  }
+                  if (data.novelaiSettings.apiKey) {
+                    localStorage.setItem("novelai-api-key", data.novelaiSettings.apiKey);
+                  }
+                  if (data.novelaiSettings.settings) {
+                    localStorage.setItem(
+                      "novelai-settings",
+                      typeof data.novelaiSettings.settings === "object"
+                        ? JSON.stringify(data.novelaiSettings.settings)
+                        : data.novelaiSettings.settings
+                    );
+                  }
+                } catch (_) {}
               }
 
-              if (data.modulePromptPresets && Array.isArray(data.modulePromptPresets)) {
-                localStorage.setItem("coc_module_prompt_presets", JSON.stringify(data.modulePromptPresets));
-              }
-              if (data.moduleDefaultPresetId) {
-                localStorage.setItem("coc_module_default_preset_id", data.moduleDefaultPresetId);
-              }
-              if (data.moduleDraftState) {
-                localStorage.setItem(
-                  "coc_module_draft_state_v1",
-                  typeof data.moduleDraftState === "object"
-                    ? JSON.stringify(data.moduleDraftState)
-                    : data.moduleDraftState
-                );
-              }
+              try {
+                if (data.modulePromptPresets && Array.isArray(data.modulePromptPresets)) {
+                  localStorage.setItem("coc_module_prompt_presets", JSON.stringify(data.modulePromptPresets));
+                }
+                if (data.moduleDefaultPresetId) {
+                  localStorage.setItem("coc_module_default_preset_id", data.moduleDefaultPresetId);
+                }
+                if (data.moduleDraftState) {
+                  localStorage.setItem(
+                    "coc_module_draft_state_v1",
+                    typeof data.moduleDraftState === "object"
+                      ? JSON.stringify(data.moduleDraftState)
+                      : data.moduleDraftState
+                  );
+                }
+              } catch (_) {}
 
               let restoredPeerCode =
                 (data.peerIdentityBackup && data.peerIdentityBackup.myPeerCode) ||
@@ -36765,7 +36780,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
               if (restoredPeerCode) {
-                localStorage.setItem("tukey_my_peer_code", restoredPeerCode);
+                try {
+                  localStorage.setItem("tukey_my_peer_code", restoredPeerCode);
+                } catch (_) {}
                 if (window.PeerManager) {
                   window.PeerManager.myPeerCode = restoredPeerCode;
                 }
@@ -36775,16 +36792,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 (data.globalSettings && data.globalSettings.peerFriendsBackup) ||
                 null;
               if (restoredFriendsBackup && typeof restoredFriendsBackup === "object") {
-                localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(restoredFriendsBackup));
+                try {
+                  localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(restoredFriendsBackup));
+                } catch (_) {
+                  try {
+                    const slimFriends = {};
+                    for (const [fk, fv] of Object.entries(restoredFriendsBackup)) {
+                      if (fv && typeof fv === "object") {
+                        const copyF = { ...fv };
+                        if (typeof copyF.avatar === "string" && copyF.avatar.startsWith("data:")) {
+                          copyF.avatar = "";
+                        }
+                        slimFriends[fk] = copyF;
+                      }
+                    }
+                    localStorage.setItem("tukey_peer_friends_backup", JSON.stringify(slimFriends));
+                  } catch (_e2) {}
+                }
               }
               const restoredDeletedCodes =
                 (data.peerIdentityBackup && data.peerIdentityBackup.deletedPeerCodes) ||
                 (data.globalSettings && data.globalSettings.deletedPeerCodes) ||
                 null;
               if (Array.isArray(restoredDeletedCodes)) {
-                localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(restoredDeletedCodes));
+                try {
+                  localStorage.setItem("tukey_deleted_peer_codes", JSON.stringify(restoredDeletedCodes));
+                } catch (_) {}
               }
-            });
+            } catch (_) {}
 
             // 导入主屏幕样式的逻辑保持不变，因为它不直接操作数据库的多个表
             if (data.homeScreenState) {
