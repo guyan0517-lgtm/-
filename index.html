@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -115065,92 +115065,11 @@ ${specificRules}`;
                     }
                   }
 
-                  // C. 将群聊记录 (qLogs[gid] + diskThoughts) 转换并合并进 db.chats 中的同名或同ID群聊
+                  // C. 清理之前误插入到小手机聊天列表里的外部QQ机器人控制台群聊条目，只允许合并原本就属于小手机的同名群聊
                   if (db.chats) {
-                    const reconstructedMsgs = [];
-                    const rawLogArr = Array.isArray(qLogs[gid]) ? qLogs[gid] : [];
-                    for (const lm of rawLogArr) {
-                      if (!lm || !(lm.text || lm.content)) continue;
-                      const isBot = Boolean(lm.isSelf || lm.role === "assistant");
-                      reconstructedMsgs.push({
-                        role: isBot ? "assistant" : "user",
-                        senderName: lm.senderName || lm.nickname || (isBot ? gName : "群友"),
-                        senderId: String(lm.userId || lm.senderId || ""),
-                        content: String(lm.text || lm.content || ""),
-                        timestamp: Number(lm.timestamp || lm.time) || Date.now(),
-                      });
-                    }
-                    // 从 qqbot_thoughts_<gid>.json 逆向恢复 AI 回复与思维链记录
-                    const sortedThoughts = diskThoughts.slice().sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
-                    for (const th of sortedThoughts) {
-                      if (!th) continue;
-                      const gMsgs = Array.isArray(th.groupMessages) ? th.groupMessages.filter(Boolean) : [];
-                      if (gMsgs.length > 0) {
-                        const combinedText = gMsgs.join("\n");
-                        reconstructedMsgs.push({
-                          role: "assistant",
-                          senderName: gName,
-                          content: combinedText,
-                          thoughtChain: th.thinking || "",
-                          timestamp: Number(th.timestamp) || Date.now(),
-                        });
-                      }
-                    }
-
-                    const matchedChat = existingChats.find(
-                      (c) =>
-                        c &&
-                        (String(c.id) === String(gid) ||
-                          String(c.id) === "qqgroup_" + String(gid) ||
-                          String(c.groupId) === String(gid) ||
-                          (c.name && String(c.name).trim() === String(gName).trim())),
-                    );
-
-                    if (matchedChat) {
-                      if (reconstructedMsgs.length > 0) {
-                        matchedChat.history = mergeChatHistoriesChronologically(
-                          matchedChat.history,
-                          reconstructedMsgs,
-                        );
-                      }
-                      if (!matchedChat.settings) matchedChat.settings = {};
-                      if (g) {
-                        if (g.aiPersona) matchedChat.settings.aiPersona = g.aiPersona;
-                        if (g.customPrompt) matchedChat.settings.customPrompt = g.customPrompt;
-                        if (qMem[gid]) matchedChat.settings.summary = qMem[gid];
-                      }
-                      await db.chats.put(matchedChat);
-                      restoredItemsCount++;
-                    } else if (g || reconstructedMsgs.length > 0) {
-                      const members =
-                        g && Array.isArray(g.playerBindings)
-                          ? g.playerBindings.map((pb, idx) => ({
-                              id: pb.qq || "mem_" + idx,
-                              originalName: pb.cardName || pb.qqRemark || pb.qq || "成员" + (idx + 1),
-                              groupNickname: pb.qqRemark || pb.cardName || "成员" + (idx + 1),
-                              persona: pb.persona || "",
-                              avatar: "",
-                            }))
-                          : [];
-                      const newGroupChat = {
-                        id: "qqgroup_" + gid,
-                        groupId: String(gid),
-                        name: gName,
-                        isGroup: true,
-                        unreadCount: 0,
-                        members,
-                        settings: {
-                          aiPersona: (g && g.aiPersona) || "",
-                          myPersona: "",
-                          customPrompt: (g && g.customPrompt) || "",
-                          summary: qMem[gid] || "",
-                        },
-                        history: reconstructedMsgs,
-                      };
-                      await db.chats.put(newGroupChat);
-                      existingChats.push(newGroupChat);
-                      restoredItemsCount++;
-                    }
+                    try {
+                      await db.chats.delete("qqgroup_" + gid);
+                    } catch (_) {}
                   }
                 }
 
@@ -115774,7 +115693,9 @@ ${specificRules}`;
                     }
                   }
                 } catch (_) {}
-                return origPut(rowObj, ...rest);
+                const res = await origPut(rowObj, ...rest);
+                scheduleAutoTermuxBackupSave();
+                return res;
               };
               if (typeof table.add === "function") {
                 const origAdd = table.add.bind(table);
@@ -115789,7 +115710,9 @@ ${specificRules}`;
                       }
                     }
                   } catch (_) {}
-                  return origAdd(rowObj, ...rest);
+                  const res = await origAdd(rowObj, ...rest);
+                  scheduleAutoTermuxBackupSave();
+                  return res;
                 };
               }
               if (typeof table.bulkAdd === "function") {
@@ -115809,7 +115732,9 @@ ${specificRules}`;
                       }
                     }
                   } catch (_) {}
-                  return origBulkAdd(rows, ...rest);
+                  const res = await origBulkAdd(rows, ...rest);
+                  scheduleAutoTermuxBackupSave();
+                  return res;
                 };
               }
               if (typeof table.bulkPut === "function") {
@@ -115829,7 +115754,9 @@ ${specificRules}`;
                       }
                     }
                   } catch (_) {}
-                  return origBulkPut(rows, ...rest);
+                  const res = await origBulkPut(rows, ...rest);
+                  scheduleAutoTermuxBackupSave();
+                  return res;
                 };
               }
               if (typeof table.update === "function") {
@@ -115840,10 +115767,52 @@ ${specificRules}`;
                       restoreVaultRefsInObjectDeep(changes);
                     }
                   } catch (_) {}
-                  return origUpdate(key, changes, ...rest);
+                  const res = await origUpdate(key, changes, ...rest);
+                  scheduleAutoTermuxBackupSave();
+                  return res;
+                };
+              }
+              if (typeof table.delete === "function") {
+                const origDelete = table.delete.bind(table);
+                table.delete = async function (...args) {
+                  const res = await origDelete(...args);
+                  scheduleAutoTermuxBackupSave();
+                  return res;
                 };
               }
             }
+          }
+
+          let _autoTermuxBackupTimer = null;
+          function scheduleAutoTermuxBackupSave() {
+            const cfg = loadVaultConfig();
+            if (!cfg || !cfg.auto) return;
+            if (_autoTermuxBackupTimer) clearTimeout(_autoTermuxBackupTimer);
+            _autoTermuxBackupTimer = setTimeout(async () => {
+              _autoTermuxBackupTimer = null;
+              try {
+                if (typeof db === "undefined" || !db.chats) return;
+                const allChats = await db.chats.toArray();
+                const realChats = allChats.filter((c) => {
+                  if (!c || typeof c !== "object") return false;
+                  if (String(c.id || "").startsWith("qqgroup_")) return false;
+                  const isDefaultMashu =
+                    (c.name === "玛修" || c.id === "chat_default" || c.id === 1) &&
+                    (!Array.isArray(c.history) || c.history.length <= 2);
+                  return !isDefaultMashu;
+                });
+                // 严禁在空白初始状态下覆盖 Termux 里的 backup.json
+                if (realChats.length === 0) return;
+                const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                if (!(await checkTermuxEndpointReachable(baseUrl))) return;
+                const snapshot = await collectFullDatabaseSnapshot();
+                await fetch(baseUrl + "/backup.json", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json; charset=utf-8" },
+                  body: JSON.stringify(snapshot),
+                });
+              } catch (_) {}
+            }, 2500);
           }
 
           window.getGlmTranslateConfig = function () {
