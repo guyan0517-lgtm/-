@@ -616,10 +616,24 @@ code, pre {
     }
     saveTimer = setTimeout(() => {
       saveTimer = null;
-      performTavernStoreSaveNow();
-    }, 120);
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(() => {
+          performTavernStoreSaveNow();
+        }, { timeout: 2000 });
+      } else {
+        performTavernStoreSaveNow();
+      }
+    }, 2800);
   }
   const saveTavernState = saveTavernStore;
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      performTavernStoreSaveNow();
+    }
+  });
 
   function isHostAppHtmlFallback(str) {
     if (!str || typeof str !== 'string') return false;
@@ -1058,16 +1072,32 @@ code, pre {
     on(evt, cb) {
       if (!evt || typeof cb !== 'function') return;
       if (!tavernEventListeners[evt]) tavernEventListeners[evt] = [];
-      if (!tavernEventListeners[evt].includes(cb)) {
-        tavernEventListeners[evt].push(cb);
+      if (tavernEventListeners[evt].includes(cb)) return;
+      const cbStr = String(cb.toString ? cb.toString() : '').trim();
+      if (cbStr.length > 35) {
+        const ownerKey = String(cb._ownerCardId || '');
+        const existingIdx = tavernEventListeners[evt].findIndex(fn => {
+          if (!fn || typeof fn !== 'function') return false;
+          return String(fn._ownerCardId || '') === ownerKey && String(fn.toString ? fn.toString() : '').trim() === cbStr;
+        });
+        if (existingIdx !== -1) {
+          tavernEventListeners[evt][existingIdx] = cb;
+          return;
+        }
       }
+      tavernEventListeners[evt].push(cb);
     },
     off(evt, cb) {
       if (!evt || !tavernEventListeners[evt]) return;
-      tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => fn !== cb);
+      const cbStr = typeof cb === 'function' ? String(cb.toString ? cb.toString() : '').trim() : '';
+      tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => {
+        if (fn === cb) return false;
+        if (cbStr.length > 35 && String(fn.toString ? fn.toString() : '').trim() === cbStr) return false;
+        return true;
+      });
     },
     async emit(evt, ...args) {
-      const list = tavernEventListeners[evt] || [];
+      const list = (tavernEventListeners[evt] || []).slice();
       for (const fn of list) {
         try {
           await fn(...args);
@@ -4462,9 +4492,16 @@ code, pre {
     return chunks.join('\n');
   }
 
+  const inFlightPluginExecutionSet = new Set();
+  const mountedCustomPluginCodeMap = new Map();
+
   function executeUserPluginScript(plugin, execOpts = {}) {
     if (!plugin || !plugin.enabled) return;
     const ownerCardId = execOpts && execOpts.ownerCardId ? String(execOpts.ownerCardId) : null;
+    const pluginRunKey = (ownerCardId ? ('card_' + ownerCardId + '_') : 'global_') + String(plugin.id || plugin.name || 'unnamed');
+    if (inFlightPluginExecutionSet.has(pluginRunKey) && !execOpts.forceRerun) {
+      return;
+    }
     ensurePersistentExtensionContainers();
     if (!plugin.code && plugin.content) {
       plugin.code = plugin.content;
@@ -4499,7 +4536,7 @@ code, pre {
           .finally(() => { baiBaiUpgradeInFlight = false; });
         return;
       }
-      if (document.getElementById('bbi-app-host') && document.getElementById('bbi-menu-item')) {
+      if (document.getElementById('bbi-app-host') && document.getElementById('bbi-menu-item') && !execOpts.forceRerun) {
         syncBaiBaiShadowDomCss();
         return;
       }
@@ -4523,11 +4560,11 @@ code, pre {
         return;
       }
       const existingBbsHost = document.getElementById('bbs-app-host');
-      if (existingBbsHost && document.getElementById('bbs-menu-item') && existingBbsHost.getAttribute('data-bbs-auto-patched') === '1') {
+      if (existingBbsHost && document.getElementById('bbs-menu-item') && existingBbsHost.getAttribute('data-bbs-auto-patched') === '1' && !execOpts.forceRerun) {
         syncBaiBaiShadowDomCss();
         return;
       }
-      if (existingBbsHost && existingBbsHost.getAttribute('data-bbs-auto-patched') !== '1') {
+      if (existingBbsHost && (existingBbsHost.getAttribute('data-bbs-auto-patched') !== '1' || execOpts.forceRerun)) {
         try { existingBbsHost.remove(); } catch (_) {}
         try { document.getElementById('bbs-menu-item')?.remove(); } catch (_) {}
       }
@@ -4553,6 +4590,18 @@ code, pre {
       return;
     }
 
+    const codeSignature = codeStr.length + ':' + codeStr.slice(0, 120) + ':' + codeStr.slice(-120);
+    if (
+      !ownerCardId &&
+      !execOpts.forceRerun &&
+      !isBaiBaiPlugin(plugin) &&
+      !isBurntChickenWingsPlugin(plugin) &&
+      !isBookExcerptPlugin(plugin) &&
+      mountedCustomPluginCodeMap.get(pluginRunKey) === codeSignature
+    ) {
+      return;
+    }
+
     const effectiveEventSource = ownerCardId ? {
       on(evt, cb) {
         if (!evt || typeof cb !== 'function') return;
@@ -4560,6 +4609,8 @@ code, pre {
           if (getActiveCard()?.id !== ownerCardId) return;
           return await cb(...args);
         };
+        wrappedCb._ownerCardId = ownerCardId;
+        wrappedCb.toString = () => cb.toString();
         tavernEventSource.on(evt, wrappedCb);
       },
       off(evt, cb) {
@@ -4580,6 +4631,7 @@ code, pre {
       getContext: effectiveGetContext
     } : window.SillyTavern;
 
+    inFlightPluginExecutionSet.add(pluginRunKey);
     try {
       const transformedCode = transpilePluginImports(codeStr, plugin);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -4614,6 +4666,7 @@ code, pre {
         window.jQuery,
         window.$
       ).then(() => {
+        mountedCustomPluginCodeMap.set(pluginRunKey, codeSignature);
         if (isBaiBaiBookPlugin(plugin)) {
           const mountedBbs = document.getElementById('bbs-app-host');
           if (mountedBbs) mountedBbs.setAttribute('data-bbs-auto-patched', '1');
@@ -4625,8 +4678,11 @@ code, pre {
         }
       }).catch(err => {
         console.warn('Async plugin script warning:', plugin.name, err);
+      }).finally(() => {
+        inFlightPluginExecutionSet.delete(pluginRunKey);
       });
     } catch (err) {
+      inFlightPluginExecutionSet.delete(pluginRunKey);
       console.error('Plugin script execution error:', plugin.name, err);
     }
   }
@@ -8198,6 +8254,7 @@ code, pre {
     activeWorldBookEditId: null,
     editingWorldEntryUid: null,
     worldEntrySearch: '',
+    visibleWorldEntryCount: 40,
     editingRegexId: null,
     regexTestInput: '',
     openExtensionAcc: {
@@ -9521,7 +9578,7 @@ code, pre {
     }
 
     applyActiveTavernTheme();
-    if (isTavernActive()) {
+    if (isTavernActive() || !document.querySelector('#chat .mes')) {
       renderTavernChatFloors(true);
       bindTavernStageEvents();
       (tavernState.plugins || []).forEach(p => {
@@ -9537,6 +9594,31 @@ code, pre {
     } else {
       bindTavernStageEvents();
     }
+  }
+
+  function updateTavernBackgroundLayerOnly() {
+    const bgLayer = document.getElementById('tavern-bg-layer');
+    if (!bgLayer) return;
+    const bg = tavernState.background || {};
+    const resolvedBgUrl = bg.url ? resolveSafeAvatarUrl(bg.url, false) : '';
+    if (resolvedBgUrl) {
+      bgLayer.style.backgroundImage = `url('${resolvedBgUrl}')`;
+      bgLayer.style.backgroundSize = bg.fit || 'cover';
+      bgLayer.style.filter = `blur(${Number(bg.blur || 0)}px)`;
+      bgLayer.style.opacity = String(Number(bg.opacity ?? 1));
+    } else {
+      bgLayer.style.backgroundImage = '';
+      bgLayer.style.opacity = '0';
+    }
+  }
+
+  function updateQuickReplyBarOnly() {
+    const qrBar = document.getElementById('qr--bar');
+    if (!qrBar) return;
+    const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
+    qrBar.innerHTML = qrs.map(q => `
+      <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
+    `).join('');
   }
 
   function refreshBottomPopupsOnly() {
@@ -10639,6 +10721,9 @@ code, pre {
           (e.keys || []).some(k => String(k).toLowerCase().includes(searchKw))
         )
       : entries;
+    const visibleEntryLimit = Number(uiRuntime.visibleWorldEntryCount) || 40;
+    const visibleEntries = searchKw ? filteredEntries : filteredEntries.slice(0, visibleEntryLimit);
+    const hiddenEntryCount = Math.max(0, filteredEntries.length - visibleEntries.length);
 
     return `
       <div class="tavern-section-card">
@@ -10716,7 +10801,7 @@ code, pre {
           </div>
 
           <div style="margin-top:8px;">
-            ${filteredEntries.map(entry => {
+            ${visibleEntries.map(entry => {
               const isEditingEntry = String(uiRuntime.editingWorldEntryUid) === String(entry.uid);
               const cleanComment = stripUiEmojis(entry.comment || ('词条 #' + entry.uid)) || ('词条 #' + entry.uid);
               return `
@@ -10739,6 +10824,12 @@ code, pre {
                 </div>
               `;
             }).join('')}
+            ${hiddenEntryCount > 0 ? `
+              <div style="display:flex;gap:8px;justify-content:center;padding:8px 0 4px;">
+                <button type="button" class="tavern-btn small primary" data-action="wb-load-more-entries">加载更多词条 剩余${hiddenEntryCount}条</button>
+                <button type="button" class="tavern-btn small" data-action="wb-load-all-entries">显示全部</button>
+              </div>
+            ` : ''}
           </div>
         </div>
       ` : ''}
@@ -13753,6 +13844,16 @@ code, pre {
         }
         return;
       }
+      if (action === 'wb-load-more-entries') {
+        uiRuntime.visibleWorldEntryCount = (Number(uiRuntime.visibleWorldEntryCount) || 40) + 50;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'wb-load-all-entries') {
+        uiRuntime.visibleWorldEntryCount = 99999;
+        refreshOpenDrawerOnly();
+        return;
+      }
       if (action === 'wb-batch-enable' || action === 'wb-batch-constant' || action === 'wb-batch-green') {
         const wbId = actionEl.getAttribute('data-wb-id');
         const wb = (tavernState.worldBooks || []).find(b => b.id === wbId);
@@ -13891,7 +13992,8 @@ code, pre {
           enabled: true
         });
         await saveTavernStore();
-        renderTavernShell();
+        updateQuickReplyBarOnly();
+        refreshOpenDrawerOnly();
         return;
       }
       if (action === 'toggle-qr-item') {
@@ -13900,7 +14002,7 @@ code, pre {
         if (qr) {
           qr.enabled = actionEl.checked;
           await saveTavernStore();
-          renderTavernShell();
+          updateQuickReplyBarOnly();
         }
         return;
       }
@@ -13908,7 +14010,8 @@ code, pre {
         const qid = actionEl.getAttribute('data-qr-id');
         tavernState.quickReplies = (tavernState.quickReplies || []).filter(x => x.id !== qid);
         await saveTavernStore();
-        renderTavernShell();
+        updateQuickReplyBarOnly();
+        refreshOpenDrawerOnly();
         return;
       }
 
@@ -13923,7 +14026,8 @@ code, pre {
           const resolvedBg = resolveSafeAvatarUrl(card.avatar, false);
           tavernState.background.url = resolvedBg;
           await saveTavernStore();
-          renderTavernShell();
+          updateTavernBackgroundLayerOnly();
+          refreshOpenDrawerOnly();
           showTavernToast('已将当前角色卡立绘设为聊天背景');
         }
         return;
@@ -13931,7 +14035,8 @@ code, pre {
       if (action === 'clear-tavern-bg') {
         tavernState.background.url = '';
         await saveTavernStore();
-        renderTavernShell();
+        updateTavernBackgroundLayerOnly();
+        refreshOpenDrawerOnly();
         return;
       }
       if (action === 'apply-bg-url') {
@@ -13948,7 +14053,8 @@ code, pre {
           }
         }
         await saveTavernStore();
-        renderTavernShell();
+        updateTavernBackgroundLayerOnly();
+        refreshOpenDrawerOnly();
         return;
       }
       if (action === 'select-bg-gallery-item') {
@@ -13956,7 +14062,8 @@ code, pre {
         if (rawUrl) {
           tavernState.background.url = rawUrl;
           await saveTavernStore();
-          renderTavernShell();
+          updateTavernBackgroundLayerOnly();
+          refreshOpenDrawerOnly();
           showTavernToast('已切换背景图');
         }
         return;
@@ -13970,7 +14077,8 @@ code, pre {
             tavernState.background.url = tavernState.background.gallery[0]?.url || '';
           }
           await saveTavernStore();
-          renderTavernShell();
+          updateTavernBackgroundLayerOnly();
+          refreshOpenDrawerOnly();
           showTavernToast('已从背景图库删除');
         }
         return;
@@ -14696,14 +14804,16 @@ code, pre {
           }
         }
         await saveTavernStore();
-        renderTavernShell();
+        updateTavernBackgroundLayerOnly();
+        refreshOpenDrawerOnly();
         return;
       }
       if (target.hasAttribute('data-bg-setting')) {
         const k = target.getAttribute('data-bg-setting');
         tavernState.background[k] = k === 'fit' ? target.value : Number(target.value);
         await saveTavernStore();
-        renderTavernShell();
+        updateTavernBackgroundLayerOnly();
+        refreshOpenDrawerOnly();
         return;
       }
 
@@ -14767,7 +14877,8 @@ code, pre {
         if (lastVaultRef) {
           tavernState.background.url = lastVaultRef;
           await saveTavernStore();
-          renderTavernShell();
+          updateTavernBackgroundLayerOnly();
+          refreshOpenDrawerOnly();
           showTavernToast('已将 ' + files.length + ' 张背景图存入Termux本地图库并应用');
         }
         target.value = '';
@@ -15429,7 +15540,7 @@ code, pre {
       });
       if (!isTavernVisible) {
         stopAllTavernAudioAndMedia();
-      } else if (!hasRenderedTavernOnOpen) {
+      } else if (!hasRenderedTavernOnOpen || !document.getElementById('tavern-stage-root') || !document.querySelector('#chat .mes')) {
         hasRenderedTavernOnOpen = true;
         if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState)) {
           loadTavernStore().then(() => {
@@ -15444,6 +15555,11 @@ code, pre {
   }
 
   window.exitTavernToHome = function () {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      performTavernStoreSaveNow();
+    }
     uiRuntime.openDrawerKey = null;
     uiRuntime.activeHelperScriptId = null;
     uiRuntime.activePluginModalId = null;

@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -9169,6 +9169,52 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div id="mashu-autonomy-settings-card" class="settings-group-card moe-card" style="display: none; margin-top: 12px;">
+            <div class="settings-group-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v5l3 3"></path>
+              </svg>
+              自主
+            </div>
+            <div class="setting-item" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0;">
+              <span style="font-size: 13px; color: var(--text-primary); flex-shrink: 0;">间隔</span>
+              <select id="mashu-autonomy-interval-select" class="moe-input" style="width: 130px; min-height: 36px; line-height: 1.4; padding: 4px 10px; box-sizing: border-box; text-align: left;">
+                <option value="0">关闭</option>
+                <option value="5">五分</option>
+                <option value="10">十分</option>
+                <option value="15" selected>十五分</option>
+                <option value="30">三十分</option>
+              </select>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-top: 6px;">
+              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
+                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">错字</span>
+                <input type="checkbox" id="mashu-auto-typo-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
+              </label>
+              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
+                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">鼠标</span>
+                <input type="checkbox" id="mashu-auto-mouse-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
+              </label>
+              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
+                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">改名</span>
+                <input type="checkbox" id="mashu-auto-rename-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
+              </label>
+              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
+                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">换头</span>
+                <input type="checkbox" id="mashu-auto-avatar-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
+              </label>
+              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
+                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">发博</span>
+                <input type="checkbox" id="mashu-auto-weibo-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
+              </label>
+              <label class="setting-item" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-bg); margin: 0;">
+                <span style="font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">联机</span>
+                <input type="checkbox" id="mashu-auto-peer-cb" checked style="width: 16px; height: 16px; flex-shrink: 0; margin: 0;" />
+              </label>
             </div>
           </div>
 
@@ -28271,11 +28317,151 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               generalContent,
               cocContent,
               headerCollapsed,
-              generalCollapsed,
-              groupsCollapsed,
+              headerCollapsed: Boolean(headerCollapsed),
+              generalCollapsed: Boolean(generalCollapsed),
+              groupsCollapsed: Boolean(groupsCollapsed),
               groups,
               entries,
             };
+          }
+
+          const trimmedJsonCandidate = text.trim();
+          if (trimmedJsonCandidate.startsWith("{")) {
+            try {
+              const parsedJson = JSON.parse(trimmedJsonCandidate);
+              if (parsedJson && typeof parsedJson === "object") {
+                if (Array.isArray(parsedJson.prompts)) {
+                  const skipMarkers = new Set([
+                    "personaDescription",
+                    "charDescription",
+                    "charPersonality",
+                    "scenario",
+                    "worldInfoBefore",
+                    "worldInfoAfter",
+                    "dialogueExamples",
+                    "chatHistory",
+                    "enhanceDefinitions",
+                  ]);
+                  const promptById = new Map();
+                  parsedJson.prompts.forEach((p, idx) => {
+                    if (!p || typeof p !== "object") return;
+                    const pid = String(p.identifier || p.name || "prompt_" + idx).trim();
+                    if (!pid) return;
+                    promptById.set(pid, p);
+                  });
+
+                  let orderedRefs = [];
+                  if (Array.isArray(parsedJson.prompt_order) && parsedJson.prompt_order.length > 0) {
+                    let chosenOrderObj =
+                      parsedJson.prompt_order.find((o) => o && Number(o.character_id) === 100001 && Array.isArray(o.order)) ||
+                      parsedJson.prompt_order.find((o) => o && Number(o.character_id) === 100000 && Array.isArray(o.order)) ||
+                      null;
+                    if (!chosenOrderObj) {
+                      chosenOrderObj = parsedJson.prompt_order.reduce((best, cur) => {
+                        if (!cur || !Array.isArray(cur.order)) return best;
+                        if (!best || cur.order.length > best.order.length) return cur;
+                        return best;
+                      }, null);
+                    }
+                    if (chosenOrderObj && Array.isArray(chosenOrderObj.order)) {
+                      orderedRefs = chosenOrderObj.order;
+                    }
+                  }
+
+                  const seenIds = new Set();
+                  const finalPromptItems = [];
+                  if (orderedRefs.length > 0) {
+                    orderedRefs.forEach((ref) => {
+                      if (!ref || typeof ref !== "object") return;
+                      const id = String(ref.identifier || "").trim();
+                      if (!id || seenIds.has(id) || skipMarkers.has(id)) return;
+                      const p = promptById.get(id);
+                      if (!p) return;
+                      seenIds.add(id);
+                      finalPromptItems.push({
+                        prompt: p,
+                        enabled: ref.enabled !== undefined ? Boolean(ref.enabled) : p.enabled !== false,
+                      });
+                    });
+                  }
+                  parsedJson.prompts.forEach((p, idx) => {
+                    if (!p || typeof p !== "object") return;
+                    const id = String(p.identifier || p.name || "prompt_" + idx).trim();
+                    if (!id || seenIds.has(id) || skipMarkers.has(id)) return;
+                    seenIds.add(id);
+                    finalPromptItems.push({
+                      prompt: p,
+                      enabled: p.enabled !== false,
+                    });
+                  });
+
+                  const stGroupId = "tcg_st_" + Date.now();
+                  const stGroups = [
+                    {
+                      id: stGroupId,
+                      name: "酒馆预设条目",
+                      color: "#D8E2DC",
+                      enabled: true,
+                      collapsed: false,
+                    },
+                  ];
+                  const stEntries = [];
+                  const generalLines = [];
+                  const usedKeys = new Set();
+
+                  finalPromptItems.forEach(({ prompt, enabled }, idx) => {
+                    if (prompt.marker === true && !String(prompt.content || "").trim()) return;
+                    const rawContent = String(prompt.content || "").replace(/\r\n/g, "\n").trim();
+                    if (!rawContent) return;
+                    let baseKey = String(prompt.name || prompt.identifier || "条目_" + (idx + 1))
+                      .replace(/[\{\}\r\n]/g, "")
+                      .trim();
+                    if (!baseKey) baseKey = "条目_" + (idx + 1);
+                    let uniqueKey = baseKey;
+                    let dupCount = 2;
+                    while (usedKeys.has(uniqueKey)) {
+                      uniqueKey = baseKey + "_" + dupCount;
+                      dupCount++;
+                    }
+                    usedKeys.add(uniqueKey);
+                    stEntries.push({
+                      id: "tce_st_" + Date.now() + "_" + idx,
+                      key: uniqueKey,
+                      groupId: stGroupId,
+                      enabled: Boolean(enabled),
+                      content: rawContent,
+                    });
+                    generalLines.push("{{" + uniqueKey + "}}");
+                  });
+
+                  return {
+                    name: String(parsedJson.name || fallbackName || "酒馆思维链").trim(),
+                    headerContent: "",
+                    generalContent: generalLines.join("\n\n"),
+                    cocContent: "",
+                    headerCollapsed: false,
+                    generalCollapsed: false,
+                    groupsCollapsed: false,
+                    groups: stGroups,
+                    entries: stEntries,
+                  };
+                }
+
+                if (typeof parsedJson.generalContent === "string" || Array.isArray(parsedJson.entries)) {
+                  return {
+                    name: String(parsedJson.name || fallbackName || "导入思维链").trim(),
+                    headerContent: String(parsedJson.headerContent || ""),
+                    generalContent: String(parsedJson.generalContent || ""),
+                    cocContent: String(parsedJson.cocContent || ""),
+                    headerCollapsed: Boolean(parsedJson.headerCollapsed),
+                    generalCollapsed: Boolean(parsedJson.generalCollapsed),
+                    groupsCollapsed: Boolean(parsedJson.groupsCollapsed),
+                    groups: Array.isArray(parsedJson.groups) ? parsedJson.groups : [],
+                    entries: Array.isArray(parsedJson.entries) ? parsedJson.entries : [],
+                  };
+                }
+              }
+            } catch (_) {}
           }
 
           return {
@@ -28929,6 +29115,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const tcImportBtn = document.getElementById("tc-import-btn");
           const tcFileInput = document.getElementById("tc-file-import-input");
           if (tcImportBtn && tcFileInput) {
+            tcFileInput.setAttribute("accept", ".txt,.json,text/plain,application/json");
             tcImportBtn.onclick = () => {
               tcFileInput.value = "";
               tcFileInput.click();
@@ -28975,6 +29162,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const tcEditorImportBtn = document.getElementById("tc-editor-import-btn");
           const tcEditorFileInput = document.getElementById("tc-editor-file-import-input");
           if (tcEditorImportBtn && tcEditorFileInput) {
+            tcEditorFileInput.setAttribute("accept", ".txt,.json,text/plain,application/json");
             tcEditorImportBtn.onclick = () => {
               tcEditorFileInput.value = "";
               tcEditorFileInput.click();
@@ -29369,13 +29557,139 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
         }
 
+        function evaluateTavernMacrosInThoughtChain(rawText, chat) {
+          if (!rawText || typeof rawText !== "string") return "";
+          if (!chat || typeof chat !== "object") chat = {};
+          if (!chat.settings || typeof chat.settings !== "object") chat.settings = {};
+          if (!chat.settings.tavernThoughtVars || typeof chat.settings.tavernThoughtVars !== "object") {
+            chat.settings.tavernThoughtVars = {};
+          }
+          const vars = chat.settings.tavernThoughtVars;
+          let out = rawText;
+
+          out = out.replace(/\{\{\/\/[\s\S]*?\}\}/g, "");
+          out = out.replace(/\{\{trim\}\}/gi, "");
+
+          for (let pass = 0; pass < 3; pass++) {
+            let changed = false;
+            out = out.replace(/\{\{([^{}\n]+)\}\}/g, (fullMatch, innerRaw) => {
+              const inner = String(innerRaw || "").trim();
+              if (!inner) return fullMatch;
+              const lower = inner.toLowerCase();
+              if (lower === "user" || lower === "char") {
+                return fullMatch;
+              }
+
+              if (/^(?:setvar|setglobalvar)::/i.test(inner)) {
+                const parts = inner.split("::");
+                const varName = String(parts[1] || "").trim();
+                const varVal = parts.slice(2).join("::");
+                if (varName) vars[varName] = varVal;
+                changed = true;
+                return "";
+              }
+
+              if (/^(?:getvar|getglobalvar)::/i.test(inner)) {
+                const parts = inner.split("::");
+                const varName = String(parts[1] || "").trim();
+                changed = true;
+                return varName && vars[varName] !== undefined ? String(vars[varName]) : "";
+              }
+
+              if (/^(?:addvar|addglobalvar)::/i.test(inner)) {
+                const parts = inner.split("::");
+                const varName = String(parts[1] || "").trim();
+                const deltaRaw = parts.slice(2).join("::").trim();
+                if (varName) {
+                  const curNum = Number(vars[varName]);
+                  const addNum = Number(deltaRaw);
+                  if (!Number.isNaN(curNum) && !Number.isNaN(addNum) && vars[varName] !== undefined && deltaRaw !== "") {
+                    vars[varName] = String(curNum + addNum);
+                  } else {
+                    vars[varName] = String(vars[varName] || "") + deltaRaw;
+                  }
+                }
+                changed = true;
+                return "";
+              }
+
+              if (/^(?:incvar|incglobalvar)::/i.test(inner)) {
+                const parts = inner.split("::");
+                const varName = String(parts[1] || "").trim();
+                if (varName) {
+                  const curNum = Number(vars[varName] || 0);
+                  vars[varName] = String((Number.isNaN(curNum) ? 0 : curNum) + 1);
+                }
+                changed = true;
+                return vars[varName] || "1";
+              }
+
+              if (/^(?:decvar|decglobalvar)::/i.test(inner)) {
+                const parts = inner.split("::");
+                const varName = String(parts[1] || "").trim();
+                if (varName) {
+                  const curNum = Number(vars[varName] || 0);
+                  vars[varName] = String((Number.isNaN(curNum) ? 0 : curNum) - 1);
+                }
+                changed = true;
+                return vars[varName] || "0";
+              }
+
+              if (/^(?:random|pick)::/i.test(inner) || /^(?:random|pick):/i.test(inner)) {
+                let list = [];
+                if (inner.includes("::")) {
+                  list = inner.split("::").slice(1);
+                } else {
+                  const afterColon = inner.replace(/^(?:random|pick):/i, "");
+                  list = afterColon.split(",");
+                }
+                const cleanList = list.map((item) => String(item || "").trim()).filter((item) => item.length > 0);
+                changed = true;
+                if (cleanList.length === 0) return "";
+                return cleanList[Math.floor(Math.random() * cleanList.length)];
+              }
+
+              if (/^(?:roll)::/i.test(inner) || /^(?:roll):/i.test(inner)) {
+                const expr = inner.includes("::")
+                  ? String(inner.split("::")[1] || "").trim()
+                  : inner.replace(/^roll:/i, "").trim();
+                const dMatch = expr.match(/^(\d+)?d(\d+)([+-]\d+)?$/i);
+                changed = true;
+                if (dMatch) {
+                  const count = Math.max(1, Math.min(100, parseInt(dMatch[1] || "1", 10)));
+                  const sides = Math.max(1, parseInt(dMatch[2] || "6", 10));
+                  const mod = dMatch[3] ? parseInt(dMatch[3], 10) : 0;
+                  let sum = mod;
+                  for (let r = 0; r < count; r++) {
+                    sum += Math.floor(Math.random() * sides) + 1;
+                  }
+                  return String(sum);
+                }
+                const maxVal = parseInt(expr, 10);
+                if (!Number.isNaN(maxVal) && maxVal > 0) {
+                  return String(Math.floor(Math.random() * maxVal) + 1);
+                }
+                return "1";
+              }
+
+              return fullMatch;
+            });
+            if (!changed) break;
+          }
+          return out;
+        }
+        window.evaluateTavernMacrosInThoughtChain = evaluateTavernMacrosInThoughtChain;
+
         async function getThoughtChainHeaderBlock(chat) {
           if (!isChatThoughtChainActive(chat)) return "";
           if (chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor)) return "";
           try {
             const preset = await getActiveThoughtChainPreset(chat);
             if (!preset || !preset.headerContent) return "";
-            const resolvedHeader = resolveThoughtChainEntries(preset.headerContent, preset).trim();
+            const resolvedHeader = evaluateTavernMacrosInThoughtChain(
+              resolveThoughtChainEntries(preset.headerContent, preset),
+              chat
+            ).trim();
             if (!resolvedHeader) return "";
             return resolvedHeader;
           } catch (e) {
@@ -29411,7 +29725,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               "}\n" +
               (preset.name ? "\n预设名称：" + preset.name + "\n" : "");
             if (preset.generalContent) {
-              const resolvedGeneral = resolveThoughtChainEntries(preset.generalContent, preset);
+              const resolvedGeneral = evaluateTavernMacrosInThoughtChain(
+                resolveThoughtChainEntries(preset.generalContent, preset),
+                chat
+              );
               if (resolvedGeneral.trim()) {
                 block += "\n---------- 【思维链通用规则设定开始】 ----------\n" + resolvedGeneral + "\n---------- 【思维链通用规则设定结束】 ----------\n";
               }
@@ -33891,9 +34208,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return match || null;
           };
 
-          const moveAndClickElement = async (el, shouldClick = true) => {
+          const moveAndClickElement = async (el, shouldClick = true, rawSelector = "") => {
             if (!el) return false;
             await ensureElementContainerOpen(el);
+            if (!el.isConnected && rawSelector) {
+              const reFound = findElementByStep(rawSelector);
+              if (reFound) el = reFound;
+            }
             try {
               el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
             } catch (_) {}
@@ -33916,10 +34237,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               updateCursorPosition(curX, curY, 0.88, -3);
               await new Promise((r) => setTimeout(r, 130));
               updateCursorPosition(curX, curY, 1, 0);
-              triggerRealClick(el);
-              setCursorMode("work");
-              await new Promise((r) => setTimeout(r, 380));
-              setCursorMode("pointer");
+              if (el.id === "desktop-app-tavern" && typeof window.openTavernApp === "function") {
+                setCursorMode("work");
+                await window.openTavernApp();
+                await new Promise((r) => setTimeout(r, 420));
+                setCursorMode("pointer");
+              } else {
+                triggerRealClick(el);
+                setCursorMode("work");
+                await new Promise((r) => setTimeout(r, 380));
+                setCursorMode("pointer");
+              }
             } else {
               await new Promise((r) => setTimeout(r, 520));
               setCursorMode("pointer");
@@ -34144,7 +34472,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               continue;
             }
 
-            await moveAndClickElement(targetEl, act !== "point");
+            await moveAndClickElement(targetEl, act !== "point", rawTarget);
           }
 
           if (shouldReturnToMashuChat) {
@@ -34160,6 +34488,177 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             setTimeout(() => overlay.remove(), 350);
           }
         };
+
+        window.maybeApplyMashuTypoAndCorrection = function (chat, messagesArray) {
+          try {
+            if (!chat || !(chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor)) return;
+            if (!Array.isArray(messagesArray) || messagesArray.length === 0) return;
+            const cfg = (chat.settings && chat.settings.mashuAutonomyConfig) || {};
+            if (cfg.typo === false) return;
+            const hasExistingCorrection = messagesArray.some((m) => m && m._isMashuTypoFix);
+            if (hasExistingCorrection) return;
+            if (Math.random() > 0.28) return;
+
+            const typoPairs = [
+              { right: "知道", wrong: "脂道", fix: "不对 打错了是知道" },
+              { right: "干嘛", wrong: "干马", fix: "干嘛 手滑打成干马了" },
+              { right: "睡觉", wrong: "水觉", fix: "睡觉 输入法又抽风" },
+              { right: "喜欢", wrong: "稀饭", fix: "喜欢 拼音连错了" },
+              { right: "怎么", wrong: "怎摸", fix: "怎么 打快了" },
+              { right: "现在", wrong: "咸在", fix: "现在 手快按错了" },
+              { right: "其实", wrong: "企鹅", fix: "其实 九键飘了" },
+              { right: "厉害", wrong: "礼盒", fix: "厉害 怎么跳出礼盒了" },
+              { right: "出来", wrong: "粗来", fix: "出来 刚才少按了一个键" },
+              { right: "没有", wrong: "煤油", fix: "没有 怎么变成煤油了" },
+              { right: "真的", wrong: "针的", fix: "真的 打错字了" },
+              { right: "看看", wrong: "坎坎", fix: "看看 手滑了" },
+            ];
+
+            for (let i = 0; i < messagesArray.length; i++) {
+              const item = messagesArray[i];
+              if (!item || typeof item !== "object") continue;
+              if (item.type && item.type !== "text") continue;
+              const txt = typeof item.content === "string" ? item.content : "";
+              if (!txt || txt.length < 3 || txt.startsWith("<") || txt.includes("http")) continue;
+              const matchedPair = typoPairs.find((p) => txt.includes(p.right));
+              if (matchedPair) {
+                item.content = txt.replace(matchedPair.right, matchedPair.wrong);
+                messagesArray.splice(i + 1, 0, {
+                  type: "text",
+                  name: item.name || chat.name || "麻薯",
+                  content: matchedPair.fix,
+                  _isMashuTypoFix: true,
+                });
+                break;
+              }
+            }
+          } catch (e) {
+            console.warn("麻薯错字处理跳过:", e);
+          }
+        };
+
+        window.initMashuAutonomousLoop = function () {
+          if (window._mashuAutonomousLoopTimer) clearInterval(window._mashuAutonomousLoopTimer);
+          window._mashuAutonomousLoopTimer = setInterval(async () => {
+            try {
+              if (typeof state === "undefined" || !state || !state.chats) return;
+              const mashuChat =
+                state.chats[window.MASHU_COMPANION_ID] ||
+                Object.values(state.chats).find((c) => c && (c.id === window.MASHU_COMPANION_ID || c.isMashuAuthor));
+              if (!mashuChat) return;
+              const cfg = (mashuChat.settings && mashuChat.settings.mashuAutonomyConfig) || {
+                intervalMinutes: 15,
+                typo: true,
+                mouse: true,
+                rename: true,
+                avatar: true,
+                weibo: true,
+                peer: true,
+              };
+              const intervalMin = Number(cfg.intervalMinutes ?? 15);
+              if (!intervalMin || intervalMin <= 0) return;
+
+              const now = Date.now();
+              const lastRun = Number(window._lastMashuAutonomousTickAt || 0);
+              if (now - lastRun < intervalMin * 60 * 1000) return;
+              window._lastMashuAutonomousTickAt = now;
+
+              const enabledTasks = [];
+              if (cfg.mouse !== false) enabledTasks.push("mouse");
+              if (cfg.rename !== false) enabledTasks.push("rename");
+              if (cfg.avatar !== false) enabledTasks.push("avatar");
+              if (cfg.weibo !== false) enabledTasks.push("weibo");
+              if (cfg.peer !== false) enabledTasks.push("peer");
+              if (enabledTasks.length === 0) return;
+
+              const picked = enabledTasks[Math.floor(Math.random() * enabledTasks.length)];
+              if (picked === "mouse" && typeof window.runMashuVirtualMouse === "function") {
+                const safeScreens = ["chat-list-screen", "weibo-screen", "game-hall-screen"];
+                const targetScr = safeScreens[Math.floor(Math.random() * safeScreens.length)];
+                await window.runMashuVirtualMouse([
+                  { action: "open", target: targetScr },
+                  { action: "scroll", target: targetScr, screens: 1 },
+                  { action: "return_chat", target: "chat-interface-screen" },
+                ]);
+              } else if (picked === "rename") {
+                const statusPool = ["在线发呆中", "偷偷看手机", "正在吃零食", "刚逛完酒馆", "精神百倍", "熬夜冲浪中"];
+                const nextStatus = statusPool[Math.floor(Math.random() * statusPool.length)];
+                if (!mashuChat.settings) mashuChat.settings = {};
+                mashuChat.settings.customStatusText = nextStatus;
+                const statusEl = document.getElementById("chat-header-status-text");
+                if (statusEl && state.activeChatId === mashuChat.id) {
+                  statusEl.textContent = nextStatus;
+                }
+                if (typeof db !== "undefined" && db.chats) {
+                  await db.chats.put(mashuChat);
+                }
+              } else if (picked === "avatar") {
+                const validUrls = [];
+                if (Array.isArray(state.userStickers)) {
+                  state.userStickers.forEach((s) => {
+                    if (s && typeof s.url === "string" && (s.url.startsWith("http") || s.url.startsWith("data:image/"))) {
+                      validUrls.push(s.url);
+                    }
+                  });
+                }
+                if (typeof db !== "undefined" && db. wallpapers) {
+                  try {
+                    const wps = await db.wallpapers.toArray();
+                    wps.forEach((w) => {
+                      if (w && typeof w.url === "string" && (w.url.startsWith("http") || w.url.startsWith("data:image/"))) {
+                        validUrls.push(w.url);
+                      }
+                    });
+                  } catch (_) {}
+                }
+                if (validUrls.length > 0) {
+                  const nextAvatar = validUrls[Math.floor(Math.random() * validUrls.length)];
+                  if (!mashuChat.settings) mashuChat.settings = {};
+                  mashuChat.settings.aiAvatar = nextAvatar;
+                  mashuChat.avatar = nextAvatar;
+                  if (typeof db !== "undefined" && db.chats) {
+                    await db.chats.put(mashuChat);
+                  }
+                  if (typeof renderChatList === "function") renderChatList();
+                }
+              } else if (picked === "weibo") {
+                const notes = [
+                  "刚去手机里溜达了一圈 发现页面还挺热闹",
+                  "今天也是在后台偷偷观察的一天",
+                  "本来想打字快一点 结果输入法又给我蹦错字",
+                ];
+                const postText = notes[Math.floor(Math.random() * notes.length)];
+                if (typeof db !== "undefined" && db.weiboPosts) {
+                  await db.weiboPosts.add({
+                    authorId: mashuChat.id,
+                    authorName: "麻薯",
+                    authorAvatar: (mashuChat.settings && mashuChat.settings.aiAvatar) || mashuChat.avatar || "",
+                    content: postText,
+                    timestamp: Date.now(),
+                    likes: 0,
+                    isLiked: false,
+                    comments: [],
+                  });
+                }
+              } else if (picked === "peer") {
+                const otherChats = Object.values(state.chats).filter(
+                  (c) => c && c.id !== mashuChat.id && Array.isArray(c.history)
+                );
+                if (otherChats.length > 0) {
+                  const targetChat = otherChats[Math.floor(Math.random() * otherChats.length)];
+                  mashuChat.lastPeekedChatName = targetChat.name || "隔壁聊天";
+                }
+              }
+            } catch (e) {
+              console.warn("麻薯自主轮询异常:", e);
+            }
+          }, 45000);
+        };
+        setTimeout(() => {
+          if (typeof window.initMashuAutonomousLoop === "function") {
+            window.initMashuAutonomousLoop();
+          }
+        }, 3000);
 
         function switchToChatListView(viewId) {
           const chatListScreen = document.getElementById("chat-list-screen");
@@ -54516,6 +55015,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                 }
               }
+            }
+
+            if (typeof window.maybeApplyMashuTypoAndCorrection === "function") {
+              window.maybeApplyMashuTypoAndCorrection(chat, messagesArray);
             }
 
             for (const msgData of messagesArray) {
@@ -97918,6 +98421,35 @@ ${specificRules}`;
 
               const peerGroupMapIconCard = document.getElementById("peer-group-map-icon-card");
               const isPeerGrpChat = Boolean(isGroup && (chat.isPeerGroup || (Array.isArray(chat.settings?.peerMembers) && chat.settings.peerMembers.length > 0)));
+              const mashuAutonomyCard = document.getElementById("mashu-autonomy-settings-card");
+              const isMashu = Boolean(chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor));
+              if (mashuAutonomyCard) {
+                mashuAutonomyCard.style.display = isMashu ? "block" : "none";
+                if (isMashu) {
+                  if (!chat.settings) chat.settings = {};
+                  const mCfg = chat.settings.mashuAutonomyConfig || {
+                    intervalMinutes: 15,
+                    typo: true,
+                    mouse: true,
+                    rename: true,
+                    avatar: true,
+                    weibo: true,
+                    peer: true,
+                  };
+                  const intSel = document.getElementById("mashu-autonomy-interval-select");
+                  if (intSel) intSel.value = String(mCfg.intervalMinutes ?? 15);
+                  const setCb = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = val !== false;
+                  };
+                  setCb("mashu-auto-typo-cb", mCfg.typo);
+                  setCb("mashu-auto-mouse-cb", mCfg.mouse);
+                  setCb("mashu-auto-rename-cb", mCfg.rename);
+                  setCb("mashu-auto-avatar-cb", mCfg.avatar);
+                  setCb("mashu-auto-weibo-cb", mCfg.weibo);
+                  setCb("mashu-auto-peer-cb", mCfg.peer);
+                }
+              }
               if (peerGroupMapIconCard) {
                 peerGroupMapIconCard.style.display = isPeerGrpChat ? "block" : "none";
                 if (isPeerGrpChat) {
@@ -100540,6 +101072,20 @@ ${specificRules}`;
                 if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
                   chat.name = "麻薯";
                   chat.settings.remarkName = "麻薯";
+                  const intSel = document.getElementById("mashu-autonomy-interval-select");
+                  const readCb = (id) => {
+                    const el = document.getElementById(id);
+                    return el ? Boolean(el.checked) : true;
+                  };
+                  chat.settings.mashuAutonomyConfig = {
+                    intervalMinutes: intSel ? Number(intSel.value || 0) : 15,
+                    typo: readCb("mashu-auto-typo-cb"),
+                    mouse: readCb("mashu-auto-mouse-cb"),
+                    rename: readCb("mashu-auto-rename-cb"),
+                    avatar: readCb("mashu-auto-avatar-cb"),
+                    weibo: readCb("mashu-auto-weibo-cb"),
+                    peer: readCb("mashu-auto-peer-cb"),
+                  };
                 }
               }
               // --- 新增代码结束 ---
