@@ -36228,4 +36228,48 @@ select,
   color: var(--text-secondary);
 }
 
+/* 安卓 vivo 小窗模式与分屏模式等比例缩放与防裁切适配 */
+:root {
+  --app-ui-zoom: 1;
+}
 
+#phone-screen {
+  zoom: var(--app-ui-zoom, 1);
+  width: calc(100vw / var(--app-ui-zoom, 1));
+  height: calc(100vh / var(--app-ui-zoom, 1));
+  height: calc(100dvh / var(--app-ui-zoom, 1));
+}
+
+body.is-compact-window #home-screen,
+body.is-compact-window #lock-screen {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.is-compact-window #clock-container {
+  margin-top: 12px !important;
+  margin-bottom: 8px !important;
+}
+
+body.is-compact-window .header {
+  height: 64px !important;
+  padding-top: calc(12px + env(safe-area-inset-top)) !important;
+  padding-bottom: 10px !important;
+}
+
+body.is-compact-window #chat-list {
+  padding-top: 64px !important;
+}
+
+body.is-compact-window .modal-content,
+body.is-small-window .modal-content {
+  max-height: calc((100dvh / var(--app-ui-zoom, 1)) - 20px) !important;
+  overflow-y: auto !important;
+}
+
+body.is-compact-window #tavern-drawer-host .drawer-content,
+body.is-small-window #tavern-drawer-host .drawer-content {
+  max-height: calc((100dvh / var(--app-ui-zoom, 1)) - 56px) !important;
+  overflow-y: auto !important;
+}

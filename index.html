@@ -81,6 +81,58 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
+    <script>
+      (function () {
+        var lastValidZoom = 1;
+        var lastWindowWidth = window.innerWidth || 375;
+        function isTextInputActive() {
+          var el = document.activeElement;
+          if (!el) return false;
+          var tag = (el.tagName || '').toUpperCase();
+          if (tag === 'TEXTAREA') return true;
+          if (tag === 'INPUT') {
+            var type = (el.type || 'text').toLowerCase();
+            return type !== 'button' && type !== 'checkbox' && type !== 'radio' && type !== 'range' && type !== 'file' && type !== 'color';
+          }
+          return Boolean(el.isContentEditable);
+        }
+        function updateMultiWindowScale() {
+          var vw = window.innerWidth || document.documentElement.clientWidth || 375;
+          var vh = window.innerHeight || document.documentElement.clientHeight || 667;
+          var widthChanged = Math.abs(vw - lastWindowWidth) > 12;
+          lastWindowWidth = vw;
+
+          if (isTextInputActive() && !widthChanged) {
+            return;
+          }
+
+          var baseW = 375;
+          var baseH = 660;
+          var zoomW = vw < 365 ? (vw / baseW) : 1;
+          var zoomH = vh < 620 ? (vh / baseH) : 1;
+          var targetZoom = Math.min(zoomW, zoomH);
+          if (targetZoom < 0.99) {
+            targetZoom = Math.max(0.55, Math.min(1, Number(targetZoom.toFixed(3))));
+          } else {
+            targetZoom = 1;
+          }
+          lastValidZoom = targetZoom;
+          document.documentElement.style.setProperty('--app-ui-zoom', String(lastValidZoom));
+          if (document.body) {
+            document.body.classList.toggle('is-small-window', vw < 365);
+            document.body.classList.toggle('is-compact-window', vh < 620);
+          }
+        }
+        window.addEventListener('resize', updateMultiWindowScale, { passive: true });
+        window.addEventListener('orientationchange', function () {
+          setTimeout(updateMultiWindowScale, 120);
+        }, { passive: true });
+        document.addEventListener('DOMContentLoaded', updateMultiWindowScale);
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', updateMultiWindowScale, { passive: true });
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="phone-screen">
@@ -2503,7 +2555,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">

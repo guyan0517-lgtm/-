@@ -5555,6 +5555,19 @@ code, pre {
         const val = globalVars[k.trim()];
         return val !== undefined && val !== null ? String(val) : '';
       })
+      .replace(/\{\{outlet::([^}]+)\}\}/gi, (_, k) => {
+        const key = String(k || '').trim();
+        const outlets = uiRuntime.activeWorldInfoOutlets || {};
+        if (Array.isArray(outlets[key]) && outlets[key].length > 0) {
+          return outlets[key].join('\n\n');
+        }
+        const lowerKey = key.toLowerCase();
+        const matchedKey = Object.keys(outlets).find(ok => ok.toLowerCase() === lowerKey);
+        if (matchedKey && Array.isArray(outlets[matchedKey]) && outlets[matchedKey].length > 0) {
+          return outlets[matchedKey].join('\n\n');
+        }
+        return '';
+      })
       .replace(/\{\{user\}\}/gi, userName)
       .replace(/\{\{char\}\}/gi, charName)
       .replace(/\{\{charIfNotGroup\}\}/gi, charName)
@@ -5627,34 +5640,47 @@ code, pre {
       isPrompt = false,
       isChatFloor = false,
       isWorldInfo = false,
-      depth = 0,
+      isCharacterDef = false,
+      isPresetPrompt = false,
+      depth = undefined,
       card = getActiveCard()
     } = options;
 
-    const targetPlacement = isWorldInfo ? 5 : (isUser ? 1 : 2);
+    const targetPlacement = isWorldInfo
+      ? 5
+      : (isCharacterDef ? 4 : (isPresetPrompt ? 3 : (isUser ? 1 : 2)));
     const scripts = getActiveRegexScriptsForCard(card);
     let output = replaceTavernMacros(String(rawText), card);
 
-    // If formatting a system preset prompt or character definition (not a chat floor and not world info), only run macro replacement so display/chat regexes never corrupt system prompt templates
-    if (isPrompt && !isChatFloor && !isWorldInfo) {
+    const isSystemOrCharBlock = isPrompt && !isChatFloor && !isWorldInfo;
+    if (isSystemOrCharBlock && !isCharacterDef && !isPresetPrompt) {
       return output;
     }
+
+    const hasDepthContext = depth !== undefined && depth !== null && !Number.isNaN(Number(depth));
+    const numericDepth = hasDepthContext ? Number(depth) : 0;
 
     for (const script of scripts) {
       if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
       if (!isPrompt && script.promptOnly && !script.markdownOnly) continue;
 
-      if (Array.isArray(script.placement) && script.placement.length > 0) {
+      if (isSystemOrCharBlock) {
+        if (!Array.isArray(script.placement) || script.placement.length === 0) continue;
+        const matchSysPlacement = isCharacterDef
+          ? script.placement.includes(4)
+          : (script.placement.includes(3) || script.placement.includes(0));
+        if (!matchSysPlacement) continue;
+      } else if (Array.isArray(script.placement) && script.placement.length > 0) {
         if (!script.placement.includes(targetPlacement)) continue;
       }
-      const minD = (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '') ? Number(script.minDepth) : null;
-      const maxD = (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '') ? Number(script.maxDepth) : null;
-      const isDefaultZeroPair = (minD === 0 || minD === null) && maxD === 0;
-      if (isPrompt && !isDefaultZeroPair) {
-        if (minD !== null && !Number.isNaN(minD) && minD > 0 && depth < minD) {
+
+      if (hasDepthContext && (isChatFloor || !isPrompt)) {
+        const minD = (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '') ? Number(script.minDepth) : null;
+        const maxD = (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '') ? Number(script.maxDepth) : null;
+        if (minD !== null && !Number.isNaN(minD) && minD > 0 && numericDepth < minD) {
           continue;
         }
-        if (maxD !== null && !Number.isNaN(maxD) && maxD > 0 && depth > maxD) {
+        if (maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
           continue;
         }
       }
@@ -5667,20 +5693,38 @@ code, pre {
       if (!rx) continue;
 
       const repStr = replaceTavernMacros(String(script.replaceString ?? ''), card);
+      const resolvedTrimStrings = (Array.isArray(script.trimStrings) && script.trimStrings.length > 0)
+        ? script.trimStrings.map(t => t ? replaceTavernMacros(String(t), card) : '').filter(Boolean)
+        : [];
       try {
         output = output.replace(rx, (...matchArgs) => {
-          let replaced = repStr.replace(/\{\{\$match\}\}|\$&/g, matchArgs[0] || '');
-          for (let g = 1; g < matchArgs.length - 2; g++) {
+          let replaced = repStr.replace(/\{\{\$?match\}\}|\$&/g, matchArgs[0] || '');
+          const lastArg = matchArgs[matchArgs.length - 1];
+          const hasNamedGroups = lastArg && typeof lastArg === 'object' && !Array.isArray(lastArg);
+          const groupEndIdx = hasNamedGroups ? matchArgs.length - 3 : matchArgs.length - 2;
+
+          for (let g = 1; g < groupEndIdx; g++) {
             const groupVal = matchArgs[g] !== undefined ? String(matchArgs[g]) : '';
-            if (Array.isArray(script.trimStrings) && script.trimStrings.length > 0) {
+            if (resolvedTrimStrings.length > 0) {
               let trimmedVal = groupVal;
-              script.trimStrings.forEach(t => {
+              resolvedTrimStrings.forEach(t => {
                 if (t) trimmedVal = trimmedVal.split(t).join('');
               });
               replaced = replaced.split('$' + g).join(trimmedVal);
             } else {
               replaced = replaced.split('$' + g).join(groupVal);
             }
+          }
+          if (hasNamedGroups) {
+            Object.entries(lastArg).forEach(([gName, gVal]) => {
+              let valStr = gVal !== undefined ? String(gVal) : '';
+              if (resolvedTrimStrings.length > 0) {
+                resolvedTrimStrings.forEach(t => {
+                  if (t) valStr = valStr.split(t).join('');
+                });
+              }
+              replaced = replaced.split(`$<${gName}>`).join(valStr);
+            });
           }
           if (!isPrompt && (/<script\b[\s\S]*?<\/script>/i.test(replaced) || /需要酒馆助手的前端渲染/i.test(replaced)) && !/<html\b/i.test(replaced) && !/<html\b/i.test(output)) {
             const cleanBlock = replaced
@@ -6913,20 +6957,44 @@ code, pre {
     });
 
     if (activeBooks.length === 0) {
+      uiRuntime.activeWorldInfoOutlets = {};
       return { beforeChar: [], afterChar: [], beforeAN: [], afterAN: [], atDepth: [], beforeExample: [], afterExample: [], outlets: {} };
     }
 
-    const defaultDepth = Math.max(1, Number(activeBooks[0].scanDepth || 4));
-    const maxBudget = Math.max(256, Number(activeBooks[0].tokenBudget || 4096));
-    const allowRecursion = Boolean(activeBooks[0].recursiveScanning ?? true);
+    const defaultDepth = Math.max(1, ...activeBooks.map(b => Number(b.scanDepth || 4)));
+    const maxBudget = activeBooks.reduce((sum, b) => sum + Math.max(256, Number(b.tokenBudget || 4096)), 0);
+    const allowRecursion = activeBooks.some(b => Boolean(b.recursiveScanning ?? true));
+
+    const persona = getActivePersona();
+    const an = tavernState.authorNote || {};
+    const extraContextParts = [];
+    if (persona && persona.description && persona.description.trim()) {
+      extraContextParts.push(persona.description.trim());
+    }
+    if (card) {
+      if (card.description && card.description.trim()) extraContextParts.push(card.description.trim());
+      if (card.personality && card.personality.trim()) extraContextParts.push(card.personality.trim());
+      if (card.scenario && card.scenario.trim()) extraContextParts.push(card.scenario.trim());
+    }
+    if (an.text && an.text.trim()) {
+      extraContextParts.push(an.text.trim());
+    }
+    const extraContextText = extraContextParts.join('\n');
 
     const recentSlice = (chatMessages || []).slice(-defaultDepth);
-    const baseScanText = recentSlice.map(m => m.mes || '').join('\n');
+    const baseScanText = recentSlice.map(m => m.mes || '').join('\n') + (extraContextText ? '\n' + extraContextText : '');
+
+    const sess = getActiveChatSession();
+    const wiTimingState = (sess && sess.metadata)
+      ? (sess.metadata.wiTimingState || (sess.metadata.wiTimingState = {}))
+      : {};
+    const curFloorCount = (chatMessages || []).length;
 
     const candidateEntries = [];
     activeBooks.forEach(book => {
       (book.entries || []).forEach(entry => {
         if (!entry.disable && (entry.content || '').trim()) {
+          entry._sourceBookId = book.id || 'book';
           candidateEntries.push(entry);
         }
       });
@@ -6944,14 +7012,33 @@ code, pre {
       let addedInPass = false;
       for (const entry of candidateEntries) {
         if (triggeredSet.has(entry)) continue;
+        const entryDelay = Number(entry.delay || 0);
+        if (entryDelay > 0 && curFloorCount < entryDelay) continue;
+
+        const timingKey = `${entry._sourceBookId || 'wb'}_${entry.uid ?? entry.comment ?? ''}`;
+        const tState = wiTimingState[timingKey] || {};
+        const isStickyActive = tState.stickyUntilFloor !== undefined && curFloorCount <= tState.stickyUntilFloor && curFloorCount >= (tState.lastTriggeredFloor || 0);
+        const isOnCooldown = !isStickyActive && tState.cooldownUntilFloor !== undefined && curFloorCount <= tState.cooldownUntilFloor && curFloorCount > (tState.lastTriggeredFloor || 0);
+        if (isOnCooldown) continue;
+
         let textToScan = currentScanPool;
         if (pass === 0 && entry.scanDepth !== null && entry.scanDepth !== undefined && entry.scanDepth !== '') {
           const customDepth = Math.max(1, Number(entry.scanDepth));
-          textToScan = (chatMessages || []).slice(-customDepth).map(m => m.mes || '').join('\n');
+          textToScan = (chatMessages || []).slice(-customDepth).map(m => m.mes || '').join('\n') + (extraContextText ? '\n' + extraContextText : '');
         }
-        if (evaluateWorldEntryMatch(entry, textToScan, pass > 0)) {
+        const matched = isStickyActive || evaluateWorldEntryMatch(entry, textToScan, pass > 0);
+        if (matched) {
           triggeredSet.add(entry);
           triggeredEntries.push(entry);
+          if (!isStickyActive && (Number(entry.sticky || 0) > 0 || Number(entry.cooldown || 0) > 0)) {
+            const stickyFloors = Math.max(0, Number(entry.sticky || 0));
+            const cooldownFloors = Math.max(0, Number(entry.cooldown || 0));
+            wiTimingState[timingKey] = {
+              lastTriggeredFloor: curFloorCount,
+              stickyUntilFloor: stickyFloors > 0 ? (curFloorCount + stickyFloors) : -1,
+              cooldownUntilFloor: cooldownFloors > 0 ? (curFloorCount + stickyFloors + cooldownFloors) : -1
+            };
+          }
           if (!entry.preventRecursion) {
             currentScanPool += '\n' + entry.content;
             addedInPass = true;
@@ -7006,6 +7093,7 @@ code, pre {
       }
     });
 
+    uiRuntime.activeWorldInfoOutlets = buckets.outlets;
     return buckets;
   }
 
@@ -7089,6 +7177,8 @@ code, pre {
     const an = tavernState.authorNote || {};
     const anDepth = Math.max(0, Number(an.depth ?? 4));
     const anRole = an.role || 'system';
+    const anFreq = Number(an.frequency ?? 1);
+    const shouldInjectAN = anFreq > 0 && (anFreq === 1 || (rawChat.length > 0 && rawChat.length % anFreq === 0));
     if (wiBuckets.beforeAN && wiBuckets.beforeAN.length > 0) {
       depthInjections.push({
         role: anRole,
@@ -7098,7 +7188,7 @@ code, pre {
         _debugLabel: '世界书 · 作者注释前 @D' + anDepth
       });
     }
-    if (an.text && an.text.trim()) {
+    if (shouldInjectAN && an.text && an.text.trim()) {
       depthInjections.push({
         role: anRole,
         depth: anDepth,
@@ -7125,7 +7215,7 @@ code, pre {
         role: an.charNoteRole || card.depth_prompt_role || 'system',
         depth: cnDepth,
         order: 115,
-        content: replaceTavernMacros(charNoteText, card),
+        content: applyTavernRegexPipeline(charNoteText, { isPrompt: true, isCharacterDef: true, depth: cnDepth, card }),
         _debugLabel: '角色深度提示词 @D' + cnDepth
       });
     }
@@ -7198,7 +7288,7 @@ code, pre {
           depth: pDepth,
           order: Number(p.injection_order ?? 100),
           seqIdx,
-          content: applyTavernRegexPipeline(p.content, { isPrompt: true, depth: pDepth, card }),
+          content: applyTavernRegexPipeline(p.content, { isPrompt: true, isPresetPrompt: true, depth: pDepth, card }),
           _debugLabel: '预设深度提示词 @D' + pDepth + ' · ' + (p.name || p.identifier || '自定义条目')
         });
       }
@@ -7273,7 +7363,7 @@ code, pre {
       if (fallbackMain.trim()) {
         finalMessages.push({
           role: 'system',
-          content: applyTavernRegexPipeline(fallbackMain, { isPrompt: true, card }),
+          content: applyTavernRegexPipeline(fallbackMain, { isPrompt: true, isPresetPrompt: true, card }),
           _debugLabel: '预设系统提示词 · Main Prompt'
         });
       }
@@ -7309,7 +7399,7 @@ code, pre {
         if (card && card.description && card.description.trim()) {
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(card.description, { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(card.description, { isPrompt: true, isCharacterDef: true, card }),
             _debugLabel: '角色设定 · Description'
           });
         }
@@ -7318,7 +7408,7 @@ code, pre {
           const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, isCharacterDef: true, card }),
             _debugLabel: '角色性格 · Personality'
           });
         }
@@ -7327,7 +7417,7 @@ code, pre {
           const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, isCharacterDef: true, card }),
             _debugLabel: '场景设定 · Scenario'
           });
         }
@@ -7335,7 +7425,7 @@ code, pre {
         const parts = [];
         if (wiBuckets.beforeExample.length > 0) parts.push(wiBuckets.beforeExample.join('\n'));
         if (card && card.mes_example && card.mes_example.trim()) {
-          parts.push(applyTavernRegexPipeline(card.mes_example, { isPrompt: true, card }));
+          parts.push(applyTavernRegexPipeline(card.mes_example, { isPrompt: true, isCharacterDef: true, card }));
         }
         if (wiBuckets.afterExample.length > 0) parts.push(wiBuckets.afterExample.join('\n'));
         if (parts.length > 0) {
@@ -7363,7 +7453,7 @@ code, pre {
         if (!allPresetIds.has('charDescription') && card && card.description && card.description.trim()) {
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(card.description, { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(card.description, { isPrompt: true, isCharacterDef: true, card }),
             _debugLabel: '角色设定 · Description'
           });
         }
@@ -7371,7 +7461,7 @@ code, pre {
           const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, isCharacterDef: true, card }),
             _debugLabel: '角色性格 · Personality'
           });
         }
@@ -7379,7 +7469,7 @@ code, pre {
           const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
           finalMessages.push({
             role: 'system',
-            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, isCharacterDef: true, card }),
             _debugLabel: '场景设定 · Scenario'
           });
         }
@@ -7387,7 +7477,7 @@ code, pre {
           const parts = [];
           if (wiBuckets.beforeExample.length > 0) parts.push(wiBuckets.beforeExample.join('\n'));
           if (card && card.mes_example && card.mes_example.trim()) {
-            parts.push(applyTavernRegexPipeline(card.mes_example, { isPrompt: true, card }));
+            parts.push(applyTavernRegexPipeline(card.mes_example, { isPrompt: true, isCharacterDef: true, card }));
           }
           if (wiBuckets.afterExample.length > 0) parts.push(wiBuckets.afterExample.join('\n'));
           if (parts.length > 0) {
@@ -7424,7 +7514,7 @@ code, pre {
         if (content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(content, { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(content, { isPrompt: true, isPresetPrompt: true, card }),
             _debugLabel: '预设系统提示词 · ' + (item.name || 'Main Prompt')
           });
         }
@@ -7436,7 +7526,7 @@ code, pre {
         if (content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(content, { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(content, { isPrompt: true, isPresetPrompt: true, card }),
             _debugLabel: '预设后置指令 · ' + (item.name || 'Post-History Instructions')
           });
         }
@@ -7444,7 +7534,7 @@ code, pre {
         if (item.content && item.content.trim()) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(item.content, { isPrompt: true, card }),
+            content: applyTavernRegexPipeline(item.content, { isPrompt: true, isPresetPrompt: true, card }),
             _debugLabel: '预设提示词 · ' + (item.name || item.identifier || '自定义条目')
           });
         }
@@ -7456,7 +7546,7 @@ code, pre {
       if (fallbackJb.trim()) {
         finalMessages.push({
           role: 'system',
-          content: applyTavernRegexPipeline(fallbackJb, { isPrompt: true, card }),
+          content: applyTavernRegexPipeline(fallbackJb, { isPrompt: true, isPresetPrompt: true, card }),
           _debugLabel: '预设后置指令 · Post-History Instructions'
         });
       }
@@ -12352,9 +12442,14 @@ code, pre {
         syncTavernGeneratingUiState(false);
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(targetMesIndex);
+        const mesBeforeSwipeEvt = targetMsg.mes;
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, targetMesIndex, genType);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, targetMesIndex, genType);
+        if (targetMsg.mes !== mesBeforeSwipeEvt) {
+          targetMsg.swipes[newSwipeIdx] = targetMsg.mes;
+          appendOrUpdateSingleFloorDom(targetMesIndex);
+        }
         if (tavernState.formatting?.autoTranslateIncoming) {
           translateTavernFloor(targetMesIndex, true);
         }
@@ -12422,8 +12517,13 @@ code, pre {
         syncTavernGeneratingUiState(false);
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
+        const mesBeforeRecvEvt = botMsg.mes;
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, newFloorIdx, genType);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, newFloorIdx, genType);
+        if (botMsg.mes !== mesBeforeRecvEvt) {
+          botMsg.swipes[0] = botMsg.mes;
+          appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
+        }
         if (tavernState.formatting?.autoTranslateIncoming) {
           translateTavernFloor(newFloorIdx, true);
         }
