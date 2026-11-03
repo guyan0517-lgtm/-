@@ -195,7 +195,8 @@ app.post('/api/upload-image-bed', async (req, res) => {
   }
 });
 
-const MASHU_STICKERS_FILE = path.join(LOCAL_VAULT_DIR, 'mashu-stickers.json');
+const MASHU_VAULT_DIR = path.join(__dirname, 'EPhoneVault');
+const MASHU_STICKERS_FILE = path.join(MASHU_VAULT_DIR, 'mashu-stickers.json');
 
 app.get('/api/mashu-stickers', (req, res) => {
   try {
@@ -222,8 +223,8 @@ app.post('/api/mashu-stickers', (req, res) => {
         url: s.url.trim(),
         enabled: s.enabled !== false
       }));
-    if (!fs.existsSync(LOCAL_VAULT_DIR)) {
-      fs.mkdirSync(LOCAL_VAULT_DIR, { recursive: true });
+    if (!fs.existsSync(MASHU_VAULT_DIR)) {
+      fs.mkdirSync(MASHU_VAULT_DIR, { recursive: true });
     }
     fs.writeFileSync(MASHU_STICKERS_FILE, JSON.stringify({ updatedAt: Date.now(), stickers: cleaned }, null, 2), 'utf8');
     return res.json({ ok: true, stickers: cleaned });

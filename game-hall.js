@@ -690,10 +690,14 @@ code, pre {
 
         for (const tUrl of candidateUrls) {
           try {
+            const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timerId = ctrl ? setTimeout(() => ctrl.abort(), 800) : null;
             const res = await fetch(tUrl, {
               method: 'GET',
-              cache: 'no-store'
+              cache: 'no-store',
+              signal: ctrl ? ctrl.signal : undefined
             });
+            if (timerId) clearTimeout(timerId);
             if (res && res.ok) {
               const text = await res.text();
               if (text && text.trim().startsWith('{')) {
@@ -17251,12 +17255,12 @@ code, pre {
         stopAllTavernAudioAndMedia();
       } else if (!hasRenderedTavernOnOpen || !document.getElementById('tavern-stage-root') || !document.querySelector('#chat .mes')) {
         hasRenderedTavernOnOpen = true;
+        injectTavernShellCss();
+        renderTavernShell();
         if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState)) {
           loadTavernStore().then(() => {
             if (isTavernActive()) renderTavernShell();
-          });
-        } else {
-          renderTavernShell();
+          }).catch(() => {});
         }
       } else {
         const sess = getActiveChatSession();
@@ -17492,6 +17496,7 @@ code, pre {
   };
 
   async function initTavernApp() {
+    injectTavernShellCss();
     setupSillyTavernGlobalBridge();
     setupTavernScreenVisibilityObserver();
     await loadTavernStore();
@@ -17506,17 +17511,26 @@ code, pre {
 
   window.openTavernApp = async function () {
     hasRenderedTavernOnOpen = true;
+    injectTavernShellCss();
     if (typeof window.showScreen === 'function') {
       window.showScreen('game-hall-screen');
     } else {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById('game-hall-screen')?.classList.add('active');
     }
-    if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState) || inflightTavernLoadPromise) {
-      await loadTavernStore();
-    }
     renderTavernShell();
-    tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+    if (!hasLoadedFromExternalOrIdb || isDefaultStarterOnlyState(tavernState) || inflightTavernLoadPromise) {
+      loadTavernStore().then(() => {
+        if (isTavernActive()) {
+          renderTavernShell();
+        }
+        tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+      }).catch(() => {
+        tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+      });
+    } else {
+      tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
+    }
   };
 
   window.getTavernLiveInspectionData = function (targetType, targetIdOrName) {

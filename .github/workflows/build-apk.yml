@@ -28,9 +28,9 @@ jobs:
       - name: Prepare Web Assets for Capacitor
         run: |
           mkdir -p dist
-          for item in index.html style.css game-hall.css game-hall.js peer-manager.js group-call.js script-kill.js; do
-            if [ -f "$item" ]; then
-              cp "$item" dist/
+          for f in *.html *.css *.js *.json *.png *.webp *.svg *.ico; do
+            if [ -f "$f" ] && [ "$f" != "server.js" ] && [ "$f" != "cloudflare-worker.js" ] && [ "$f" != "package.json" ] && [ "$f" != "package-lock.json" ] && [ "$f" != "capacitor.config.json" ] && [ "$f" != "tsconfig.json" ]; then
+              cp "$f" dist/
             fi
           done
           if [ -d "public" ]; then
@@ -39,8 +39,9 @@ jobs:
 
       - name: Install Capacitor & Generate Android Project
         run: |
-          npm init -y || true
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          rm -f package.json package-lock.json bun.lock
+          echo '{"name":"ephone-apk","version":"1.0.0","private":true}' > package.json
+          npm install --no-package-lock @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
           if [ ! -d "android" ]; then
             npx cap add android
           else
