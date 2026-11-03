@@ -7,6 +7,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -64,9 +67,21 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk ../EPhone.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: EPhone-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: EPhone.apk
+
+      - name: Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: 小手机安卓安装包最新版
+          body: 点击下方 EPhone.apk 即可直接下载安装到手机
+          files: EPhone.apk
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

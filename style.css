@@ -36228,48 +36228,95 @@ select,
   color: var(--text-secondary);
 }
 
-/* 安卓 vivo 小窗模式与分屏模式等比例缩放与防裁切适配 */
-:root {
-  --app-ui-zoom: 1;
-}
-
+/* 思维链弹窗与小窗分屏防溢出适配（不破坏卡头与全屏比例） */
 #phone-screen {
-  zoom: var(--app-ui-zoom, 1);
-  width: calc(100vw / var(--app-ui-zoom, 1));
-  height: calc(100vh / var(--app-ui-zoom, 1));
-  height: calc(100dvh / var(--app-ui-zoom, 1));
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
 }
 
-body.is-compact-window #home-screen,
-body.is-compact-window #lock-screen {
-  overflow-y: auto;
-  overflow-x: hidden;
+#thought-chain-editor-modal .modal-content,
+#thought-chain-bind-modal .modal-content,
+#shared-resource-import-modal .modal-content,
+#debug-console-modal .modal-content,
+#chat-module-chapters-modal .modal-content,
+#qqbot-thought-viewer-modal .modal-content {
+  box-sizing: border-box !important;
+  max-height: min(82vh, calc(100% - 36px)) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#thought-chain-editor-modal .modal-header,
+#thought-chain-editor-modal .modal-footer,
+#thought-chain-bind-modal .modal-header,
+#thought-chain-bind-modal .modal-footer,
+#shared-resource-import-modal .modal-header,
+#shared-resource-import-modal .modal-footer,
+#debug-console-modal .modal-header,
+#debug-console-modal .modal-footer,
+#chat-module-chapters-modal .modal-header,
+#chat-module-chapters-modal .modal-footer,
+#qqbot-thought-viewer-modal .modal-header {
+  flex-shrink: 0 !important;
+}
+
+#thought-chain-editor-modal .modal-body,
+#thought-chain-bind-modal .modal-body,
+#shared-resource-import-modal .modal-body,
+#debug-console-modal .modal-body,
+#chat-module-chapters-modal .modal-body,
+#qqbot-thought-viewer-modal .modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
 }
 
-body.is-compact-window #clock-container {
-  margin-top: 12px !important;
-  margin-bottom: 8px !important;
+#preset-actions-modal #custom-modal {
+  box-sizing: border-box !important;
+  max-height: min(80vh, calc(100% - 40px)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
 }
 
-body.is-compact-window .header {
-  height: 64px !important;
-  padding-top: calc(12px + env(safe-area-inset-top)) !important;
-  padding-bottom: 10px !important;
-}
-
-body.is-compact-window #chat-list {
-  padding-top: 64px !important;
-}
-
-body.is-compact-window .modal-content,
-body.is-small-window .modal-content {
-  max-height: calc((100dvh / var(--app-ui-zoom, 1)) - 20px) !important;
+#preset-actions-modal .custom-modal-footer {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
   overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
-body.is-compact-window #tavern-drawer-host .drawer-content,
-body.is-small-window #tavern-drawer-host .drawer-content {
-  max-height: calc((100dvh / var(--app-ui-zoom, 1)) - 56px) !important;
-  overflow-y: auto !important;
+@media (max-height: 560px) {
+  #home-screen,
+  #lock-screen {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #thought-chain-editor-modal .modal-content,
+  #thought-chain-bind-modal .modal-content,
+  #shared-resource-import-modal .modal-content,
+  #debug-console-modal .modal-content,
+  #chat-module-chapters-modal .modal-content,
+  #qqbot-thought-viewer-modal .modal-content {
+    max-height: calc(100% - 20px) !important;
+    padding: 12px 14px !important;
+  }
+}
+
+@media (max-width: 335px) {
+  #chat-input-actions-top {
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .chat-action-icon-btn {
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+  }
 }

@@ -81,58 +81,6 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
-    <script>
-      (function () {
-        var lastValidZoom = 1;
-        var lastWindowWidth = window.innerWidth || 375;
-        function isTextInputActive() {
-          var el = document.activeElement;
-          if (!el) return false;
-          var tag = (el.tagName || '').toUpperCase();
-          if (tag === 'TEXTAREA') return true;
-          if (tag === 'INPUT') {
-            var type = (el.type || 'text').toLowerCase();
-            return type !== 'button' && type !== 'checkbox' && type !== 'radio' && type !== 'range' && type !== 'file' && type !== 'color';
-          }
-          return Boolean(el.isContentEditable);
-        }
-        function updateMultiWindowScale() {
-          var vw = window.innerWidth || document.documentElement.clientWidth || 375;
-          var vh = window.innerHeight || document.documentElement.clientHeight || 667;
-          var widthChanged = Math.abs(vw - lastWindowWidth) > 12;
-          lastWindowWidth = vw;
-
-          if (isTextInputActive() && !widthChanged) {
-            return;
-          }
-
-          var baseW = 375;
-          var baseH = 660;
-          var zoomW = vw < 365 ? (vw / baseW) : 1;
-          var zoomH = vh < 620 ? (vh / baseH) : 1;
-          var targetZoom = Math.min(zoomW, zoomH);
-          if (targetZoom < 0.99) {
-            targetZoom = Math.max(0.55, Math.min(1, Number(targetZoom.toFixed(3))));
-          } else {
-            targetZoom = 1;
-          }
-          lastValidZoom = targetZoom;
-          document.documentElement.style.setProperty('--app-ui-zoom', String(lastValidZoom));
-          if (document.body) {
-            document.body.classList.toggle('is-small-window', vw < 365);
-            document.body.classList.toggle('is-compact-window', vh < 620);
-          }
-        }
-        window.addEventListener('resize', updateMultiWindowScale, { passive: true });
-        window.addEventListener('orientationchange', function () {
-          setTimeout(updateMultiWindowScale, 120);
-        }, { passive: true });
-        document.addEventListener('DOMContentLoaded', updateMultiWindowScale);
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', updateMultiWindowScale, { passive: true });
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="phone-screen">
@@ -2567,7 +2515,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -10988,12 +10936,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     </div>
 
     <div id="thought-chain-editor-modal" class="modal">
-      <div class="modal-content" style="max-width: 350px; width: 85%; height: auto; max-height: 86vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); margin: auto; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <div class="modal-content" style="max-width: 350px; width: 88%; height: auto; max-height: min(82vh, calc(100% - 36px)); padding: 16px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); margin: auto; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
           <span id="tc-editor-modal-title" style="font-weight: 600; font-size: 16px; color: var(--text-primary);">编辑思维链</span>
           <button type="button" class="close-btn" id="close-tc-editor-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
         </div>
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 4px 2px;">
+        <div class="modal-body" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 2px;">
           <div class="form-group" style="margin-bottom: 14px;">
             <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">预设名称</label>
             <input type="text" id="tc-preset-name-input" class="moe-input" placeholder="输入预设名称" style="width: 100%; box-sizing: border-box;" />
@@ -11051,7 +10999,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             </div>
           </div>
         </div>
-        <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); justify-content: flex-end; align-items: center;">
+        <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color); justify-content: flex-end; align-items: center; flex-shrink: 0;">
           <button type="button" class="chat-mod-footer-btn secondary" id="tc-editor-import-btn" style="flex: 1;">导入</button>
           <button type="button" class="chat-mod-footer-btn secondary" id="tc-editor-export-btn" style="flex: 1;">导出</button>
           <button type="button" class="chat-mod-footer-btn secondary" id="cancel-tc-editor-btn" style="flex: 1;">关闭</button>
@@ -11062,12 +11010,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
     </div>
 
     <div id="thought-chain-bind-modal" class="modal">
-      <div class="modal-content" style="max-width: 340px; width: 84%; height: auto; max-height: 85vh; padding: 18px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); margin: auto; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden;">
-        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <div class="modal-content" style="max-width: 340px; width: 88%; height: auto; max-height: min(82vh, calc(100% - 36px)); padding: 16px; border-radius: 18px; display: flex; flex-direction: column; background: var(--card-bg); margin: auto; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; box-sizing: border-box;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
           <span style="font-weight: 600; font-size: 16px; color: var(--text-primary);">思维链绑定</span>
           <button type="button" class="close-btn" id="close-thought-chain-bind-modal-btn" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
         </div>
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 4px 2px;">
+        <div class="modal-body" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 2px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 10px 14px; background: var(--secondary-bg); border-radius: 12px; border: 1px solid var(--border-color);">
             <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">启用思维链</span>
             <input type="checkbox" id="tc-enable-master-switch" style="cursor: pointer; width: 18px; height: 18px; margin: 0;" />
@@ -11085,7 +11033,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           </div>
           <div id="tc-preset-select-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
         </div>
-        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+        <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color); flex-shrink: 0;">
           <button type="button" class="chat-mod-footer-btn secondary" id="cancel-thought-chain-bind-btn">关闭</button>
           <button type="button" class="chat-mod-footer-btn primary" id="save-thought-chain-bind-btn">保存</button>
         </div>
