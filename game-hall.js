@@ -981,6 +981,11 @@ code, pre {
               if (p.presence_penalty === undefined) p.presence_penalty = p.presPenalty ?? 0;
               if (p.repetition_penalty === undefined) p.repetition_penalty = p.repPenalty ?? 1.0;
               if (!Array.isArray(p.regexScripts)) p.regexScripts = [];
+              const pNote1 = p.regexScripts.find(r => r && String(r.scriptName || '').includes('复古笔记1') && !r.disabled);
+              const pNote2 = p.regexScripts.find(r => r && String(r.scriptName || '').includes('复古笔记2'));
+              if (pNote1 && pNote2 && !pNote2.disabled) {
+                pNote2.disabled = true;
+              }
               if (!Array.isArray(p.prompts) || p.prompts.length === 0) {
                 p.prompts = getDefaultPromptOrderItems();
               }
@@ -5408,11 +5413,11 @@ code, pre {
         scope: scopeName
       }));
 
-    // Auto-pair 复古笔记1 and 复古笔记2 so unclosed tags never break rendering
+    // Prevent 复古笔记1 and 复古笔记2 from both being enabled at the same time
     const note1 = normalized.find(r => String(r.scriptName).includes('复古笔记1') && !r.disabled);
     const note2 = normalized.find(r => String(r.scriptName).includes('复古笔记2'));
-    if (note1 && note2 && note2.disabled) {
-      note2.disabled = false;
+    if (note1 && note2 && !note2.disabled) {
+      note2.disabled = true;
     }
     return normalized;
   }
@@ -6251,7 +6256,7 @@ code, pre {
     const presetScripts = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
     const extScripts = Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : [];
-    return [...extScripts, ...cardScripts, ...presetScripts, ...globalScripts].filter(s => s && !s.disabled && s.findRegex);
+    return [...cardScripts, ...presetScripts, ...globalScripts, ...extScripts].filter(s => s && !s.disabled && s.findRegex);
   }
 
   function applyTavernRegexPipeline(rawText, options = {}) {
@@ -6265,6 +6270,7 @@ code, pre {
       isPresetPrompt = false,
       isEdit = false,
       depth = undefined,
+      floorIndex = undefined,
       card = getActiveCard()
     } = options;
 
@@ -6285,7 +6291,19 @@ code, pre {
     for (const script of scripts) {
       if (isEdit && script.runOnEdit === false) continue;
       if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
-      if (!isPrompt && script.promptOnly && !script.markdownOnly) continue;
+      const isDepthCleanupScript = Boolean(
+        !isPrompt &&
+        script.promptOnly &&
+        !script.markdownOnly &&
+        hasDepthContext &&
+        script.minDepth !== null &&
+        script.minDepth !== undefined &&
+        script.minDepth !== '' &&
+        Number(script.minDepth) > 0 &&
+        numericDepth >= Number(script.minDepth) &&
+        String(script.replaceString ?? '').trim() === ''
+      );
+      if (!isPrompt && script.promptOnly && !script.markdownOnly && !isDepthCleanupScript) continue;
 
       if (isSystemOrCharBlock) {
         if (!Array.isArray(script.placement) || script.placement.length === 0) continue;
@@ -6303,7 +6321,8 @@ code, pre {
         if (minD !== null && !Number.isNaN(minD) && minD > 0 && numericDepth < minD) {
           continue;
         }
-        if (maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
+        // In display mode (!isPrompt), never let maxDepth disable regex rendering on chat floors so older floors and floor #0 (首楼) keep their card UI
+        if (isPrompt && maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
           continue;
         }
       }
@@ -6321,12 +6340,14 @@ code, pre {
         : [];
       try {
         output = output.replace(rx, (...matchArgs) => {
-          let replaced = repStr.replace(/\{\{\$?match\}\}|\$&/g, matchArgs[0] || '');
+          const fullMatchedStr = String(matchArgs[0] || '');
+          let replaced = repStr.replace(/\{\{\$?match\}\}|\$&/g, fullMatchedStr);
           const lastArg = matchArgs[matchArgs.length - 1];
           const hasNamedGroups = lastArg && typeof lastArg === 'object' && !Array.isArray(lastArg);
           const groupEndIdx = hasNamedGroups ? matchArgs.length - 3 : matchArgs.length - 2;
 
-          for (let g = 1; g < groupEndIdx; g++) {
+          // Replace higher group numbers first ($16 down to $1) so $1 never corrupts $10-$16
+          for (let g = groupEndIdx - 1; g >= 1; g--) {
             const groupVal = matchArgs[g] !== undefined ? String(matchArgs[g]) : '';
             if (resolvedTrimStrings.length > 0) {
               let trimmedVal = groupVal;
@@ -6349,12 +6370,45 @@ code, pre {
               replaced = replaced.split(`$<${gName}>`).join(valStr);
             });
           }
-          if (!isPrompt && (/<script\b[\s\S]*?<\/script>/i.test(replaced) || /需要酒馆助手的前端渲染/i.test(replaced)) && !/<html\b/i.test(replaced) && !/<html\b/i.test(output)) {
-            const cleanBlock = replaced
+
+          // Guard against cross-block status regexes or stray reasoning regexes swallowing middle story paragraphs
+          if (!isPrompt && fullMatchedStr.length > 140) {
+            const strippedReplaced = replaced.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '');
+            const matchedLines = fullMatchedStr.split(/\r?\n/);
+            const preservedNarrativeLines = [];
+            for (const ln of matchedLines) {
+              const tLn = ln.trim();
+              if (!tLn) continue;
+              // Skip tag lines, status lines, and lines whose content still exists in the replacement
+              if (/^(?:<|\[|【|```|✦|◆|●|•|—|--|\||F\.C\.|\d{4}年)/.test(tLn)) continue;
+              if (/(?:状态栏|当前位置|当前衣着|料理进度|持有货币|随身行囊|已掌握食谱|主厨姓名|Todo\||Post\||\[Board\]|\[\/STATUS\])/i.test(tLn)) continue;
+              if (tLn.length >= 22 && /[\u4e00-\u9fa5]{10,}/.test(tLn)) {
+                const probe = tLn.slice(0, 14);
+                if (!strippedReplaced.includes(probe)) {
+                  preservedNarrativeLines.push(ln);
+                }
+              }
+            }
+            if (preservedNarrativeLines.length >= 2) {
+              const recoveredStory = preservedNarrativeLines.join('\n\n') + '\n\n';
+              if (!replaced.trim()) {
+                return recoveredStory.trim();
+              }
+              replaced = recoveredStory + replaced;
+            }
+          }
+
+          if (!isPrompt) {
+            const trimmedRep = replaced
               .replace(/^\s*```(?:html|HTML|xml)?[ \t]*\r?\n?/i, '')
               .replace(/\r?\n?[ \t]*```\s*$/i, '')
               .trim();
-            return '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + cleanBlock + '</body></html>';
+            if (/^(?:<!DOCTYPE\s+html|<html\b)/i.test(trimmedRep)) {
+              return trimmedRep;
+            }
+            if ((/<script\b[\s\S]*?<\/script>/i.test(trimmedRep) || /需要酒馆助手的前端渲染/i.test(trimmedRep)) && !/<html\b/i.test(trimmedRep)) {
+              return '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + trimmedRep + '</body></html>';
+            }
           }
           return replaced;
         });
@@ -6805,12 +6859,15 @@ code, pre {
 
   function renderTavernMessageHtml(rawText, options = {}) {
     if (!rawText) return '';
-    const cleanedForDisplay = String(rawText)
+    let cleanedForDisplay = String(rawText)
       .replace(/<bbs_start>[\s\S]*?<bbs_end>/gi, '')
       .replace(/<bbs_items>[\s\S]*?<\/bbs_items>/gi, '')
       .replace(/<bbs_vars>[\s\S]*?<\/bbs_vars>/gi, '')
-      .replace(/<\/?(?:bbs_start|bbs_end|bbs_items|bbs_vars)>/gi, '')
-      .trim();
+      .replace(/<\/?(?:bbs_start|bbs_end|bbs_items|bbs_vars)>/gi, '');
+    if (!/<(?:think|thinking|thought|reasoning|cot|antThinking)\b/i.test(cleanedForDisplay)) {
+      cleanedForDisplay = cleanedForDisplay.replace(/<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
+    }
+    cleanedForDisplay = cleanedForDisplay.trim();
     if (!cleanedForDisplay) return '';
     const afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
 
@@ -6831,14 +6888,10 @@ code, pre {
       .replace(/```(?:html|HTML)\s*(?=<)/g, '')
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
 
-    if (!/<html\b/i.test(working) && /<script\b[\s\S]*?<\/script>/i.test(working) && (/<body\b/i.test(working) || /需要酒馆助手的前端渲染/i.test(working))) {
-      working = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + working + '</body></html>';
-    }
-
-    // 2. Extract full HTML documents (<!DOCTYPE html>...</html> or <html...>...</html>) into sandboxed iframes
+    // 2. Extract each self-contained HTML document (<!DOCTYPE html>...</html> or <html...>...</html>) into its own sandboxed iframe without bridging across story text
     const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
     const protectedBlocks = [];
-    working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html[\s\S]*?<\/html>/gi, match => {
+    working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html\b(?:(?!<html\b)[\s\S])*?<\/html>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
@@ -8494,10 +8547,13 @@ code, pre {
     }
     const prefillStdMatch = text.match(/^([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot)>/i);
     if (prefillStdMatch && !/<(?:think|thinking|thought|reasoning|cot)>/i.test(prefillStdMatch[1])) {
-      const remAfterStd = text.slice(prefillStdMatch[0].length);
-      if ((options && options.hasPrefill) || remAfterStd.trim().length > 0) {
+      if (options && options.hasPrefill) {
+        const remAfterStd = text.slice(prefillStdMatch[0].length);
         if (prefillStdMatch[1].trim()) reasoningChunks.push(prefillStdMatch[1].trim());
         text = remAfterStd;
+      } else {
+        // Without prefill, remove only the stray orphan closing tag so story text before it is never deleted
+        text = text.replace(/<\/(?:think|thinking|thought|reasoning|cot)>/gi, '');
       }
     }
 
@@ -11114,6 +11170,7 @@ code, pre {
               isPrompt: false,
               isEdit: isEditPass,
               isLastFloor: isLast,
+              floorIndex: idx,
               depth: messages.length - 1 - idx,
               card
             }));
@@ -11289,7 +11346,7 @@ code, pre {
           newDetails.removeAttribute('open');
         }
       }
-      const isEditingTransition = Boolean(existingNode.querySelector('.tavern-floor-edit-box') || newFloorNode.querySelector('.tavern-floor-edit-box'));
+      const isEditingTransition = Boolean(existingNode.querySelector('.edit_textarea, .tavern-floor-edit-box') || newFloorNode.querySelector('.edit_textarea, .tavern-floor-edit-box'));
       const oldTextEl = existingNode.querySelector('.mes_text');
       const newTextEl = newFloorNode.querySelector('.mes_text');
       const hasLiveFramesOrImgs = oldTextEl && (oldTextEl.querySelector('iframe.tavern-html-sandbox-frame') || oldTextEl.querySelector('img'));
@@ -13542,6 +13599,7 @@ code, pre {
               isUser: Boolean(msg.is_user),
               isPrompt: false,
               isLastFloor,
+              floorIndex: mesIndex,
               depth: sess.messages.length - 1 - mesIndex,
               card
             })
@@ -13555,6 +13613,7 @@ code, pre {
           isUser: Boolean(msg.is_user),
           isPrompt: false,
           isLastFloor,
+          floorIndex: mesIndex,
           depth: sess.messages.length - 1 - mesIndex,
           card
         });
