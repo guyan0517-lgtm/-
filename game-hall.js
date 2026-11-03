@@ -875,6 +875,7 @@ code, pre {
 
         hasLoadedTavernStoreOnce = true;
         ensureActiveCardChatInitialized();
+        syncWorldBooksAndPresetOnCardSwitch(getActiveCard(), { silent: true });
       } finally {
         inflightTavernLoadPromise = null;
       }
@@ -958,19 +959,71 @@ code, pre {
     return tavernState.chatsByCardId[card.id];
   }
 
-  function buildInitialSessionForCard(card) {
-    const greetings = [];
-    if (card.first_mes && String(card.first_mes).trim()) {
-      greetings.push(String(card.first_mes));
-    }
+  function getAllCardGreetingsList(card) {
+    if (!card) return ['你好，旅人。'];
+    const all = [];
+    const first = card.first_mes !== undefined && card.first_mes !== null ? String(card.first_mes) : '';
+    all.push(first || '你好，旅人。');
     if (Array.isArray(card.alternate_greetings)) {
       card.alternate_greetings.forEach(g => {
-        if (g && String(g).trim()) greetings.push(String(g));
+        if (g !== undefined && g !== null && String(g).trim()) {
+          all.push(String(g));
+        }
       });
     }
-    if (greetings.length === 0) {
-      greetings.push('你好，旅人。');
+    return all;
+  }
+
+  function getEnabledCardGreetings(card) {
+    const all = getAllCardGreetingsList(card);
+    const disabledSet = new Set(Array.isArray(card?.disabledGreetingIndices) ? card.disabledGreetingIndices.map(Number) : []);
+    const enabled = all.filter((g, idx) => !disabledSet.has(idx) && String(g).trim());
+    if (enabled.length === 0) {
+      return [all[0] || '你好，旅人。'];
     }
+    return enabled;
+  }
+
+  function syncWorldBooksAndPresetOnCardSwitch(card, options = {}) {
+    if (!card) return { switchedBookName: '', switchedPresetName: '' };
+    const allCardBookIds = new Set(
+      (tavernState.cards || [])
+        .map(c => c && c.worldBookId)
+        .filter(Boolean)
+    );
+    let switchedBookName = '';
+    if (Array.isArray(tavernState.worldBooks)) {
+      tavernState.worldBooks.forEach(wb => {
+        if (!wb) return;
+        if (allCardBookIds.has(wb.id)) {
+          wb.enabled = wb.id === card.worldBookId;
+          if (wb.enabled) switchedBookName = wb.name || '';
+        } else if (card.worldBookId && wb.id === card.worldBookId) {
+          wb.enabled = true;
+          switchedBookName = wb.name || '';
+        }
+      });
+    }
+    if (card.worldBookId) {
+      uiRuntime.activeWorldBookEditId = card.worldBookId;
+    } else if (Array.isArray(tavernState.worldBooks) && tavernState.worldBooks.length > 0) {
+      const firstEnabled = tavernState.worldBooks.find(b => b && b.enabled) || tavernState.worldBooks[0];
+      if (firstEnabled) uiRuntime.activeWorldBookEditId = firstEnabled.id;
+    }
+
+    let switchedPresetName = '';
+    if (Array.isArray(tavernState.presets)) {
+      const boundPreset = tavernState.presets.find(p => p && Array.isArray(p.boundCardIds) && p.boundCardIds.includes(card.id));
+      if (boundPreset && tavernState.activePresetId !== boundPreset.id) {
+        tavernState.activePresetId = boundPreset.id;
+        switchedPresetName = boundPreset.name || '';
+      }
+    }
+    return { switchedBookName, switchedPresetName };
+  }
+
+  function buildInitialSessionForCard(card) {
+    const greetings = getEnabledCardGreetings(card);
     return {
       cardId: card.id,
       chatId: 'chat_' + card.id + '_' + Date.now(),
@@ -5035,6 +5088,7 @@ code, pre {
     }
 
     tavernState.activeCardId = newCard.id;
+    syncWorldBooksAndPresetOnCardSwitch(newCard, { silent: true });
     if ((tavernState.background?.syncWithCard || tavernState.background?.syncCardAvatarAsBg) && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
       tavernState.background.url = newCard.backgroundUrl || newCard.avatar;
     }
@@ -5642,6 +5696,7 @@ code, pre {
       isWorldInfo = false,
       isCharacterDef = false,
       isPresetPrompt = false,
+      isEdit = false,
       depth = undefined,
       card = getActiveCard()
     } = options;
@@ -5661,6 +5716,7 @@ code, pre {
     const numericDepth = hasDepthContext ? Number(depth) : 0;
 
     for (const script of scripts) {
+      if (isEdit && script.runOnEdit === false) continue;
       if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
       if (!isPrompt && script.promptOnly && !script.markdownOnly) continue;
 
@@ -6221,7 +6277,7 @@ code, pre {
       return '\n' + token + '\n';
     });
 
-    // 3. Protect standalone <style>...</style> + <script>...</script> blocks
+    // 3. Protect standalone <style>...</style> + <script>...</script> + <pre>...</pre> blocks
     working = working.replace(/<style[\s\S]*?<\/style>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(match);
@@ -6232,6 +6288,11 @@ code, pre {
       protectedBlocks.push(match);
       return token;
     });
+    working = working.replace(/```([a-zA-Z0-9_-]*)[ \t]*\r?\n([\s\S]*?)```/g, (full, lang, codeBody) => {
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(`<pre style="background:rgba(0,0,0,0.05);padding:8px 10px;border-radius:8px;overflow-x:auto;font-family:monospace;font-size:12px;margin:6px 0;"><code>${escapeHtmlSimple(codeBody.replace(/\r?\n$/, ''))}</code></pre>`);
+      return '\n' + token + '\n';
+    });
 
     // 4. Collapse newlines inside multi-line HTML opening tags (e.g. <input\n type="radio"\n name="story">)
     // so line-splitting never tears HTML attributes apart!
@@ -6239,7 +6300,7 @@ code, pre {
       return fullTag.replace(/\r?\n\s*/g, ' ');
     });
 
-    // 5. Basic markdown bold/italic outside HTML tags
+    // 5. Basic markdown bold/italic/inline-code outside HTML tags
     const tagHolders = [];
     working = working.replace(/<[^>]+>/g, tag => {
       const t = '___TAVERN_TAG_HOLD_' + tagHolders.length + '___';
@@ -6248,6 +6309,7 @@ code, pre {
     });
 
     working = working
+      .replace(/`([^`\n]+)`/g, '<code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.92em;">$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
 
@@ -6262,17 +6324,75 @@ code, pre {
     working = working.replace(/___TAVERN_TAG_HOLD_(\d+)___/g, (_, idx) => tagHolders[Number(idx)] || '');
     working = working.replace(/<div\s+data-bbi-slot=""\s*><\/div>/gi, '\n<div data-bbi-slot=""></div>\n');
 
-    // 7. Convert plain text paragraphs while keeping HTML tags and protected blocks intact
+    // 6b. Convert Markdown tables into HTML tables before line-by-line paragraph wrapping
+    working = working.replace(/(?:^[ \t]*\|.+\|[ \t]*\r?\n)+/gm, tableBlock => {
+      const rows = tableBlock.trim().split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+      if (rows.length < 2) return tableBlock;
+      const isSep = /^\|[\s:|-]+\|$/.test(rows[1]) && rows[1].includes('-');
+      if (!isSep) return tableBlock;
+      const parseCells = (rowStr) => rowStr.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const headers = parseCells(rows[0]);
+      const bodyRows = rows.slice(2).map(parseCells);
+      const tableHtml = `<div style="overflow-x:auto;margin:6px 0;"><table style="width:100%;border-collapse:collapse;font-size:0.93em;"><thead><tr>${headers.map(h => `<th style="border:1px solid rgba(160,160,175,0.4);padding:5px 8px;background:rgba(0,0,0,0.04);text-align:left;">${h}</th>`).join('')}</tr></thead><tbody>${bodyRows.map(r => `<tr>${r.map(c => `<td style="border:1px solid rgba(160,160,175,0.35);padding:5px 8px;">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(tableHtml);
+      return '\n' + token + '\n';
+    });
+
+    // 7. Convert plain text paragraphs and Markdown block syntax while tracking multi-line HTML container depth
     const lines = working.split('\n');
+    let htmlBlockDepth = 0;
+    const blockContainerRx = /<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|form|select|nav|main|aside|figure|figcaption|svg)\b[^>]*>/gi;
     const htmlLines = lines.map(line => {
       const trimmed = line.trim();
-      if (!trimmed) return '<div class="tavern-para-spacer"></div>';
+      if (!trimmed) {
+        return htmlBlockDepth > 0 ? '' : '<div class="tavern-para-spacer"></div>';
+      }
       if (/^___TAVERN_PROTECTED_BLOCK_\d+___$/.test(trimmed)) {
         return trimmed;
       }
-      if (/^<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|hr|h[1-6]|p|style|form|input|label|button|select|option|span|nav|main|aside|figure|figcaption|iframe|svg)/i.test(trimmed)) {
+
+      const startsWithHtmlTag = /^<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|hr|h[1-6]|p|style|form|input|label|button|select|option|span|nav|main|aside|figure|figcaption|iframe|svg)\b/i.test(trimmed);
+      const wasInHtmlBlock = htmlBlockDepth > 0;
+
+      let tagMatch;
+      blockContainerRx.lastIndex = 0;
+      while ((tagMatch = blockContainerRx.exec(trimmed)) !== null) {
+        const fullTag = tagMatch[0];
+        if (fullTag.endsWith('/>')) continue;
+        if (fullTag.startsWith('</')) {
+          htmlBlockDepth = Math.max(0, htmlBlockDepth - 1);
+        } else {
+          htmlBlockDepth++;
+        }
+      }
+
+      if (startsWithHtmlTag || wasInHtmlBlock || htmlBlockDepth > 0) {
         return line;
       }
+
+      // Markdown horizontal rule
+      if (/^(?:---+|___+|\*\*\*+)$/.test(trimmed)) {
+        return '<hr style="border:none;border-top:1px dashed rgba(150,150,165,0.45);margin:8px 0;" />';
+      }
+      // Markdown headings
+      const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+      if (hMatch) {
+        const level = hMatch[1].length;
+        const sizes = ['1.22em', '1.14em', '1.08em', '1.02em', '0.98em', '0.94em'];
+        return `<div style="font-weight:700;font-size:${sizes[level - 1] || '1em'};margin:6px 0 4px 0;">${hMatch[2]}</div>`;
+      }
+      // Markdown blockquote
+      if (/^>\s?(.*)$/.test(trimmed)) {
+        const quoteBody = trimmed.replace(/^>\s?/, '');
+        return `<blockquote style="margin:4px 0;padding:4px 10px;border-left:3px solid rgba(150,150,165,0.55);color:inherit;opacity:0.88;">${quoteBody}</blockquote>`;
+      }
+      // Markdown list item
+      const ulMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+      if (ulMatch) {
+        return `<div style="display:flex;align-items:baseline;gap:6px;margin:2px 0;"><span style="flex-shrink:0;">•</span><span>${ulMatch[1]}</span></div>`;
+      }
+
       return '<p>' + line + '</p>';
     });
 
@@ -7870,6 +7990,43 @@ code, pre {
       };
 
       const t0 = performance.now();
+      if (!uiRuntime.apiRequestStats) {
+        uiRuntime.apiRequestStats = { sent: 0, received: 0, success: 0, fail: 0 };
+      }
+      if (!Array.isArray(uiRuntime.apiRequestLogs)) {
+        uiRuntime.apiRequestLogs = [];
+      }
+      uiRuntime.apiRequestStats.sent++;
+      const apiCallLogEntry = {
+        id: 'apicall_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        model: creds.model || '未知模型',
+        stream: useStreaming,
+        isBackground,
+        status: 'pending',
+        elapsed: '请求中',
+        detail: ''
+      };
+      uiRuntime.apiRequestLogs.unshift(apiCallLogEntry);
+      if (uiRuntime.apiRequestLogs.length > 30) {
+        uiRuntime.apiRequestLogs.length = 30;
+      }
+      const markApiCallSuccess = (elapsedStr) => {
+        if (apiCallLogEntry.status === 'pending') {
+          apiCallLogEntry.status = 'success';
+          apiCallLogEntry.elapsed = elapsedStr;
+          uiRuntime.apiRequestStats.received++;
+          uiRuntime.apiRequestStats.success++;
+        }
+      };
+      const markApiCallFail = (errMsg) => {
+        if (apiCallLogEntry.status === 'pending') {
+          apiCallLogEntry.status = 'fail';
+          apiCallLogEntry.elapsed = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+          apiCallLogEntry.detail = String(errMsg || '请求失败').slice(0, 120);
+          uiRuntime.apiRequestStats.fail++;
+        }
+      };
       let res = null;
       try {
         res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
@@ -8119,6 +8276,7 @@ code, pre {
         }
         const finalCleanReply = parsed.cleanReply || (refusalReason ? ('【' + refusalReason + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
         const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        markApiCallSuccess(elapsedSec);
         return {
           content: finalCleanReply,
           reasoning: combinedReasoning,
@@ -8258,6 +8416,7 @@ code, pre {
         throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
       }
       const finalCleanStreamReply = finalParsed.cleanReply || '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】';
+      markApiCallSuccess(elapsedSec);
       return {
         content: finalCleanStreamReply,
         reasoning: finalReasoning,
@@ -8284,6 +8443,7 @@ code, pre {
     const finalCleanFallbackReply = parsed.cleanReply || (refErr ? ('【' + refErr + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
 
     const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    markApiCallSuccess(elapsedSec);
     if (useStreaming && typeof onStreamUpdate === 'function') {
       onStreamUpdate({
         content: finalCleanFallbackReply,
@@ -8298,6 +8458,13 @@ code, pre {
       reasoning: combinedReasoning,
       genTime: elapsedSec
     };
+    } catch (callErr) {
+      try {
+        if (typeof markApiCallFail === 'function') {
+          markApiCallFail(callErr && callErr.message ? callErr.message : '请求失败');
+        }
+      } catch (_) {}
+      throw callErr;
     } finally {
       clearTimeout(timeoutTimer);
       clearInterval(keepAlivePulseTimer);
@@ -8392,6 +8559,11 @@ code, pre {
     showDebugConsole: false,
     debugConsoleLogs: [],
     debugConsoleClearedChatId: '',
+    showPresetBindPanel: false,
+    showCardGreetingsPanel: false,
+    wbFilterOpeningsOnly: false,
+    apiRequestStats: { sent: 0, received: 0, success: 0, fail: 0 },
+    apiRequestLogs: [],
     toastTimer: null,
     errorTimer: null
   };
@@ -9975,17 +10147,32 @@ code, pre {
       if (info.reasoning !== undefined) msg.reasoning = info.reasoning;
       if (info.send_date !== undefined) msg.send_date = info.send_date;
       if (info.token_count !== undefined) msg.token_count = info.token_count;
+      if (info.var_snapshot && typeof info.var_snapshot === 'object') {
+        const sess = getActiveChatSession();
+        if (sess) {
+          if (!sess.metadata) sess.metadata = {};
+          sess.metadata.variables = JSON.parse(JSON.stringify(info.var_snapshot));
+        }
+      }
     }
   }
 
   function recordMessageToSwipeInfo(msg, swipeIdx) {
     if (!msg) return;
     if (!Array.isArray(msg.swipe_info)) msg.swipe_info = [];
+    let varSnapshot = null;
+    try {
+      const curVars = getChatVariablesStore();
+      if (curVars && typeof curVars === 'object') {
+        varSnapshot = JSON.parse(JSON.stringify(curVars));
+      }
+    } catch (_) {}
     msg.swipe_info[swipeIdx] = {
       send_date: msg.send_date || Date.now(),
       gen_time: msg.gen_time || '',
       reasoning: msg.reasoning || '',
-      token_count: msg.token_count || estimateTokens(msg.mes || '')
+      token_count: msg.token_count || estimateTokens(msg.mes || ''),
+      var_snapshot: varSnapshot
     };
   }
 
@@ -10020,6 +10207,8 @@ code, pre {
     const effectiveCleanText = (rawSavedReasoning && String(rawSavedReasoning).trim()) ? currentRawText : inlineExtracted.cleanReply;
 
     const isWaitingFirstToken = uiRuntime.isGenerating && isLast && !isUser && !effectiveCleanText.trim();
+    const isEditPass = Boolean(m._justEdited);
+    if (m._justEdited) delete m._justEdited;
     const renderedHtml = isEditingThis
       ? ''
       : (isWaitingFirstToken
@@ -10027,6 +10216,7 @@ code, pre {
           : renderTavernMessageHtml(effectiveCleanText, {
               isUser,
               isPrompt: false,
+              isEdit: isEditPass,
               isLastFloor: isLast,
               depth: messages.length - 1 - idx,
               card
@@ -10432,11 +10622,17 @@ code, pre {
   function renderDrawerSliders() {
     const preset = getActivePreset();
     const prompts = Array.isArray(preset.prompts) ? preset.prompts : [];
+    const boundCardIds = Array.isArray(preset.boundCardIds) ? preset.boundCardIds : [];
+    const cards = Array.isArray(tavernState.cards) ? tavernState.cards : [];
 
     return `
       <div class="tavern-section-card">
         <div class="tavern-section-label">
           <span>预设配置管理</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small ${uiRuntime.showPresetBindPanel ? 'primary' : ''}" data-action="toggle-preset-bind-panel">绑定</button>
+            <button type="button" class="tavern-btn small primary" data-action="save-active-openai-preset">保存</button>
+          </div>
         </div>
         <div class="tavern-btn-grid">
           <button type="button" class="tavern-btn small primary" data-action="trigger-import-presets">导入预设</button>
@@ -10445,14 +10641,33 @@ code, pre {
           <button type="button" class="tavern-btn small danger" data-action="delete-active-preset">删除预设</button>
         </div>
         <select class="tavern-select" data-change="switch-preset">
-          ${tavernState.presets.map(p => `
-            <option value="${p.id}" ${p.id === preset.id ? 'selected' : ''}>${escapeHtmlSimple(stripUiEmojis(p.name))}</option>
-          `).join('')}
+          ${tavernState.presets.map(p => {
+            const bCount = Array.isArray(p.boundCardIds) ? p.boundCardIds.length : 0;
+            return `
+            <option value="${p.id}" ${p.id === preset.id ? 'selected' : ''}>${escapeHtmlSimple(stripUiEmojis(p.name))}${bCount > 0 ? ' · 已绑' + bCount + '卡' : ''}</option>
+          `;
+          }).join('')}
         </select>
         <div class="tavern-field-group" style="margin-top:8px;margin-bottom:0;">
           <label>当前预设名称 修改或另存时使用</label>
           <input type="text" class="tavern-input" id="tavern-openai-preset-name-input" value="${escapeHtmlSimple(stripUiEmojis(preset.name || ''))}" placeholder="输入预设名称" />
         </div>
+        ${uiRuntime.showPresetBindPanel ? `
+          <div style="margin-top:8px;padding:8px 10px;border-radius:10px;background:#f4f5f9;border:1px solid rgba(200,205,220,0.85);">
+            <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:6px;">勾选要绑定此预设与思维链的角色卡 切换到该角色时将自动启用本预设</div>
+            <div style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
+              ${cards.map(c => {
+                const isBound = boundCardIds.includes(c.id);
+                return `
+                  <label class="tavern-check-row" style="padding:3px 2px;">
+                    <input type="checkbox" class="tavern-fixed-check" data-action="toggle-preset-card-bind" data-card-id="${escapeHtmlSimple(c.id)}" ${isBound ? 'checked' : ''} />
+                    <span>${escapeHtmlSimple(stripUiEmojis(c.name || '角色'))}${c.id === tavernState.activeCardId ? ' · 当前角色' : ''}</span>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
         <div class="tavern-field-hint">支持导入酒馆OpenAI预设JSON，完整保留原预设提示词与思维链排列顺序</div>
       </div>
 
@@ -10549,7 +10764,10 @@ code, pre {
       <div id="completion_prompt_manager" class="tavern-section-card">
         <div class="tavern-section-label">
           <span>提示词排序与开关列表 共${prompts.length}项</span>
-          <button type="button" class="tavern-btn small primary" data-action="add-custom-prompt-item">新增条目</button>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="add-custom-prompt-item">新增条目</button>
+            <button type="button" class="tavern-btn small primary" data-action="save-active-openai-preset">保存</button>
+          </div>
         </div>
 
         <div id="completion_prompt_manager_list">
@@ -10828,15 +11046,22 @@ code, pre {
 
     const entries = activeBook ? (activeBook.entries || []) : [];
     const searchKw = (uiRuntime.worldEntrySearch || '').trim().toLowerCase();
-    const filteredEntries = searchKw
+    const openingFilterRx = /开场|路线|序章|分支|线|if|opening|route|prologue|branch|初见|起点/i;
+    const baseFiltered = uiRuntime.wbFilterOpeningsOnly
       ? entries.filter(e =>
+          openingFilterRx.test(String(e.comment || '')) ||
+          (e.keys || []).some(k => openingFilterRx.test(String(k || '')))
+        )
+      : entries;
+    const filteredEntries = searchKw
+      ? baseFiltered.filter(e =>
           String(e.comment || '').toLowerCase().includes(searchKw) ||
           String(e.content || '').toLowerCase().includes(searchKw) ||
           (e.keys || []).some(k => String(k).toLowerCase().includes(searchKw))
         )
-      : entries;
+      : baseFiltered;
     const visibleEntryLimit = Number(uiRuntime.visibleWorldEntryCount) || 40;
-    const visibleEntries = searchKw ? filteredEntries : filteredEntries.slice(0, visibleEntryLimit);
+    const visibleEntries = (searchKw || uiRuntime.wbFilterOpeningsOnly) ? filteredEntries : filteredEntries.slice(0, visibleEntryLimit);
     const hiddenEntryCount = Math.max(0, filteredEntries.length - visibleEntries.length);
 
     return `
@@ -10907,7 +11132,8 @@ code, pre {
           </div>
 
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
-            <input type="text" class="tavern-input" style="flex:1 1 140px;" id="wb-entry-search-input" value="${escapeHtmlSimple(uiRuntime.worldEntrySearch)}" placeholder="搜索词条标题或关键词..." />
+            <input type="text" class="tavern-input" style="flex:1 1 120px;" id="wb-entry-search-input" value="${escapeHtmlSimple(uiRuntime.worldEntrySearch)}" placeholder="搜索词条标题或关键词..." />
+            <button type="button" class="tavern-btn small ${uiRuntime.wbFilterOpeningsOnly ? 'primary' : ''}" data-action="wb-filter-openings">开场</button>
             <button type="button" class="tavern-btn small primary" data-action="wb-add-entry" data-wb-id="${activeBook.id}">新增</button>
             <button type="button" class="tavern-btn small" data-action="wb-batch-enable" data-wb-id="${activeBook.id}">全启</button>
             <button type="button" class="tavern-btn small" data-action="wb-batch-constant" data-wb-id="${activeBook.id}">全蓝</button>
@@ -11402,6 +11628,49 @@ code, pre {
           <div class="tavern-field-hint">点击打开控制台可查看最近5层对话的完整上下文与AI原始回复文本</div>
         `}
       </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>接口状态控制台</span>
+          <button type="button" class="tavern-btn small" data-action="clear-tavern-api-logs">清空</button>
+        </div>
+        <div class="tavern-grid-3" style="margin-bottom:8px;">
+          <div style="padding:8px 10px;border-radius:10px;background:#f4f5f9;text-align:center;">
+            <div style="font-size:11px;color:#666;">发送申请</div>
+            <div style="font-size:15px;font-weight:700;color:#333;margin-top:2px;">${Number(uiRuntime.apiRequestStats?.sent || 0)}条</div>
+          </div>
+          <div style="padding:8px 10px;border-radius:10px;background:#eef7f1;text-align:center;">
+            <div style="font-size:11px;color:#3b7a57;">接收成功</div>
+            <div style="font-size:15px;font-weight:700;color:#2e6b48;margin-top:2px;">${Number(uiRuntime.apiRequestStats?.success || 0)}条</div>
+          </div>
+          <div style="padding:8px 10px;border-radius:10px;background:#fdf0f0;text-align:center;">
+            <div style="font-size:11px;color:#b52b27;">请求失败</div>
+            <div style="font-size:15px;font-weight:700;color:#b52b27;margin-top:2px;">${Number(uiRuntime.apiRequestStats?.fail || 0)}条</div>
+          </div>
+        </div>
+        <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+          ${(!Array.isArray(uiRuntime.apiRequestLogs) || uiRuntime.apiRequestLogs.length === 0) ? `
+            <div style="font-size:12px;color:#777;padding:6px 0;">暂无接口调用记录，发送消息或测试连接后会实时显示每次调用的模型、耗时与成功失败状态。</div>
+          ` : uiRuntime.apiRequestLogs.map(item => {
+            const isOk = item.status === 'success';
+            const isFail = item.status === 'fail';
+            const badgeBg = isOk ? '#e6f4ea' : (isFail ? '#fce8e6' : '#f1f3f4');
+            const badgeColor = isOk ? '#1e8e3e' : (isFail ? '#d93025' : '#5f6368');
+            const statusLabel = isOk ? '成功' : (isFail ? '失败' : '进行中');
+            return `
+              <div class="tavern-list-row" style="padding:6px 10px;">
+                <div class="tavern-list-row-main">
+                  <div style="font-size:12.5px;font-weight:600;color:#333;">模型: ${escapeHtmlSimple(item.model || '默认模型')} · ${item.stream ? '流式' : '非流式'}${item.isBackground ? ' · 后台' : ''}</div>
+                  <div class="tavern-list-row-sub">${escapeHtmlSimple(item.time || '')} · 耗时: ${escapeHtmlSimple(item.elapsed || '0.0s')}${item.detail ? ' · ' + escapeHtmlSimple(item.detail) : ''}</div>
+                </div>
+                <div class="tavern-list-row-actions">
+                  <span style="padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;background:${badgeBg};color:${badgeColor};">${statusLabel}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
     `;
   }
 
@@ -11804,7 +12073,44 @@ code, pre {
           <textarea class="tavern-textarea" id="card-edit-firstmes" rows="4">${escapeHtmlSimple(activeCard.first_mes || '')}</textarea>
         </div>
         <div class="tavern-field-group" style="margin-bottom:0;">
-          <label>额外多开场白数量: ${altGreetings.length}个 可在0层左右翻页切换</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+            <label style="margin:0;">多开场白开关与切换 共${1 + altGreetings.length}个</label>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="tavern-btn small ${uiRuntime.showCardGreetingsPanel ? 'primary' : ''}" data-action="toggle-card-greetings-panel">开场</button>
+              <button type="button" class="tavern-btn small" data-action="add-card-alt-greeting">新增</button>
+            </div>
+          </div>
+          ${uiRuntime.showCardGreetingsPanel ? (() => {
+            const allGList = getAllCardGreetingsList(activeCard);
+            const disabledSet = new Set(Array.isArray(activeCard.disabledGreetingIndices) ? activeCard.disabledGreetingIndices.map(Number) : []);
+            return `
+              <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;padding:8px;border-radius:10px;background:#f4f5f9;border:1px solid rgba(200,205,220,0.85);margin-bottom:8px;">
+                <div class="tavern-field-hint" style="margin-bottom:2px;">可单独关闭不需要的路线开场白，或点击选用立即将该开场白切换至聊天第0层</div>
+                ${allGList.map((gText, gIdx) => {
+                  const isEnabled = !disabledSet.has(gIdx);
+                  const previewStr = String(gText || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 56) || '空开场白';
+                  return `
+                    <div style="background:#fff;border:1px solid rgba(210,210,220,0.85);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                        <label class="tavern-check-row" style="margin:0;flex:1;min-width:0;">
+                          <input type="checkbox" class="tavern-fixed-check" data-action="toggle-card-greeting-enabled" data-greeting-idx="${gIdx}" ${isEnabled ? 'checked' : ''} />
+                          <span style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${gIdx === 0 ? '主开场白 #1' : ('分支开场白 #' + (gIdx + 1))} · ${isEnabled ? '已开启' : '已关闭'}</span>
+                        </label>
+                        <div style="display:flex;gap:5px;flex-shrink:0;">
+                          <button type="button" class="tavern-btn small primary" data-action="use-card-greeting-now" data-greeting-idx="${gIdx}">选用</button>
+                          ${gIdx > 0 ? `<button type="button" class="tavern-btn small danger" data-action="del-card-alt-greeting" data-greeting-idx="${gIdx}">删</button>` : ''}
+                        </div>
+                      </div>
+                      <div style="font-size:11.5px;color:#666;line-height:1.4;word-break:break-word;">${escapeHtmlSimple(previewStr)}</div>
+                      ${gIdx > 0 ? `
+                        <textarea class="tavern-textarea card-alt-greeting-input" data-alt-idx="${gIdx - 1}" rows="2" style="font-size:12px;">${escapeHtmlSimple(gText)}</textarea>
+                      ` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `;
+          })() : ''}
           <div class="tavern-btn-grid" style="margin-top:4px;margin-bottom:0;">
             <button type="button" class="tavern-btn small" data-action="sync-card-greetings-to-floor0">同步开场白至0层</button>
             <button type="button" class="tavern-btn small primary" data-action="save-card-edits">保存角色卡修改</button>
@@ -11917,6 +12223,26 @@ code, pre {
     // 3. Check unclosed first-line [STATUS] before its first newline arrives
     if (/^\s*\[STATUS\][^\r\n]*$/i.test(text)) {
       updateCut(0);
+    }
+
+    // 4. Check unclosed generic custom XML/HTML container tags or trailing incomplete '<tag...' at stream tail
+    const standardHtmlTags = new Set(['p', 'br', 'hr', 'img', 'input', 'meta', 'link', 'span', 'strong', 'em', 'b', 'i', 'u', 's', 'q', 'code', 'pre', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'div', 'section', 'article', 'header', 'footer', 'blockquote', 'details', 'summary', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'button', 'label', 'select', 'option', 'form', 'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'style', 'script', 'html', 'head', 'body', 'iframe', 'audio', 'video', 'source', 'font', 'small', 'sub', 'sup', 'mark', 'del', 'ins', 'ruby', 'rt', 'rp']);
+    const customOpenRx = /<([a-zA-Z][a-zA-Z0-9_-]{2,})\b[^<>]*>/g;
+    let cMatch;
+    while ((cMatch = customOpenRx.exec(text)) !== null) {
+      const tName = cMatch[1];
+      const lowerName = tName.toLowerCase();
+      if (standardHtmlTags.has(lowerName) && lowerName !== 'style' && lowerName !== 'script') continue;
+      if (cMatch[0].endsWith('/>')) continue;
+      const closeTagRx = new RegExp('<\\/' + tName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*>', 'i');
+      if (!closeTagRx.test(text.slice(cMatch.index))) {
+        updateCut(cMatch.index);
+        break;
+      }
+    }
+    const trailingHalfTag = text.match(/<[a-zA-Z!/][^>]{0,240}$/);
+    if (trailingHalfTag && trailingHalfTag.index !== undefined) {
+      updateCut(trailingHalfTag.index);
     }
 
     if (cutIdx !== -1) {
@@ -13370,6 +13696,7 @@ code, pre {
             msg.reasoning = rBox.value;
           }
           recordMessageToSwipeInfo(msg, sId);
+          msg._justEdited = true;
           uiRuntime.editingFloorMesId = null;
           uiRuntime.editingFloorReasoning = false;
           await saveTavernStore();
@@ -13515,6 +13842,11 @@ code, pre {
             sess.messages = rebuilt.messages;
           }
           sess.messages.forEach((m, i) => { m.mesid = i; });
+          const newLastMsg = sess.messages[sess.messages.length - 1];
+          if (newLastMsg) {
+            const activeSwipeIdx = Math.max(0, Number(newLastMsg.swipe_id || 0));
+            syncSwipeInfoToMessage(newLastMsg, activeSwipeIdx);
+          }
           uiRuntime.openExtraMenuMesId = null;
           await saveTavernStore();
           renderTavernChatFloors(sess.messages.length <= 1);
@@ -13619,12 +13951,62 @@ code, pre {
         document.getElementById('tavern-file-presets')?.click();
         return;
       }
+      if (action === 'toggle-preset-bind-panel') {
+        uiRuntime.showPresetBindPanel = !uiRuntime.showPresetBindPanel;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'toggle-preset-card-bind') {
+        const cid = actionEl.getAttribute('data-card-id');
+        const cur = getActivePreset();
+        if (cur && cid) {
+          if (!Array.isArray(cur.boundCardIds)) cur.boundCardIds = [];
+          if (actionEl.checked) {
+            // Remove this card from other presets so binding is unambiguous
+            (tavernState.presets || []).forEach(p => {
+              if (p && p.id !== cur.id && Array.isArray(p.boundCardIds)) {
+                p.boundCardIds = p.boundCardIds.filter(id => id !== cid);
+              }
+            });
+            if (!cur.boundCardIds.includes(cid)) cur.boundCardIds.push(cid);
+          } else {
+            cur.boundCardIds = cur.boundCardIds.filter(id => id !== cid);
+          }
+          await saveTavernStore(true);
+          refreshOpenDrawerOnly();
+          showTavernToast(actionEl.checked ? '已将该角色绑定至当前预设' : '已取消该角色的预设绑定');
+        }
+        return;
+      }
+      if (action === 'save-active-openai-preset') {
+        const cur = getActivePreset();
+        if (cur) {
+          const nameInput = document.getElementById('tavern-openai-preset-name-input')?.value?.trim();
+          if (nameInput) cur.name = nameInput;
+          if (uiRuntime.editingPromptId) {
+            const item = (cur.prompts || []).find(p => p.identifier === uiRuntime.editingPromptId);
+            if (item) {
+              item.name = document.getElementById('edit-prompt-name')?.value || item.name;
+              item.role = document.getElementById('edit-prompt-role')?.value || 'system';
+              item.injection_position = Number(document.getElementById('edit-prompt-pos')?.value || 0);
+              item.injection_depth = Number(document.getElementById('edit-prompt-depth')?.value || 4);
+              item.content = document.getElementById('edit-prompt-content')?.value ?? item.content;
+            }
+          }
+          ensurePresetHasPromptOrder(cur);
+          await saveTavernStore(true);
+          refreshOpenDrawerOnly();
+          showTavernToast('当前预设与思维链已保存: ' + (cur.name || '默认预设'));
+        }
+        return;
+      }
       if (action === 'save-as-new-openai-preset') {
         const cur = getActivePreset();
         const rawName = document.getElementById('tavern-openai-preset-name-input')?.value?.trim() || (cur.name + ' 副本');
         const cloned = JSON.parse(JSON.stringify(cur));
         cloned.id = 'preset_' + Date.now();
         cloned.name = rawName;
+        cloned.boundCardIds = [];
         tavernState.presets.unshift(cloned);
         tavernState.activePresetId = cloned.id;
         await saveTavernStore(true);
@@ -14017,6 +14399,12 @@ code, pre {
         refreshOpenDrawerOnly();
         return;
       }
+      if (action === 'wb-filter-openings') {
+        uiRuntime.wbFilterOpeningsOnly = !uiRuntime.wbFilterOpeningsOnly;
+        refreshOpenDrawerOnly();
+        showTavernToast(uiRuntime.wbFilterOpeningsOnly ? '已筛选开场与路线相关世界书词条' : '已恢复显示全部世界书词条');
+        return;
+      }
       if (action === 'wb-load-all-entries') {
         uiRuntime.visibleWorldEntryCount = 99999;
         refreshOpenDrawerOnly();
@@ -14264,6 +14652,13 @@ code, pre {
         uiRuntime.debugConsoleClearedChatId = getActiveChatSession()?.id || 'cleared';
         refreshOpenDrawerOnly();
         showTavernToast('已清空控制台临时记录');
+        return;
+      }
+      if (action === 'clear-tavern-api-logs') {
+        uiRuntime.apiRequestLogs = [];
+        uiRuntime.apiRequestStats = { sent: 0, received: 0, success: 0, fail: 0 };
+        refreshOpenDrawerOnly();
+        showTavernToast('已清空接口状态控制台记录');
         return;
       }
       if (action === 'copy-tavern-debug-block') {
@@ -14616,6 +15011,7 @@ code, pre {
           system_prompt: '',
           post_history_instructions: '',
           alternate_greetings: [],
+          disabledGreetingIndices: [],
           tags: [],
           worldBookId: null,
           regexScripts: [],
@@ -14623,6 +15019,7 @@ code, pre {
         };
         tavernState.cards.unshift(newCard);
         tavernState.activeCardId = newCard.id;
+        syncWorldBooksAndPresetOnCardSwitch(newCard, { silent: true });
         ensureActiveCardChatInitialized(newCard);
         await saveTavernStore();
         renderTavernShell();
@@ -14633,6 +15030,7 @@ code, pre {
         if (cid) {
           tavernState.activeCardId = cid;
           const nextCard = getActiveCard();
+          const switchSync = syncWorldBooksAndPresetOnCardSwitch(nextCard);
           ensureActiveCardChatInitialized(nextCard);
           if (tavernState.background?.syncCardAvatarAsBg && nextCard && nextCard.avatar) {
             tavernState.background.url = resolveSafeAvatarUrl(nextCard.avatar, false);
@@ -14642,6 +15040,10 @@ code, pre {
           renderTavernShell();
           await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_CHANGED, cid);
           syncCardScopedFloatingWidgets();
+          const notices = ['已切换至 ' + (nextCard?.name || '角色')];
+          if (switchSync.switchedBookName) notices.push('启用世界书 ' + switchSync.switchedBookName);
+          if (switchSync.switchedPresetName) notices.push('切换预设 ' + switchSync.switchedPresetName);
+          showTavernToast(notices.join(' · '));
         }
         return;
       }
@@ -14659,6 +15061,7 @@ code, pre {
         tavernState.cards = tavernState.cards.filter(c => c.id !== cid);
         if (tavernState.activeCardId === cid) {
           tavernState.activeCardId = tavernState.cards[0].id;
+          syncWorldBooksAndPresetOnCardSwitch(getActiveCard(), { silent: true });
         }
         await saveTavernStore();
         renderTavernShell();
@@ -14666,6 +15069,91 @@ code, pre {
       }
       if (action === 'trigger-upload-card-avatar') {
         document.getElementById('tavern-file-card-avatar')?.click();
+        return;
+      }
+      if (action === 'toggle-card-greetings-panel') {
+        uiRuntime.showCardGreetingsPanel = !uiRuntime.showCardGreetingsPanel;
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'toggle-card-greeting-enabled') {
+        const gIdx = Number(actionEl.getAttribute('data-greeting-idx'));
+        const card = getActiveCard();
+        if (card && !Number.isNaN(gIdx)) {
+          if (!Array.isArray(card.disabledGreetingIndices)) card.disabledGreetingIndices = [];
+          if (actionEl.checked) {
+            card.disabledGreetingIndices = card.disabledGreetingIndices.filter(x => Number(x) !== gIdx);
+          } else {
+            if (!card.disabledGreetingIndices.map(Number).includes(gIdx)) {
+              card.disabledGreetingIndices.push(gIdx);
+            }
+          }
+          const sess = getActiveChatSession();
+          if (sess && sess.messages && sess.messages[0] && sess.messages.length === 1) {
+            const enabledList = getEnabledCardGreetings(card);
+            sess.messages[0].swipes = enabledList;
+            sess.messages[0].swipe_id = 0;
+            sess.messages[0].mes = enabledList[0];
+            sess.messages[0].token_count = estimateTokens(enabledList[0]);
+            renderTavernChatFloors(true);
+          }
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'use-card-greeting-now') {
+        const gIdx = Number(actionEl.getAttribute('data-greeting-idx'));
+        const card = getActiveCard();
+        const sess = getActiveChatSession();
+        if (card && sess && sess.messages && sess.messages[0] && !Number.isNaN(gIdx)) {
+          const allG = getAllCardGreetingsList(card);
+          const chosen = allG[gIdx];
+          if (chosen !== undefined) {
+            if (Array.isArray(card.disabledGreetingIndices)) {
+              card.disabledGreetingIndices = card.disabledGreetingIndices.filter(x => Number(x) !== gIdx);
+            }
+            const enabledG = getEnabledCardGreetings(card);
+            const targetSwipeIdx = Math.max(0, enabledG.indexOf(chosen));
+            sess.messages[0].swipes = enabledG;
+            sess.messages[0].swipe_id = targetSwipeIdx;
+            sess.messages[0].mes = chosen;
+            sess.messages[0].token_count = estimateTokens(chosen);
+            uiRuntime.openDrawerKey = null;
+            await saveTavernStore();
+            renderTavernShell();
+            showTavernToast('已选用第 ' + (gIdx + 1) + ' 个开场白并应用至第0层');
+          }
+        }
+        return;
+      }
+      if (action === 'add-card-alt-greeting') {
+        const card = getActiveCard();
+        if (card) {
+          if (!Array.isArray(card.alternate_greetings)) card.alternate_greetings = [];
+          card.alternate_greetings.push('新的分支开场白...');
+          uiRuntime.showCardGreetingsPanel = true;
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已新增一条分支开场白');
+        }
+        return;
+      }
+      if (action === 'del-card-alt-greeting') {
+        const gIdx = Number(actionEl.getAttribute('data-greeting-idx'));
+        const card = getActiveCard();
+        if (card && Array.isArray(card.alternate_greetings) && gIdx > 0) {
+          card.alternate_greetings.splice(gIdx - 1, 1);
+          if (Array.isArray(card.disabledGreetingIndices)) {
+            card.disabledGreetingIndices = card.disabledGreetingIndices
+              .map(Number)
+              .filter(x => x !== gIdx)
+              .map(x => (x > gIdx ? x - 1 : x));
+          }
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已删除该分支开场白');
+        }
         return;
       }
       if (action === 'save-card-edits') {
@@ -14678,6 +15166,16 @@ code, pre {
           card.personality = document.getElementById('card-edit-personality')?.value || '';
           card.scenario = document.getElementById('card-edit-scenario')?.value || '';
           card.first_mes = document.getElementById('card-edit-firstmes')?.value || '';
+          const altInputs = document.querySelectorAll('.card-alt-greeting-input');
+          if (altInputs && altInputs.length > 0 && Array.isArray(card.alternate_greetings)) {
+            altInputs.forEach(inp => {
+              const aIdx = Number(inp.getAttribute('data-alt-idx'));
+              if (!Number.isNaN(aIdx) && aIdx >= 0 && aIdx < card.alternate_greetings.length) {
+                card.alternate_greetings[aIdx] = inp.value;
+              }
+            });
+          }
+          syncWorldBooksAndPresetOnCardSwitch(card, { silent: true });
           const sess = getActiveChatSession();
           if (sess && Array.isArray(sess.messages)) {
             sess.messages.forEach(m => {
@@ -14687,7 +15185,7 @@ code, pre {
           await saveTavernStore();
           refreshOpenDrawerOnly();
           renderTavernChatFloors(false);
-          showTavernToast('角色卡设定与对话名称已同步保存');
+          showTavernToast('角色卡设定与世界书绑定已同步保存');
         }
         return;
       }
@@ -14695,7 +15193,7 @@ code, pre {
         const card = getActiveCard();
         const sess = getActiveChatSession();
         if (card && sess && sess.messages[0]) {
-          const allG = [card.first_mes, ...(card.alternate_greetings || [])].filter(Boolean);
+          const allG = getEnabledCardGreetings(card);
           if (allG.length > 0) {
             sess.messages[0].swipes = allG;
             sess.messages[0].swipe_id = 0;
@@ -14703,7 +15201,7 @@ code, pre {
             sess.messages[0].token_count = estimateTokens(allG[0]);
             await saveTavernStore();
             renderTavernChatFloors(true);
-            showTavernToast('已同步 ' + allG.length + ' 个开场白至第0层');
+            showTavernToast('已同步 ' + allG.length + ' 个已开启的开场白至第0层');
           }
         }
         return;
