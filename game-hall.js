@@ -1267,7 +1267,7 @@ code, pre {
       }
       if ((ch === '\n' || ch === '\r') && !inQuotes) {
         const restAfterNewline = raw.slice(i + 1);
-        if (/^\s*\/(?:trigger|gen|generate|continue|impersonate|setvar|addvar|incvar|decvar|setglobalvar|setentryfield|delvar|flushvar|cut|del|hide|unhide)\b/i.test(restAfterNewline)) {
+        if (/^\s*\/(?:trigger|gen|generate|continue|impersonate|setvar|addvar|incvar|decvar|setglobalvar|setentryfield|delvar|flushvar|cut|del|hide|unhide|if|add|sub|mul|div|math|world|preset)\b/i.test(restAfterNewline)) {
           if (current.trim()) results.push(current.trim());
           current = '';
           continue;
@@ -1277,6 +1277,71 @@ code, pre {
     }
     if (current.trim()) results.push(current.trim());
     return results;
+  }
+
+  function getDeepVarByPath(storeObj, rawPath) {
+    if (!storeObj || typeof storeObj !== 'object' || !rawPath) return undefined;
+    const cleanKey = String(rawPath).trim();
+    if (cleanKey in storeObj) return storeObj[cleanKey];
+    const parts = cleanKey.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+    let cur = storeObj;
+    for (const p of parts) {
+      if (cur === null || cur === undefined || typeof cur !== 'object') return undefined;
+      cur = cur[p];
+    }
+    return cur;
+  }
+
+  function setDeepVarByPath(storeObj, rawPath, val) {
+    if (!storeObj || typeof storeObj !== 'object' || !rawPath) return;
+    const cleanKey = String(rawPath).trim();
+    if (!cleanKey.includes('.') && !cleanKey.includes('[')) {
+      storeObj[cleanKey] = val;
+      return;
+    }
+    const parts = cleanKey.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+    let cur = storeObj;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i];
+      if (cur[p] === null || cur[p] === undefined || typeof cur[p] !== 'object') {
+        cur[p] = /^\d+$/.test(parts[i + 1]) ? [] : {};
+      }
+      cur = cur[p];
+    }
+    cur[parts[parts.length - 1]] = val;
+  }
+
+  function deleteDeepVarByPath(storeObj, rawPath) {
+    if (!storeObj || typeof storeObj !== 'object' || !rawPath) return;
+    const cleanKey = String(rawPath).trim();
+    if (cleanKey in storeObj) {
+      delete storeObj[cleanKey];
+      return;
+    }
+    const parts = cleanKey.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+    let cur = storeObj;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i];
+      if (!cur || typeof cur !== 'object') return;
+      cur = cur[p];
+    }
+    if (cur && typeof cur === 'object') {
+      delete cur[parts[parts.length - 1]];
+    }
+  }
+
+  function deepMergeVariables(target, source) {
+    if (!target || typeof target !== 'object' || !source || typeof source !== 'object') return target;
+    Object.keys(source).forEach(k => {
+      const sv = source[k];
+      const tv = target[k];
+      if (sv && typeof sv === 'object' && !Array.isArray(sv) && tv && typeof tv === 'object' && !Array.isArray(tv)) {
+        deepMergeVariables(tv, sv);
+      } else {
+        target[k] = sv;
+      }
+    });
+    return target;
   }
 
   async function executeTavernSlashCommand(cmdText, execOptions = {}) {
@@ -1291,7 +1356,11 @@ code, pre {
     let suppressAutoTrigger = Boolean(execOptions && execOptions.suppressAutoTrigger);
 
     for (const rawLine of parts) {
-      const line = rawLine.replace(/\{\{pipe\}\}|\{\{\$pipe\}\}/gi, String(lastResult ?? '')).trim();
+      const cardForMacro = getActiveCard();
+      const line = replaceTavernMacros(
+        rawLine.replace(/\{\{pipe\}\}|\{\{\$pipe\}\}/gi, String(lastResult ?? '')),
+        cardForMacro
+      ).trim();
       if (!line) continue;
 
       // If an HTML button or script passes plain non-slash text to triggerSlash, treat it as /send + auto-trigger
@@ -1350,68 +1419,157 @@ code, pre {
         if (m) {
           const vars = getChatVariablesStore();
           const k = m[1].replace(/^["']|["']$/g, '').trim();
-          const v = (m[2] || '').replace(/^["']|["']$/g, '');
-          vars[k] = v;
-          lastResult = v;
+          let v = (m[2] || '').replace(/^["']|["']$/g, '');
+          if ((v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']'))) {
+            try { v = JSON.parse(v); } catch (_) {}
+          }
+          setDeepVarByPath(vars, k, v);
+          lastResult = typeof v === 'object' ? JSON.stringify(v) : String(v);
         }
       } else if (/^\/(?:getvar|getchatvar)\b/i.test(line)) {
         const key = line.replace(/^\/(?:getvar|getchatvar)\s+(?:key=)?/i, '').replace(/^["']|["']$/g, '').trim();
         const vars = getChatVariablesStore();
-        lastResult = vars[key] !== undefined ? String(vars[key]) : '';
+        const val = getDeepVarByPath(vars, key);
+        lastResult = val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : '';
       } else if (/^\/(?:addvar|addchatvar)\b/i.test(line)) {
         const m = line.match(/^\/(?:addvar|addchatvar)\s+(?:key=)?([^\s]+)\s+([\s\S]*)$/i);
         if (m) {
           const vars = getChatVariablesStore();
           const key = m[1].trim();
-          const cur = Number(vars[key] ?? 0);
+          const curVal = getDeepVarByPath(vars, key);
+          const cur = Number(curVal ?? 0);
           const delta = Number(m[2].trim());
+          let nextVal;
           if (!Number.isNaN(cur) && !Number.isNaN(delta)) {
-            vars[key] = cur + delta;
+            nextVal = cur + delta;
           } else {
-            vars[key] = String(vars[key] || '') + m[2].trim();
+            nextVal = String(curVal || '') + m[2].trim();
           }
-          lastResult = String(vars[key]);
+          setDeepVarByPath(vars, key, nextVal);
+          lastResult = String(nextVal);
         }
       } else if (/^\/(?:incvar|decvar)\b/i.test(line)) {
         const isInc = /^\/incvar\b/i.test(line);
         const key = line.replace(/^\/(?:incvar|decvar)\s+(?:key=)?/i, '').trim();
         if (key) {
           const vars = getChatVariablesStore();
-          vars[key] = (Number(vars[key]) || 0) + (isInc ? 1 : -1);
-          lastResult = String(vars[key]);
+          const nextVal = (Number(getDeepVarByPath(vars, key)) || 0) + (isInc ? 1 : -1);
+          setDeepVarByPath(vars, key, nextVal);
+          lastResult = String(nextVal);
         }
       } else if (/^\/(?:delvar|flushvar)\b/i.test(line)) {
         const key = line.replace(/^\/(?:delvar|flushvar)\s+(?:key=)?/i, '').trim();
         const vars = getChatVariablesStore();
-        if (key) delete vars[key];
+        if (key) deleteDeepVarByPath(vars, key);
         lastResult = '';
       } else if (/^\/setglobalvar\b/i.test(line)) {
         const m = line.match(/^\/setglobalvar\s+(?:key=)?([^\s]+)\s+([\s\S]*)$/i);
         if (m) {
           const gvars = getGlobalVariablesStore();
-          gvars[m[1].trim()] = m[2];
+          setDeepVarByPath(gvars, m[1].trim(), m[2]);
           lastResult = m[2];
         }
       } else if (/^\/getglobalvar\b/i.test(line)) {
         const key = line.replace(/^\/getglobalvar\s+(?:key=)?/i, '').trim();
         const gvars = getGlobalVariablesStore();
-        lastResult = gvars[key] !== undefined ? String(gvars[key]) : '';
+        const val = getDeepVarByPath(gvars, key);
+        lastResult = val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : '';
       } else if (/^\/addglobalvar\b/i.test(line)) {
         const m = line.match(/^\/addglobalvar\s+(?:key=)?([^\s]+)\s+([\s\S]*)$/i);
         if (m) {
           const gvars = getGlobalVariablesStore();
           const key = m[1].trim();
-          const cur = Number(gvars[key] ?? 0);
+          const curVal = getDeepVarByPath(gvars, key);
+          const cur = Number(curVal ?? 0);
           const delta = Number(m[2].trim());
-          gvars[key] = (!Number.isNaN(cur) && !Number.isNaN(delta)) ? (cur + delta) : (String(gvars[key] || '') + m[2].trim());
-          lastResult = String(gvars[key]);
+          const nextVal = (!Number.isNaN(cur) && !Number.isNaN(delta)) ? (cur + delta) : (String(curVal || '') + m[2].trim());
+          setDeepVarByPath(gvars, key, nextVal);
+          lastResult = String(nextVal);
+        }
+      } else if (/^\/(?:add|sub|mul|div|mod|math)\b/i.test(line)) {
+        const opMatch = line.match(/^\/(add|sub|mul|div|mod|math)\s+([\s\S]*)$/i);
+        if (opMatch) {
+          const op = opMatch[1].toLowerCase();
+          const nums = opMatch[2].trim().split(/\s+/).map(n => Number(n)).filter(n => !Number.isNaN(n));
+          if (nums.length >= 2) {
+            let resNum = nums[0];
+            for (let k = 1; k < nums.length; k++) {
+              if (op === 'sub') resNum -= nums[k];
+              else if (op === 'mul') resNum *= nums[k];
+              else if (op === 'div') resNum = nums[k] !== 0 ? (resNum / nums[k]) : resNum;
+              else if (op === 'mod') resNum = nums[k] !== 0 ? (resNum % nums[k]) : resNum;
+              else resNum += nums[k];
+            }
+            lastResult = String(resNum);
+          } else if (nums.length === 1) {
+            lastResult = String(nums[0]);
+          }
+        }
+      } else if (/^\/if\b/i.test(line)) {
+        const leftM = line.match(/left=(?:"([^"]*)"|'([^']*)'|([^\s]+))/i);
+        const rightM = line.match(/right=(?:"([^"]*)"|'([^']*)'|([^\s]+))/i);
+        const ruleM = line.match(/rule=(?:"([^"]*)"|'([^']*)'|([^\s]+))/i);
+        const elseM = line.match(/else=(?:\{:([\s\S]*?):\}|"([^"]*)"|'([^']*)')/i);
+        const thenBlockM = line.match(/\{:([\s\S]*?):\}/);
+        const vars = getChatVariablesStore();
+        const resolveOperand = (rawOp) => {
+          const s = String(rawOp ?? '').trim();
+          const fromVar = getDeepVarByPath(vars, s);
+          return fromVar !== undefined ? fromVar : s;
+        };
+        const leftVal = resolveOperand(leftM ? (leftM[1] ?? leftM[2] ?? leftM[3]) : '');
+        const rightVal = resolveOperand(rightM ? (rightM[1] ?? rightM[2] ?? rightM[3]) : '');
+        const rule = String(ruleM ? (ruleM[1] ?? ruleM[2] ?? ruleM[3]) : 'eq').toLowerCase();
+        const lNum = Number(leftVal);
+        const rNum = Number(rightVal);
+        const bothNum = !Number.isNaN(lNum) && !Number.isNaN(rNum) && String(leftVal).trim() !== '' && String(rightVal).trim() !== '';
+        let passed = false;
+        if (rule === 'eq' || rule === '==') passed = bothNum ? (lNum === rNum) : (String(leftVal) === String(rightVal));
+        else if (rule === 'neq' || rule === '!=') passed = bothNum ? (lNum !== rNum) : (String(leftVal) !== String(rightVal));
+        else if (rule === 'gt' || rule === '>') passed = bothNum ? (lNum > rNum) : (String(leftVal) > String(rightVal));
+        else if (rule === 'gte' || rule === '>=') passed = bothNum ? (lNum >= rNum) : (String(leftVal) >= String(rightVal));
+        else if (rule === 'lt' || rule === '<') passed = bothNum ? (lNum < rNum) : (String(leftVal) < String(rightVal));
+        else if (rule === 'lte' || rule === '<=') passed = bothNum ? (lNum <= rNum) : (String(leftVal) <= String(rightVal));
+        else if (rule === 'in') passed = String(leftVal).includes(String(rightVal));
+        else if (rule === 'nin') passed = !String(leftVal).includes(String(rightVal));
+        let branchCmd = '';
+        if (passed) {
+          if (thenBlockM) branchCmd = thenBlockM[1].trim();
+          else {
+            branchCmd = line
+              .replace(/^\/if\s+/i, '')
+              .replace(/(?:left|right|rule|else)=(?:\{:[\s\S]*?:\}|"[^"]*"|'[^']*'|[^\s]+)\s*/gi, '')
+              .trim();
+          }
+        } else if (elseM) {
+          branchCmd = (elseM[1] ?? elseM[2] ?? elseM[3] ?? '').trim();
+        }
+        if (branchCmd) {
+          lastResult = await executeTavernSlashCommand(branchCmd, execOptions);
+        }
+      } else if (/^\/world\b/i.test(line)) {
+        const stateM = line.match(/state=(on|off|true|false)/i);
+        const wbName = line.replace(/^\/world\b/i, '').replace(/state=(?:on|off|true|false)/i, '').replace(/^["'\s]+|["'\s]+$/g, '');
+        if (wbName) {
+          const targetWb = (tavernState.worldBooks || []).find(w => w && (w.name === wbName || w.id === wbName || w.name.includes(wbName)));
+          if (targetWb) {
+            targetWb.enabled = stateM ? /^(on|true)$/i.test(stateM[1]) : !targetWb.enabled;
+            showTavernToast((targetWb.enabled ? '已启用世界书: ' : '已关闭世界书: ') + targetWb.name);
+            lastResult = targetWb.name;
+          }
+        }
+      } else if (/^\/preset\b/i.test(line)) {
+        const pName = line.replace(/^\/preset\b/i, '').replace(/^["'\s]+|["'\s]+$/g, '');
+        if (pName) {
+          await getTavernPresetManager('openai').selectPreset(pName);
+          lastResult = pName;
         }
       } else if (/^\/(?:echo|toast)\b/i.test(line)) {
         const msg = line.replace(/^\/(?:echo|toast)(?:\s+severity=[^\s]+|\s+title="[^"]*")*\s+/i, '').trim();
         if (msg) showTavernToast(msg);
         lastResult = msg;
       } else if (/^\/(?:input|setinput)\b/i.test(line)) {
-        const textVal = line.replace(/^\/(?:input|setinput)\s+/i, '').trim();
+        const textVal = line.replace(/^\/(?:input|setinput)\s*/i, '').trim();
         const textarea = document.getElementById('send_textarea');
         if (textarea) textarea.value = textVal;
         lastResult = textVal;
@@ -1524,6 +1682,29 @@ code, pre {
                 if (!sess.messages[i].extra || typeof sess.messages[i].extra !== 'object') sess.messages[i].extra = {};
                 sess.messages[i].extra.bbs_hidden = isHide;
               }
+            }
+          }
+        }
+      } else {
+        const customCmdMatch = line.match(/^\/([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/);
+        if (customCmdMatch && window.SlashCommandParser && window.SlashCommandParser.commands) {
+          const cmdName = customCmdMatch[1];
+          const rawArgStr = (customCmdMatch[2] || '').trim();
+          const cmdObj = window.SlashCommandParser.commands[cmdName] ||
+            Object.values(window.SlashCommandParser.commands).find(c => c && Array.isArray(c.aliases) && c.aliases.includes(cmdName));
+          if (cmdObj && typeof cmdObj.callback === 'function') {
+            try {
+              const namedArgs = {};
+              const unnamedVal = rawArgStr.replace(/([a-zA-Z0-9_-]+)=(?:"([^"]*)"|'([^']*)'|([^\s]+))/g, (_, k, v1, v2, v3) => {
+                namedArgs[k] = v1 ?? v2 ?? v3 ?? '';
+                return '';
+              }).trim();
+              const customRes = await cmdObj.callback(namedArgs, unnamedVal);
+              if (customRes !== undefined && customRes !== null) {
+                lastResult = String(customRes);
+              }
+            } catch (cmdErr) {
+              console.warn('Custom slash command warning:', cmdName, cmdErr);
             }
           }
         }
@@ -3734,14 +3915,29 @@ code, pre {
     };
     window.Generate = () => triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
 
-    window.getVariables = (opts) => {
+    const resolveVarStoreByOpts = (opts) => {
       if (opts && opts.type === 'global') return getGlobalVariablesStore();
+      if (opts && opts.type === 'message') {
+        const sess = getActiveChatSession();
+        const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+        const rawId = opts.message_id !== undefined ? Number(opts.message_id) : (msgs.length - 1);
+        const idx = rawId < 0 ? Math.max(0, msgs.length + rawId) : rawId;
+        const targetMsg = msgs[idx];
+        if (targetMsg) {
+          if (!targetMsg.data || typeof targetMsg.data !== 'object') targetMsg.data = {};
+          if (!targetMsg.data.variables || typeof targetMsg.data.variables !== 'object') targetMsg.data.variables = {};
+          return targetMsg.data.variables;
+        }
+      }
       return getChatVariablesStore();
     };
+    window.getVariables = (opts) => {
+      return resolveVarStoreByOpts(opts);
+    };
     window.insertOrAssignVariables = async (varsObj, opts) => {
-      const target = (opts && opts.type === 'global') ? getGlobalVariablesStore() : getChatVariablesStore();
+      const target = resolveVarStoreByOpts(opts);
       if (varsObj && typeof varsObj === 'object') {
-        Object.assign(target, varsObj);
+        deepMergeVariables(target, varsObj);
         await saveTavernStore();
       }
       return target;
@@ -3750,6 +3946,10 @@ code, pre {
       const sess = getActiveChatSession();
       if (opts && opts.type === 'global') {
         tavernState.extensionSettings.globalVariables = Object.assign({}, varsObj || {});
+      } else if (opts && opts.type === 'message') {
+        const target = resolveVarStoreByOpts(opts);
+        Object.keys(target).forEach(k => delete target[k]);
+        Object.assign(target, varsObj || {});
       } else if (sess) {
         if (!sess.metadata) sess.metadata = {};
         sess.metadata.variables = Object.assign({}, varsObj || {});
@@ -3759,7 +3959,7 @@ code, pre {
     };
     window.updateVariablesWith = async (updaterFn, opts) => {
       const cur = window.getVariables(opts);
-      const next = typeof updaterFn === 'function' ? updaterFn(cur) : cur;
+      const next = typeof updaterFn === 'function' ? await updaterFn(cur) : cur;
       if (next && typeof next === 'object') {
         return await window.replaceVariables(next, opts);
       }
@@ -3768,8 +3968,8 @@ code, pre {
     };
     window.deleteVariable = async (key, opts) => {
       const target = window.getVariables(opts);
-      if (target && key in target) {
-        delete target[key];
+      if (target && key) {
+        deleteDeepVarByPath(target, key);
         await saveTavernStore();
       }
     };
@@ -4483,6 +4683,52 @@ code, pre {
         }
       });
       syncBookExcerptDomAvatars();
+      sortExtensionsMenuDeterministically();
+    } catch (_) {}
+  }
+
+  function sortExtensionsMenuDeterministically() {
+    try {
+      const extMenu = document.getElementById('extensionsMenu');
+      if (!extMenu) return;
+      const children = Array.from(extMenu.children);
+      if (children.length <= 2) return;
+      const getSortWeight = (el) => {
+        if (!el || el.tagName === 'STYLE') return 0;
+        if (el.getAttribute('data-action') === 'open-helper-script') return 10;
+        const innerId = el.id || el.querySelector('[id]')?.id || '';
+        const kind = el.getAttribute('data-baibai-kind') || el.getAttribute('data-plugin-kind') || '';
+        const txt = String(el.textContent || '').trim();
+        if (innerId === 'bbs-menu-item' || kind === 'book' || /柏宝书/.test(txt)) return 20;
+        if (innerId === 'bbi-menu-item' || kind === 'image' || /柏宝绘/.test(txt)) return 21;
+        if (innerId === 'pa-menu-entry' || kind === 'bcw' || /预设工坊|Burnt/i.test(txt)) return 22;
+        if (innerId === 'be-menu-entry' || kind === 'book-excerpt' || /书摘/.test(txt)) return 23;
+        if (!el.hasAttribute('data-action') || el.getAttribute('data-action') === 'open-plugin-modal') return 30;
+        const act = el.getAttribute('data-action') || '';
+        if (act === 'popup-translate-last') return 50;
+        if (act === 'popup-translate-input') return 51;
+        if (act === 'wand-generate-image') return 52;
+        if (act === 'run-memory-summary-now') return 53;
+        return 60;
+      };
+      let needsSort = false;
+      for (let i = 1; i < children.length; i++) {
+        if (getSortWeight(children[i]) < getSortWeight(children[i - 1])) {
+          needsSort = true;
+          break;
+        }
+      }
+      if (!needsSort) return;
+      const sorted = [...children].sort((a, b) => {
+        const wa = getSortWeight(a);
+        const wb = getSortWeight(b);
+        if (wa !== wb) return wa - wb;
+        if (wa === 30) {
+          return String(a.textContent || '').localeCompare(String(b.textContent || ''), 'zh-CN');
+        }
+        return 0;
+      });
+      sorted.forEach(node => extMenu.appendChild(node));
     } catch (_) {}
   }
 
@@ -5575,52 +5821,58 @@ code, pre {
       .replace(/\{\{\/\/[\s\S]*?\}\}/g, '')
       .replace(/\{\{\/\*[\s\S]*?\*\/\}\}/g, '')
       .replace(/\{\{setvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
-        localVars[k.trim()] = v;
+        setDeepVarByPath(localVars, k.trim(), v);
         return '';
       })
       .replace(/\{\{addvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
         const key = k.trim();
-        const cur = Number(localVars[key]);
+        const rawCur = getDeepVarByPath(localVars, key);
+        const cur = Number(rawCur);
         const delta = Number(v);
-        if (!Number.isNaN(cur) && !Number.isNaN(delta)) {
-          localVars[key] = cur + delta;
+        if (rawCur !== undefined && !Number.isNaN(cur) && !Number.isNaN(delta)) {
+          setDeepVarByPath(localVars, key, cur + delta);
         } else {
-          localVars[key] = String(localVars[key] || '') + v;
+          setDeepVarByPath(localVars, key, String(rawCur ?? '') + v);
         }
         return '';
       })
       .replace(/\{\{incvar::([^}]+)\}\}/gi, (_, k) => {
         const key = k.trim();
-        localVars[key] = (Number(localVars[key]) || 0) + 1;
-        return String(localVars[key]);
+        const nextVal = (Number(getDeepVarByPath(localVars, key)) || 0) + 1;
+        setDeepVarByPath(localVars, key, nextVal);
+        return String(nextVal);
       })
       .replace(/\{\{decvar::([^}]+)\}\}/gi, (_, k) => {
         const key = k.trim();
-        localVars[key] = (Number(localVars[key]) || 0) - 1;
-        return String(localVars[key]);
+        const nextVal = (Number(getDeepVarByPath(localVars, key)) || 0) - 1;
+        setDeepVarByPath(localVars, key, nextVal);
+        return String(nextVal);
       })
       .replace(/\{\{getvar::([^}]+)\}\}/gi, (_, k) => {
-        const val = localVars[k.trim()];
-        return val !== undefined && val !== null ? String(val) : '';
+        const val = getDeepVarByPath(localVars, k.trim());
+        if (val === undefined || val === null) return '';
+        return typeof val === 'object' ? JSON.stringify(val) : String(val);
       })
       .replace(/\{\{setglobalvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
-        globalVars[k.trim()] = v;
+        setDeepVarByPath(globalVars, k.trim(), v);
         return '';
       })
       .replace(/\{\{addglobalvar::([^:}]+)::([^}]*)\}\}/gi, (_, k, v) => {
         const key = k.trim();
-        const cur = Number(globalVars[key]);
+        const rawCur = getDeepVarByPath(globalVars, key);
+        const cur = Number(rawCur);
         const delta = Number(v);
-        if (!Number.isNaN(cur) && !Number.isNaN(delta)) {
-          globalVars[key] = cur + delta;
+        if (rawCur !== undefined && !Number.isNaN(cur) && !Number.isNaN(delta)) {
+          setDeepVarByPath(globalVars, key, cur + delta);
         } else {
-          globalVars[key] = String(globalVars[key] || '') + v;
+          setDeepVarByPath(globalVars, key, String(rawCur ?? '') + v);
         }
         return '';
       })
       .replace(/\{\{getglobalvar::([^}]+)\}\}/gi, (_, k) => {
-        const val = globalVars[k.trim()];
-        return val !== undefined && val !== null ? String(val) : '';
+        const val = getDeepVarByPath(globalVars, k.trim());
+        if (val === undefined || val === null) return '';
+        return typeof val === 'object' ? JSON.stringify(val) : String(val);
       })
       .replace(/\{\{outlet::([^}]+)\}\}/gi, (_, k) => {
         const key = String(k || '').trim();
@@ -6322,7 +6574,14 @@ code, pre {
     });
 
     working = working
+      .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|data:image\/[^\s)]+|vault:\/\/[^\s)]+)\)/g, (_, altTxt, rawUrl) => {
+        const safeSrc = resolveSafeAvatarUrl(rawUrl, false);
+        const vaultAttr = String(rawUrl).startsWith('vault://') ? ` data-vault-ref="${escapeHtmlSimple(rawUrl)}"` : '';
+        return `<img src="${escapeHtmlSimple(safeSrc)}"${vaultAttr} alt="${escapeHtmlSimple(altTxt || '图片')}" style="max-width:100%;border-radius:10px;margin:4px 0;display:block;" />`;
+      })
       .replace(/`([^`\n]+)`/g, '<code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.92em;">$1</code>')
+      .replace(/~~([^~\n]+)~~/g, '<del style="opacity:0.78;">$1</del>')
+      .replace(/==([^=\n]+)==/g, '<mark style="background:rgba(255,215,100,0.38);color:inherit;padding:0 3px;border-radius:4px;">$1</mark>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
       .replace(/＊([^＊\n]+)＊/g, '<em>$1</em>')
@@ -6407,10 +6666,19 @@ code, pre {
         const quoteBody = trimmed.replace(/^>\s?/, '');
         return `<blockquote style="margin:4px 0;padding:4px 10px;border-left:3px solid rgba(150,150,165,0.55);color:inherit;opacity:0.88;">${quoteBody}</blockquote>`;
       }
-      // Markdown list item
-      const ulMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+      // Markdown list item (including indented nested list items)
+      const ulMatch = line.match(/^([ \t]*)[-*•]\s+(.+)$/);
       if (ulMatch) {
-        return `<div style="display:flex;align-items:baseline;gap:6px;margin:2px 0;"><span style="flex-shrink:0;">•</span><span>${ulMatch[1]}</span></div>`;
+        const indentSpaces = (ulMatch[1] || '').replace(/\t/g, '  ').length;
+        const padLeft = Math.min(48, Math.floor(indentSpaces / 2) * 14);
+        const bulletChar = padLeft > 0 ? '◦' : '•';
+        return `<div style="display:flex;align-items:baseline;gap:6px;margin:2px 0;padding-left:${padLeft}px;"><span style="flex-shrink:0;">${bulletChar}</span><span>${ulMatch[2]}</span></div>`;
+      }
+      const olMatch = line.match(/^([ \t]*)(\d+\.)\s+(.+)$/);
+      if (olMatch) {
+        const indentSpaces = (olMatch[1] || '').replace(/\t/g, '  ').length;
+        const padLeft = Math.min(48, Math.floor(indentSpaces / 2) * 14);
+        return `<div style="display:flex;align-items:baseline;gap:6px;margin:2px 0;padding-left:${padLeft}px;"><span style="flex-shrink:0;font-weight:600;">${olMatch[2]}</span><span>${olMatch[3]}</span></div>`;
       }
 
       return '<p>' + line + '</p>';
@@ -7197,10 +7465,43 @@ code, pre {
       if (!addedInPass) break;
     }
 
+    // Resolve inclusion/exclusion groups (entries sharing the same non-empty group name where position !== 7)
+    const groupedCandidates = new Map();
+    const ungroupedEntries = [];
+    for (const entry of triggeredEntries) {
+      const grpName = Number(entry.position) !== 7 ? String(entry.group || '').trim() : '';
+      if (!grpName) {
+        ungroupedEntries.push(entry);
+      } else {
+        if (!groupedCandidates.has(grpName)) groupedCandidates.set(grpName, []);
+        groupedCandidates.get(grpName).push(entry);
+      }
+    }
+    const groupWinners = new Set(ungroupedEntries);
+    groupedCandidates.forEach(groupList => {
+      if (groupList.length === 1) {
+        groupWinners.add(groupList[0]);
+        return;
+      }
+      const sortedByOrder = [...groupList].sort((a, b) => (Number(b.groupWeight ?? 100) - Number(a.groupWeight ?? 100)) || (Number(b.order ?? 100) - Number(a.order ?? 100)));
+      const totalWeight = sortedByOrder.reduce((sum, e) => sum + Math.max(1, Number(e.groupWeight ?? 100)), 0);
+      let roll = Math.random() * totalWeight;
+      let chosen = sortedByOrder[0];
+      for (const item of sortedByOrder) {
+        roll -= Math.max(1, Number(item.groupWeight ?? 100));
+        if (roll <= 0) {
+          chosen = item;
+          break;
+        }
+      }
+      groupWinners.add(chosen);
+    });
+    const finalTriggeredEntries = triggeredEntries.filter(e => groupWinners.has(e));
+
     // Apply token budget and World Info regex placement (placement 5)
     let usedTokens = 0;
     const budgetedEntries = [];
-    for (const entry of triggeredEntries) {
+    for (const entry of finalTriggeredEntries) {
       const formatted = applyTavernRegexPipeline(entry.content, { isPrompt: true, isWorldInfo: true, card });
       const tCount = estimateTokens(formatted);
       if (usedTokens + tCount > maxBudget && !entry.constant) continue;
@@ -7468,10 +7769,12 @@ code, pre {
       const chatLabel = m.is_user
         ? (idx === lastUserSliceIdx ? `用户输入 · 本次发送 #${floorNo}` : `历史对话 · 用户 #${floorNo}`)
         : (m.is_system ? `历史对话 · 系统 #${floorNo}` : `历史对话 · 角色回复 #${floorNo}`);
+      const attachedImages = (m.extra && Array.isArray(m.extra.images)) ? m.extra.images.filter(Boolean) : [];
       return {
         role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
-        content: cleanedContent,
-        _debugLabel: chatLabel,
+        content: cleanedContent || (attachedImages.length > 0 ? '请结合附图进行回复' : ''),
+        _images: attachedImages.length > 0 ? attachedImages : undefined,
+        _debugLabel: chatLabel + (attachedImages.length > 0 ? ` · 含${attachedImages.length}张图片` : ''),
         _isChatContext: true
       };
     });
@@ -7961,14 +8264,37 @@ code, pre {
     const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
     const rawWireMessages = Array.isArray(messages)
       ? messages
-          .map(m => ({ role: m?.role || 'system', content: String(m?.content || '') }))
-          .filter(m => m.content.trim().length > 0)
+          .map(m => ({
+            role: m?.role || 'system',
+            content: String(m?.content || ''),
+            _images: Array.isArray(m?._images) ? m._images.filter(Boolean) : []
+          }))
+          .filter(m => m.content.trim().length > 0 || m._images.length > 0)
       : [];
     const cleanWireMessages = [];
     for (const msg of rawWireMessages) {
+      const hasImgs = msg._images && msg._images.length > 0;
       const prev = cleanWireMessages[cleanWireMessages.length - 1];
-      if (prev && prev.role === msg.role) {
+      if (prev && prev.role === msg.role && !hasImgs && !Array.isArray(prev.content)) {
         prev.content += '\n\n' + msg.content;
+      } else if (hasImgs) {
+        const multimodalParts = [];
+        if (msg.content && msg.content.trim()) {
+          multimodalParts.push({ type: 'text', text: msg.content });
+        }
+        for (const imgRef of msg._images) {
+          let finalUrl = String(imgRef || '');
+          if (finalUrl.startsWith('vault://') && typeof window.resolveVaultRefToUrl === 'function') {
+            try {
+              const unlocked = await window.resolveVaultRefToUrl(finalUrl);
+              if (unlocked) finalUrl = unlocked;
+            } catch (_) {}
+          }
+          if (finalUrl) {
+            multimodalParts.push({ type: 'image_url', image_url: { url: finalUrl } });
+          }
+        }
+        cleanWireMessages.push({ role: msg.role, content: multimodalParts });
       } else {
         cleanWireMessages.push({ role: msg.role, content: msg.content });
       }
@@ -8591,6 +8917,11 @@ code, pre {
     showPresetBindPanel: false,
     showCardGreetingsPanel: false,
     wbFilterOpeningsOnly: false,
+    showWbEntryAdvanced: false,
+    showRxEditorAdvanced: false,
+    pendingChatImages: [],
+    selectiveImportPromptsList: null,
+    selectiveImportSourceName: '',
     apiRequestStats: { sent: 0, received: 0, success: 0, fail: 0 },
     apiRequestLogs: [],
     toastTimer: null,
@@ -8802,6 +9133,99 @@ code, pre {
         background-position: center;
         background-repeat: no-repeat;
         transition: opacity 0.25s ease;
+      }
+      #tavern-char-sprite-layer {
+        position: absolute;
+        right: 10px;
+        bottom: 68px;
+        width: clamp(82px, 22vw, 136px);
+        max-height: min(34vh, 190px);
+        pointer-events: none;
+        z-index: 12;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        overflow: hidden;
+      }
+      #tavern-char-sprite-layer.sprite-hidden {
+        display: none !important;
+      }
+      #tavern-char-sprite-layer img {
+        max-width: 100% !important;
+        max-height: min(34vh, 190px) !important;
+        width: auto !important;
+        height: auto !important;
+        object-fit: contain !important;
+        display: block;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.16));
+      }
+      #chatAttachButton {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        flex-shrink: 0;
+        color: #6c6c72;
+        border-radius: 50%;
+        transition: background 0.14s ease, transform 0.12s ease;
+      }
+      #chatAttachButton:active {
+        transform: scale(0.92);
+        background: rgba(0, 0, 0, 0.06);
+      }
+      #chatAttachButton svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #tavern-chat-attach-preview {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 4px 6px;
+        pointer-events: auto;
+      }
+      #tavern-chat-attach-preview:empty {
+        display: none !important;
+      }
+      .tavern-attach-thumb-item {
+        position: relative;
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(180, 180, 192, 0.85);
+        background: #fff;
+        flex-shrink: 0;
+      }
+      .tavern-attach-thumb-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .tavern-attach-thumb-del {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(40, 40, 44, 0.82);
+        color: #fff;
+        font-size: 10px;
+        line-height: 16px;
+        text-align: center;
+        padding: 0;
+        cursor: pointer;
       }
       /* Native SillyTavern Top Bar */
       #top-bar {
@@ -9822,6 +10246,11 @@ code, pre {
         <!-- Native SillyTavern #chat Message List -->
         <div id="chat"></div>
 
+        <!-- Character Sprite Overlay Layer -->
+        <div id="tavern-char-sprite-layer" class="${tavernState.uiSettings?.enableCharSprites ? '' : 'sprite-hidden'}">
+          ${renderActiveCharacterSpriteInnerHtml(activeCardForShell)}
+        </div>
+
         <!-- Bottom Options & Extensions Popups (Always mounted in DOM so plugins can inject items) -->
         <div id="tavern-popup-host">
           ${renderBottomOptionsPopup()}
@@ -9838,10 +10267,14 @@ code, pre {
                 <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
               `).join('')}
             </div>
+            <div id="tavern-chat-attach-preview">${renderChatAttachPreviewHtml()}</div>
             <div id="nonQRFormItems">
               <div id="leftSendForm">
                 <div id="options_button" data-action="toggle-options-popup" title="对话操作菜单"></div>
                 <div id="extensionsMenuButton" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
+                <div id="chatAttachButton" data-action="trigger-chat-attach-image" title="发送图片附件">
+                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                </div>
               </div>
               <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
               <div id="rightSendForm">
@@ -9856,10 +10289,13 @@ code, pre {
         <input type="file" id="tavern-file-worldbooks" accept=".json,application/json" multiple style="display:none" />
         <input type="file" id="tavern-file-regexes" accept=".json,application/json" multiple style="display:none" />
         <input type="file" id="tavern-file-presets" accept=".json,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-selective-prompts" accept=".json,application/json" style="display:none" />
         <input type="file" id="tavern-file-themes" accept=".json,.css,application/json,text/css" multiple style="display:none" />
         <input type="file" id="tavern-file-plugins" accept=".js,.json,.html,.css,application/javascript,text/javascript,application/json,text/html,text/css" multiple style="display:none" />
         <input type="file" id="tavern-file-chats" accept=".json,.jsonl,application/json" multiple style="display:none" />
         <input type="file" id="tavern-file-bg" accept="image/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-chat-attach" accept="image/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-char-sprite" accept="image/*" style="display:none" />
         <input type="file" id="tavern-file-persona-avatar" accept="image/*" style="display:none" />
         <input type="file" id="tavern-file-card-avatar" accept="image/*" style="display:none" />
       </div>
@@ -9936,6 +10372,67 @@ code, pre {
     `).join('');
   }
 
+  function renderChatAttachPreviewHtml() {
+    const list = Array.isArray(uiRuntime.pendingChatImages) ? uiRuntime.pendingChatImages : [];
+    if (list.length === 0) return '';
+    return list.map((item, idx) => {
+      const thumbUrl = resolveSafeAvatarUrl(item.previewUrl || item.vaultUrl || item.apiDataUrl || '', false);
+      return `
+        <div class="tavern-attach-thumb-item">
+          <img src="${escapeHtmlSimple(thumbUrl)}" alt="附件" />
+          <button type="button" class="tavern-attach-thumb-del" data-action="remove-chat-attach-image" data-idx="${idx}" title="移除图片">×</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function refreshChatAttachPreviewOnly() {
+    const el = document.getElementById('tavern-chat-attach-preview');
+    if (el) {
+      el.innerHTML = renderChatAttachPreviewHtml();
+    }
+  }
+
+  function detectCharacterEmotionKeyFromText(text) {
+    const s = String(text || '');
+    if (!s) return '默认';
+    if (/笑|开心|高兴|喜悦|愉快|欢快|弯起眉眼|嘴角上扬/.test(s)) return '开心';
+    if (/脸红|害羞|羞涩|耳根发烫|低头|不好意思/.test(s)) return '害羞';
+    if (/生气|愤怒|恼火|冷笑|皱眉|呵斥|咬牙/.test(s)) return '生气';
+    if (/哭|流泪|难过|悲伤|委屈|哽咽|眼眶泛红/.test(s)) return '难过';
+    return '默认';
+  }
+
+  function renderActiveCharacterSpriteInnerHtml(cardObj) {
+    if (!tavernState.uiSettings || !tavernState.uiSettings.enableCharSprites) return '';
+    const card = cardObj || getActiveCard();
+    if (!card) return '';
+    const sess = getActiveChatSession();
+    const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+    const lastCharMsg = [...msgs].reverse().find(m => m && !m.is_user);
+    const emotionKey = detectCharacterEmotionKeyFromText(lastCharMsg ? lastCharMsg.mes : '');
+    const sprites = (card.sprites && typeof card.sprites === 'object') ? card.sprites : {};
+    const rawSpriteUrl = sprites[emotionKey] || sprites['默认'] || card.avatar || '';
+    if (!rawSpriteUrl || rawSpriteUrl === DEFAULT_AVATAR_SVG || String(rawSpriteUrl).startsWith('data:image/svg')) {
+      return '';
+    }
+    const safeUrl = resolveSafeAvatarUrl(rawSpriteUrl, false);
+    const vaultAttr = String(rawSpriteUrl).startsWith('vault://') ? ` data-vault-ref="${escapeHtmlSimple(rawSpriteUrl)}"` : '';
+    return `<img src="${escapeHtmlSimple(safeUrl)}"${vaultAttr} alt="${escapeHtmlSimple(card.name || '立绘')}" onerror="this.style.display='none';" />`;
+  }
+
+  function updateCharacterSpriteLayerOnly() {
+    const layer = document.getElementById('tavern-char-sprite-layer');
+    if (!layer) return;
+    const enabled = Boolean(tavernState.uiSettings && tavernState.uiSettings.enableCharSprites);
+    layer.classList.toggle('sprite-hidden', !enabled);
+    if (!enabled) {
+      layer.innerHTML = '';
+      return;
+    }
+    layer.innerHTML = renderActiveCharacterSpriteInnerHtml(getActiveCard());
+  }
+
   function refreshBottomPopupsOnly() {
     const optEl = document.getElementById('options');
     if (optEl) {
@@ -9944,6 +10441,9 @@ code, pre {
     }
     const extEl = document.getElementById('extensionsMenu');
     if (extEl) {
+      if (uiRuntime.showExtensionsPopup) {
+        sortExtensionsMenuDeterministically();
+      }
       extEl.classList.toggle('tavern-popup-hidden', !uiRuntime.showExtensionsPopup);
       extEl.style.display = uiRuntime.showExtensionsPopup ? 'flex' : 'none';
     }
@@ -10345,6 +10845,15 @@ code, pre {
             ${isEditingThis ? `
               <textarea id="tavern-floor-edit-box-${idx}" class="edit_textarea" rows="8">${escapeHtmlSimple(currentRawText)}</textarea>
             ` : renderedHtml}
+            ${!isEditingThis && m.extra && Array.isArray(m.extra.images) && m.extra.images.length > 0 ? `
+              <div class="tavern-floor-attached-images" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                ${m.extra.images.map(imgRef => {
+                  const safeImg = resolveSafeAvatarUrl(imgRef, false);
+                  const vAttr = String(imgRef).startsWith('vault://') ? ` data-vault-ref="${escapeHtmlSimple(imgRef)}"` : '';
+                  return `<img src="${escapeHtmlSimple(safeImg)}"${vAttr} alt="附图" style="max-width:100%;max-height:240px;border-radius:10px;object-fit:contain;display:block;" />`;
+                }).join('')}
+              </div>
+            ` : ''}
           </div>
 
           ${hasTranslation ? `
@@ -10564,6 +11073,11 @@ code, pre {
               'getChatMessage',
               'setChatMessage',
               'setChatMessages',
+              'getVariables',
+              'insertOrAssignVariables',
+              'replaceVariables',
+              'updateVariablesWith',
+              'deleteVariable',
               'triggerSlash',
               'triggerSlashWithResult',
               '$',
@@ -10580,6 +11094,11 @@ code, pre {
               window.TavernHelper.getChatMessage,
               window.TavernHelper.setChatMessage,
               window.TavernHelper.setChatMessages,
+              window.getVariables,
+              window.insertOrAssignVariables,
+              window.replaceVariables,
+              window.updateVariablesWith,
+              window.deleteVariable,
               executeTavernSlashCommand,
               executeTavernSlashCommand,
               window.$,
@@ -10794,10 +11313,31 @@ code, pre {
         <div class="tavern-section-label">
           <span>提示词排序与开关列表 共${prompts.length}项</span>
           <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small" data-action="trigger-import-selective-prompts">挑入</button>
             <button type="button" class="tavern-btn small" data-action="add-custom-prompt-item">新增条目</button>
             <button type="button" class="tavern-btn small primary" data-action="save-active-openai-preset">保存</button>
           </div>
         </div>
+        ${Array.isArray(uiRuntime.selectiveImportPromptsList) ? `
+          <div style="margin-bottom:10px;padding:10px;border-radius:12px;background:#f4f5f9;border:1px solid rgba(195,200,218,0.9);">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;">
+              <span style="font-size:12px;font-weight:700;color:#333;">从 ${escapeHtmlSimple(uiRuntime.selectiveImportSourceName || '外部预设')} 挑选条目并入当前预设</span>
+              <div style="display:flex;gap:5px;">
+                <button type="button" class="tavern-btn small" data-action="selective-prompts-select-all">全选</button>
+                <button type="button" class="tavern-btn small primary" data-action="confirm-selective-prompts-import">合并</button>
+                <button type="button" class="tavern-btn small" data-action="cancel-selective-prompts-import">取消</button>
+              </div>
+            </div>
+            <div style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
+              ${uiRuntime.selectiveImportPromptsList.map((sp, spIdx) => `
+                <label class="tavern-check-row" style="padding:3px 4px;background:#fff;border-radius:8px;border:1px solid rgba(215,215,225,0.7);">
+                  <input type="checkbox" class="tavern-fixed-check selective-prompt-check" data-sp-idx="${spIdx}" ${sp._checked !== false ? 'checked' : ''} />
+                  <span style="font-size:12px;font-weight:600;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtmlSimple(stripUiEmojis(sp.name || sp.identifier || '提示词条目'))} · ${escapeHtmlSimple(sp.role || 'system')}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
 
         <div id="completion_prompt_manager_list">
           ${prompts.map((item, idx) => {
@@ -10816,6 +11356,7 @@ code, pre {
                   <div class="tavern-list-row-actions">
                     <button type="button" class="tavern-btn small" data-action="move-prompt-up" data-idx="${idx}">上移</button>
                     <button type="button" class="tavern-btn small" data-action="move-prompt-down" data-idx="${idx}">下移</button>
+                    ${!item.marker ? `<button type="button" class="tavern-btn small" data-action="copy-prompt-item" data-prompt-id="${item.identifier}">复制</button>` : ''}
                     ${!item.marker ? `<button type="button" class="tavern-btn small ${isEditingThis ? 'primary' : ''}" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">${isEditingThis ? '收起' : '编辑'}</button>` : ''}
                   </div>
                 </div>
@@ -10829,6 +11370,7 @@ code, pre {
                       <div class="tavern-field-group">
                         <label>条目名称</label>
                         <input type="text" class="tavern-input" id="edit-prompt-name" value="${escapeHtmlSimple(cleanTitle)}" />
+                        <div class="tavern-field-hint">列表里方便辨认的标题，不影响发给AI的实际内容</div>
                       </div>
                       <div class="tavern-field-group">
                         <label>发送角色</label>
@@ -10837,6 +11379,7 @@ code, pre {
                           <option value="user" ${item.role === 'user' ? 'selected' : ''}>用户 User</option>
                           <option value="assistant" ${item.role === 'assistant' ? 'selected' : ''}>助手 Assistant</option>
                         </select>
+                        <div class="tavern-field-hint">以谁的口吻发给AI，常规设定选系统，破限或预填选助手</div>
                       </div>
                       <div class="tavern-field-group">
                         <label>注入位置</label>
@@ -10844,10 +11387,12 @@ code, pre {
                           <option value="0" ${Number(item.injection_position) === 0 ? 'selected' : ''}>按顺序排列</option>
                           <option value="1" ${Number(item.injection_position) === 1 ? 'selected' : ''}>按深度插入</option>
                         </select>
+                        <div class="tavern-field-hint">按列表上下顺序排，或强行插进最近几层聊天记录中间</div>
                       </div>
                       <div class="tavern-field-group">
                         <label>注入深度</label>
                         <input type="number" class="tavern-input" id="edit-prompt-depth" value="${Number(item.injection_depth ?? 4)}" min="0" max="200" />
+                        <div class="tavern-field-hint">仅按深度插入时生效，填0插在最末尾，填4插在倒数第4层前</div>
                       </div>
                     </div>
                     <div class="tavern-field-group">
@@ -11005,6 +11550,7 @@ code, pre {
             </div>
           `).join('')}
         </div>
+        <div class="tavern-field-hint" style="margin-bottom:6px;">识别AI输出的思考标签并自动收纳进思考过程折叠框，避免思考草稿混入正文气泡</div>
         <label class="tavern-check-row">
           <input type="checkbox" data-fmt-bool="autoCollapseReasoning" ${fmt.autoCollapseReasoning !== false ? 'checked' : ''} />
           <span>默认折叠思维链推理过程</span>
@@ -11020,6 +11566,7 @@ code, pre {
         <div class="tavern-field-group" style="margin-top:6px;">
           <label>自定义停止词 逗号分隔</label>
           <input type="text" class="tavern-input" id="tavern-stop-strings-input" value="${escapeHtmlSimple((fmt.customStoppingStrings || []).join(', '))}" placeholder="例如: \nUser:, \n旅人:" />
+          <div class="tavern-field-hint">当AI生成遇到这些词时会立刻停笔，防止AI替你说话抢戏</div>
         </div>
       </div>
 
@@ -11028,18 +11575,22 @@ code, pre {
         <div class="tavern-field-group">
           <label>主系统提示词 Main System Prompt</label>
           <textarea class="tavern-textarea" rows="3" data-fmt-str="systemPrompt">${escapeHtmlSimple(fmt.systemPrompt || '')}</textarea>
+          <div class="tavern-field-hint">预设未单独指定主提示词时使用的兜底总规则</div>
         </div>
         <div class="tavern-field-group">
           <label>历史后置指令 Post-History Instructions</label>
           <textarea class="tavern-textarea" rows="3" data-fmt-str="postHistoryPrompt">${escapeHtmlSimple(fmt.postHistoryPrompt || '')}</textarea>
+          <div class="tavern-field-hint">放在所有聊天记录最末尾的强调指令，AI对这里的约束印象最深</div>
         </div>
         <div class="tavern-field-group">
           <label>帮写扮演提示词 Impersonation Prompt</label>
           <textarea class="tavern-textarea" rows="2" data-fmt-str="impersonationPrompt">${escapeHtmlSimple(fmt.impersonationPrompt || '')}</textarea>
+          <div class="tavern-field-hint">点击帮写玩家回复时发给AI的指令，让AI站在你的视角替你写台词</div>
         </div>
         <div class="tavern-field-group">
           <label>继续续写提示词 Continue Nudge</label>
           <input type="text" class="tavern-input" data-fmt-str="continueNudgePrompt" value="${escapeHtmlSimple(fmt.continueNudgePrompt || '')}" />
+          <div class="tavern-field-hint">点击继续续写时发给AI的衔接提示，催促AI接着上一句往下写</div>
         </div>
         <button type="button" class="tavern-btn primary" data-action="save-formatting-settings">保存格式化设置</button>
       </div>
@@ -11210,12 +11761,16 @@ code, pre {
       <div class="tavern-section-card" style="background:#f7f8fc;border-color:#cfd6ea;margin:4px 0 10px 0;">
         <div class="tavern-section-label">
           <span>编辑词条: ${escapeHtmlSimple(stripUiEmojis(entry.comment))}</span>
-          <button type="button" class="tavern-btn small" data-action="wb-close-entry-editor">收起</button>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="tavern-btn small ${uiRuntime.showWbEntryAdvanced ? 'primary' : ''}" data-action="toggle-wb-entry-adv">高级</button>
+            <button type="button" class="tavern-btn small" data-action="wb-close-entry-editor">收起</button>
+          </div>
         </div>
         <div class="tavern-grid-2">
           <div class="tavern-field-group">
             <label>词条备注标题</label>
             <input type="text" class="tavern-input" id="wb-edit-comment" value="${escapeHtmlSimple(stripUiEmojis(entry.comment || ''))}" />
+            <div class="tavern-field-hint">仅用于在列表中识别词条，不会发送给AI</div>
           </div>
           <div class="tavern-field-group">
             <label>触发模式</label>
@@ -11223,14 +11778,17 @@ code, pre {
               <option value="false" ${!entry.constant ? 'selected' : ''}>绿灯 关键词触发</option>
               <option value="true" ${entry.constant ? 'selected' : ''}>蓝灯 始终常驻</option>
             </select>
+            <div class="tavern-field-hint">蓝灯代表每次对话必定带上，绿灯代表聊到关键词才激活</div>
           </div>
           <div class="tavern-field-group">
             <label>主关键词 逗号分隔</label>
             <input type="text" class="tavern-input" id="wb-edit-keys" value="${escapeHtmlSimple((entry.keys || []).join(', '))}" />
+            <div class="tavern-field-hint">绿灯模式下，聊天中出现任意一个主关键词就会触发本词条</div>
           </div>
           <div class="tavern-field-group">
             <label>次要过滤词 逗号分隔</label>
             <input type="text" class="tavern-input" id="wb-edit-seckeys" value="${escapeHtmlSimple((entry.secondaryKeys || []).join(', '))}" />
+            <div class="tavern-field-hint">配合主关键词做二次筛选，留空则只需满足主关键词即可</div>
           </div>
           <div class="tavern-field-group">
             <label>次要词匹配逻辑</label>
@@ -11240,16 +11798,21 @@ code, pre {
               <option value="2" ${Number(entry.selectiveLogic) === 2 ? 'selected' : ''}>完全不包含</option>
               <option value="3" ${Number(entry.selectiveLogic) === 3 ? 'selected' : ''}>必须全部包含</option>
             </select>
+            <div class="tavern-field-hint">决定次要过滤词是必须同时出现还是用来排除特定情况</div>
           </div>
           <div class="tavern-field-group">
             <label>插入位置</label>
             <select class="tavern-select" id="wb-edit-pos">
               <option value="0" ${Number(entry.position) === 0 ? 'selected' : ''}>角色设定之前</option>
               <option value="1" ${Number(entry.position) === 1 ? 'selected' : ''}>角色设定之后</option>
-              <option value="2" ${Number(entry.position) === 2 ? 'selected' : ''}>对话示例之前</option>
-              <option value="3" ${Number(entry.position) === 3 ? 'selected' : ''}>对话示例之后</option>
+              <option value="2" ${Number(entry.position) === 2 ? 'selected' : ''}>作者注释之前</option>
+              <option value="3" ${Number(entry.position) === 3 ? 'selected' : ''}>作者注释之后</option>
               <option value="4" ${Number(entry.position) === 4 ? 'selected' : ''}>按聊天深度插入</option>
+              <option value="5" ${Number(entry.position) === 5 ? 'selected' : ''}>对话示例之前</option>
+              <option value="6" ${Number(entry.position) === 6 ? 'selected' : ''}>对话示例之后</option>
+              <option value="7" ${Number(entry.position) === 7 ? 'selected' : ''}>宏插槽 Outlet</option>
             </select>
+            <div class="tavern-field-hint">决定这条设定塞在发送给AI的哪个段落位置</div>
           </div>
           <div class="tavern-field-group">
             <label>深度与顺序</label>
@@ -11257,6 +11820,7 @@ code, pre {
               <input type="number" class="tavern-input" id="wb-edit-depth" value="${entry.depth ?? 4}" placeholder="深度" />
               <input type="number" class="tavern-input" id="wb-edit-order" value="${entry.order ?? 100}" placeholder="顺序" />
             </div>
+            <div class="tavern-field-hint">深度指插在倒数第几层消息前，顺序数字越小排得越靠前</div>
           </div>
           <div class="tavern-field-group">
             <label>触发概率与发送身份</label>
@@ -11268,8 +11832,43 @@ code, pre {
                 <option value="2" ${Number(entry.role) === 2 ? 'selected' : ''}>助手</option>
               </select>
             </div>
+            <div class="tavern-field-hint">概率填100代表百分之百触发，填50代表只有一半几率触发</div>
           </div>
         </div>
+        ${uiRuntime.showWbEntryAdvanced ? `
+          <div style="padding:10px;border-radius:10px;background:#eff2f9;border:1px solid rgba(195,202,222,0.9);margin-bottom:10px;">
+            <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:6px;">词条高级时效与互斥组设置 默认无需开启</div>
+            <div class="tavern-grid-3">
+              <div class="tavern-field-group">
+                <label>延迟楼层 Delay</label>
+                <input type="number" class="tavern-input" id="wb-edit-delay" value="${Number(entry.delay || 0)}" min="0" max="500" />
+                <div class="tavern-field-hint">聊满多少层之后才允许触发本词条，填0代表不延迟</div>
+              </div>
+              <div class="tavern-field-group">
+                <label>粘性持续 Sticky</label>
+                <input type="number" class="tavern-input" id="wb-edit-sticky" value="${Number(entry.sticky || 0)}" min="0" max="100" />
+                <div class="tavern-field-hint">一旦触发后，接下来连续几回合即使没提关键词也保持生效</div>
+              </div>
+              <div class="tavern-field-group">
+                <label>冷却间隔 Cooldown</label>
+                <input type="number" class="tavern-input" id="wb-edit-cooldown" value="${Number(entry.cooldown || 0)}" min="0" max="100" />
+                <div class="tavern-field-hint">触发结束后休息几回合不再重复触发，填0代表无冷却</div>
+              </div>
+            </div>
+            <div class="tavern-grid-2">
+              <div class="tavern-field-group" style="margin-bottom:0;">
+                <label>互斥分组名称 Group</label>
+                <input type="text" class="tavern-input" id="wb-edit-group" value="${escapeHtmlSimple(entry.group || '')}" placeholder="留空代表不分组" />
+                <div class="tavern-field-hint">填写相同组名的多个词条同时触发时，只挑一个生效</div>
+              </div>
+              <div class="tavern-field-group" style="margin-bottom:0;">
+                <label>同组权重 Weight</label>
+                <input type="number" class="tavern-input" id="wb-edit-group-weight" value="${Number(entry.groupWeight ?? 100)}" min="1" max="1000" />
+                <div class="tavern-field-hint">同组竞争时数字越大越容易被选中，默认填100</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
         <div class="tavern-field-group">
           <label>词条正文内容 Content</label>
           <textarea class="tavern-textarea" id="wb-edit-content" rows="5">${escapeHtmlSimple(entry.content || '')}</textarea>
@@ -11323,10 +11922,12 @@ code, pre {
           <input type="checkbox" data-ui-bool="enableThemeCustomCss" ${uiCfg.enableThemeCustomCss !== false ? 'checked' : ''} />
           <span>启用当前主题附加CSS样式美化</span>
         </label>
+        <div class="tavern-field-hint">关闭后将暂停加载下方自定义CSS代码，仅保留基础色彩</div>
         <label class="tavern-check-row" style="margin-top:6px;">
           <input type="checkbox" data-ui-bool="enableBaiBaiBookBeautify" ${uiCfg.enableBaiBaiBookBeautify ? 'checked' : ''} />
           <span>覆盖柏宝书界面美化</span>
         </label>
+        <div class="tavern-field-hint">开启后让柏宝书弹窗与酒馆当前日间或夜间柔和色调自动同步</div>
       </div>
 
       <div class="tavern-section-card">
@@ -11421,6 +12022,7 @@ code, pre {
             <span>开启聊天楼层懒加载</span>
           </label>
         </div>
+        <div class="tavern-field-hint">懒加载默认只渲染最近30层对话，大幅降低长篇聊天的手机内存占用</div>
       </div>
 
       <div class="tavern-section-card">
@@ -11571,16 +12173,63 @@ code, pre {
               <option value="contain" ${bg.fit === 'contain' ? 'selected' : ''}>完整居中 Contain</option>
               <option value="100% 100%" ${bg.fit === '100% 100%' ? 'selected' : ''}>拉伸填充 Stretch</option>
             </select>
+            <div class="tavern-field-hint">决定背景图是铺满全屏还是完整显示</div>
           </div>
           <div class="tavern-field-group">
             <label>背景模糊度: ${bg.blur ?? 0}px</label>
             <input type="number" class="tavern-input" data-bg-setting="blur" value="${bg.blur ?? 0}" min="0" max="40" />
+            <div class="tavern-field-hint">数值越大背景越朦胧，能突出聊天气泡文字</div>
           </div>
           <div class="tavern-field-group">
             <label>不透明度: ${bg.opacity ?? 1}</label>
             <input type="number" class="tavern-input" data-bg-setting="opacity" value="${bg.opacity ?? 1}" min="0" max="1" step="0.05" />
+            <div class="tavern-field-hint">填1为完全清晰，调小会让背景变淡融入底色</div>
           </div>
         </div>
+      </div>
+
+      <div class="tavern-section-card">
+        <div class="tavern-section-label">
+          <span>角色立绘悬浮显示与AI暗号生图</span>
+        </div>
+        <label class="tavern-check-row">
+          <input type="checkbox" data-ui-bool="enableCharSprites" ${tavernState.uiSettings?.enableCharSprites ? 'checked' : ''} />
+          <span>开启聊天右下角角色立绘显示</span>
+        </label>
+        <div class="tavern-field-hint" style="margin-bottom:8px;">默认关闭。开启后在聊天界面右下角按安全比例悬浮展示当前角色立绘或表情差分，自动适配分屏与小窗且不遮挡按钮</div>
+        ${tavernState.uiSettings?.enableCharSprites ? `
+          <div style="padding:8px 10px;border-radius:10px;background:#f4f5f9;border:1px solid rgba(200,205,220,0.85);margin-bottom:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;">
+              <span style="font-size:12px;font-weight:700;color:#333;">当前角色表情立绘差分 自动按台词情绪切换</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <select class="tavern-select" id="tavern-sprite-emotion-select" style="width:92px !important;min-height:32px !important;height:32px !important;padding:2px 18px 2px 6px !important;font-size:12px !important;">
+                  <option value="默认">默认</option>
+                  <option value="开心">开心</option>
+                  <option value="害羞">害羞</option>
+                  <option value="生气">生气</option>
+                  <option value="难过">难过</option>
+                </select>
+                <button type="button" class="tavern-btn small primary" data-action="trigger-upload-char-sprite">上传</button>
+              </div>
+            </div>
+            <div class="tavern-field-hint">未单独上传表情差分时默认显示角色卡立绘，上传的图片会自动存入Termux本地释放浏览器内存</div>
+            ${activeCard && cardHasSprites(activeCard) ? `
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                ${Object.entries(activeCard.sprites || {}).map(([emo, url]) => `
+                  <div style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;background:#fff;border:1px solid rgba(200,200,210,0.8);font-size:11.5px;">
+                    <span>${escapeHtmlSimple(emo)}</span>
+                    <button type="button" class="tavern-btn small danger" data-action="del-char-sprite-emo" data-emo="${escapeHtmlSimple(emo)}" style="min-height:20px !important;padding:0 5px !important;font-size:10px !important;">删</button>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+        <label class="tavern-check-row">
+          <input type="checkbox" data-ui-bool="enableNativeTagAutoImage" ${tavernState.uiSettings?.enableNativeTagAutoImage ? 'checked' : ''} />
+          <span>开启AI原生画图暗号自动调用NovelAI生图</span>
+        </label>
+        <div class="tavern-field-hint">默认关闭。开启后若角色卡让AI在回复中写出image_prompt等原生画图标签，系统会自动调用NovelAI生成插图并贴入气泡</div>
       </div>
 
       <div class="tavern-section-card">
@@ -11750,12 +12399,16 @@ code, pre {
                 <div class="tavern-section-card" style="background:#f7f8fc;border-color:#cfd6ea;">
                   <div class="tavern-section-label">
                     <span>编辑正则: ${escapeHtmlSimple(editingRx.scriptName)}</span>
-                    <button type="button" class="tavern-btn small" data-action="close-regex-editor">收起</button>
+                    <div style="display:flex;gap:6px;">
+                      <button type="button" class="tavern-btn small ${uiRuntime.showRxEditorAdvanced ? 'primary' : ''}" data-action="toggle-rx-editor-adv">高级</button>
+                      <button type="button" class="tavern-btn small" data-action="close-regex-editor">收起</button>
+                    </div>
                   </div>
                   <div class="tavern-grid-3">
                     <div class="tavern-field-group">
                       <label>脚本名称</label>
                       <input type="text" class="tavern-input" id="rx-edit-name" value="${escapeHtmlSimple(editingRx.scriptName)}" />
+                      <div class="tavern-field-hint">列表里显示的正则名字</div>
                     </div>
                     <div class="tavern-field-group">
                       <label>所属范围</label>
@@ -11764,6 +12417,7 @@ code, pre {
                         <option value="card" ${editingRx._scope === 'card' ? 'selected' : ''}>角色专属</option>
                         <option value="preset" ${editingRx._scope === 'preset' ? 'selected' : ''}>预设配套</option>
                       </select>
+                      <div class="tavern-field-hint">决定对所有角色生效还是仅对当前角色或预设生效</div>
                     </div>
                     <div class="tavern-field-group">
                       <label>生效时机</label>
@@ -11772,15 +12426,58 @@ code, pre {
                         <option value="prompt" ${editingRx.promptOnly && !editingRx.markdownOnly ? 'selected' : ''}>仅发送提示词生效</option>
                         <option value="both" ${editingRx.markdownOnly && editingRx.promptOnly ? 'selected' : ''}>画面与提示词同时生效</option>
                       </select>
+                      <div class="tavern-field-hint">美化状态栏选仅渲染画面，清洗发给AI的废话选仅提示词</div>
                     </div>
                   </div>
+                  ${uiRuntime.showRxEditorAdvanced ? (() => {
+                    const pl = Array.isArray(editingRx.placement) && editingRx.placement.length > 0 ? editingRx.placement.map(Number) : [1, 2];
+                    return `
+                      <div style="padding:10px;border-radius:10px;background:#eff2f9;border:1px solid rgba(195,202,222,0.9);margin-bottom:10px;">
+                        <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:4px;">正则作用位置与深度范围 默认无需改动</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+                          <label class="tavern-check-row"><input type="checkbox" class="tavern-fixed-check rx-edit-placement-check" value="1" ${pl.includes(1) ? 'checked' : ''} /><span>用户消息</span></label>
+                          <label class="tavern-check-row"><input type="checkbox" class="tavern-fixed-check rx-edit-placement-check" value="2" ${pl.includes(2) ? 'checked' : ''} /><span>AI回复</span></label>
+                          <label class="tavern-check-row"><input type="checkbox" class="tavern-fixed-check rx-edit-placement-check" value="3" ${pl.includes(3) ? 'checked' : ''} /><span>预设提示词</span></label>
+                          <label class="tavern-check-row"><input type="checkbox" class="tavern-fixed-check rx-edit-placement-check" value="4" ${pl.includes(4) ? 'checked' : ''} /><span>角色设定</span></label>
+                          <label class="tavern-check-row"><input type="checkbox" class="tavern-fixed-check rx-edit-placement-check" value="5" ${pl.includes(5) ? 'checked' : ''} /><span>世界书</span></label>
+                        </div>
+                        <div class="tavern-field-hint" style="margin-bottom:8px;">勾选哪些内容需要经过这条正则处理</div>
+                        <div class="tavern-grid-3">
+                          <div class="tavern-field-group">
+                            <label>最小生效深度 Min Depth</label>
+                            <input type="number" class="tavern-input" id="rx-edit-min-depth" value="${editingRx.minDepth !== null && editingRx.minDepth !== undefined ? editingRx.minDepth : ''}" placeholder="不限制" />
+                            <div class="tavern-field-hint">填0或留空代表最新一层消息也生效</div>
+                          </div>
+                          <div class="tavern-field-group">
+                            <label>最大生效深度 Max Depth</label>
+                            <input type="number" class="tavern-input" id="rx-edit-max-depth" value="${editingRx.maxDepth !== null && editingRx.maxDepth !== undefined ? editingRx.maxDepth : ''}" placeholder="不限制" />
+                            <div class="tavern-field-hint">超过该历史楼层深度的旧消息不再执行此正则</div>
+                          </div>
+                          <div class="tavern-field-group">
+                            <label>查找式宏替换</label>
+                            <select class="tavern-select" id="rx-edit-sub-macro">
+                              <option value="0" ${!Number(editingRx.substituteRegex) ? 'selected' : ''}>关闭</option>
+                              <option value="1" ${Number(editingRx.substituteRegex) === 1 ? 'selected' : ''}>开启</option>
+                            </select>
+                            <div class="tavern-field-hint">开启后查找正则里的user和char会自动换成真名</div>
+                          </div>
+                        </div>
+                        <div class="tavern-field-group" style="margin-bottom:0;">
+                          <label>捕获组剔除字符 Trim Strings 每行一个</label>
+                          <textarea class="tavern-textarea" id="rx-edit-trim-strings" rows="2" placeholder="在替换结果中自动删掉的冗余词，每行填一个">${escapeHtmlSimple(Array.isArray(editingRx.trimStrings) ? editingRx.trimStrings.join('\n') : '')}</textarea>
+                        </div>
+                      </div>
+                    `;
+                  })() : ''}
                   <div class="tavern-field-group">
                     <label>查找正则表达式 Find Regex</label>
                     <input type="text" class="tavern-input" id="rx-edit-find" value="${escapeHtmlSimple(editingRx.findRegex)}" style="font-family:monospace;" />
+                    <div class="tavern-field-hint">填写要寻找匹配的文本格式或标签规则</div>
                   </div>
                   <div class="tavern-field-group">
                     <label>替换内容或HTML模板 Replace String</label>
                     <textarea class="tavern-textarea" id="rx-edit-replace" rows="5" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(editingRx.replaceString)}</textarea>
+                    <div class="tavern-field-hint">匹配成功后替换成的新文字或状态栏HTML代码，留空则直接删掉匹配内容</div>
                   </div>
                   <div style="display:flex;justify-content:flex-end;gap:8px;">
                     <button type="button" class="tavern-btn small primary" data-action="save-regex-editor" data-rx-id="${editingRx.id}" data-scope="${editingRx._scope}">保存正则脚本</button>
@@ -11820,11 +12517,13 @@ code, pre {
               <div class="tavern-field-group">
                 <label>当前对话作者注释内容</label>
                 <textarea class="tavern-textarea" id="an-text-input" rows="3" placeholder="实时插入到指定聊天深度的文风或剧情引导...">${escapeHtmlSimple(an.text || '')}</textarea>
+                <div class="tavern-field-hint">适合写当前场景气氛或文风提醒，会始终插在最新几层对话附近提醒AI</div>
               </div>
               <div class="tavern-grid-3">
                 <div class="tavern-field-group">
                   <label>注入深度 Depth</label>
                   <input type="number" class="tavern-input" id="an-depth-input" value="${an.depth ?? 4}" min="0" max="100" />
+                  <div class="tavern-field-hint">插在倒数第几条聊天消息之前</div>
                 </div>
                 <div class="tavern-field-group">
                   <label>注入角色 Role</label>
@@ -11833,10 +12532,12 @@ code, pre {
                     <option value="user" ${an.role === 'user' ? 'selected' : ''}>User</option>
                     <option value="assistant" ${an.role === 'assistant' ? 'selected' : ''}>Assistant</option>
                   </select>
+                  <div class="tavern-field-hint">以系统还是用户的身份发送这条注释</div>
                 </div>
                 <div class="tavern-field-group">
                   <label>间隔步频</label>
                   <input type="number" class="tavern-input" id="an-freq-input" value="${an.frequency ?? 1}" min="1" max="50" />
+                  <div class="tavern-field-hint">填1代表每回合都发送，填3代表每聊3层发送一次</div>
                 </div>
               </div>
               <button type="button" class="tavern-btn small primary" data-action="save-author-note">保存作者注释</button>
@@ -11860,10 +12561,12 @@ code, pre {
                 <div class="tavern-field-group">
                   <label>摘要注入深度 Depth</label>
                   <input type="number" class="tavern-input" id="mem-depth-input" value="${mem.injectDepth ?? 2}" min="0" max="100" />
+                  <div class="tavern-field-hint">将前情提要插在倒数第几层消息之前发给AI</div>
                 </div>
                 <div class="tavern-field-group">
                   <label>自动总结间隔楼层</label>
                   <input type="number" class="tavern-input" id="mem-interval-input" value="${mem.autoInterval ?? 20}" min="5" max="200" />
+                  <div class="tavern-field-hint">每新增多少层对话触发一次回顾总结</div>
                 </div>
               </div>
               <div class="tavern-field-group">
@@ -11988,6 +12691,7 @@ code, pre {
               <option value="0" ${Number(activeP.position) !== 4 ? 'selected' : ''}>系统提示词区</option>
               <option value="4" ${Number(activeP.position) === 4 ? 'selected' : ''}>按聊天深度注入</option>
             </select>
+            <div class="tavern-field-hint">放系统提示词区代表在最开头介绍你，按聊天深度注入代表插在最新几层消息附近防遗忘</div>
           </div>
         </div>
         <div class="tavern-field-group">
@@ -12159,6 +12863,43 @@ code, pre {
     textarea.style.height = nextHeight + 'px';
   }
 
+  function cardHasSprites(card) {
+    return Boolean(card && card.sprites && typeof card.sprites === 'object' && Object.keys(card.sprites).length > 0);
+  }
+
+  async function maybeAutoGenerateNativeTagImageForFloor(mesIndex) {
+    try {
+      if (!tavernState.uiSettings || !tavernState.uiSettings.enableNativeTagAutoImage) return;
+      if (typeof window.generateNovelAiImage !== 'function') return;
+      const sess = getActiveChatSession();
+      const msg = sess && sess.messages && sess.messages[mesIndex];
+      if (!msg || msg.is_user) return;
+      const raw = String(msg.mes || '');
+      const tagMatch =
+        raw.match(/<(?:image_prompt|img_prompt|draw|novelai|nai_prompt)\b[^>]*>([\s\S]*?)<\/(?:image_prompt|img_prompt|draw|novelai|nai_prompt)>/i) ||
+        raw.match(/<(?:pic|image)\b[^>]*\bprompt=["']([^"']+)["'][^>]*\/?>/i) ||
+        raw.match(/\[(?:image|generate_image|draw)\s*:\s*([^\]]+)\]/i);
+      if (!tagMatch || !tagMatch[1]) return;
+      const promptTags = String(tagMatch[1]).trim();
+      if (!promptTags || (msg.extra && msg.extra._autoImageGeneratedForPrompt === promptTags)) return;
+      if (!msg.extra || typeof msg.extra !== 'object') msg.extra = {};
+      msg.extra._autoImageGeneratedForPrompt = promptTags;
+      showTavernToast('检测到画图标签，正在调用NovelAI生图...');
+      const imgUrl = await window.generateNovelAiImage(promptTags);
+      if (imgUrl) {
+        const storedUrl = await offloadImageToVault(imgUrl, 'tavern_autoimg_' + Date.now() + '.png');
+        const finalRef = storedUrl || imgUrl;
+        if (!Array.isArray(msg.extra.images)) msg.extra.images = [];
+        msg.extra.images.push(finalRef);
+        await saveTavernStore();
+        appendOrUpdateSingleFloorDom(mesIndex);
+        showTavernToast('已自动生成场景插图并附入当前楼层');
+      }
+    } catch (err) {
+      console.warn('Auto native tag image generation warning:', err);
+    }
+  }
+
   async function handleSendUserMessage() {
     if (uiRuntime.isGenerating) {
       if (uiRuntime.abortController) {
@@ -12169,15 +12910,16 @@ code, pre {
     const textarea = document.getElementById('send_textarea');
     if (!textarea) return;
     const rawInput = textarea.value.trim();
+    const pendingImgs = Array.isArray(uiRuntime.pendingChatImages) ? [...uiRuntime.pendingChatImages] : [];
     uiRuntime.editingFloorMesId = null;
     uiRuntime.editingFloorReasoning = false;
 
-    if (!rawInput) {
+    if (!rawInput && pendingImgs.length === 0) {
       await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
       return;
     }
 
-    if (rawInput.startsWith('/')) {
+    if (rawInput.startsWith('/') && pendingImgs.length === 0) {
       textarea.value = '';
       autoResizeTavernSendTextarea(textarea);
       await executeTavernSlashCommand(rawInput);
@@ -12186,9 +12928,12 @@ code, pre {
 
     textarea.value = '';
     autoResizeTavernSendTextarea(textarea);
+    uiRuntime.pendingChatImages = [];
+    refreshChatAttachPreviewOnly();
     const sess = getActiveChatSession();
     const tokenCnt = estimateTokens(rawInput);
     const nowTs = Date.now();
+    const attachedRefs = pendingImgs.map(x => x.vaultUrl || x.apiDataUrl || x.previewUrl).filter(Boolean);
     const userMsg = {
       mesid: sess.messages.length,
       name: getUserDisplayName(),
@@ -12201,7 +12946,8 @@ code, pre {
       swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: tokenCnt }],
       reasoning: '',
       gen_time: '',
-      token_count: tokenCnt
+      token_count: tokenCnt,
+      extra: attachedRefs.length > 0 ? { images: attachedRefs } : {}
     };
     const chatElBeforeSend = document.getElementById('chat');
     const wasNearBottomBeforeSend = isTavernChatNearBottom(chatElBeforeSend, 85);
@@ -12882,7 +13628,10 @@ code, pre {
         if (tavernState.formatting?.autoTranslateIncoming) {
           translateTavernFloor(newFloorIdx, true);
         }
+        updateCharacterSpriteLayerOnly();
+        maybeAutoGenerateNativeTagImageForFloor(newFloorIdx);
       }
+      updateCharacterSpriteLayerOnly();
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_ENDED, genType);
     } catch (err) {
       if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
@@ -13585,6 +14334,20 @@ code, pre {
         return;
       }
 
+      if (action === 'trigger-chat-attach-image') {
+        document.getElementById('tavern-file-chat-attach')?.click();
+        return;
+      }
+
+      if (action === 'remove-chat-attach-image') {
+        const idx = Number(actionEl.getAttribute('data-idx'));
+        if (Array.isArray(uiRuntime.pendingChatImages) && idx >= 0 && idx < uiRuntime.pendingChatImages.length) {
+          uiRuntime.pendingChatImages.splice(idx, 1);
+          refreshChatAttachPreviewOnly();
+        }
+        return;
+      }
+
       if (action === 'send-message') {
         await handleSendUserMessage();
         return;
@@ -14115,6 +14878,74 @@ code, pre {
         }
         return;
       }
+      if (action === 'copy-prompt-item') {
+        const pid = actionEl.getAttribute('data-prompt-id');
+        const preset = getActivePreset();
+        const list = preset.prompts || [];
+        const idx = list.findIndex(p => p && p.identifier === pid);
+        if (idx >= 0) {
+          const orig = list[idx];
+          const cloned = JSON.parse(JSON.stringify(orig));
+          cloned.identifier = 'custom_copy_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+          cloned.name = (orig.name || orig.identifier || '提示词') + ' 副本';
+          cloned.marker = false;
+          list.splice(idx + 1, 0, cloned);
+          ensurePresetHasPromptOrder(preset);
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已复制条目: ' + cloned.name);
+        }
+        return;
+      }
+      if (action === 'trigger-import-selective-prompts') {
+        document.getElementById('tavern-file-selective-prompts')?.click();
+        return;
+      }
+      if (action === 'selective-prompts-select-all') {
+        if (Array.isArray(uiRuntime.selectiveImportPromptsList)) {
+          const allChecked = uiRuntime.selectiveImportPromptsList.every(x => x._checked !== false);
+          uiRuntime.selectiveImportPromptsList.forEach(x => { x._checked = !allChecked; });
+          refreshOpenDrawerOnly();
+        }
+        return;
+      }
+      if (action === 'cancel-selective-prompts-import') {
+        uiRuntime.selectiveImportPromptsList = null;
+        uiRuntime.selectiveImportSourceName = '';
+        refreshOpenDrawerOnly();
+        return;
+      }
+      if (action === 'confirm-selective-prompts-import') {
+        const list = Array.isArray(uiRuntime.selectiveImportPromptsList) ? uiRuntime.selectiveImportPromptsList : [];
+        const checks = document.querySelectorAll('.selective-prompt-check');
+        checks.forEach(ch => {
+          const i = Number(ch.getAttribute('data-sp-idx'));
+          if (list[i]) list[i]._checked = Boolean(ch.checked);
+        });
+        const chosen = list.filter(x => x && x._checked !== false);
+        const preset = getActivePreset();
+        if (chosen.length > 0 && preset) {
+          if (!Array.isArray(preset.prompts)) preset.prompts = [];
+          chosen.forEach((item, idx) => {
+            const copy = JSON.parse(JSON.stringify(item));
+            delete copy._checked;
+            if (!copy.identifier || preset.prompts.some(p => p.identifier === copy.identifier)) {
+              copy.identifier = 'imported_' + Date.now() + '_' + idx;
+            }
+            copy.marker = false;
+            preset.prompts.push(copy);
+          });
+          ensurePresetHasPromptOrder(preset);
+          uiRuntime.selectiveImportPromptsList = null;
+          uiRuntime.selectiveImportSourceName = '';
+          await saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已挑入 ' + chosen.length + ' 条提示词至当前预设');
+        } else {
+          showTavernToast('请至少勾选一条要并入的提示词');
+        }
+        return;
+      }
       if (action === 'add-custom-prompt-item') {
         const preset = getActivePreset();
         const newId = 'custom_' + Date.now();
@@ -14487,6 +15318,11 @@ code, pre {
         refreshOpenDrawerOnly();
         return;
       }
+      if (action === 'toggle-wb-entry-adv') {
+        uiRuntime.showWbEntryAdvanced = !uiRuntime.showWbEntryAdvanced;
+        refreshOpenDrawerOnly();
+        return;
+      }
       if (action === 'wb-close-entry-editor') {
         uiRuntime.editingWorldEntryUid = null;
         refreshOpenDrawerOnly();
@@ -14509,6 +15345,16 @@ code, pre {
           entry.probability = Number(document.getElementById('wb-edit-prob')?.value || 100);
           entry.role = Number(document.getElementById('wb-edit-role')?.value || 0);
           entry.content = document.getElementById('wb-edit-content')?.value || '';
+          const delayEl = document.getElementById('wb-edit-delay');
+          if (delayEl) entry.delay = Math.max(0, Number(delayEl.value || 0));
+          const stickyEl = document.getElementById('wb-edit-sticky');
+          if (stickyEl) entry.sticky = Math.max(0, Number(stickyEl.value || 0));
+          const cooldownEl = document.getElementById('wb-edit-cooldown');
+          if (cooldownEl) entry.cooldown = Math.max(0, Number(cooldownEl.value || 0));
+          const groupEl = document.getElementById('wb-edit-group');
+          if (groupEl) entry.group = groupEl.value.trim();
+          const groupWeightEl = document.getElementById('wb-edit-group-weight');
+          if (groupWeightEl) entry.groupWeight = Math.max(1, Number(groupWeightEl.value || 100));
           uiRuntime.editingWorldEntryUid = null;
           await saveTavernStore();
           refreshOpenDrawerOnly();
@@ -14654,6 +15500,22 @@ code, pre {
           updateTavernBackgroundLayerOnly();
           refreshOpenDrawerOnly();
           showTavernToast('已切换背景图');
+        }
+        return;
+      }
+      if (action === 'trigger-upload-char-sprite') {
+        document.getElementById('tavern-file-char-sprite')?.click();
+        return;
+      }
+      if (action === 'del-char-sprite-emo') {
+        const emo = actionEl.getAttribute('data-emo');
+        const card = getActiveCard();
+        if (card && card.sprites && emo && card.sprites[emo]) {
+          delete card.sprites[emo];
+          await saveTavernStore();
+          updateCharacterSpriteLayerOnly();
+          refreshOpenDrawerOnly();
+          showTavernToast('已移除 ' + emo + ' 表情立绘');
         }
         return;
       }
@@ -14818,6 +15680,11 @@ code, pre {
         refreshOpenDrawerOnly();
         return;
       }
+      if (action === 'toggle-rx-editor-adv') {
+        uiRuntime.showRxEditorAdvanced = !uiRuntime.showRxEditorAdvanced;
+        refreshOpenDrawerOnly();
+        return;
+      }
       if (action === 'close-regex-editor') {
         uiRuntime.editingRegexId = null;
         refreshOpenDrawerOnly();
@@ -14851,6 +15718,32 @@ code, pre {
           const mode = document.getElementById('rx-edit-mode')?.value || 'display';
           item.markdownOnly = mode === 'display' || mode === 'both';
           item.promptOnly = mode === 'prompt' || mode === 'both';
+          const plChecks = document.querySelectorAll('.rx-edit-placement-check');
+          if (plChecks && plChecks.length > 0) {
+            const nextPl = [];
+            plChecks.forEach(ch => {
+              if (ch.checked) nextPl.push(Number(ch.value));
+            });
+            item.placement = nextPl.length > 0 ? nextPl : [1, 2];
+          }
+          const minDEl = document.getElementById('rx-edit-min-depth');
+          if (minDEl) {
+            const v = minDEl.value.trim();
+            item.minDepth = v === '' ? null : Number(v);
+          }
+          const maxDEl = document.getElementById('rx-edit-max-depth');
+          if (maxDEl) {
+            const v = maxDEl.value.trim();
+            item.maxDepth = v === '' ? null : Number(v);
+          }
+          const subEl = document.getElementById('rx-edit-sub-macro');
+          if (subEl) {
+            item.substituteRegex = Number(subEl.value || 0);
+          }
+          const trimEl = document.getElementById('rx-edit-trim-strings');
+          if (trimEl) {
+            item.trimStrings = trimEl.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+          }
           item.scope = newScope;
           if (newScope !== oldScope) {
             oldList.splice(itemIdx, 1);
@@ -15496,7 +16389,12 @@ code, pre {
         tavernState.uiSettings[k] = Boolean(target.checked);
         await saveTavernStore();
         applyActiveTavernTheme();
-        if (k !== 'enableBaiBaiBookBeautify') {
+        if (k === 'enableCharSprites') {
+          updateCharacterSpriteLayerOnly();
+          refreshOpenDrawerOnly();
+        } else if (k === 'enableNativeTagAutoImage') {
+          refreshOpenDrawerOnly();
+        } else if (k !== 'enableBaiBaiBookBeautify') {
           renderTavernChatFloors(false);
         }
         return;
@@ -15542,6 +16440,67 @@ code, pre {
       }
       if (target.id === 'tavern-file-presets' && target.files?.length) {
         await handleBatchImportPresets(Array.from(target.files));
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-selective-prompts' && target.files?.[0]) {
+        try {
+          const f = target.files[0];
+          const raw = JSON.parse(await f.text());
+          const parsed = parsePresetFromRaw(raw, f.name);
+          const candidateItems = (parsed.prompts || []).filter(p => p && !p.marker && p.content && String(p.content).trim());
+          if (candidateItems.length > 0) {
+            uiRuntime.selectiveImportPromptsList = candidateItems.map(p => ({ ...p, _checked: true }));
+            uiRuntime.selectiveImportSourceName = parsed.name || f.name.replace(/\.json$/i, '');
+            refreshOpenDrawerOnly();
+            showTavernToast('已读取 ' + candidateItems.length + ' 条提示词，请勾选后点击合并');
+          } else {
+            showTavernToast('该文件中未找到可挑入的自定义提示词条目');
+          }
+        } catch (err) {
+          showTavernToast('读取预设文件失败: ' + (err.message || 'JSON格式错误'));
+        }
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-chat-attach' && target.files?.length) {
+        const files = Array.from(target.files);
+        if (!Array.isArray(uiRuntime.pendingChatImages)) uiRuntime.pendingChatImages = [];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const dataUrl = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(f);
+          });
+          const vaultUrl = await offloadImageToVault(f, 'tavern_chat_img_' + Date.now() + '_' + i + '.png');
+          if (dataUrl || vaultUrl) {
+            uiRuntime.pendingChatImages.push({
+              vaultUrl: vaultUrl || dataUrl,
+              apiDataUrl: dataUrl || vaultUrl,
+              previewUrl: dataUrl || vaultUrl
+            });
+          }
+        }
+        refreshChatAttachPreviewOnly();
+        showTavernToast('已添加 ' + files.length + ' 张图片附件');
+        target.value = '';
+        return;
+      }
+      if (target.id === 'tavern-file-char-sprite' && target.files?.[0]) {
+        const f = target.files[0];
+        const emo = document.getElementById('tavern-sprite-emotion-select')?.value || '默认';
+        const url = await offloadImageToVault(f, 'tavern_sprite_' + Date.now() + '.png');
+        const card = getActiveCard();
+        if (url && card) {
+          if (!card.sprites || typeof card.sprites !== 'object') card.sprites = {};
+          card.sprites[emo] = url;
+          await saveTavernStore();
+          updateCharacterSpriteLayerOnly();
+          refreshOpenDrawerOnly();
+          showTavernToast('已上传并保存 ' + emo + ' 表情立绘至Termux本地');
+        }
         target.value = '';
         return;
       }
