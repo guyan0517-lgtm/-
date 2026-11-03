@@ -15737,14 +15737,123 @@ code, pre {
     tavernEventSource.emit(TAVERN_EVENT_TYPES.APP_READY);
   };
 
+  function findTavernCardByQuery(rawQuery) {
+    const cards = Array.isArray(tavernState.cards) ? tavernState.cards : [];
+    const activeCard = getActiveCard();
+    const q = String(rawQuery || '')
+      .replace(/^(tavern_card|tavern|card|chat|角色卡|酒馆角色卡|酒馆)[:：]?/i, '')
+      .replace(/^[\[【「『《"']+|[】\]」』》"']+$/g, '')
+      .trim();
+    if (!q || /^(当前|当前角色|当前角色卡|当前卡|默认|酒馆|sillytavern)$/i.test(q)) {
+      return activeCard;
+    }
+    const exact = cards.find(c => c && (String(c.id) === q || String(c.name || '').trim() === q));
+    if (exact) return exact;
+    const lowerQ = q.toLowerCase();
+    const partial = cards.find(c => {
+      if (!c || !c.name) return false;
+      const n = String(c.name).trim().toLowerCase();
+      return n.includes(lowerQ) || lowerQ.includes(n);
+    });
+    return partial || activeCard;
+  }
+
+  function extractReasoningFromRawMes(rawMes, existingReasoning) {
+    const parts = [];
+    if (existingReasoning && String(existingReasoning).trim()) {
+      parts.push(String(existingReasoning).trim());
+    }
+    const text = String(rawMes || '');
+    if (text) {
+      const pairs = getActiveReasoningTagPairs();
+      for (const pair of pairs) {
+        const startTag = String(pair?.start || '').trim();
+        const endTag = String(pair?.end || '').trim();
+        if (startTag && endTag) {
+          const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const matches = text.match(new RegExp(escStart + '([\\s\\S]*?)' + escEnd, 'gi'));
+          if (matches) {
+            matches.forEach(m => {
+              const inner = m.replace(new RegExp('^' + escStart + '|' + escEnd + '$', 'gi'), '').trim();
+              if (inner && !parts.includes(inner)) parts.push(inner);
+            });
+          }
+        }
+      }
+      const stdMatches = text.match(/<(?:think|thinking|thought|reasoning|cot)>([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot)>/gi);
+      if (stdMatches) {
+        stdMatches.forEach(m => {
+          const inner = m.replace(/^<(?:think|thinking|thought|reasoning|cot)>|<\/(?:think|thinking|thought|reasoning|cot)>$/gi, '').trim();
+          if (inner && !parts.includes(inner)) parts.push(inner);
+        });
+      }
+    }
+    return parts.join('\n').slice(0, 1200);
+  }
+
+  window.openTavernCardByNameForMashu = async function (rawCardQuery) {
+    await window.openTavernApp();
+    const targetCard = findTavernCardByQuery(rawCardQuery);
+    if (targetCard && targetCard.id !== tavernState.activeCardId) {
+      tavernState.activeCardId = targetCard.id;
+      ensureActiveCardChatInitialized(targetCard);
+      await saveTavernStore();
+      renderTavernShell();
+    }
+    return targetCard;
+  };
+
+  window.getTavernQuickOverviewForMashu = function () {
+    try {
+      const activeCard = getActiveCard();
+      const activePreset = getActivePreset();
+      const cards = (tavernState.cards || []).map((c, idx) => {
+        const sess = tavernState.chatsByCardId && tavernState.chatsByCardId[c.id];
+        const msgs = Array.isArray(sess?.messages) ? sess.messages : [];
+        const wb = (tavernState.worldBooks || []).find(w => w && w.id === c.worldBookId);
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const lastPreview = lastMsg ? stripHistoricalReasoningFromText(lastMsg.mes || '').replace(/\s+/g, ' ').slice(0, 60) : '';
+        return `${idx + 1}. 「${c.name}」[ID=${c.id}${c.id === activeCard?.id ? ', 当前选中' : ''}, 聊天${msgs.length}层, 局部正则${(c.regexScripts || []).length}条, 绑定世界书:${wb ? wb.name : '无'}${lastPreview ? ' | 最新聊天:"' + lastPreview + '"' : ''}]`;
+      });
+      const wbs = (tavernState.worldBooks || []).map((w, idx) =>
+        `${idx + 1}. 「${w.name}」[ID=${w.id}, ${w.enabled ? '全局启用' : '未全局启用'}, 共${(w.entries || []).length}条词条]`
+      );
+      const presets = (tavernState.presets || []).map((p, idx) =>
+        `${idx + 1}. 「${p.name}」[ID=${p.id}${p.id === activePreset?.id ? ', 当前启用' : ''}, 提示词${(p.prompts || []).length}项, 正则${(p.regexScripts || []).length}条]`
+      );
+      const globalRx = (tavernState.globalRegexScripts || []).map(r => `${r.scriptName}${r.disabled ? '[关]' : '[开]'}`);
+      const cotPairs = getActiveReasoningTagPairs().map(p => `${p.start}...${p.end}`).join(' / ');
+      return [
+        `【酒馆SillyTavern实时总览（连接填 [申请连接:tavern_card:角色卡或世界书名:让我看看] 或调鼠标 "target": "tavern:角色卡名"）】`,
+        `- 角色卡列表（共${cards.length}张）：\n  ` + (cards.join('\n  ') || '暂无角色卡'),
+        `- 世界书列表（共${wbs.length}本）：` + (wbs.join('；') || '暂无世界书'),
+        `- 预设列表（共${presets.length}个）：` + (presets.join('；') || '暂无预设'),
+        `- 全局正则（共${globalRx.length}条）：` + (globalRx.join('、') || '暂无全局正则'),
+        `- 当前酒馆思维链标签：${cotPairs || '<think>...</think>'}`
+      ].join('\n');
+    } catch (e) {
+      return '酒馆模块就绪';
+    }
+  };
+
   window.getTavernLiveInspectionData = function (targetType, targetIdOrName) {
     const activeCard = getActiveCard();
     const activePreset = getActivePreset();
-    const activeSess = getActiveChatSession();
+    const q = String(targetIdOrName || '').trim();
+    const targetCard = findTavernCardByQuery(q) || activeCard;
+    if (targetCard) {
+      ensureActiveCardChatInitialized(targetCard);
+    }
+    const targetSess = (targetCard && tavernState.chatsByCardId && tavernState.chatsByCardId[targetCard.id]) || getActiveChatSession();
+    const allMsgs = Array.isArray(targetSess?.messages) ? targetSess.messages : [];
+
     const cardsSummary = (tavernState.cards || []).map(c => ({
       id: c.id,
       name: c.name,
       isActive: c.id === activeCard?.id,
+      isInspectedTarget: c.id === targetCard?.id,
+      floorCount: Array.isArray(tavernState.chatsByCardId?.[c.id]?.messages) ? tavernState.chatsByCardId[c.id].messages.length : 0,
       greetingCount: 1 + (c.alternate_greetings?.length || 0),
       regexCount: (c.regexScripts || []).length,
       worldBookId: c.worldBookId || ''
@@ -15754,6 +15863,7 @@ code, pre {
       name: p.name,
       isActive: p.id === activePreset?.id,
       promptCount: (p.prompts || []).length,
+      regexCount: (p.regexScripts || []).length,
       stream: Boolean(p.stream_openai)
     }));
     const worldBooksSummary = (tavernState.worldBooks || []).map(wb => ({
@@ -15763,57 +15873,415 @@ code, pre {
       entryCount: (wb.entries || []).length
     }));
 
-    let detailText = '';
-    if (targetType === 'tavern_card') {
-      const card = (tavernState.cards || []).find(c => c.id === targetIdOrName || c.name === targetIdOrName) || activeCard;
-      if (card) {
-        const wb = (tavernState.worldBooks || []).find(b => b.id === card.worldBookId);
-        detailText = [
-          `【已授权读取的酒馆角色卡: ${card.name}】`,
-          `- 角色描述: ${(card.description || '无').slice(0, 1200)}`,
-          `- 性格特征: ${(card.personality || '无').slice(0, 400)}`,
-          `- 场景设定: ${(card.scenario || '无').slice(0, 500)}`,
-          `- 作者注释与说明: ${(card.creator_notes || '无').slice(0, 600)}`,
-          `- 主开场白摘要: ${(card.first_mes || '无').slice(0, 800)}`,
-          `- 额外多开场白数: ${(card.alternate_greetings || []).length}个`,
-          `- 专属正则脚本: ${(card.regexScripts || []).map(r => r.scriptName + (r.disabled ? '[已关]' : '[已开]')).join('、') || '无'}`,
-          `- 绑定世界书: ${wb ? `${wb.name} 共${(wb.entries || []).length}条词条` : '未单独绑定'}`,
-          `- 当前聊天记录层数: ${(activeSess?.messages || []).length}层`
-        ].join('\n');
-      }
-    } else if (targetType === 'tavern_preset') {
-      const p = (tavernState.presets || []).find(x => x.id === targetIdOrName || x.name === targetIdOrName) || activePreset;
-      if (p) {
-        const enabledItems = (p.prompts || []).filter(i => i.enabled).map(i => stripUiEmojis(i.name || i.identifier));
-        const disabledItems = (p.prompts || []).filter(i => !i.enabled).map(i => stripUiEmojis(i.name || i.identifier));
-        detailText = [
-          `【已授权读取的酒馆预设: ${p.name}】`,
-          `- 流式输出: ${p.stream_openai ? '已开启' : '未开启'} | 温度:${p.temperature} | 最大上下文:${p.openai_max_context} | 最大回复:${p.openai_max_tokens}`,
-          `- 已启用条目(${enabledItems.length}项): ${enabledItems.slice(0, 35).join('、')}`,
-          `- 未启用条目(${disabledItems.length}项): ${disabledItems.slice(0, 25).join('、')}`
-        ].join('\n');
-      }
-    } else if (targetType === 'tavern_worldbook') {
-      const wb = (tavernState.worldBooks || []).find(x => x.id === targetIdOrName || x.name === targetIdOrName) || (tavernState.worldBooks || [])[0];
-      if (wb) {
-        const entryLines = (wb.entries || []).slice(0, 40).map(e => `${stripUiEmojis(e.comment || e.uid)}[${e.disable ? '关' : (e.constant ? '蓝灯常驻' : '绿灯关键:' + (e.keys || []).slice(0, 3).join(','))}]`);
-        detailText = [
-          `【已授权读取的酒馆世界书: ${wb.name}】`,
-          `- 状态: ${wb.enabled ? '全局启用' : '未全局启用'} | 扫描深度:${wb.scanDepth || 4} | 词条总数:${(wb.entries || []).length}`,
-          `- 词条列表摘要: ${entryLines.join('；')}`
-        ].join('\n');
-      }
+    const cardDetail = targetCard ? {
+      id: targetCard.id,
+      name: targetCard.name,
+      description: String(targetCard.description || '').slice(0, 2600),
+      personality: String(targetCard.personality || '').slice(0, 900),
+      scenario: String(targetCard.scenario || '').slice(0, 1000),
+      creator_notes: String(targetCard.creator_notes || '').slice(0, 800),
+      system_prompt: String(targetCard.system_prompt || '').slice(0, 1000),
+      post_history_instructions: String(targetCard.post_history_instructions || '').slice(0, 1000),
+      first_mes: String(targetCard.first_mes || '').slice(0, 1500),
+      mes_example: String(targetCard.mes_example || '').slice(0, 1000),
+      alternate_greetings: (targetCard.alternate_greetings || []).slice(0, 10).map((g, idx) => ({
+        index: idx + 1,
+        preview: String(g || '').slice(0, 500)
+      })),
+      boundWorldBookId: targetCard.worldBookId || ''
+    } : null;
+
+    const recentChatFloors = allMsgs.slice(-35).map((m, idx) => {
+      const floorNum = Math.max(0, allMsgs.length - 35) + idx;
+      const cleanBody = stripHistoricalReasoningFromText(m.mes || '') || String(m.mes || '');
+      const floorCot = extractReasoningFromRawMes(m.mes, m.reasoning);
+      return {
+        floor: floorNum,
+        mesid: m.mesid ?? floorNum,
+        sender: m.name || (m.is_user ? getUserDisplayName() : (targetCard?.name || '角色')),
+        role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
+        swipeIndex: m.swipe_id || 0,
+        swipeTotal: Array.isArray(m.swipes) ? m.swipes.length : 1,
+        thoughtChain: floorCot || undefined,
+        content: cleanBody.slice(0, 1100)
+      };
+    });
+
+    const cardRegexList = (targetCard?.regexScripts || []).map(r => ({
+      id: r.id,
+      scope: 'card',
+      scriptName: r.scriptName,
+      disabled: Boolean(r.disabled),
+      findRegex: String(r.findRegex || '').slice(0, 400),
+      replaceString: String(r.replaceString || '').slice(0, 600),
+      placement: r.placement
+    }));
+    const presetRegexList = (activePreset?.regexScripts || []).map(r => ({
+      id: r.id,
+      scope: 'preset',
+      scriptName: r.scriptName,
+      disabled: Boolean(r.disabled),
+      findRegex: String(r.findRegex || '').slice(0, 400),
+      replaceString: String(r.replaceString || '').slice(0, 600),
+      placement: r.placement
+    }));
+    const globalRegexList = (tavernState.globalRegexScripts || []).map(r => ({
+      id: r.id,
+      scope: 'global',
+      scriptName: r.scriptName,
+      disabled: Boolean(r.disabled),
+      findRegex: String(r.findRegex || '').slice(0, 400),
+      replaceString: String(r.replaceString || '').slice(0, 600),
+      placement: r.placement
+    }));
+
+    const matchedWbByQuery = q
+      ? (tavernState.worldBooks || []).find(w => w && (w.id === q || w.name === q || String(w.name || '').includes(q)))
+      : null;
+    const boundWb = targetCard?.worldBookId
+      ? (tavernState.worldBooks || []).find(w => w && w.id === targetCard.worldBookId)
+      : null;
+    const relevantWbs = [];
+    const pushWbDetail = (wb, relationLabel) => {
+      if (!wb || relevantWbs.some(x => x.id === wb.id)) return;
+      relevantWbs.push({
+        id: wb.id,
+        name: wb.name,
+        relation: relationLabel,
+        enabled: Boolean(wb.enabled),
+        scanDepth: wb.scanDepth || 4,
+        entryCount: (wb.entries || []).length,
+        entries: (wb.entries || []).slice(0, 60).map(e => ({
+          uid: e.uid,
+          comment: stripUiEmojis(e.comment || ('词条#' + e.uid)),
+          lightMode: e.disable ? '已关闭' : (e.constant ? '蓝灯常驻' : '绿灯关键词触发'),
+          disable: Boolean(e.disable),
+          constant: Boolean(e.constant),
+          keys: Array.isArray(e.keys) ? e.keys : [],
+          order: e.order ?? 100,
+          depth: e.depth ?? 4,
+          position: e.position ?? 0,
+          content: String(e.content || '').slice(0, 750)
+        }))
+      });
+    };
+    if (matchedWbByQuery) pushWbDetail(matchedWbByQuery, '指定查看的世界书');
+    if (boundWb) pushWbDetail(boundWb, '当前角色卡绑定世界书');
+    (tavernState.worldBooks || []).filter(w => w && w.enabled).forEach(w => pushWbDetail(w, '全局启用世界书'));
+    if (relevantWbs.length === 0 && (tavernState.worldBooks || []).length > 0) {
+      pushWbDetail(tavernState.worldBooks[0], '酒馆世界书');
     }
+
+    const matchedPresetByQuery = q
+      ? (tavernState.presets || []).find(p => p && (p.id === q || p.name === q || String(p.name || '').includes(q)))
+      : null;
+    const inspectPreset = matchedPresetByQuery || activePreset;
+    const presetAndCoTDetail = inspectPreset ? {
+      id: inspectPreset.id,
+      name: inspectPreset.name,
+      stream_openai: Boolean(inspectPreset.stream_openai),
+      temperature: inspectPreset.temperature,
+      top_p: inspectPreset.top_p,
+      openai_max_context: inspectPreset.openai_max_context,
+      openai_max_tokens: inspectPreset.openai_max_tokens,
+      reasoningTagPairs: getActiveReasoningTagPairs(),
+      prompts: (inspectPreset.prompts || []).map(p => ({
+        identifier: p.identifier,
+        name: stripUiEmojis(p.name || p.identifier),
+        enabled: Boolean(p.enabled),
+        role: p.role || 'system',
+        marker: Boolean(p.marker),
+        injection_position: p.injection_position ?? 0,
+        injection_depth: p.injection_depth ?? 4,
+        content: p.marker ? '[系统结构占位符]' : String(p.content || '').slice(0, 650)
+      }))
+    } : null;
 
     return {
       activeDrawerKey: uiRuntime.openDrawerKey,
       activeCardName: activeCard ? activeCard.name : '未选择',
+      inspectedCardName: targetCard ? targetCard.name : '未选择',
       activePresetName: activePreset ? activePreset.name : '标准酒馆预设',
       cardsSummary,
       presetsSummary,
       worldBooksSummary,
-      detailText
+      cardDetail,
+      chatHistoryTotalFloors: allMsgs.length,
+      chatHistoryFloors: recentChatFloors,
+      worldBooksDetail: relevantWbs,
+      regexScriptsDetail: {
+        cardRegexes: cardRegexList,
+        presetRegexes: presetRegexList,
+        globalRegexes: globalRegexList
+      },
+      presetAndCoTDetail
     };
+  };
+
+  window.applyTavernMashuActions = async function (actions) {
+    if (!Array.isArray(actions) || actions.length === 0) return [];
+    const logs = [];
+    for (const rawAct of actions) {
+      if (!rawAct || typeof rawAct !== 'object') continue;
+      const actType = String(rawAct.action || rawAct.type || '').toLowerCase().trim();
+      const targetCard = findTavernCardByQuery(rawAct.cardName || rawAct.cardId || rawAct.target || '');
+
+      if (actType === 'update_card' || actType === 'edit_card' || actType === 'modify_card') {
+        if (!targetCard) continue;
+        const fields = rawAct.fields && typeof rawAct.fields === 'object' ? rawAct.fields : rawAct;
+        const allowedKeys = [
+          'name', 'description', 'personality', 'scenario',
+          'first_mes', 'mes_example', 'creator_notes',
+          'system_prompt', 'post_history_instructions'
+        ];
+        const changed = [];
+        allowedKeys.forEach(k => {
+          if (fields[k] !== undefined && typeof fields[k] === 'string') {
+            targetCard[k] = fields[k];
+            changed.push(k);
+          }
+        });
+        if (Array.isArray(fields.alternate_greetings)) {
+          targetCard.alternate_greetings = fields.alternate_greetings.map(g => String(g || ''));
+          changed.push('alternate_greetings');
+        }
+        if (fields.first_mes !== undefined) {
+          const sess = tavernState.chatsByCardId && tavernState.chatsByCardId[targetCard.id];
+          if (sess && Array.isArray(sess.messages) && sess.messages.length === 1 && !sess.messages[0].is_user) {
+            sess.messages[0].mes = targetCard.first_mes;
+            if (Array.isArray(sess.messages[0].swipes) && sess.messages[0].swipes.length > 0) {
+              sess.messages[0].swipes[0] = targetCard.first_mes;
+            }
+          }
+        }
+        if (changed.length > 0) {
+          logs.push(`已修改角色卡「${targetCard.name}」的字段：${changed.join('、')}`);
+        }
+      } else if (actType === 'update_chat_floor' || actType === 'edit_floor' || actType === 'edit_chat_floor') {
+        if (!targetCard) continue;
+        ensureActiveCardChatInitialized(targetCard);
+        const sess = tavernState.chatsByCardId[targetCard.id];
+        const msgs = Array.isArray(sess?.messages) ? sess.messages : [];
+        let floorIdx = rawAct.floor !== undefined ? Number(rawAct.floor) : (rawAct.mesid !== undefined ? Number(rawAct.mesid) : msgs.length - 1);
+        if (floorIdx < 0) floorIdx = msgs.length + floorIdx;
+        const msgObj = msgs[floorIdx];
+        if (msgObj) {
+          if (typeof rawAct.content === 'string' || typeof rawAct.mes === 'string') {
+            const newMes = typeof rawAct.content === 'string' ? rawAct.content : rawAct.mes;
+            msgObj.mes = newMes;
+            if (Array.isArray(msgObj.swipes) && typeof msgObj.swipe_id === 'number') {
+              msgObj.swipes[msgObj.swipe_id] = newMes;
+            }
+          }
+          if (typeof rawAct.reasoning === 'string' || typeof rawAct.thoughtChain === 'string') {
+            msgObj.reasoning = typeof rawAct.reasoning === 'string' ? rawAct.reasoning : rawAct.thoughtChain;
+          }
+          logs.push(`已修改角色「${targetCard.name}」第 #${floorIdx} 层聊天记录`);
+        }
+      } else if (actType === 'delete_chat_floor' || actType === 'delete_floor') {
+        if (!targetCard) continue;
+        ensureActiveCardChatInitialized(targetCard);
+        const sess = tavernState.chatsByCardId[targetCard.id];
+        const msgs = Array.isArray(sess?.messages) ? sess.messages : [];
+        let floorIdx = rawAct.floor !== undefined ? Number(rawAct.floor) : msgs.length - 1;
+        if (floorIdx < 0) floorIdx = msgs.length + floorIdx;
+        if (floorIdx >= 0 && floorIdx < msgs.length && msgs.length > 1) {
+          msgs.splice(floorIdx, 1);
+          msgs.forEach((m, i) => { if (m) m.mesid = i; });
+          logs.push(`已删除角色「${targetCard.name}」第 #${floorIdx} 层聊天记录`);
+        }
+      } else if (actType === 'upsert_worldbook_entry' || actType === 'update_worldbook_entry' || actType === 'add_worldbook_entry' || actType === 'toggle_worldbook_entry') {
+        const wbQuery = String(rawAct.worldBookName || rawAct.worldBookId || '').trim();
+        let wb = wbQuery
+          ? (tavernState.worldBooks || []).find(w => w && (w.id === wbQuery || w.name === wbQuery || String(w.name || '').includes(wbQuery)))
+          : null;
+        if (!wb && targetCard && targetCard.worldBookId) {
+          wb = (tavernState.worldBooks || []).find(w => w && w.id === targetCard.worldBookId);
+        }
+        if (!wb && (tavernState.worldBooks || []).length > 0) {
+          wb = (tavernState.worldBooks || []).find(w => w && w.enabled) || tavernState.worldBooks[0];
+        }
+        if (!wb && targetCard) {
+          wb = {
+            id: 'wb_' + Date.now(),
+            name: targetCard.name + '世界书',
+            enabled: true,
+            scanDepth: 4,
+            tokenBudget: 4096,
+            recursiveScanning: true,
+            entries: []
+          };
+          tavernState.worldBooks.unshift(wb);
+          targetCard.worldBookId = wb.id;
+        }
+        if (wb) {
+          if (!Array.isArray(wb.entries)) wb.entries = [];
+          const entryData = rawAct.entry && typeof rawAct.entry === 'object' ? rawAct.entry : rawAct;
+          const targetComment = String(entryData.comment || entryData.name || '').trim();
+          let existing = wb.entries.find(e =>
+            (entryData.uid !== undefined && String(e.uid) === String(entryData.uid)) ||
+            (targetComment && stripUiEmojis(e.comment || '') === stripUiEmojis(targetComment))
+          );
+          if (!existing) {
+            const nextUid = wb.entries.length > 0 ? Math.max(...wb.entries.map(e => Number(e.uid) || 0)) + 1 : 0;
+            existing = normalizeSingleWorldEntry({
+              uid: nextUid,
+              comment: targetComment || ('词条 #' + (wb.entries.length + 1)),
+              content: entryData.content || '',
+              keys: Array.isArray(entryData.keys) ? entryData.keys : (typeof entryData.keys === 'string' ? entryData.keys.split(/[,，]/).map(s => s.trim()).filter(Boolean) : []),
+              constant: Boolean(entryData.constant),
+              disable: Boolean(entryData.disable),
+              order: Number(entryData.order ?? 100),
+              depth: Number(entryData.depth ?? 4),
+              position: Number(entryData.position ?? 0)
+            }, wb.entries.length);
+            wb.entries.push(existing);
+            logs.push(`已在世界书「${wb.name}」新增词条「${existing.comment}」`);
+          } else {
+            if (entryData.comment !== undefined) existing.comment = String(entryData.comment);
+            if (entryData.content !== undefined) existing.content = String(entryData.content);
+            if (entryData.keys !== undefined) {
+              existing.keys = Array.isArray(entryData.keys)
+                ? entryData.keys
+                : String(entryData.keys).split(/[,，]/).map(s => s.trim()).filter(Boolean);
+            }
+            if (entryData.constant !== undefined) existing.constant = Boolean(entryData.constant);
+            if (entryData.disable !== undefined) existing.disable = Boolean(entryData.disable);
+            if (entryData.enabled !== undefined) existing.disable = !entryData.enabled;
+            if (entryData.order !== undefined) existing.order = Number(entryData.order);
+            if (entryData.depth !== undefined) existing.depth = Number(entryData.depth);
+            if (entryData.position !== undefined) existing.position = Number(entryData.position);
+            logs.push(`已更新世界书「${wb.name}」词条「${existing.comment}」`);
+          }
+        }
+      } else if (actType === 'delete_worldbook_entry') {
+        const wbQuery = String(rawAct.worldBookName || rawAct.worldBookId || '').trim();
+        const wb = (wbQuery && (tavernState.worldBooks || []).find(w => w && (w.id === wbQuery || w.name === wbQuery || String(w.name || '').includes(wbQuery))))
+          || (targetCard?.worldBookId && (tavernState.worldBooks || []).find(w => w && w.id === targetCard.worldBookId))
+          || (tavernState.worldBooks || [])[0];
+        if (wb && Array.isArray(wb.entries)) {
+          const targetComment = String(rawAct.comment || rawAct.name || '').trim();
+          const beforeLen = wb.entries.length;
+          wb.entries = wb.entries.filter(e =>
+            !((rawAct.uid !== undefined && String(e.uid) === String(rawAct.uid)) ||
+              (targetComment && stripUiEmojis(e.comment || '') === stripUiEmojis(targetComment)))
+          );
+          if (wb.entries.length < beforeLen) {
+            logs.push(`已从世界书「${wb.name}」删除词条「${targetComment || rawAct.uid}」`);
+          }
+        }
+      } else if (actType === 'upsert_regex' || actType === 'update_regex' || actType === 'add_regex' || actType === 'toggle_regex') {
+        const scope = String(rawAct.scope || 'card').toLowerCase();
+        const rxList = scope === 'global'
+          ? (tavernState.globalRegexScripts || (tavernState.globalRegexScripts = []))
+          : (scope === 'preset' && activePreset
+            ? (activePreset.regexScripts || (activePreset.regexScripts = []))
+            : (targetCard ? (targetCard.regexScripts || (targetCard.regexScripts = [])) : (tavernState.globalRegexScripts || (tavernState.globalRegexScripts = []))));
+        const rxName = String(rawAct.scriptName || rawAct.name || '').trim();
+        let existingRx = rxList.find(r =>
+          (rawAct.id && r.id === rawAct.id) ||
+          (rxName && (r.scriptName === rxName || String(r.scriptName || '').includes(rxName)))
+        );
+        if (!existingRx) {
+          existingRx = {
+            id: 'rx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            scriptName: rxName || ('正则脚本 ' + (rxList.length + 1)),
+            findRegex: String(rawAct.findRegex || rawAct.regex || ''),
+            replaceString: String(rawAct.replaceString ?? rawAct.replacement ?? ''),
+            trimStrings: Array.isArray(rawAct.trimStrings) ? rawAct.trimStrings : [],
+            placement: Array.isArray(rawAct.placement) ? rawAct.placement : [1, 2],
+            disabled: Boolean(rawAct.disabled),
+            markdownOnly: rawAct.markdownOnly !== undefined ? Boolean(rawAct.markdownOnly) : true,
+            promptOnly: Boolean(rawAct.promptOnly),
+            runOnEdit: true,
+            substituteRegex: 0,
+            minDepth: null,
+            maxDepth: null,
+            scope: scope === 'global' ? 'global' : (scope === 'preset' ? 'preset' : 'card')
+          };
+          rxList.push(existingRx);
+          logs.push(`已新增酒馆正则脚本「${existingRx.scriptName}」`);
+        } else {
+          if (rawAct.scriptName !== undefined) existingRx.scriptName = String(rawAct.scriptName);
+          if (rawAct.findRegex !== undefined || rawAct.regex !== undefined) {
+            existingRx.findRegex = String(rawAct.findRegex ?? rawAct.regex);
+          }
+          if (rawAct.replaceString !== undefined || rawAct.replacement !== undefined) {
+            existingRx.replaceString = String(rawAct.replaceString ?? rawAct.replacement);
+          }
+          if (rawAct.disabled !== undefined) existingRx.disabled = Boolean(rawAct.disabled);
+          if (rawAct.enabled !== undefined) existingRx.disabled = !rawAct.enabled;
+          if (Array.isArray(rawAct.placement)) existingRx.placement = rawAct.placement;
+          logs.push(`已修改酒馆正则脚本「${existingRx.scriptName}」`);
+        }
+      } else if (actType === 'delete_regex') {
+        const rxName = String(rawAct.scriptName || rawAct.name || '').trim();
+        for (const list of [targetCard?.regexScripts, activePreset?.regexScripts, tavernState.globalRegexScripts]) {
+          if (!Array.isArray(list)) continue;
+          const idx = list.findIndex(r => (rawAct.id && r.id === rawAct.id) || (rxName && r.scriptName === rxName));
+          if (idx !== -1) {
+            const removed = list.splice(idx, 1)[0];
+            logs.push(`已删除酒馆正则脚本「${removed.scriptName}」`);
+            break;
+          }
+        }
+      } else if (actType === 'upsert_preset_prompt' || actType === 'update_preset_prompt' || actType === 'toggle_preset_prompt') {
+        const preset = getActivePreset();
+        if (preset && Array.isArray(preset.prompts)) {
+          const pName = String(rawAct.name || rawAct.identifier || '').trim();
+          let item = preset.prompts.find(p =>
+            (rawAct.identifier && p.identifier === rawAct.identifier) ||
+            (pName && (stripUiEmojis(p.name || '') === stripUiEmojis(pName) || String(p.name || '').includes(pName)))
+          );
+          if (!item && pName) {
+            item = {
+              identifier: rawAct.identifier || ('custom_' + Date.now()),
+              name: pName,
+              enabled: rawAct.enabled !== undefined ? Boolean(rawAct.enabled) : true,
+              role: rawAct.role || 'system',
+              content: String(rawAct.content || ''),
+              marker: false,
+              injection_position: Number(rawAct.injection_position ?? 0),
+              injection_depth: Number(rawAct.injection_depth ?? 4),
+              injection_order: Number(rawAct.injection_order ?? 100),
+              forbid_overrides: false
+            };
+            preset.prompts.push(item);
+            ensurePresetHasPromptOrder(preset);
+            logs.push(`已在酒馆预设「${preset.name}」新增条目「${item.name}」`);
+          } else if (item) {
+            if (rawAct.name !== undefined) item.name = String(rawAct.name);
+            if (rawAct.content !== undefined) item.content = String(rawAct.content);
+            if (rawAct.enabled !== undefined) item.enabled = Boolean(rawAct.enabled);
+            if (rawAct.role !== undefined) item.role = String(rawAct.role);
+            if (rawAct.injection_depth !== undefined) item.injection_depth = Number(rawAct.injection_depth);
+            if (rawAct.injection_position !== undefined) item.injection_position = Number(rawAct.injection_position);
+            ensurePresetHasPromptOrder(preset);
+            logs.push(`已修改酒馆预设「${preset.name}」条目「${item.name}」`);
+          }
+        }
+      } else if (actType === 'update_cot_tags' || actType === 'update_reasoning_tags') {
+        const fmt = tavernState.formatting || (tavernState.formatting = {});
+        if (Array.isArray(rawAct.pairs) && rawAct.pairs.length > 0) {
+          fmt.reasoningTagPairs = rawAct.pairs
+            .map(p => ({ start: String(p.start || '<think>').trim(), end: String(p.end || '</think>').trim() }))
+            .filter(p => p.start && p.end);
+        } else if (rawAct.startTag && rawAct.endTag) {
+          fmt.reasoningStartTag = String(rawAct.startTag).trim();
+          fmt.reasoningEndTag = String(rawAct.endTag).trim();
+          fmt.reasoningTagPairs = [{ start: fmt.reasoningStartTag, end: fmt.reasoningEndTag }];
+        }
+        logs.push(`已更新酒馆思维链折叠标签配置`);
+      }
+    }
+
+    if (logs.length > 0) {
+      await saveTavernStore();
+      if (isTavernActive()) {
+        renderTavernShell();
+      }
+    }
+    return logs;
   };
 
   if (document.readyState === 'loading') {
