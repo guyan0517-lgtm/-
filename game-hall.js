@@ -4926,8 +4926,28 @@ code, pre {
     try {
       const extMenu = document.getElementById('extensionsMenu');
       if (!extMenu) return;
-      const children = Array.from(extMenu.children);
-      if (children.length <= 2) return;
+      const pluginSubmenu = document.getElementById('tavern-wand-plugins-submenu');
+      if (pluginSubmenu) {
+        Array.from(extMenu.children).forEach(node => {
+          if (!node || node.tagName === 'STYLE' || node.id === 'tavern-wand-plugins-submenu') return;
+          const act = node.getAttribute('data-action') || '';
+          const isBuiltInWandItem = (
+            act === 'toggle-wand-plugins-submenu' ||
+            act === 'trigger-chat-attach-image' ||
+            act === 'popup-translate-last' ||
+            act === 'popup-translate-input' ||
+            act === 'wand-generate-image' ||
+            act === 'run-memory-summary-now' ||
+            act === 'open-drawer-direct'
+          );
+          if (!isBuiltInWandItem) {
+            pluginSubmenu.appendChild(node);
+          }
+        });
+      }
+      const targetContainer = pluginSubmenu || extMenu;
+      const children = Array.from(targetContainer.children);
+      if (children.length <= 1) return;
       const getSortWeight = (el) => {
         if (!el || el.tagName === 'STYLE') return 0;
         if (el.getAttribute('data-action') === 'open-helper-script') return 10;
@@ -4939,21 +4959,8 @@ code, pre {
         if (innerId === 'pa-menu-entry' || kind === 'bcw' || /预设工坊|Burnt/i.test(txt)) return 22;
         if (innerId === 'be-menu-entry' || kind === 'book-excerpt' || /书摘/.test(txt)) return 23;
         if (!el.hasAttribute('data-action') || el.getAttribute('data-action') === 'open-plugin-modal') return 30;
-        const act = el.getAttribute('data-action') || '';
-        if (act === 'popup-translate-last') return 50;
-        if (act === 'popup-translate-input') return 51;
-        if (act === 'wand-generate-image') return 52;
-        if (act === 'run-memory-summary-now') return 53;
         return 60;
       };
-      let needsSort = false;
-      for (let i = 1; i < children.length; i++) {
-        if (getSortWeight(children[i]) < getSortWeight(children[i - 1])) {
-          needsSort = true;
-          break;
-        }
-      }
-      if (!needsSort) return;
       const sorted = [...children].sort((a, b) => {
         const wa = getSortWeight(a);
         const wb = getSortWeight(b);
@@ -4963,7 +4970,7 @@ code, pre {
         }
         return 0;
       });
-      sorted.forEach(node => extMenu.appendChild(node));
+      sorted.forEach(node => targetContainer.appendChild(node));
     } catch (_) {}
   }
 
@@ -5402,7 +5409,7 @@ code, pre {
               ? String(item.replace_string)
               : (item.replacement !== undefined ? String(item.replacement) : '')),
         trimStrings: Array.isArray(item.trimStrings) ? item.trimStrings : (Array.isArray(item.trim_strings) ? item.trim_strings : []),
-        placement: Array.isArray(item.placement) && item.placement.length > 0 ? item.placement.map(Number) : [1, 2],
+        placement: Array.isArray(item.placement) && item.placement.length > 0 ? item.placement.map(Number) : [2],
         disabled: Boolean(item.disabled),
         markdownOnly: item.markdownOnly !== undefined ? Boolean(item.markdownOnly) : (item.markdown_only !== undefined ? Boolean(item.markdown_only) : true),
         promptOnly: Boolean(item.promptOnly ?? item.prompt_only),
@@ -6256,7 +6263,7 @@ code, pre {
     const presetScripts = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
     const extScripts = Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : [];
-    return [...cardScripts, ...presetScripts, ...globalScripts, ...extScripts].filter(s => s && !s.disabled && s.findRegex);
+    return [...globalScripts, ...presetScripts, ...cardScripts, ...extScripts].filter(s => s && !s.disabled && s.findRegex);
   }
 
   function applyTavernRegexPipeline(rawText, options = {}) {
@@ -6270,7 +6277,6 @@ code, pre {
       isPresetPrompt = false,
       isEdit = false,
       depth = undefined,
-      floorIndex = undefined,
       card = getActiveCard()
     } = options;
 
@@ -6291,19 +6297,7 @@ code, pre {
     for (const script of scripts) {
       if (isEdit && script.runOnEdit === false) continue;
       if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
-      const isDepthCleanupScript = Boolean(
-        !isPrompt &&
-        script.promptOnly &&
-        !script.markdownOnly &&
-        hasDepthContext &&
-        script.minDepth !== null &&
-        script.minDepth !== undefined &&
-        script.minDepth !== '' &&
-        Number(script.minDepth) > 0 &&
-        numericDepth >= Number(script.minDepth) &&
-        String(script.replaceString ?? '').trim() === ''
-      );
-      if (!isPrompt && script.promptOnly && !script.markdownOnly && !isDepthCleanupScript) continue;
+      if (!isPrompt && script.promptOnly && !script.markdownOnly) continue;
 
       if (isSystemOrCharBlock) {
         if (!Array.isArray(script.placement) || script.placement.length === 0) continue;
@@ -6315,14 +6309,13 @@ code, pre {
         if (!script.placement.includes(targetPlacement)) continue;
       }
 
-      if (hasDepthContext && (isChatFloor || !isPrompt)) {
+      if (hasDepthContext) {
         const minD = (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '') ? Number(script.minDepth) : null;
         const maxD = (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '') ? Number(script.maxDepth) : null;
         if (minD !== null && !Number.isNaN(minD) && minD > 0 && numericDepth < minD) {
           continue;
         }
-        // In display mode (!isPrompt), never let maxDepth disable regex rendering on chat floors so older floors and floor #0 (首楼) keep their card UI
-        if (isPrompt && maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
+        if (maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
           continue;
         }
       }
@@ -6339,64 +6332,51 @@ code, pre {
         ? script.trimStrings.map(t => t ? replaceTavernMacros(String(t), card) : '').filter(Boolean)
         : [];
       try {
-        output = output.replace(rx, (...matchArgs) => {
+        const prevOutput = output;
+        const nextOutput = output.replace(rx, (...matchArgs) => {
           const fullMatchedStr = String(matchArgs[0] || '');
-          let replaced = repStr.replace(/\{\{\$?match\}\}|\$&/g, fullMatchedStr);
           const lastArg = matchArgs[matchArgs.length - 1];
           const hasNamedGroups = lastArg && typeof lastArg === 'object' && !Array.isArray(lastArg);
           const groupEndIdx = hasNamedGroups ? matchArgs.length - 3 : matchArgs.length - 2;
 
-          // Replace higher group numbers first ($16 down to $1) so $1 never corrupts $10-$16
-          for (let g = groupEndIdx - 1; g >= 1; g--) {
-            const groupVal = matchArgs[g] !== undefined ? String(matchArgs[g]) : '';
+          const applyTrim = (valStr) => {
+            let res = valStr;
             if (resolvedTrimStrings.length > 0) {
-              let trimmedVal = groupVal;
               resolvedTrimStrings.forEach(t => {
-                if (t) trimmedVal = trimmedVal.split(t).join('');
+                if (t) res = res.split(t).join('');
               });
-              replaced = replaced.split('$' + g).join(trimmedVal);
-            } else {
-              replaced = replaced.split('$' + g).join(groupVal);
             }
-          }
-          if (hasNamedGroups) {
-            Object.entries(lastArg).forEach(([gName, gVal]) => {
-              let valStr = gVal !== undefined ? String(gVal) : '';
-              if (resolvedTrimStrings.length > 0) {
-                resolvedTrimStrings.forEach(t => {
-                  if (t) valStr = valStr.split(t).join('');
-                });
-              }
-              replaced = replaced.split(`$<${gName}>`).join(valStr);
-            });
-          }
+            return res;
+          };
 
-          // Guard against cross-block status regexes or stray reasoning regexes swallowing middle story paragraphs
-          if (!isPrompt && fullMatchedStr.length > 140) {
-            const strippedReplaced = replaced.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '');
-            const matchedLines = fullMatchedStr.split(/\r?\n/);
-            const preservedNarrativeLines = [];
-            for (const ln of matchedLines) {
-              const tLn = ln.trim();
-              if (!tLn) continue;
-              // Skip tag lines, status lines, and lines whose content still exists in the replacement
-              if (/^(?:<|\[|【|```|✦|◆|●|•|—|--|\||F\.C\.|\d{4}年)/.test(tLn)) continue;
-              if (/(?:状态栏|当前位置|当前衣着|料理进度|持有货币|随身行囊|已掌握食谱|主厨姓名|Todo\||Post\||\[Board\]|\[\/STATUS\])/i.test(tLn)) continue;
-              if (tLn.length >= 22 && /[\u4e00-\u9fa5]{10,}/.test(tLn)) {
-                const probe = tLn.slice(0, 14);
-                if (!strippedReplaced.includes(probe)) {
-                  preservedNarrativeLines.push(ln);
+          const replaced = repStr.replace(/\{\{\$?match\}\}|\$&|\$<([^>]+)>|\$(\d{1,2})/g, (token, namedGroup, numStr) => {
+            if (token === '$&' || token === '{{match}}' || token === '{{$match}}') {
+              return applyTrim(fullMatchedStr);
+            }
+            if (namedGroup !== undefined) {
+              if (hasNamedGroups && Object.prototype.hasOwnProperty.call(lastArg, namedGroup)) {
+                const gVal = lastArg[namedGroup];
+                return applyTrim(gVal !== undefined ? String(gVal) : '');
+              }
+              return '';
+            }
+            if (numStr !== undefined) {
+              const gNum = Number(numStr);
+              if (gNum >= 1 && gNum < groupEndIdx) {
+                const gVal = matchArgs[gNum];
+                return applyTrim(gVal !== undefined ? String(gVal) : '');
+              }
+              if (numStr.length === 2) {
+                const singleDigit = Number(numStr[0]);
+                if (singleDigit >= 1 && singleDigit < groupEndIdx) {
+                  const gVal = matchArgs[singleDigit];
+                  return applyTrim(gVal !== undefined ? String(gVal) : '') + numStr[1];
                 }
               }
+              return '';
             }
-            if (preservedNarrativeLines.length >= 2) {
-              const recoveredStory = preservedNarrativeLines.join('\n\n') + '\n\n';
-              if (!replaced.trim()) {
-                return recoveredStory.trim();
-              }
-              replaced = recoveredStory + replaced;
-            }
-          }
+            return token;
+          });
 
           if (!isPrompt) {
             const trimmedRep = replaced
@@ -6412,6 +6392,12 @@ code, pre {
           }
           return replaced;
         });
+
+        // Prevent legacy preset regexes that had [1, 2] default placement from wiping out a user's own message into an empty bubble
+        if (isUser && !isPrompt && prevOutput.trim() && !nextOutput.trim()) {
+          continue;
+        }
+        output = nextOutput;
       } catch (err) {
         console.warn('Regex execution warning:', script.scriptName, err);
       }
@@ -10614,8 +10600,8 @@ code, pre {
 
     // Preserve existing #chat node so plugin MutationObservers (ST-BaiBai-Image / ST-BaiBai-Book / book-excerpt) never detach
     const prevChatEl = document.getElementById('chat');
-    // Preserve all third-party plugin menu items mounted inside #extensionsMenu (including .extension_container, #pa-menu-entry, #be-menu-entry, etc.)
-    const prevExtMenuNodes = Array.from(document.querySelectorAll('#extensionsMenu > :not(.tavern-popup-item):not(style)'));
+    // Preserve all third-party plugin menu items mounted inside #extensionsMenu or #tavern-wand-plugins-submenu
+    const prevExtMenuNodes = Array.from(document.querySelectorAll('#tavern-wand-plugins-submenu > :not(.tavern-popup-item), #extensionsMenu > :not(.tavern-popup-item):not(style):not(#tavern-wand-plugins-submenu)'));
     const canPreserveFloatingWidgets = Boolean(
       activeCardForShell &&
       lastExecutedHelperCardId === activeCardForShell.id &&
@@ -10679,9 +10665,6 @@ code, pre {
               <div id="leftSendForm">
                 <div id="options_button" data-action="toggle-options-popup" title="对话操作菜单"></div>
                 <div id="extensionsMenuButton" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
-                <div id="chatAttachButton" data-action="trigger-chat-attach-image" title="发送图片附件">
-                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                </div>
               </div>
               <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
               <div id="rightSendForm">
@@ -10713,15 +10696,15 @@ code, pre {
       newChatPlaceholder.replaceWith(prevChatEl);
     }
 
-    const newExtMenu = document.getElementById('extensionsMenu');
-    if (newExtMenu && prevExtMenuNodes.length > 0) {
+    const newPluginSubmenu = document.getElementById('tavern-wand-plugins-submenu') || document.getElementById('extensionsMenu');
+    if (newPluginSubmenu && prevExtMenuNodes.length > 0) {
       prevExtMenuNodes.forEach(node => {
         if (!node) return;
         const innerId = node.id || node.querySelector('[id]')?.id || '';
-        if (innerId && !newExtMenu.querySelector('#' + innerId)) {
-          newExtMenu.insertBefore(node, newExtMenu.firstChild);
+        if (innerId && !newPluginSubmenu.querySelector('#' + innerId)) {
+          newPluginSubmenu.insertBefore(node, newPluginSubmenu.firstChild);
         } else if (!innerId) {
-          newExtMenu.insertBefore(node, newExtMenu.firstChild);
+          newPluginSubmenu.insertBefore(node, newPluginSubmenu.firstChild);
         }
       });
     }
@@ -10860,6 +10843,14 @@ code, pre {
       }
       extEl.classList.toggle('tavern-popup-hidden', !uiRuntime.showExtensionsPopup);
       extEl.style.display = uiRuntime.showExtensionsPopup ? 'flex' : 'none';
+      const pluginSubEl = document.getElementById('tavern-wand-plugins-submenu');
+      if (pluginSubEl) {
+        pluginSubEl.style.display = uiRuntime.showWandPluginsSubmenu ? 'flex' : 'none';
+      }
+      const pluginArrowEl = document.getElementById('tavern-wand-plugins-arrow');
+      if (pluginArrowEl) {
+        pluginArrowEl.style.transform = uiRuntime.showWandPluginsSubmenu ? 'rotate(90deg)' : 'rotate(0deg)';
+      }
     }
   }
 
@@ -11023,6 +11014,7 @@ code, pre {
     const userPlugins = (tavernState.plugins || []).filter(p => p && !p.builtInType && p.enabled);
     const card = getActiveCard();
     const helperScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
+    const subOpen = Boolean(uiRuntime.showWandPluginsSubmenu);
     return `
       <div id="extensionsMenu" class="tavern-bottom-popup ${uiRuntime.showExtensionsPopup ? '' : 'tavern-popup-hidden'}" style="display:${uiRuntime.showExtensionsPopup ? 'flex' : 'none'};">
         <style>
@@ -11031,25 +11023,38 @@ code, pre {
           #extensionsMenu:has(#pa-menu-entry) .tavern-popup-item[data-plugin-kind="bcw"] { display: none !important; }
           #extensionsMenu:has(#be-menu-entry) .tavern-popup-item[data-plugin-kind="book-excerpt"] { display: none !important; }
         </style>
-        ${helperScripts.map(hs => `
-          <div class="tavern-popup-item" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">
-            打开 ${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌面板'))}
-          </div>
-        `).join('')}
-        ${userPlugins.map(up => {
-          const kindAttr = isBaiBaiImagePlugin(up)
-            ? 'data-baibai-kind="image"'
-            : (isBaiBaiBookPlugin(up)
-              ? 'data-baibai-kind="book"'
-              : (isBurntChickenWingsPlugin(up)
-                ? 'data-plugin-kind="bcw"'
-                : (isBookExcerptPlugin(up) ? 'data-plugin-kind="book-excerpt"' : '')));
-          return `
-          <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${kindAttr}>
-            ${escapeHtmlSimple(stripUiEmojis(up.name))}
-          </div>
-        `;
-        }).join('')}
+        <div class="tavern-popup-item" data-action="toggle-wand-plugins-submenu" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+            <span>插件</span>
+          </span>
+          <svg id="tavern-wand-plugins-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;transition:transform 0.16s ease;transform:${subOpen ? 'rotate(90deg)' : 'rotate(0deg)'};"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+        <div id="tavern-wand-plugins-submenu" style="display:${subOpen ? 'flex' : 'none'};flex-direction:column;gap:4px;padding-left:10px;border-left:2px solid rgba(128,128,128,0.22);margin:2px 0 4px 6px;">
+          ${helperScripts.map(hs => `
+            <div class="tavern-popup-item" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">
+              打开 ${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌面板'))}
+            </div>
+          `).join('')}
+          ${userPlugins.map(up => {
+            const kindAttr = isBaiBaiImagePlugin(up)
+              ? 'data-baibai-kind="image"'
+              : (isBaiBaiBookPlugin(up)
+                ? 'data-baibai-kind="book"'
+                : (isBurntChickenWingsPlugin(up)
+                  ? 'data-plugin-kind="bcw"'
+                  : (isBookExcerptPlugin(up) ? 'data-plugin-kind="book-excerpt"' : '')));
+            return `
+            <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${kindAttr}>
+              ${escapeHtmlSimple(stripUiEmojis(up.name))}
+            </div>
+          `;
+          }).join('')}
+        </div>
+        <div id="chatAttachButton" class="tavern-popup-item" data-action="trigger-chat-attach-image" style="display:flex;align-items:center;gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+          <span>传图</span>
+        </div>
         <div class="tavern-popup-item" data-action="popup-translate-last">双语翻译最后一层消息</div>
         <div class="tavern-popup-item" data-action="popup-translate-input">翻译输入框草稿文字</div>
         <div class="tavern-popup-item" data-action="wand-generate-image">生成当前剧情场景插图</div>
@@ -11349,9 +11354,11 @@ code, pre {
       const isEditingTransition = Boolean(existingNode.querySelector('.edit_textarea, .tavern-floor-edit-box') || newFloorNode.querySelector('.edit_textarea, .tavern-floor-edit-box'));
       const oldTextEl = existingNode.querySelector('.mes_text');
       const newTextEl = newFloorNode.querySelector('.mes_text');
+      const isStreamingThisFloor = Boolean(uiRuntime.isGenerating && idx === messages.length - 1);
       const hasLiveFramesOrImgs = oldTextEl && (oldTextEl.querySelector('iframe.tavern-html-sandbox-frame') || oldTextEl.querySelector('img'));
-      if (!isEditingTransition && oldTextEl && newTextEl && hasLiveFramesOrImgs) {
-        // Update in-place so already-mounted iframes and images inside .mes_text never detach from document and never reload/flash
+      const preservedBbsHosts = Array.from(existingNode.querySelectorAll('.bbs-fp-host'));
+      if (isStreamingThisFloor && !isEditingTransition && oldTextEl && newTextEl && hasLiveFramesOrImgs) {
+        // Update in-place during live stream so already-mounted iframes and images inside .mes_text never detach
         existingNode.className = newFloorNode.className;
         const oldAvatarWrapper = existingNode.querySelector('.mesAvatarWrapper');
         const newAvatarWrapper = newFloorNode.querySelector('.mesAvatarWrapper');
@@ -11378,6 +11385,14 @@ code, pre {
         executeInlineMessageScripts(existingNode);
       } else {
         existingNode.replaceWith(newFloorNode);
+        if (preservedBbsHosts.length > 0) {
+          const targetMesBlock = newFloorNode.querySelector('.mes_block') || newFloorNode;
+          preservedBbsHosts.forEach(hostEl => {
+            if (hostEl && !newFloorNode.contains(hostEl)) {
+              targetMesBlock.appendChild(hostEl);
+            }
+          });
+        }
         executeInlineMessageScripts(newFloorNode);
       }
     } else {
@@ -13932,6 +13947,7 @@ code, pre {
         let result;
         try {
           result = await callTavernAiCompletion(apiMessages, isStreamOn ? (partial) => {
+            targetMsg.swipe_id = newSwipeIdx;
             targetMsg.swipes[newSwipeIdx] = partial.content;
             targetMsg.mes = partial.content;
             targetMsg.reasoning = partial.reasoning || '';
@@ -13955,6 +13971,7 @@ code, pre {
         }
         if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
 
+        targetMsg.swipe_id = newSwipeIdx;
         targetMsg.swipes[newSwipeIdx] = result.content;
         targetMsg.mes = result.content;
         targetMsg.reasoning = result.reasoning || '';
@@ -14753,6 +14770,12 @@ code, pre {
         return;
       }
 
+      if (action === 'toggle-wand-plugins-submenu') {
+        uiRuntime.showWandPluginsSubmenu = !uiRuntime.showWandPluginsSubmenu;
+        refreshBottomPopupsOnly();
+        return;
+      }
+
       if (action === 'stop-generation') {
         if (uiRuntime.abortController) {
           uiRuntime.abortController.abort();
@@ -14764,6 +14787,8 @@ code, pre {
       }
 
       if (action === 'trigger-chat-attach-image') {
+        uiRuntime.showExtensionsPopup = false;
+        refreshBottomPopupsOnly();
         document.getElementById('tavern-file-chat-attach')?.click();
         return;
       }
@@ -14802,6 +14827,10 @@ code, pre {
 
       // Floor Actions
       if (action === 'floor-swipe-left' || action === 'floor-swipe-right') {
+        if (uiRuntime.isGenerating) {
+          showTavernToast('正在生成回复中，请先等待完成或暂停后再切换分支');
+          return;
+        }
         const idx = Number(actionEl.getAttribute('data-mesid'));
         const sess = getActiveChatSession();
         const msg = sess && sess.messages[idx];
@@ -17325,7 +17354,7 @@ code, pre {
               findRegex: rx.findRegex || rx.find_regex || '',
               replaceString: rx.replaceString ?? rx.replace_string ?? '',
               trimStrings: Array.isArray(rx.trimStrings) ? rx.trimStrings : [],
-              placement: Array.isArray(rx.placement) ? rx.placement : [1, 2],
+              placement: Array.isArray(rx.placement) && rx.placement.length > 0 ? rx.placement : [2],
               disabled: Boolean(rx.disabled),
               markdownOnly: rx.markdownOnly !== undefined ? Boolean(rx.markdownOnly) : true,
               promptOnly: Boolean(rx.promptOnly),

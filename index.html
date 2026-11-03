@@ -2515,7 +2515,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v13.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v13.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -28414,6 +28414,48 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   };
                 }
 
+                if (parsedJson.entries && typeof parsedJson.entries === "object" && !Array.isArray(parsedJson.entries)) {
+                  const rawEntriesList = Object.values(parsedJson.entries).filter(e => e && typeof e === "object");
+                  if (rawEntriesList.length > 0) {
+                    const defaultGid = "tcg_" + Date.now() + "_wb";
+                    const stGroups = [{ id: defaultGid, name: "思维链模块组", enabled: true, collapsed: false }];
+                    const stEntries = [];
+                    const generalLines = [];
+                    const usedKeys = new Set();
+                    rawEntriesList.forEach((item, idx) => {
+                      const rawTitle = String(item.comment || item.name || item.title || (Array.isArray(item.key) && item.key[0]) || ("模块" + (idx + 1))).trim();
+                      const cleanKey = rawTitle.replace(/[\{\}\r\n]/g, "").trim() || ("模块" + (idx + 1));
+                      let uniqueKey = cleanKey;
+                      let dupCount = 2;
+                      while (usedKeys.has(uniqueKey)) {
+                        uniqueKey = cleanKey + "_" + dupCount;
+                        dupCount++;
+                      }
+                      usedKeys.add(uniqueKey);
+                      const isEnabled = item.disable !== undefined ? !item.disable : (item.enabled !== undefined ? Boolean(item.enabled) : true);
+                      stEntries.push({
+                        id: "tce_" + Date.now() + "_" + idx,
+                        groupId: defaultGid,
+                        key: uniqueKey,
+                        content: String(item.content || ""),
+                        enabled: isEnabled,
+                      });
+                      generalLines.push("{{" + uniqueKey + "}}");
+                    });
+                    return {
+                      name: String(parsedJson.name || fallbackName || "导入思维链").trim(),
+                      headerContent: "",
+                      generalContent: generalLines.join("\n"),
+                      cocContent: "",
+                      headerCollapsed: false,
+                      generalCollapsed: false,
+                      groupsCollapsed: false,
+                      groups: stGroups,
+                      entries: stEntries,
+                    };
+                  }
+                }
+
                 if (typeof parsedJson.generalContent === "string" || Array.isArray(parsedJson.entries)) {
                   return {
                     name: String(parsedJson.name || fallbackName || "导入思维链").trim(),
@@ -33480,7 +33522,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window.refreshMashuThoughtChainsCache = async function () {
           try {
             if (typeof db !== "undefined" && db.thoughtChainPresets) {
-              window._cachedMashuThoughtChains = await db.thoughtChainPresets.toArray();
+              const allPresets = await db.thoughtChainPresets.toArray();
+              for (const p of allPresets) {
+                if (
+                  p &&
+                  (!Array.isArray(p.entries) || p.entries.length === 0) &&
+                  typeof p.generalContent === "string" &&
+                  p.generalContent.trim().startsWith("{") &&
+                  typeof parseThoughtChainFromText === "function"
+                ) {
+                  const reparsed = parseThoughtChainFromText(p.generalContent, p.name || "导入思维链");
+                  if (reparsed && Array.isArray(reparsed.entries) && reparsed.entries.length > 0) {
+                    p.generalContent = reparsed.generalContent;
+                    p.groups = reparsed.groups;
+                    p.entries = reparsed.entries;
+                    await db.thoughtChainPresets.put(p);
+                  }
+                }
+              }
+              window._cachedMashuThoughtChains = allPresets;
             }
           } catch (_) {}
         };
@@ -33528,17 +33588,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const matched = qName
                 ? presets.filter(p => p && (String(p.name || "").includes(qName) || qName.includes(String(p.name || "")) || String(p.id) === qName))
                 : presets;
-              const list = (matched.length > 0 ? matched : presets).map(p => ({
-                id: p.id,
-                name: p.name,
-                headerContent: String(p.headerContent || "").slice(0, 500),
-                generalContent: String(p.generalContent || "").slice(0, 800),
-                cocContent: String(p.cocContent || "").slice(0, 500),
-                entryCount: Array.isArray(p.entries) ? p.entries.length : 0,
-                entries: Array.isArray(p.entries)
-                  ? p.entries.slice(0, 12).map(e => ({ id: e.id, name: e.name, role: e.role, enabled: e.enabled !== false, content: String(e.content || "").slice(0, 350) }))
-                  : []
-              }));
+              const list = (matched.length > 0 ? matched : presets).map(p => {
+                const groupMap = {};
+                if (Array.isArray(p.groups)) {
+                  p.groups.forEach(g => {
+                    if (g && g.id) groupMap[g.id] = g;
+                  });
+                }
+                const allEntries = Array.isArray(p.entries) ? p.entries : [];
+                return {
+                  id: p.id,
+                  name: p.name,
+                  headerContent: String(p.headerContent || "").slice(0, 500),
+                  generalContent: String(p.generalContent || "").slice(0, 800),
+                  cocContent: String(p.cocContent || "").slice(0, 500),
+                  groupCount: Array.isArray(p.groups) ? p.groups.length : 0,
+                  entryCount: allEntries.length,
+                  enabledEntryCount: allEntries.filter(e => {
+                    if (!e || e.enabled === false) return false;
+                    const grp = e.groupId ? groupMap[e.groupId] : null;
+                    return !grp || grp.enabled !== false;
+                  }).length,
+                  entries: allEntries.slice(0, 80).map(e => {
+                    const grp = e && e.groupId ? groupMap[e.groupId] : null;
+                    const isEntryEnabled = Boolean(e && e.enabled !== false && (!grp || grp.enabled !== false));
+                    return {
+                      id: e.id,
+                      key: e.key || e.name || e.title || "未命名条目",
+                      groupName: grp ? (grp.name || "") : "",
+                      enabled: isEntryEnabled,
+                      content: String(e.content || "").slice(0, 260)
+                    };
+                  })
+                };
+              });
               return JSON.stringify({ totalPresets: presets.length, presets: list }, null, 2);
             }
             if (targetType === "qq_chat" || targetType === "chat" || targetType === "persona") {
@@ -33925,7 +34008,7 @@ ${wbCognition}
 - 你完全精通SillyTavern酒馆的底层运行机制以及小手机内置酒馆与小手机外部导卡的全部操作，当对方询问怎么用、角色卡怎么导入时，你可以用大白话简短教对方，或者召唤虚拟鼠标一步步指给对方看：
   1. 角色卡的本质与两处导入方式：酒馆的角色卡通常是一张PNG图片或者一个JSON文件，内嵌了角色设定、开场白、专属世界书和正则脚本。除了在桌面「酒馆」里导入外，现在在连线界面右上角点「+」号菜单里的「导卡」，也可以直接导入PNG或JSON角色卡到小手机连线列表，并且角色卡附带的世界书和正则会自动进入小手机的世界书库和正则库，还会自动同步启用和关闭状态！
   2. 压缩包怎么用：如果下载的是zip或rar压缩包，必须先把压缩包解压出来再选里面的PNG或JSON文件。
-  3. 世界书绿灯与蓝灯：绿色代表「绿灯关键词触发」，省内存省Token；蓝色代表「蓝灯常驻激活」。
+  3. 世界书区分（极其重要，严禁混淆）：只有内置「酒馆」里的世界书才有绿灯关键词触发、蓝灯常驻激活以及触发词设置；而小手机桌面外面的独立「世界书」应用（#desktop-app-world-book）没有绿灯蓝灯、也没有触发词输入框，只有标题、分类和内容，通过在聊天设置里勾选绑定后直接全文生效！
 - 常用界面与窗口核心选择器（仅在教学指路或偷看时供 mouseActions 使用）：
   - 桌面图标：QQ \`#desktop-app-qq\`、世界书 \`#desktop-app-world-book\`、写模 \`#check-phone-btn\`、微博 \`#weibo-app-icon\`、书柜 \`#desktop-app-forum\`、思维链 \`#lovers-space-app-icon\`、酒馆 \`#desktop-app-tavern\`、沙盘 \`#taobao-app-icon\`、人设 \`#persona-creator-app-icon\`、API设置 \`#desktop-app-api-settings\`、法则 \`#studio-app-icon\`、字体 \`#desktop-app-font-settings\`、外观设置 \`#desktop-app-wallpaper\`。
   - 聊天界面与弹窗：聊天列表返回桌面 \`.screen.active .back-btn\`、聊天窗口返回列表 \`#back-to-list-btn\`、打开当前聊天设置弹窗 \`#chat-settings-btn\`、关闭当前弹窗或窗口填 \`{"target": "close", "action": "close"}\`。
@@ -34836,9 +34919,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const act = String(edit.action || edit.type || "").toLowerCase().trim();
             try {
               if (act === "update_my_persona" || act === "set_my_persona") {
-                const targetChat = typeof window.resolveMashuTargetChat === "function"
-                  ? window.resolveMashuTargetChat(edit.chatName || edit.target || "", "")
-                  : null;
+                const rawTargetName = String(edit.chatName || edit.target || "").trim();
+                let targetChat = null;
+                if (!rawTargetName || rawTargetName === "麻薯" || rawTargetName.includes("麻薯")) {
+                  targetChat = mashuChat;
+                } else if (typeof window.resolveMashuTargetChat === "function") {
+                  const candidate = window.resolveMashuTargetChat(rawTargetName, "");
+                  if (candidate) {
+                    const candTitle = String((typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(candidate) : "") || candidate.mainGroupName || candidate.name || "").trim();
+                    if (candTitle.includes(rawTargetName) || rawTargetName.includes(candTitle) || String(candidate.name || "").includes(rawTargetName)) {
+                      targetChat = candidate;
+                    }
+                  }
+                }
+                if (!targetChat) targetChat = mashuChat;
                 if (!targetChat) continue;
                 if (!targetChat.settings) targetChat.settings = {};
                 if (typeof edit.myPersona === "string" && edit.myPersona.trim()) {
