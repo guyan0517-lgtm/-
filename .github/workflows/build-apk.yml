@@ -1,0 +1,71 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Prepare Web Assets for Capacitor
+        run: |
+          mkdir -p dist
+          for item in index.html style.css game-hall.css game-hall.js peer-manager.js group-call.js script-kill.js; do
+            if [ -f "$item" ]; then
+              cp "$item" dist/
+            fi
+          done
+          if [ -d "public" ]; then
+            cp -r public/* dist/ 2>/dev/null || true
+          fi
+
+      - name: Install Capacitor & Generate Android Project
+        run: |
+          npm init -y || true
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          if [ ! -d "android" ]; then
+            npx cap add android
+          else
+            npx cap sync android
+          fi
+
+      - name: Configure Android Fullscreen & Cleartext Permissions
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            sed -i 's/<application/<application android:usesCleartextTraffic="true" android:largeHeap="true"/g' "$MANIFEST" || true
+          fi
+          STYLES="android/app/src/main/res/values/styles.xml"
+          if [ -f "$STYLES" ]; then
+            sed -i 's/Theme.AppCompat.DayNight.NoActionBar/Theme.AppCompat.DayNight.NoActionBar/g' "$STYLES" || true
+          fi
+
+      - name: Build Debug APK
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EPhone-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk

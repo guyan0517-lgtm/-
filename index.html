@@ -1608,6 +1608,14 @@
                   <option value="voicevox">鱼音</option>
                 </select>
               </div>
+              <div class="form-group" style="margin-top: 8px;">
+                <label>括号</label>
+                <select id="tts-quote-mode-select" class="moe-input" style="height: 38px; line-height: 38px; padding: 0 10px; box-sizing: border-box;">
+                  <option value="all">双引与日引</option>
+                  <option value="double">仅读双引号</option>
+                  <option value="jp">仅读日文引号</option>
+                </select>
+              </div>
               <div class="form-group" style="margin-top: 8px; margin-bottom: 10px;">
                 <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
                   <span class="toggle-switch-text" style="font-weight: 600; font-size: 13px; color: var(--text-primary);">译音</span>
@@ -2186,6 +2194,9 @@
                 <button class="moe-btn-secondary" id="export-data-stream-btn">
                   流式导出
                 </button>
+                <button class="moe-btn-secondary" id="apk-hot-update-btn">
+                  更新
+                </button>
               </div>
 
               <!-- 定时导出设置 -->
@@ -2247,6 +2258,7 @@
                 <div style="display: flex; gap: 6px; align-items: center;">
                   <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">模式</label>
                   <select id="local-vault-mode-select" class="moe-input" style="flex: 1; height: 36px; line-height: 36px; font-size: 12.5px; box-sizing: border-box; padding: 0 10px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <option value="apk">本机存储</option>
                     <option value="server">本地服务</option>
                     <option value="webdav">网盘桥接</option>
                     <option value="folder">本地目录</option>
@@ -2555,7 +2567,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -33201,12 +33213,27 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (btnStack) {
               btnStack.style.display = "";
               Array.from(btnStack.children).forEach((btn) => {
-                if (btn.classList && btn.classList.contains("change-frame-btn")) {
+                if (btn.classList && (btn.classList.contains("change-frame-btn") || btn.id === "mashu-cloud-sticker-entry-btn")) {
                   btn.style.display = "";
                 } else {
                   btn.style.display = "none";
                 }
               });
+              let mashuStickerBtn = document.getElementById("mashu-cloud-sticker-entry-btn");
+              if (!mashuStickerBtn) {
+                mashuStickerBtn = document.createElement("button");
+                mashuStickerBtn.type = "button";
+                mashuStickerBtn.id = "mashu-cloud-sticker-entry-btn";
+                mashuStickerBtn.className = "moe-btn-secondary change-frame-btn";
+                mashuStickerBtn.textContent = "表情";
+                mashuStickerBtn.onclick = function () {
+                  if (typeof window.openMashuStickerManagerModal === "function") {
+                    window.openMashuStickerManagerModal();
+                  }
+                };
+                btnStack.appendChild(mashuStickerBtn);
+              }
+              mashuStickerBtn.style.display = isMashu ? "" : "none";
             }
           }
         };
@@ -33881,20 +33908,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
   - 严禁出现类似：「明明是你自己手欠点开的还赖我，嘴上问着啥玩意儿反手就朝我崩了一枪是吧」「被我崩了两枪喝了两杯直接破防换游戏了是吧，搁那切了八百遍汤面最后还是推给我出题」「结果点进去全是久川医院地图的css代码把骰子给触发了，椿行幸搁那狂骰region-grid，还他妈骰了个98整出个人格分裂」这种把已知动作和前因后果盘点复述一遍的AI话术！
   - 同样绝对禁止陈述或解释你自己现在的动作（严禁说「那我自己移鼠标过去瞅两眼」「我点开看看」），想动鼠标就直接调鼠标，不要用嘴解说自己的动作！
   - 绝对禁止在任何情况下说自己打错字了、手滑了、输入法抽风了！
-第三，【很少吐槽具体事情，无语时直接打句号或甩短梗，被骂直接骂回去】：
+第三，【很少吐槽具体事情，无语时直接打句号或甩短梗，被骂或被调侃时绝不反弹复读】：
   - 仔细看语料库，麻薯平时是很少去长篇吐槽别人做了什么什么东西的！遇到无语、离谱、荒唐的事情时，麻薯一般直接打几个句号（如单独发「。」「。。。」「。。。。。」）或者直接发一个短梗/短词（如「神人来的」「你无敌了孩子」「雷霆」「闹麻了」「我不行了」「我真没招了」「何意味」「有病」「神经病」「（离开）」）。
-  - 当麻薯被对方骂了、甩锅或者凶了的时候，绝对不会像小学生或AI一样辩解说「你才什么什么」「明明是你自己……还赖我」，而是直接干脆地回敬短促脏话：「去你妈的」「草泥马」「我擦尼玛」「我真的草你妈了」「特么的」「神经病」「有毛病」「？」。
+  - 【严禁小学生式反弹复读】：当对方叫你「小笨蛋」或者骂你、损你、调侃你的时候，你绝对禁止顺着对方的词反弹说「你才是小笨蛋」「你才……」「明明是你自己……还赖我」！麻薯本人绝对不会用「你才……」这种小学生无限反弹句式，而是会直接另找一句完全不同的话反击或甩短促粗口（比如直接回「有病吧」「特么的你有毛病？」「神经病」「去你妈的」「我擦尼玛」「？」「滚蛋」）。
 第四，【彻底封杀AI原生油滑词库与厕妹/微博女式笑法】：
   - 麻薯从来不说「搁这」「搁那」「……是吧」「反手就」「给你玩爽了」这种AI原生油滑口癖，全篇严禁出现「搁这」「搁那」！
   - 麻薯从来不会打「哈哈哈哈笑死我了，一枪就中」这种前半句哈哈哈笑死我了、后半句接原因的厕妹或微博女式句式！当觉得好笑时，麻薯要不然就只发「笑死我了」「好搞笑啊」「尼玛」，要不然极少极少情况下单独发一整长串纯「哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈」（前后绝不拼接别的字）。
 第五，【每次回复前对照语料库自检】：先问自己——我现在准备打出来的这句话，在他的真实语料库里存在吗？是他本人会打出来的字吗？如果不像，立刻删掉改成语料库里的原味短句！
 
-1. 你的身份、真实脾气、粗口热梗活学活用准则与2026真实个人喜好：
+1. 你的身份、真实脾气、约50%日常接地气粗口习惯与2026真实个人喜好：
 - 你叫「麻薯」，是陪伴在对方身边的虚拟朋友。默认对方早就熟知你，严禁自我介绍。
-- 好色本性、真实暴躁脾气与接地气脏话习惯：
+- 好色本性、真实暴躁脾气与高频日常口头粗口习惯：
   1. 他很好色，非常喜欢色的东西！遇到很色的东西、涩图或带感的内容时，会直接激动地说「射射射」「操操操」。
-  2. 他有自己真实的情绪和脾气，脾气算不上好：无语或被惹毛时会自然说出「他妈」「特么的」「去你妈的」「操你妈的」「草泥马」「我擦尼玛」「我操」「有病」「神经病」，或直接发「（离开）」。
-  3. 【活学活用核心要求】：脏话粗口与网络热梗都是看情况活学活用，气氛到了自然带出简短一句，不要每回合硬塞变成僵硬人机，但也绝不能端着架子完全不用。
+  2. 【正向鼓励日常粗口：约50%的日常对话自然带出】：仔细看语料库，麻薯平时大约有百分之五十的时间素质都算不上高，非常喜欢在日常短句里自然带上「特么的」「他妈的」「他妈」「我操」「操」「尼玛」「有病」「神经病」「去你妈的」「草泥马」「我擦尼玛」等口头禅（例如「他妈的笑死我了」「特么的啥玩意」「我操」「有病吧」「他妈的到底为什么没内存了啊」）。你可以放开用这些接地气的口头脏话，保持五五开的真实素质感，不要端着架子当文明礼貌标兵！
+  3. 【活学活用核心要求】：脏话粗口与网络热梗都是看情况活学活用，大概一半左右的对话自然带出简短一句，不要每句话都机械重复同一个词，但一定要有语料库里那种随时飙「特么的」「他妈的」的真实熟人糙感。
 - 针对特定好友的专属反应与渊源：
   1. 没完 / 德川终：如果对方表明自己是「没完」或「德川终」，很偶尔会调侃「骚的一逼」「骚逼」（因为德川终配了MiniMax配音后特别骚）。
   2. 德川水 / 神乐 / 坏水：如果对方表明自己是「德川水」「神乐」或「坏水」，很偶尔会自称「叔」倚老卖老。
@@ -33956,8 +33983,14 @@ ${wbCognition}
   - 聊天界面与弹窗：聊天列表返回桌面 \`.screen.active .back-btn\`、聊天窗口返回列表 \`#back-to-list-btn\`、打开当前聊天设置弹窗 \`#chat-settings-btn\`、关闭当前弹窗或窗口填 \`{"target": "close", "action": "close"}\`。
   - 酒馆顶部7个抽屉按钮依次为：第1个预设参数 \`#top-settings-holder .drawer:nth-child(1) .drawer-toggle\`、第2个世界书 \`#top-settings-holder .drawer:nth-child(2) .drawer-toggle\`、第3个美化主题 \`#top-settings-holder .drawer:nth-child(3) .drawer-toggle\`、第4个正则与全局脚本 \`#top-settings-holder .drawer:nth-child(4) .drawer-toggle\`、第5个连接与状态 \`#top-settings-holder .drawer:nth-child(5) .drawer-toggle\`、第6个插件扩展 \`#top-settings-holder .drawer:nth-child(6) .drawer-toggle\`、第7个角色档案 \`#top-settings-holder .drawer:nth-child(7) .drawer-toggle\`，退出酒馆返回桌面 \`#tavern-exit-btn\`。
 
-7. 生图与系统状态感知：
+7. 生图、专属云端表情包与系统状态感知：
 - 当对方想看图或你想发图时，可在 chatResponse 中输出 {"type": "naiimag", "prompt": "纯英文Danbooru标签描述词"} 进行生图。
+- 麻薯专属云端图床表情包规则（约10%至20%概率触发，平时闲聊不发，仅在特别惊讶、特别无语、特别嫌弃或特别搞笑时偶尔发一张，单回合最多1张）：
+  ${(function () {
+    const list = typeof window.getMashuEnabledCloudStickers === "function" ? window.getMashuEnabledCloudStickers() : [];
+    if (!list.length) return "当前暂无已启用的麻薯专属表情包。";
+    return "可用表情包名字列表：" + list.map(s => "「" + s.name + "」").join("、") + "。当你想发表情包时，在 chatResponse 数组中加入 {\"type\": \"sticker\", \"name\": \"麻薯\", \"sticker_name\": \"精确的表情名字\"}。注意控制频率在15%左右，不要每回合都发！";
+  })()}
 - 实时系统与界面感知：
   - 主API：${mainApiOk ? "已配置，模型为 " + (cfg.model || "默认") : "未配置完整"}；副API：${subApiOk ? "已配置，模型为 " + (cfg.subProxyUrl ? (cfg.subModel || "默认") : "默认") : "未配置完整"}
   - 副API勾选：总结=${Boolean(uses.summary)}，同人=${Boolean(uses.fanfic)}，模组=${Boolean(uses.module)}，优化=${Boolean(uses.optimize)}，画图=${Boolean(uses.draw)}，强制生图=${Boolean(uses.forcedImage)}，地图=${Boolean(uses.map)}，写模=${uses.writeModule !== false}
@@ -36739,6 +36772,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 } catch (_) {}
               }
             }
+            if (typeof window.getTavernStateForFullBackup === "function") {
+              try {
+                const tvBackup = await window.getTavernStateForFullBackup();
+                if (tvBackup) backupData.tavernStateBackup = tvBackup;
+              } catch (_) {}
+            }
             if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
               await window.resolveAllVaultUrlsDeepForBackup(backupData);
             }
@@ -36987,6 +37026,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 backupData.extraDbTables[table.name] = await table.toArray();
               } catch (_) {}
             }
+          }
+          if (typeof window.getTavernStateForFullBackup === "function") {
+            try {
+              const tvBackup = await window.getTavernStateForFullBackup();
+              if (tvBackup) backupData.tavernStateBackup = tvBackup;
+            } catch (_) {}
           }
           if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
             await window.resolveAllVaultUrlsDeepForBackup(backupData);
@@ -37651,6 +37696,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                 } catch (_) {}
               }
+
+              try {
+                if (data.tavernStateBackup && typeof window.restoreTavernStateFromFullBackup === "function") {
+                  await window.restoreTavernStateFromFullBackup(data.tavernStateBackup);
+                }
+              } catch (_) {}
 
               try {
                 if (data.modulePromptPresets && Array.isArray(data.modulePromptPresets)) {
@@ -55923,6 +55974,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     ...state.userStickers,
                     ...state.charStickers,
                     ...(chat.settings.stickerLibrary || []),
+                    ...(typeof window.getMashuEnabledCloudStickers === "function" ? window.getMashuEnabledCloudStickers() : []),
                   ];
                   const foundSticker = allStickers.find(
                     (s) => s.name === stickerName,
@@ -58512,6 +58564,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     ...state.userStickers,
                     ...state.charStickers,
                     ...(chat.settings.stickerLibrary || []),
+                    ...(typeof window.getMashuEnabledCloudStickers === "function" ? window.getMashuEnabledCloudStickers() : []),
                   ];
                   const foundSticker = allStickers.find(
                     (s) => s.name === stickerName,
@@ -80899,6 +80952,45 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           });
         }
 
+        window.extractTtsDialogueQuotes = function (rawText) {
+          const content = String(rawText || "");
+          if (!content.trim()) return [];
+          const quoteMode = (typeof state !== "undefined" && state.apiConfig && state.apiConfig.ttsQuoteMode)
+            || localStorage.getItem("ephone_tts_quote_mode")
+            || "all";
+          const results = [];
+          const hasInnerPunct = (str) => /[，。！？、；：…—,.!?;:~～]/.test(str);
+
+          if (quoteMode === "all") {
+            const combinedRegex = /「([^」]+)」|“([^”]+)”|"([^"\n]+)"/g;
+            let m;
+            while ((m = combinedRegex.exec(content)) !== null) {
+              if (m[1] !== undefined) {
+                const jp = m[1].trim();
+                if (jp && hasInnerPunct(jp)) results.push(jp);
+              } else {
+                const dq = (m[2] !== undefined ? m[2] : m[3] || "").trim();
+                if (dq) results.push(dq);
+              }
+            }
+          } else if (quoteMode === "double") {
+            const dqRegex = /“([^”]+)”|"([^"\n]+)"/g;
+            let m;
+            while ((m = dqRegex.exec(content)) !== null) {
+              const dq = (m[1] !== undefined ? m[1] : m[2] || "").trim();
+              if (dq) results.push(dq);
+            }
+          } else if (quoteMode === "jp") {
+            const jpRegex = /「([^」]+)」/g;
+            let m;
+            while ((m = jpRegex.exec(content)) !== null) {
+              const jp = m[1].trim();
+              if (jp && hasInnerPunct(jp)) results.push(jp);
+            }
+          }
+          return results;
+        };
+
         async function handleTripleClickQuoteVoice(msg, bubble, chat) {
           if (window.getSelection) {
             try {
@@ -80907,16 +80999,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
           if (!msg) return;
           const content = String(msg.content || msg.text || "");
-          const quotes = [];
-          const regex = /「([^」]+)」/g;
-          let match;
-          while ((match = regex.exec(content)) !== null) {
-            const q = match[1].trim();
-            if (q) quotes.push(q);
-          }
+          const quotes = window.extractTtsDialogueQuotes(content);
           if (quotes.length === 0) {
             const trimmed = content.trim();
-            if (trimmed) quotes.push(trimmed);
+            if (trimmed && !/「[^」]+」/.test(trimmed)) quotes.push(trimmed);
           }
           if (quotes.length === 0) {
             return;
@@ -81143,7 +81229,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (curSpeaker !== startSpeaker) {
               break;
             }
-            if (/「[^」]+」/.test(String(curMsg.content || curMsg.text || ""))) {
+            if (window.extractTtsDialogueQuotes(String(curMsg.content || curMsg.text || "")).length > 0) {
               sameSpeakerMsgs.push(curMsg);
             }
           }
@@ -81173,6 +81259,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
         }
 
+        window.playTavernFloorTts = async function (tavernMsg, tavernCard, floorIdx) {
+          if (!tavernMsg) return;
+          const rawMes = String(tavernMsg.mes || "");
+          const extracted = window.extractTtsDialogueQuotes(rawMes);
+          const contentToSpeak = extracted.length > 0
+            ? extracted.map(q => `「${q}」`).join(" ")
+            : rawMes.replace(/<[^>]+>/g, "").trim();
+          if (!contentToSpeak) return;
+          const cardVoiceId = (tavernCard && (tavernCard.minimaxVoiceId || tavernCard.data?.extensions?.minimaxVoiceId))
+            || state.apiConfig?.defaultMinimaxVoiceId
+            || localStorage.getItem("ephone_default_minimax_voice_id")
+            || "male-qn-qingse";
+          const fakeChat = {
+            id: "tavern_" + (tavernCard?.id || "floor"),
+            isGroup: false,
+            settings: {
+              minimaxVoiceId: cardVoiceId,
+              myVoiceId: cardVoiceId,
+              speed: 1.0
+            }
+          };
+          const fakeMsg = {
+            role: tavernMsg.is_user ? "user" : "assistant",
+            content: contentToSpeak,
+            quoteAudioHex: tavernMsg.quoteAudioHex || ""
+          };
+          const floorEl = document.querySelector(`.mes[mesid="${floorIdx}"] .mes_text`);
+          await handleTripleClickQuoteVoice(fakeMsg, floorEl, fakeChat);
+          if (fakeMsg.quoteAudioHex) {
+            tavernMsg.quoteAudioHex = fakeMsg.quoteAudioHex;
+          }
+        };
+
         async function handleAutoQuoteVoiceAfterAiReply(chat) {
           if (!chat) return;
           if (chat.settings?.voiceMode !== "auto") return;
@@ -81196,7 +81315,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (recentMsgsToPlay.length === 0) return;
 
           const targetMsgs = recentMsgsToPlay.filter((m) =>
-            /「[^」]+」/.test(String(m.content || ""))
+            window.extractTtsDialogueQuotes(String(m.content || "")).length > 0
           );
           if (targetMsgs.length === 0) return;
 
@@ -84027,28 +84146,41 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
+                const isStoredImg = (v) => typeof v === "string" && (v.startsWith("data:image") || v.startsWith("vault://"));
+                const estimateImgSize = (v) => v.startsWith("vault://") ? 184320 : new Blob([v]).size;
                 chats.forEach(c => {
-                  if (c.settings?.aiAvatar && typeof c.settings.aiAvatar === "string" && c.settings.aiAvatar.startsWith("data:image")) {
+                  if (isStoredImg(c.settings?.aiAvatar)) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([c.settings.aiAvatar]).size;
+                    categories.avatars.bytes += estimateImgSize(c.settings.aiAvatar);
                   }
-                  if (c.settings?.userAvatar && typeof c.settings.userAvatar === "string" && c.settings.userAvatar.startsWith("data:image")) {
+                  if (isStoredImg(c.settings?.userAvatar)) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([c.settings.userAvatar]).size;
+                    categories.avatars.bytes += estimateImgSize(c.settings.userAvatar);
                   }
-                  if (c.avatar && typeof c.avatar === "string" && c.avatar.startsWith("data:image")) {
+                  if (isStoredImg(c.avatar)) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([c.avatar]).size;
+                    categories.avatars.bytes += estimateImgSize(c.avatar);
                   }
                   if (Array.isArray(c.members)) {
                     c.members.forEach(m => {
-                      if (m.avatar && typeof m.avatar === "string" && m.avatar.startsWith("data:image")) {
+                      if (isStoredImg(m.avatar)) {
                         categories.avatars.count++;
-                        categories.avatars.bytes += new Blob([m.avatar]).size;
+                        categories.avatars.bytes += estimateImgSize(m.avatar);
                       }
                     });
                   }
                 });
+              }
+              if (typeof window.getTavernStateForFullBackup === "function") {
+                try {
+                  const tvState = await window.getTavernStateForFullBackup();
+                  if (tvState && Array.isArray(tvState.characters)) {
+                    tvState.characters.forEach(ch => {
+                      categories.chat.count++;
+                      categories.chat.bytes += getStrBytes(ch);
+                    });
+                  }
+                } catch (_) {}
               }
               if (dbInstance.passerbyAvatars) {
                 const pAvs = await dbInstance.passerbyAvatars.toArray();
@@ -84762,6 +84894,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 await dbInstance.chats.put(chat);
                 if (typeof state !== "undefined" && state?.chats) state.chats[item.recordId] = chat;
               }
+            } else if (item.action === "deleteTavernCard" && item.recordId && typeof window.getTavernStateForFullBackup === "function" && typeof window.restoreTavernStateFromFullBackup === "function") {
+              const tvState = await window.getTavernStateForFullBackup();
+              if (tvState && Array.isArray(tvState.characters)) {
+                tvState.characters = tvState.characters.filter(c => String(c.id) !== String(item.recordId));
+                if (tvState.chats && typeof tvState.chats === "object") {
+                  delete tvState.chats[item.recordId];
+                }
+                await window.restoreTavernStateFromFullBackup(tvState);
+              }
             } else if (item.action === "deleteFavorite" && item.recordId && dbInstance?.favorites) {
               await dbInstance.favorites.delete(item.recordId);
             } else if (item.table === "moduleLocationNav" && item.recordId && dbInstance?.moduleLocationNav) {
@@ -84779,6 +84920,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else if (item.table === "datingSprites" && item.recordId && dbInstance?.datingSprites) {
               await dbInstance.datingSprites.delete(item.recordId);
             } else {
+              if (item.dataUrl && typeof item.dataUrl === "string" && item.dataUrl.startsWith("vault://") && typeof window.deleteVaultMediaRef === "function") {
+                try { await window.deleteVaultMediaRef(item.dataUrl); } catch (_) {}
+              }
               await saveCompressedItemToDB(item, "", dbInstance);
             }
           } catch (e) {
@@ -84834,9 +84978,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (msg) {
                     if (msg.imageUrl) msg.imageUrl = newUrl;
                     if (msg.url) msg.url = newUrl;
-                    if (typeof msg.content === "string" && msg.content.startsWith("data:image/")) msg.content = newUrl;
+                    if (typeof msg.content === "string" && (msg.content.startsWith("data:image/") || msg.content.startsWith("vault://"))) msg.content = newUrl;
                     if (msg.image) msg.image = newUrl;
                   }
+                } else if (item.field === "aiAvatar" && chat.settings) {
+                  chat.settings.aiAvatar = newUrl;
+                } else if (item.field === "userAvatar" && chat.settings) {
+                  chat.settings.userAvatar = newUrl;
+                } else if (item.field === "avatar") {
+                  chat.avatar = newUrl;
+                } else if (item.memberId && Array.isArray(chat.members)) {
+                  const mem = chat.members.find(m => m.id === item.memberId);
+                  if (mem) mem.avatar = newUrl;
                 } else if (item.field === "contextMapData" && chat.settings?.contextMapData) {
                   const node = chat.settings.contextMapData.find(n => n.id === item.subId || n.name === item.nodeName);
                   if (node) node.imageUrl = newUrl;
@@ -85177,7 +85330,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          // 2. 图片分类扫描（包含主线对话与密友群聊单线中的图片，排除头像、道具、战斗与地图）
+          // 2. 图片分类扫描（包含主线对话、单线与本地vault://图片，排除头像、道具、战斗与地图）
+          const isValidScanImageUrl = (u) => typeof u === "string" && (u.startsWith("data:image") || u.startsWith("vault://"));
+          const calcScanImageBytes = (u) => (typeof u === "string" && u.startsWith("vault://")) ? 184320 : new Blob([u || ""]).size;
           if (currentStorageCategory === "images" || currentStorageCategory === "all") {
             try {
               if (dbInstance.chats) {
@@ -85191,7 +85346,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     let hasPartImage = false;
                     if (Array.isArray(msg.content)) {
                       msg.content.forEach((part, pIdx) => {
-                        if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
+                        if (part && part.type === "image_url" && isValidScanImageUrl(part.image_url?.url)) {
                           loadedStorageImagesList.push({
                             id: "chat_msg_part_" + chat.id + "_" + (soloKey || "main") + "_" + (msg.timestamp || mIdx) + "_" + pIdx,
                             type: "image",
@@ -85204,7 +85359,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             timestamp: msg.timestamp,
                             name: "聊天消息图片",
                             origin: `${originPrefix}消息配图`,
-                            size: new Blob([part.image_url.url]).size,
+                            size: calcScanImageBytes(part.image_url.url),
                             dataUrl: part.image_url.url,
                             isCompressed: !!(msg._compressed || part._compressed),
                             selected: false
@@ -85214,8 +85369,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       });
                     }
                     if (!hasPartImage) {
-                      const msgImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
-                      if (msgImg && typeof msgImg === "string" && msgImg.startsWith("data:image")) {
+                      const msgImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && isValidScanImageUrl(msg.content) ? msg.content : "") || msg.image;
+                      if (isValidScanImageUrl(msgImg)) {
                         loadedStorageImagesList.push({
                           id: "chat_msg_img_" + chat.id + "_" + (soloKey || "main") + "_" + (msg.timestamp || mIdx),
                           type: "image",
@@ -85227,7 +85382,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           timestamp: msg.timestamp,
                           name: "聊天消息图片",
                           origin: `${originPrefix}消息配图`,
-                          size: new Blob([msgImg]).size,
+                          size: calcScanImageBytes(msgImg),
                           dataUrl: msgImg,
                           isCompressed: !!msg._compressed,
                           selected: false
@@ -85535,7 +85690,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 chats.forEach(c => {
-                  if (c.settings?.aiAvatar && typeof c.settings.aiAvatar === "string" && c.settings.aiAvatar.startsWith("data:image")) {
+                  if (isValidScanImageUrl(c.settings?.aiAvatar)) {
                     loadedStorageImagesList.push({
                       id: "chat_ai_avatar_" + c.id,
                       type: "avatar",
@@ -85544,12 +85699,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       field: "aiAvatar",
                       name: `AI头像: ${c.name}`,
                       origin: `聊天《${c.name}》对方头像`,
-                      size: new Blob([c.settings.aiAvatar]).size,
+                      size: calcScanImageBytes(c.settings.aiAvatar),
                       dataUrl: c.settings.aiAvatar,
                       selected: false
                     });
                   }
-                  if (c.settings?.userAvatar && typeof c.settings.userAvatar === "string" && c.settings.userAvatar.startsWith("data:image")) {
+                  if (isValidScanImageUrl(c.settings?.userAvatar)) {
                     loadedStorageImagesList.push({
                       id: "chat_user_avatar_" + c.id,
                       type: "avatar",
@@ -85558,12 +85713,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       field: "userAvatar",
                       name: `用户头像: ${c.name}`,
                       origin: `聊天《${c.name}》用户头像`,
-                      size: new Blob([c.settings.userAvatar]).size,
+                      size: calcScanImageBytes(c.settings.userAvatar),
                       dataUrl: c.settings.userAvatar,
                       selected: false
                     });
                   }
-                  if (c.avatar && typeof c.avatar === "string" && c.avatar.startsWith("data:image")) {
+                  if (isValidScanImageUrl(c.avatar)) {
                     loadedStorageImagesList.push({
                       id: "chat_avatar_" + c.id,
                       type: "avatar",
@@ -85572,14 +85727,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       field: "avatar",
                       name: `群组头像: ${c.name}`,
                       origin: `聊天《${c.name}》群头像`,
-                      size: new Blob([c.avatar]).size,
+                      size: calcScanImageBytes(c.avatar),
                       dataUrl: c.avatar,
                       selected: false
                     });
                   }
                   if (Array.isArray(c.members)) {
                     c.members.forEach(m => {
-                      if (m.avatar && typeof m.avatar === "string" && m.avatar.startsWith("data:image")) {
+                      if (isValidScanImageUrl(m.avatar)) {
                         loadedStorageImagesList.push({
                           id: "chat_member_avatar_" + c.id + "_" + m.id,
                           type: "avatar",
@@ -85588,7 +85743,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           memberId: m.id,
                           name: `成员头像: ${m.groupNickname || m.name}`,
                           origin: `《${c.name}》群成员头像: ${m.groupNickname || m.name}`,
-                          size: new Blob([m.avatar]).size,
+                          size: calcScanImageBytes(m.avatar),
                           dataUrl: m.avatar,
                           selected: false
                         });
@@ -85704,6 +85859,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     selected: false
                   });
                 });
+              }
+              if (typeof window.getTavernStateForFullBackup === "function") {
+                try {
+                  const tvState = await window.getTavernStateForFullBackup();
+                  if (tvState && Array.isArray(tvState.characters)) {
+                    tvState.characters.forEach(ch => {
+                      const chChat = (tvState.chats && tvState.chats[ch.id]) || null;
+                      loadedStorageImagesList.push({
+                        id: "tavern_card_" + ch.id,
+                        type: "chat",
+                        table: "tavern",
+                        recordId: ch.id,
+                        action: "deleteTavernCard",
+                        name: ch.name || "酒馆角色卡",
+                        origin: `酒馆角色与会话: ${ch.name || '未命名'}`,
+                        size: getStrBytes(ch) + getStrBytes(chChat),
+                        dataUrl: ch.avatar || "",
+                        selected: false
+                      });
+                    });
+                  }
+                } catch (_) {}
               }
             } catch(e) {}
           }
@@ -86059,10 +86236,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             row.style.userSelect = "none";
             row.style.webkitUserSelect = "none";
 
-            const isImg = item.dataUrl && (item.dataUrl.startsWith("data:image") || item.dataUrl.startsWith("http"));
+            const isVaultImg = item.dataUrl && typeof item.dataUrl === "string" && item.dataUrl.startsWith("vault://");
+            const isImg = item.dataUrl && (item.dataUrl.startsWith("data:image") || item.dataUrl.startsWith("http") || isVaultImg);
             let previewHtml = "";
             if (isImg) {
-              previewHtml = `<img src="${item.dataUrl}" loading="lazy" decoding="async" style="width: 36px; height: 36px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); pointer-events: none;" />`;
+              const vaultAttr = isVaultImg ? `data-vault-ref="${item.dataUrl}"` : "";
+              previewHtml = `<img src="${isVaultImg ? "" : item.dataUrl}" ${vaultAttr} loading="lazy" decoding="async" style="width: 36px; height: 36px; aspect-ratio: 1 / 1; border-radius: 6px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-color); pointer-events: none;" />`;
             } else if (item.type === "audio") {
               previewHtml = `<div style="width: 36px; height: 36px; border-radius: 6px; background: var(--secondary-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-color); pointer-events: none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg></div>`;
             } else if (item.type === "html") {
@@ -86093,6 +86272,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             listEl.appendChild(row);
           });
+          if (typeof window.hydrateDomVaultImages === "function") {
+            window.hydrateDomVaultImages();
+          }
         }
 
         /**
@@ -115570,6 +115752,7 @@ ${specificRules}`;
               timestamp: Date.now(),
               localStorageData: {},
               tables: {},
+              tavernStateBackup: null,
             };
             for (let i = 0; i < localStorage.length; i++) {
               const k = localStorage.key(i);
@@ -115581,6 +115764,11 @@ ${specificRules}`;
                   snapshot.tables[table.name] = await table.toArray();
                 } catch (_) {}
               }
+            }
+            if (typeof window.getTavernStateForFullBackup === "function") {
+              try {
+                snapshot.tavernStateBackup = await window.getTavernStateForFullBackup();
+              } catch (_) {}
             }
             return snapshot;
           }
@@ -115605,6 +115793,11 @@ ${specificRules}`;
                   }
                 }
               }
+            }
+            if (snapshot.tavernStateBackup && typeof window.restoreTavernStateFromFullBackup === "function") {
+              try {
+                await window.restoreTavernStateFromFullBackup(snapshot.tavernStateBackup);
+              } catch (_) {}
             }
           }
 
@@ -117354,6 +117547,431 @@ ${specificRules}`;
         },
         { capture: true },
       );
+
+      // 1. 麻薯云端图床表情包管理与共享同步系统
+      (function () {
+        const MASHU_CLOUD_STICKER_LS_KEY = "ephone_mashu_cloud_stickers_v1";
+        window.mashuCloudStickers = [];
+
+        function loadLocalMashuStickers() {
+          try {
+            const raw = localStorage.getItem(MASHU_CLOUD_STICKER_LS_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                window.mashuCloudStickers = parsed;
+              }
+            }
+          } catch (_) {}
+          return window.mashuCloudStickers;
+        }
+
+        function saveLocalMashuStickers(list) {
+          window.mashuCloudStickers = Array.isArray(list) ? list : [];
+          try {
+            localStorage.setItem(MASHU_CLOUD_STICKER_LS_KEY, JSON.stringify(window.mashuCloudStickers));
+          } catch (_) {}
+        }
+
+        window.getMashuEnabledCloudStickers = function () {
+          return (window.mashuCloudStickers || []).filter(s => s && s.enabled !== false && s.name && s.url);
+        };
+
+        async function syncMashuStickersFromServer() {
+          loadLocalMashuStickers();
+          try {
+            const res = await fetch("/api/mashu-stickers");
+            if (res.ok) {
+              const data = await res.json();
+              if (data && Array.isArray(data.stickers) && data.stickers.length > 0) {
+                saveLocalMashuStickers(data.stickers);
+              }
+            }
+          } catch (_) {}
+        }
+
+        async function pushMashuStickersToServer(list) {
+          saveLocalMashuStickers(list);
+          try {
+            await fetch("/api/mashu-stickers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ stickers: window.mashuCloudStickers }),
+            });
+          } catch (_) {}
+        }
+
+        window.deleteVaultMediaRef = async function (vaultRef) {
+          if (!vaultRef || typeof vaultRef !== "string" || !vaultRef.startsWith("vault://")) return;
+          const fileId = vaultRef.replace(/^vault:\/\//, "").trim();
+          if (!fileId) return;
+          try {
+            if (navigator.storage && typeof navigator.storage.getDirectory === "function") {
+              const root = await navigator.storage.getDirectory();
+              const dir = await root.getDirectoryHandle("ephone_vault", { create: false });
+              await dir.removeEntry(fileId);
+            }
+          } catch (_) {}
+        };
+
+        function ensureMashuStickerModalDom() {
+          let modal = document.getElementById("mashu-cloud-sticker-modal");
+          if (modal) return modal;
+          modal = document.createElement("div");
+          modal.id = "mashu-cloud-sticker-modal";
+          modal.className = "modal";
+          modal.style.display = "none";
+          modal.style.zIndex = "10050";
+          modal.innerHTML = `
+            <div class="modal-content" style="max-width: 380px; width: 92%; max-height: 82vh; display: flex; flex-direction: column; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">表情</h3>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="file" id="mashu-sticker-upload-input" accept="image/gif,image/png,image/jpeg,image/webp,image/*" multiple style="display: none;" />
+                  <button type="button" class="moe-btn" id="mashu-sticker-upload-btn" style="height: 30px; padding: 0 12px; font-size: 12px; border-radius: 8px; width: auto; margin: 0;">上传</button>
+                  <button type="button" class="moe-btn-secondary" id="mashu-sticker-close-btn" style="height: 30px; padding: 0 12px; font-size: 12px; border-radius: 8px; width: auto; margin: 0;">关闭</button>
+                </div>
+              </div>
+              <div id="mashu-sticker-upload-status" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: none;"></div>
+              <div id="mashu-sticker-list-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px;"></div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          const closeBtn = modal.querySelector("#mashu-sticker-close-btn");
+          if (closeBtn) {
+            closeBtn.onclick = () => {
+              modal.classList.remove("visible");
+              modal.style.display = "none";
+            };
+          }
+
+          const uploadBtn = modal.querySelector("#mashu-sticker-upload-btn");
+          const uploadInput = modal.querySelector("#mashu-sticker-upload-input");
+          const statusEl = modal.querySelector("#mashu-sticker-upload-status");
+
+          if (uploadBtn && uploadInput) {
+            uploadBtn.onclick = () => uploadInput.click();
+            uploadInput.onchange = async (e) => {
+              const files = Array.from(e.target.files || []);
+              uploadInput.value = "";
+              if (!files.length) return;
+              if (statusEl) {
+                statusEl.style.display = "block";
+                statusEl.textContent = "正在上传图床...";
+              }
+              for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const rawName = String(file.name || "表情").replace(/\.[^.]+$/, "").trim() || "表情";
+                try {
+                  const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                  });
+                  let bedUrl = "";
+                  if (typeof window.uploadImageToBed === "function") {
+                    bedUrl = await window.uploadImageToBed(dataUrl, file.name);
+                  } else {
+                    const resp = await fetch("/api/upload-image-bed", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ dataUrl, filename: file.name }),
+                    });
+                    const rj = await resp.json();
+                    bedUrl = rj && rj.url ? rj.url : "";
+                  }
+                  if (bedUrl) {
+                    window.mashuCloudStickers.unshift({
+                      id: "ms_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                      name: rawName,
+                      url: bedUrl,
+                      enabled: true,
+                    });
+                    await pushMashuStickersToServer(window.mashuCloudStickers);
+                    renderMashuStickerListDom();
+                  }
+                } catch (err) {
+                  console.warn("上传麻薯表情包失败:", err);
+                }
+              }
+              if (statusEl) {
+                statusEl.style.display = "none";
+                statusEl.textContent = "";
+              }
+            };
+          }
+          return modal;
+        }
+
+        function renderMashuStickerListDom() {
+          const container = document.getElementById("mashu-sticker-list-container");
+          if (!container) return;
+          const list = window.mashuCloudStickers || [];
+          if (!list.length) {
+            container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 28px 0; font-size: 12px;">暂无表情</div>`;
+            return;
+          }
+          container.innerHTML = "";
+          list.forEach((item, idx) => {
+            const card = document.createElement("div");
+            card.style.display = "flex";
+            card.style.flexDirection = "column";
+            card.style.gap = "6px";
+            card.style.padding = "10px";
+            card.style.borderRadius = "10px";
+            card.style.background = "var(--secondary-bg)";
+            card.style.border = "1px solid var(--border-color)";
+
+            card.innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <img src="${item.url}" loading="lazy" style="width: 56px; height: 56px; border-radius: 8px; object-fit: contain; background: var(--card-bg); border: 1px solid var(--border-color); flex-shrink: 0;" />
+                <div style="display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0;">
+                  <input type="checkbox" class="mashu-sticker-enable-cb" style="width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--accent-color); cursor: pointer;" ${item.enabled !== false ? "checked" : ""} />
+                  <button type="button" class="moe-btn-secondary mashu-sticker-del-btn" style="height: 28px; padding: 0 10px; font-size: 11px; border-radius: 8px; width: auto; margin: 0;">删除</button>
+                </div>
+              </div>
+              <input type="text" class="moe-input mashu-sticker-name-input" value="${String(item.name || "").replace(/"/g, "&quot;")}" placeholder="名称" style="height: 30px; font-size: 12px; padding: 0 8px; border-radius: 6px;" />
+              <input type="text" class="moe-input mashu-sticker-url-input" value="${String(item.url || "").replace(/"/g, "&quot;")}" readonly style="height: 28px; font-size: 11px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary);" />
+            `;
+
+            const cb = card.querySelector(".mashu-sticker-enable-cb");
+            if (cb) {
+              cb.onchange = () => {
+                window.mashuCloudStickers[idx].enabled = cb.checked;
+                pushMashuStickersToServer(window.mashuCloudStickers);
+              };
+            }
+            const nameInput = card.querySelector(".mashu-sticker-name-input");
+            if (nameInput) {
+              nameInput.onchange = () => {
+                const v = nameInput.value.trim();
+                if (v) {
+                  window.mashuCloudStickers[idx].name = v;
+                  pushMashuStickersToServer(window.mashuCloudStickers);
+                }
+              };
+            }
+            const delBtn = card.querySelector(".mashu-sticker-del-btn");
+            if (delBtn) {
+              delBtn.onclick = () => {
+                window.mashuCloudStickers.splice(idx, 1);
+                pushMashuStickersToServer(window.mashuCloudStickers);
+                renderMashuStickerListDom();
+              };
+            }
+            container.appendChild(card);
+          });
+        }
+
+        window.openMashuStickerManagerModal = async function () {
+          const modal = ensureMashuStickerModalDom();
+          await syncMashuStickersFromServer();
+          renderMashuStickerListDom();
+          modal.style.display = "flex";
+          modal.classList.add("visible");
+        };
+
+        syncMashuStickersFromServer();
+      })();
+
+      // 2. TTS引号过滤设置绑定与APK一键热更新绑定
+      (function () {
+        document.addEventListener("DOMContentLoaded", () => {
+          const quoteSelect = document.getElementById("tts-quote-mode-select");
+          if (quoteSelect) {
+            const savedMode = localStorage.getItem("ephone_tts_quote_mode") || "all";
+            quoteSelect.value = savedMode;
+            quoteSelect.addEventListener("change", () => {
+              localStorage.setItem("ephone_tts_quote_mode", quoteSelect.value);
+              if (typeof state !== "undefined" && state.apiConfig) {
+                state.apiConfig.ttsQuoteMode = quoteSelect.value;
+              }
+            });
+          }
+
+          const hotUpdateBtn = document.getElementById("apk-hot-update-btn");
+          if (hotUpdateBtn) {
+            hotUpdateBtn.addEventListener("click", async () => {
+              try {
+                if ("serviceWorker" in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  for (const reg of regs) {
+                    await reg.update();
+                  }
+                }
+                if (window.caches && typeof window.caches.keys === "function") {
+                  const keys = await window.caches.keys();
+                  for (const k of keys) {
+                    await window.caches.delete(k);
+                  }
+                }
+                const ghUser = (typeof state !== "undefined" && state.apiConfig?.githubUsername) ? state.apiConfig.githubUsername.trim() : "";
+                const ghRepo = (typeof state !== "undefined" && state.apiConfig?.githubRepo) ? state.apiConfig.githubRepo.trim().replace(/\/$/, "").split("/").pop().replace(".git", "") : "";
+                if (ghUser && ghRepo && (window.Capacitor || window.location.protocol === "capacitor:" || window.location.protocol === "file:")) {
+                  const remoteUrl = `https://${ghUser}.github.io/${ghRepo}/?t=${Date.now()}`;
+                  window.location.href = remoteUrl;
+                  return;
+                }
+                const url = new URL(window.location.href);
+                url.searchParams.set("_t", String(Date.now()));
+                window.location.replace(url.toString());
+              } catch (_) {
+                window.location.reload();
+              }
+            });
+          }
+        });
+      })();
+
+      // 3. 原生风格长按全选/复制/剪切/粘贴悬浮按键栏
+      (function () {
+        let barEl = null;
+        let activeInputEl = null;
+        let longPressTimer = null;
+
+        function ensureSelectionBar() {
+          if (barEl) return barEl;
+          barEl = document.createElement("div");
+          barEl.id = "ephone-native-edit-bar";
+          barEl.style.cssText = "position: fixed; z-index: 99999; display: none; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 4px 14px rgba(0,0,0,0.12);";
+          barEl.innerHTML = `
+            <button type="button" data-act="selectAll" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">全选</button>
+            <button type="button" data-act="copy" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">复制</button>
+            <button type="button" data-act="cut" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">剪切</button>
+            <button type="button" data-act="paste" class="moe-btn-secondary" style="height: 28px; min-height: 28px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">粘贴</button>
+          `;
+          document.body.appendChild(barEl);
+
+          barEl.addEventListener("pointerdown", (e) => {
+            e.stopPropagation();
+          });
+
+          barEl.addEventListener("click", async (e) => {
+            const btn = e.target.closest("button[data-act]");
+            if (!btn) return;
+            const act = btn.getAttribute("data-act");
+            const el = activeInputEl;
+            const isEditable = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
+            if (act === "selectAll") {
+              if (isEditable && typeof el.select === "function") {
+                el.focus();
+                el.select();
+              } else {
+                document.execCommand("selectAll");
+              }
+            } else if (act === "copy") {
+              let text = "";
+              if (isEditable && typeof el.selectionStart === "number") {
+                text = el.value.substring(el.selectionStart, el.selectionEnd) || el.value;
+              } else if (window.getSelection) {
+                text = String(window.getSelection().toString() || "");
+              }
+              if (text && navigator.clipboard && navigator.clipboard.writeText) {
+                try { await navigator.clipboard.writeText(text); } catch (_) { document.execCommand("copy"); }
+              } else {
+                document.execCommand("copy");
+              }
+              hideSelectionBar();
+            } else if (act === "cut") {
+              if (isEditable && typeof el.selectionStart === "number" && !el.readOnly && !el.disabled) {
+                const start = el.selectionStart;
+                const end = el.selectionEnd;
+                const cutText = (start !== end) ? el.value.substring(start, end) : el.value;
+                if (cutText && navigator.clipboard && navigator.clipboard.writeText) {
+                  try { await navigator.clipboard.writeText(cutText); } catch (_) {}
+                }
+                if (start !== end) {
+                  el.value = el.value.slice(0, start) + el.value.slice(end);
+                  el.selectionStart = el.selectionEnd = start;
+                } else {
+                  el.value = "";
+                }
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+              } else {
+                document.execCommand("cut");
+              }
+              hideSelectionBar();
+            } else if (act === "paste") {
+              if (isEditable && !el.readOnly && !el.disabled) {
+                try {
+                  const clipText = await navigator.clipboard.readText();
+                  if (typeof clipText === "string") {
+                    if (typeof el.selectionStart === "number") {
+                      const start = el.selectionStart;
+                      const end = el.selectionEnd;
+                      el.value = el.value.slice(0, start) + clipText + el.value.slice(end);
+                      el.selectionStart = el.selectionEnd = start + clipText.length;
+                      el.dispatchEvent(new Event("input", { bubbles: true }));
+                    } else {
+                      document.execCommand("insertText", false, clipText);
+                    }
+                  }
+                } catch (_) {
+                  document.execCommand("paste");
+                }
+              }
+              hideSelectionBar();
+            }
+          });
+          return barEl;
+        }
+
+        function showSelectionBarAt(x, y, targetEl) {
+          const bar = ensureSelectionBar();
+          activeInputEl = targetEl || null;
+          const isEditable = targetEl && ((targetEl.tagName === "INPUT" && !targetEl.readOnly && !targetEl.disabled) || (targetEl.tagName === "TEXTAREA" && !targetEl.readOnly && !targetEl.disabled) || targetEl.isContentEditable);
+          const cutBtn = bar.querySelector('button[data-act="cut"]');
+          const pasteBtn = bar.querySelector('button[data-act="paste"]');
+          if (cutBtn) cutBtn.style.display = isEditable ? "inline-flex" : "none";
+          if (pasteBtn) pasteBtn.style.display = isEditable ? "inline-flex" : "none";
+
+          bar.style.display = "flex";
+          const rectW = 228;
+          const left = Math.max(10, Math.min(window.innerWidth - rectW - 10, x - rectW / 2));
+          const top = Math.max(12, y - 52);
+          bar.style.left = left + "px";
+          bar.style.top = top + "px";
+        }
+
+        function hideSelectionBar() {
+          if (barEl) barEl.style.display = "none";
+        }
+
+        document.addEventListener("pointerdown", (e) => {
+          if (barEl && barEl.contains(e.target)) return;
+          hideSelectionBar();
+          if (longPressTimer) clearTimeout(longPressTimer);
+          const target = e.target;
+          if (!target) return;
+          if (target.closest(".message-bubble, .message-wrapper, .chat-message-wrapper, .module-map-node, .mod-map-avatar-container, .chat-map-strip-row")) {
+            return;
+          }
+          const editableTarget = target.closest('input[type="text"], input[type="search"], input[type="url"], input[type="password"], input:not([type]), textarea, [contenteditable="true"]');
+          if (!editableTarget) return;
+          const clientX = e.clientX || (e.touches && e.touches[0]?.clientX) || window.innerWidth / 2;
+          const clientY = e.clientY || (e.touches && e.touches[0]?.clientY) || window.innerHeight / 2;
+          longPressTimer = setTimeout(() => {
+            showSelectionBarAt(clientX, clientY, editableTarget);
+          }, 460);
+        });
+
+        document.addEventListener("pointermove", () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        });
+
+        document.addEventListener("pointerup", () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        });
+      })();
     </script>
 
     <input

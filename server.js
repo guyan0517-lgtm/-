@@ -195,6 +195,43 @@ app.post('/api/upload-image-bed', async (req, res) => {
   }
 });
 
+const MASHU_STICKERS_FILE = path.join(LOCAL_VAULT_DIR, 'mashu-stickers.json');
+
+app.get('/api/mashu-stickers', (req, res) => {
+  try {
+    if (!fs.existsSync(MASHU_STICKERS_FILE)) {
+      return res.json({ ok: true, stickers: [] });
+    }
+    const raw = fs.readFileSync(MASHU_STICKERS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.stickers) ? parsed.stickers : []);
+    return res.json({ ok: true, stickers: list });
+  } catch (err) {
+    return res.json({ ok: true, stickers: [] });
+  }
+});
+
+app.post('/api/mashu-stickers', (req, res) => {
+  try {
+    const incoming = req.body && Array.isArray(req.body.stickers) ? req.body.stickers : [];
+    const cleaned = incoming
+      .filter(s => s && typeof s.name === 'string' && typeof s.url === 'string' && s.name.trim() && s.url.trim())
+      .map(s => ({
+        id: String(s.id || ('ms_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
+        name: s.name.trim(),
+        url: s.url.trim(),
+        enabled: s.enabled !== false
+      }));
+    if (!fs.existsSync(LOCAL_VAULT_DIR)) {
+      fs.mkdirSync(LOCAL_VAULT_DIR, { recursive: true });
+    }
+    fs.writeFileSync(MASHU_STICKERS_FILE, JSON.stringify({ updatedAt: Date.now(), stickers: cleaned }, null, 2), 'utf8');
+    return res.json({ ok: true, stickers: cleaned });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || '保存麻薯表情包失败' });
+  }
+});
+
 app.post('/api/webdav-proxy', async (req, res) => {
   try {
     const { url, method = 'GET', username = '', password = '', contentBase64 = '', contentType = 'application/octet-stream', depth } = req.body || {};

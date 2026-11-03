@@ -423,6 +423,31 @@ code, pre {
     } catch (_) {}
   }
 
+  window.getTavernStateForFullBackup = async function () {
+    try {
+      const fromIdb = await idbGet(STORAGE_KEY);
+      if (fromIdb && typeof fromIdb === 'object') return fromIdb;
+      if (typeof tavernState !== 'undefined' && tavernState) return tavernState;
+    } catch (_) {}
+    return null;
+  };
+
+  window.restoreTavernStateFromFullBackup = async function (backupObj) {
+    if (!backupObj || typeof backupObj !== 'object') return false;
+    try {
+      await idbSet(STORAGE_KEY, backupObj);
+      if (typeof tavernState !== 'undefined') {
+        tavernState = backupObj;
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY + '_meta', JSON.stringify({ updatedAt: Date.now() }));
+      } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
   function getTermuxBaseUrl() {
     try {
       const raw = localStorage.getItem('ephone_local_vault_config') || localStorage.getItem('ephone_local_vault_config_v1');
@@ -10800,6 +10825,9 @@ code, pre {
             ` : `
               <div class="flex-container mes_buttons mes_edit_buttons">
                 <div class="extraMesButtons ${isExtraOpen ? '' : 'tavern-extra-hidden'}">
+                  <button type="button" class="tavern-mes-icon-btn" data-action="floor-tts" data-mesid="${idx}" title="朗读">
+                    <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                  </button>
                   <button type="button" class="tavern-mes-icon-btn" data-action="floor-copy" data-mesid="${idx}" title="复制原文">
                     <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                   </button>
@@ -14536,6 +14564,21 @@ code, pre {
           msg.translation = '';
           await saveTavernStore();
           appendOrUpdateSingleFloorDom(idx);
+        }
+        return;
+      }
+
+      if (action === 'floor-tts') {
+        const idx = Number(actionEl.getAttribute('data-mesid'));
+        const sess = getActiveChatSession();
+        const card = getActiveCharacterCard();
+        const msg = sess && sess.messages[idx];
+        uiRuntime.openExtraMenuMesId = null;
+        appendOrUpdateSingleFloorDom(idx);
+        if (msg && typeof window.playTavernFloorTts === 'function') {
+          await window.playTavernFloorTts(msg, card, idx);
+        } else {
+          showTavernToast('未找到语音朗读模块');
         }
         return;
       }

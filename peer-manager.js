@@ -914,6 +914,12 @@
       if (typeof window.API_BASE_URL === "string" && window.API_BASE_URL.trim()) {
         return window.API_BASE_URL.trim().replace(/\/+$/, "");
       }
+      try {
+        const savedBase = localStorage.getItem("ephone_custom_peer_relay_url");
+        if (savedBase && savedBase.trim()) {
+          return savedBase.trim().replace(/\/+$/, "");
+        }
+      } catch (e) {}
       return "";
     },
 
@@ -921,12 +927,22 @@
       const base = this.getApiBase();
       if (base) return true;
       if (this._backendRelayUnsupported) return false;
+      const proto = (typeof window !== "undefined" && window.location && window.location.protocol)
+        ? String(window.location.protocol).toLowerCase()
+        : "";
       const host = (typeof window !== "undefined" && window.location && window.location.hostname)
         ? window.location.hostname.toLowerCase()
         : "";
+      const isCapacitorOrApk = Boolean(
+        (typeof window !== "undefined" && (window.Capacitor || window.cordova || window.AndroidBridge)) ||
+        proto === "file:" ||
+        proto === "capacitor:" ||
+        proto === "ionic:" ||
+        proto === "app:"
+      );
       if (
+        isCapacitorOrApk ||
         !host ||
-        (typeof window !== "undefined" && window.location && window.location.protocol === "file:") ||
         host.endsWith(".github.io") ||
         host.endsWith(".pages.dev") ||
         host.endsWith(".netlify.app") ||
