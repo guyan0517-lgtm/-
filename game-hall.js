@@ -2599,7 +2599,16 @@ code, pre {
       callPopup: callGenericPopupShim,
       POPUP_TYPE: { TEXT: 1, CONFIRM: 2, INPUT: 3, DISPLAY: 4 },
       POPUP_RESULT: { AFFIRMATIVE: 1, NEGATIVE: 0, CANCELLED: null },
-      saveChat: async () => saveTavernStore(),
+      saveChat: async () => {
+        const res = await saveTavernStore();
+        if (!uiRuntime.isGenerating && isTavernActive()) {
+          const sess = getActiveChatSession();
+          if (sess && Array.isArray(sess.messages) && sess.messages.length > 0) {
+            appendOrUpdateSingleFloorDom(sess.messages.length - 1);
+          }
+        }
+        return res;
+      },
       saveMetadata: async () => saveTavernStore(),
       saveMetadataDebounced: () => saveTavernStore(),
       saveSettingsDebounced: () => saveTavernStore(),
@@ -5608,7 +5617,7 @@ code, pre {
     const presetScripts = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
     const extScripts = Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : [];
-    return [...cardScripts, ...presetScripts, ...globalScripts, ...extScripts].filter(s => s && !s.disabled && s.findRegex);
+    return [...extScripts, ...cardScripts, ...presetScripts, ...globalScripts].filter(s => s && !s.disabled && s.findRegex);
   }
 
   function applyTavernRegexPipeline(rawText, options = {}) {
@@ -5747,7 +5756,8 @@ code, pre {
         overflow-x: hidden !important;
         overflow-y: hidden !important;
         padding-bottom: 10px !important;
-        box-sizing: content-box !important;
+        box-sizing: border-box !important;
+        max-width: 100% !important;
       }
     </style>`;
 
@@ -6128,7 +6138,14 @@ code, pre {
 
   function renderTavernMessageHtml(rawText, options = {}) {
     if (!rawText) return '';
-    const afterRegex = applyTavernRegexPipeline(rawText, { ...options, isPrompt: false });
+    const cleanedForDisplay = String(rawText)
+      .replace(/<bbs_start>[\s\S]*?<bbs_end>/gi, '')
+      .replace(/<bbs_items>[\s\S]*?<\/bbs_items>/gi, '')
+      .replace(/<bbs_vars>[\s\S]*?<\/bbs_vars>/gi, '')
+      .replace(/<\/?(?:bbs_start|bbs_end|bbs_items|bbs_vars)>/gi, '')
+      .trim();
+    if (!cleanedForDisplay) return '';
+    const afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
 
     // 1. Unwrap markdown code fences (```html ... ``` or ``` ... ```) that wrap HTML documents or UI blocks
     let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?([\s\S]*?)```/g, (full, inner) => {
@@ -8071,10 +8088,16 @@ code, pre {
         }
       };
 
-      const flushLiveDom = (isLive) => {
+      let lastStreamFlushTime = 0;
+      const flushLiveDom = (isLive, forceNow = false) => {
+        const nowPerf = performance.now();
+        if (isLive && !forceNow && nowPerf - lastStreamFlushTime < 48) {
+          return;
+        }
+        lastStreamFlushTime = nowPerf;
         const liveParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: isLive });
         const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
-        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        const elapsedSec = ((nowPerf - t0) / 1000).toFixed(1) + 's';
         onStreamUpdate({
           content: liveParsed.cleanReply,
           reasoning: liveReasoning,
@@ -8092,6 +8115,7 @@ code, pre {
               parseSseLines(sseBuffer.split(/\r?\n/));
               sseBuffer = '';
             }
+            flushLiveDom(true, true);
             break;
           }
           sseBuffer += decoder.decode(value, { stream: true });
@@ -8101,7 +8125,7 @@ code, pre {
           if (streamErrorMsg) {
             throw new Error('API流式返回错误: ' + streamErrorMsg);
           }
-          flushLiveDom(true);
+          flushLiveDom(true, false);
         }
       } catch (readErr) {
         if (readErr && readErr.name === 'AbortError') {
@@ -11886,7 +11910,29 @@ code, pre {
     }
   }
 
-  function updateStreamingFloorDom(mesIndex) {
+  function updateStreamingFloorDom(mesIndex, forceImmediate = false) {
+    if (!isTavernActive()) {
+      uiRuntime.pendingStreamFloorIndex = mesIndex;
+      return;
+    }
+    const nowPerf = performance.now();
+    const speedSetting = Math.max(0, Number(tavernState.uiSettings?.streamSpeed || 0));
+    const minIntervalMs = speedSetting > 0 ? Math.max(25, Math.min(200, Math.round(1000 / speedSetting))) : 45;
+    if (uiRuntime.isGenerating && !forceImmediate && uiRuntime._lastDomStreamPaintTs && (nowPerf - uiRuntime._lastDomStreamPaintTs < minIntervalMs)) {
+      if (!uiRuntime._pendingStreamPaintTimer) {
+        uiRuntime._pendingStreamPaintTimer = setTimeout(() => {
+          uiRuntime._pendingStreamPaintTimer = null;
+          updateStreamingFloorDom(mesIndex, true);
+        }, minIntervalMs);
+      }
+      return;
+    }
+    uiRuntime._lastDomStreamPaintTs = nowPerf;
+    if (uiRuntime._pendingStreamPaintTimer) {
+      clearTimeout(uiRuntime._pendingStreamPaintTimer);
+      uiRuntime._pendingStreamPaintTimer = null;
+    }
+
     const chatEl = document.getElementById('chat');
     if (!chatEl) return;
     const prevScrollTop = chatEl.scrollTop;
@@ -11902,7 +11948,29 @@ code, pre {
     }
     const textEl = floorEl.querySelector('.mes_text');
     if (textEl) {
-      const rawStreamText = String(msg.mes || '');
+      const fullStreamText = String(msg.mes || '');
+      let rawStreamText = fullStreamText;
+      if (uiRuntime.isGenerating && speedSetting > 0 && fullStreamText.length > 0 && !forceImmediate) {
+        if (uiRuntime._streamFloorIdx !== mesIndex) {
+          uiRuntime._streamFloorIdx = mesIndex;
+          uiRuntime._streamShownChars = 0;
+          uiRuntime._streamLastStepTs = nowPerf;
+        }
+        const elapsedStepSec = Math.max(0.02, (nowPerf - (uiRuntime._streamLastStepTs || nowPerf)) / 1000);
+        uiRuntime._streamLastStepTs = nowPerf;
+        const stepChars = Math.max(1, Math.round(speedSetting * elapsedStepSec));
+        uiRuntime._streamShownChars = Math.min(fullStreamText.length, (uiRuntime._streamShownChars || 0) + stepChars);
+        rawStreamText = fullStreamText.slice(0, uiRuntime._streamShownChars);
+        if (uiRuntime._streamShownChars < fullStreamText.length && !uiRuntime._pendingStreamPaintTimer) {
+          uiRuntime._pendingStreamPaintTimer = setTimeout(() => {
+            uiRuntime._pendingStreamPaintTimer = null;
+            updateStreamingFloorDom(mesIndex, false);
+          }, minIntervalMs);
+        }
+      } else {
+        uiRuntime._streamShownChars = fullStreamText.length;
+      }
+
       const isLastFloor = mesIndex === sess.messages.length - 1;
       if (!rawStreamText.trim() && uiRuntime.isGenerating) {
         patchStreamingMesTextDom(textEl, `<div class="tavern-typing-indicator" title="AI正在思考生成中"><span></span><span></span><span></span></div>`);
@@ -11922,7 +11990,7 @@ code, pre {
           : '';
         patchStreamingMesTextDom(textEl, narrativeHtml + tailNotice);
       } else {
-        const finalHtml = renderTavernMessageHtml(rawStreamText, {
+        const finalHtml = renderTavernMessageHtml(fullStreamText, {
           isUser: Boolean(msg.is_user),
           isPrompt: false,
           isLastFloor,
@@ -15548,6 +15616,20 @@ code, pre {
           });
         } else {
           renderTavernShell();
+        }
+      } else {
+        const sess = getActiveChatSession();
+        if (sess && Array.isArray(sess.messages) && sess.messages.length > 0) {
+          const targetIdx = (typeof uiRuntime.pendingStreamFloorIndex === 'number' && sess.messages[uiRuntime.pendingStreamFloorIndex])
+            ? uiRuntime.pendingStreamFloorIndex
+            : (sess.messages.length - 1);
+          uiRuntime.pendingStreamFloorIndex = null;
+          uiRuntime._streamShownChars = String(sess.messages[targetIdx]?.mes || '').length;
+          if (uiRuntime.isGenerating) {
+            updateStreamingFloorDom(targetIdx, true);
+          } else {
+            appendOrUpdateSingleFloorDom(targetIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
+          }
         }
       }
     });

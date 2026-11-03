@@ -2503,7 +2503,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v11.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v12.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -33955,6 +33955,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
         window.runMashuVirtualMouse = async function (actions, options = {}) {
           if (!Array.isArray(actions) || actions.length === 0) return;
+          const mashuIdGate = window.MASHU_COMPANION_ID || "mashu_companion_author";
+          const chatScreenGate = document.getElementById("chat-interface-screen");
+          const tavernScreenGate = document.getElementById("game-hall-screen");
+          const isCurrentlyInMashuChat = Boolean(
+            chatScreenGate &&
+            chatScreenGate.classList.contains("active") &&
+            String(state.activeChatId) === String(mashuIdGate) &&
+            !(tavernScreenGate && tavernScreenGate.classList.contains("active"))
+          );
+          if (!isCurrentlyInMashuChat) {
+            const staleOverlay = document.getElementById("mashu-virtual-mouse-overlay");
+            if (staleOverlay) staleOverlay.remove();
+            return;
+          }
           const shouldReturnToMashuChat = Boolean(options && options.returnToMashuChat);
           let overlay = document.getElementById("mashu-virtual-mouse-overlay");
           if (overlay) overlay.remove();
@@ -34754,8 +34768,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (!txt.includes(pair.right)) continue;
                 txt = txt.replace(pair.right, pair.wrong);
                 appliedCount++;
-                // 约70%概率直接不纠正，仅约30%概率发一个纯正字词气泡纠正，绝不解释打错字
-                if (Math.random() < 0.30) {
+                // 七成概率单独补发正确字词气泡纠正，三成概率直接不补，绝不解释打错字
+                if (Math.random() < 0.70) {
                   correctionsForBubble.push(pair.right);
                 }
               }
@@ -61562,6 +61576,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const config = state.globalSettings.backgroundActivityConfig || {};
 
           allSingleChats.forEach((chat) => {
+            if (!chat || chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor || (window.isMashuChat && window.isMashuChat(chat))) {
+              return;
+            }
             // 检查1：处理【被用户拉黑】的角色
             if (chat.relationship?.status === "blocked_by_user") {
               const blockedTimestamp = chat.relationship.blockedTimestamp;
