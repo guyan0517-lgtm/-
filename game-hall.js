@@ -555,7 +555,15 @@ code, pre {
     return true;
   }
 
+  let tavernSaveInFlight = false;
+  let tavernSaveQueued = false;
+
   async function performTavernStoreSaveNow() {
+    if (tavernSaveInFlight) {
+      tavernSaveQueued = true;
+      return;
+    }
+    tavernSaveInFlight = true;
     try {
       if (inflightTavernLoadPromise) {
         await inflightTavernLoadPromise;
@@ -602,6 +610,12 @@ code, pre {
       }
     } catch (err) {
       console.error('保存酒馆状态失败:', err);
+    } finally {
+      tavernSaveInFlight = false;
+      if (tavernSaveQueued) {
+        tavernSaveQueued = false;
+        saveTavernStore(false);
+      }
     }
   }
 
@@ -614,10 +628,11 @@ code, pre {
       await performTavernStoreSaveNow();
       return;
     }
+    const delayMs = (typeof uiRuntime !== 'undefined' && uiRuntime && uiRuntime.isGenerating) ? 3200 : 1800;
     saveTimer = setTimeout(() => {
       saveTimer = null;
       performTavernStoreSaveNow();
-    }, 120);
+    }, delayMs);
   }
   const saveTavernState = saveTavernStore;
 
@@ -1054,20 +1069,54 @@ code, pre {
     BEFORE_PROMPT: 2
   };
 
+  let activePluginRegistrationContext = null;
+
   const tavernEventSource = {
     on(evt, cb) {
       if (!evt || typeof cb !== 'function') return;
       if (!tavernEventListeners[evt]) tavernEventListeners[evt] = [];
-      if (!tavernEventListeners[evt].includes(cb)) {
+      if (activePluginRegistrationContext) {
+        if (!cb._tavernPluginKey && activePluginRegistrationContext.pluginKey) {
+          cb._tavernPluginKey = activePluginRegistrationContext.pluginKey;
+        }
+        if (!cb._tavernOwnerCardId && activePluginRegistrationContext.ownerCardId) {
+          cb._tavernOwnerCardId = activePluginRegistrationContext.ownerCardId;
+        }
+      }
+      const fnStr = cb._origCbStr || String(cb);
+      const pKey = cb._tavernPluginKey || '';
+      const alreadyExists = tavernEventListeners[evt].some(existing => {
+        if (existing === cb) return true;
+        if (pKey && existing._tavernPluginKey === pKey && (existing._origCbStr || String(existing)) === fnStr) {
+          return true;
+        }
+        return false;
+      });
+      if (!alreadyExists) {
         tavernEventListeners[evt].push(cb);
       }
     },
     off(evt, cb) {
       if (!evt || !tavernEventListeners[evt]) return;
-      tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => fn !== cb);
+      tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => fn !== cb && fn._origCb !== cb);
+    },
+    clearByPluginKey(pluginKey) {
+      if (!pluginKey) return;
+      Object.keys(tavernEventListeners).forEach(evt => {
+        if (Array.isArray(tavernEventListeners[evt])) {
+          tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => fn && fn._tavernPluginKey !== pluginKey);
+        }
+      });
+    },
+    clearByOwnerCardExclude(activeCardId) {
+      Object.keys(tavernEventListeners).forEach(evt => {
+        if (Array.isArray(tavernEventListeners[evt])) {
+          tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => !fn?._tavernOwnerCardId || fn._tavernOwnerCardId === activeCardId);
+        }
+      });
     },
     async emit(evt, ...args) {
-      const list = tavernEventListeners[evt] || [];
+      const list = Array.isArray(tavernEventListeners[evt]) ? [...tavernEventListeners[evt]] : [];
       for (const fn of list) {
         try {
           await fn(...args);
@@ -2923,54 +2972,21 @@ code, pre {
 
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
-    let directErr = null;
-    const attemptStart = performance.now();
-    try {
-      const res = await rawFetch(url, options);
-      return res;
-    } catch (err) {
-      if (err && err.name === 'AbortError') throw err;
-      directErr = err;
-    }
-    const elapsedMs = performance.now() - attemptStart;
-    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
-    if (
-      elapsedMs < 3500 &&
-      !isStaticHost &&
-      !options?._noAutoRetry &&
-      !(options?.signal && options.signal.aborted) &&
-      /^https?:\/\//i.test(url) &&
-      !url.startsWith(window.location.origin)
-    ) {
+    return await rawFetch(url, options);
+  }
+
+  function formatTavernChatCompletionUrl(rawBaseUrl) {
+    const cleanBase = normalizeTavernBaseUrl(rawBaseUrl);
+    if (!cleanBase) return '';
+    if (typeof window.formatChatCompletionUrl === 'function') {
       try {
-        let parsedBody = undefined;
-        if (options && options.body !== undefined) {
-          try {
-            parsedBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-          } catch (_) {
-            parsedBody = options.body;
-          }
-        }
-        const proxyRes = await rawFetch('/api/proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            method: (options && options.method) || 'POST',
-            headers: (options && options.headers) || {},
-            body: parsedBody
-          }),
-          signal: options?.signal
-        });
-        if (proxyRes && proxyRes.status !== 404 && proxyRes.status !== 405) {
-          return proxyRes;
-        }
-      } catch (fbErr) {
-        if (fbErr && fbErr.name === 'AbortError') throw fbErr;
-        if (!directErr) directErr = fbErr;
-      }
+        const formatted = window.formatChatCompletionUrl(cleanBase);
+        if (formatted) return formatted;
+      } catch (_) {}
     }
-    throw directErr || new Error('Failed to fetch');
+    if (/\/chat\/completions$/i.test(cleanBase)) return cleanBase;
+    if (/\/v\d+(?:beta\d*)?$/i.test(cleanBase)) return cleanBase + '/chat/completions';
+    return cleanBase + '/v1/chat/completions';
   }
 
   function setupSillyTavernGlobalBridge() {
@@ -3060,7 +3076,9 @@ code, pre {
               if (!base) {
                 return new Response(JSON.stringify({ error: true, message: '请先填写API地址' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
               }
-              const modelsEndpoints = [base + '/v1/models', base + '/models'];
+              const modelsEndpoints = base.endsWith('/v1')
+                ? [base + '/models', base.replace(/\/v1$/i, '') + '/models']
+                : [base + '/v1/models', base + '/models'];
               let lastStatus = 500;
               let lastText = '';
               for (const mUrl of modelsEndpoints) {
@@ -3135,55 +3153,42 @@ code, pre {
                   }
                 } catch (_) {}
               }
-              const cleanBaseForEp = base.replace(/\/+$/, '');
-              const endpoints = cleanBaseForEp.endsWith('/v1')
-                ? [cleanBaseForEp + '/chat/completions', cleanBaseForEp.replace(/\/v1$/i, '') + '/chat/completions']
-                : [cleanBaseForEp + '/v1/chat/completions', cleanBaseForEp + '/chat/completions'];
+              const ep = formatTavernChatCompletionUrl(base);
               const headers = {
                 'Content-Type': 'application/json',
-                ...(key ? { 'Authorization': 'Bearer ' + key } : {}),
-                ...(wantStream ? { 'Accept': 'text/event-stream' } : { 'Accept': 'application/json' })
+                ...(key ? { 'Authorization': 'Bearer ' + key } : {})
               };
               let upstreamRes = null;
-              let lastErr = null;
-              for (const ep of endpoints) {
-                try {
-                  upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(openAiPayload),
-                    signal: init?.signal
-                  });
-                  if (upstreamRes.status === 400) {
-                    const errTxt = await upstreamRes.text().catch(() => '');
-                    if (/max_tokens|max_completion_tokens|maximum|token/i.test(errTxt)) {
-                      const retryPayload = Object.assign({}, openAiPayload);
-                      delete retryPayload.max_tokens;
-                      upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(retryPayload),
-                        signal: init?.signal
-                      });
-                    } else {
-                      return new Response(errTxt, { status: 400, headers: { 'Content-Type': 'application/json' } });
-                    }
+              try {
+                upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                  method: 'POST',
+                  headers,
+                  body: JSON.stringify(openAiPayload),
+                  signal: init?.signal
+                });
+                if (upstreamRes.status === 400) {
+                  const errTxt = await upstreamRes.text().catch(() => '');
+                  if (/max_tokens|max_completion_tokens|maximum|token/i.test(errTxt)) {
+                    const retryPayload = Object.assign({}, openAiPayload);
+                    delete retryPayload.max_tokens;
+                    upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify(retryPayload),
+                      signal: init?.signal
+                    });
+                  } else {
+                    return new Response(errTxt, { status: 400, headers: { 'Content-Type': 'application/json' } });
                   }
-                  if (upstreamRes.status !== 404 && upstreamRes.status !== 405) {
-                    break;
-                  }
-                } catch (err) {
-                  if (err && err.name === 'AbortError') throw err;
-                  lastErr = err;
                 }
-              }
-              if (!upstreamRes) {
-                return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+              } catch (err) {
+                if (err && err.name === 'AbortError') throw err;
+                return new Response(JSON.stringify({ error: { message: err?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
               }
               if (!wantStream && upstreamRes.ok) {
                 const rawBodyText = await upstreamRes.text().catch(() => '');
                 const trimmedBody = rawBodyText.trim();
-                if (trimmedBody.startsWith('data:')) {
+                if (/^\s*data:/m.test(trimmedBody)) {
                   let aggContent = '';
                   let aggReasoning = '';
                   const lines = trimmedBody.split(/\r?\n/);
@@ -3197,8 +3202,15 @@ code, pre {
                       const choice = chunk.choices && chunk.choices[0];
                       const delta = choice ? (choice.delta || choice.message || {}) : {};
                       if (typeof delta.content === 'string') aggContent += delta.content;
+                      else if (Array.isArray(delta.content)) {
+                        delta.content.forEach(p => {
+                          if (typeof p === 'string') aggContent += p;
+                          else if (p && p.text) aggContent += p.text;
+                        });
+                      }
                       if (typeof delta.reasoning_content === 'string') aggReasoning += delta.reasoning_content;
                       else if (typeof delta.reasoning === 'string') aggReasoning += delta.reasoning;
+                      else if (chunk.delta?.text) aggContent += chunk.delta.text;
                     } catch (_) {}
                   }
                   const synthJson = {
@@ -3882,10 +3894,13 @@ code, pre {
       setChatMessages: async (msgs, opts = {}) => {
         const sess = getActiveChatSession();
         if (!sess || !Array.isArray(msgs)) return;
-        const isPartialUpdate = msgs.every(m => m && m.message_id !== undefined && m.is_user === undefined && m.swipes === undefined);
-        if (isPartialUpdate) {
+        const updatedIndices = [];
+        const hasIndexedUpdates = msgs.every(m => m && (m.message_id !== undefined || m.mesid !== undefined));
+        if (hasIndexedUpdates) {
           msgs.forEach(u => {
-            const target = sess.messages[u.message_id];
+            const rawIdx = u.message_id !== undefined ? Number(u.message_id) : Number(u.mesid);
+            const idx = rawIdx < 0 ? sess.messages.length + rawIdx : rawIdx;
+            const target = sess.messages[idx];
             if (target) {
               const nextMsgText = u.message !== undefined ? u.message : u.mes;
               if (nextMsgText !== undefined) {
@@ -3902,14 +3917,26 @@ code, pre {
               if (u.extra && typeof u.extra === 'object') {
                 target.extra = Object.assign({}, target.extra || {}, u.extra);
               }
+              updatedIndices.push(idx);
             }
           });
         } else {
-          sess.messages = msgs;
+          sess.messages = msgs.map((m, idx) => {
+            const text = m?.mes !== undefined ? m.mes : (m?.message !== undefined ? m.message : '');
+            return Object.assign({}, m, {
+              mesid: idx,
+              mes: text,
+              swipes: Array.isArray(m?.swipes) && m.swipes.length > 0 ? m.swipes : [text]
+            });
+          });
         }
         await saveTavernStore();
         if (!opts || opts.refresh !== 'none') {
-          renderTavernChatFloors(false);
+          if (updatedIndices.length > 0 && updatedIndices.length <= 5) {
+            updatedIndices.forEach(idx => appendOrUpdateSingleFloorDom(idx));
+          } else {
+            renderTavernChatFloors(false);
+          }
         }
       },
       createChatMessages: async (newMsgs) => {
@@ -4441,10 +4468,6 @@ code, pre {
       .replace(
         'if(l.length<1)return nr(o),!1;',
         'if(l.length>=0)return nr(o),!1;'
-      )
-      .replace(
-        'n.CHARACTER_MESSAGE_RENDERED&&t.on(n.CHARACTER_MESSAGE_RENDERED,()=>xt())',
-        'n.CHARACTER_MESSAGE_RENDERED&&t.on(n.CHARACTER_MESSAGE_RENDERED,()=>{xt();setTimeout(()=>nr(!1),180)})'
       );
   }
 
@@ -4462,9 +4485,12 @@ code, pre {
     return chunks.join('\n');
   }
 
+  const executedPluginScriptKeys = new Set();
+
   function executeUserPluginScript(plugin, execOpts = {}) {
     if (!plugin || !plugin.enabled) return;
     const ownerCardId = execOpts && execOpts.ownerCardId ? String(execOpts.ownerCardId) : null;
+    const pluginKey = (ownerCardId ? ('card_' + ownerCardId + '_') : 'global_') + String(plugin.id || plugin.name || 'plugin');
     ensurePersistentExtensionContainers();
     if (!plugin.code && plugin.content) {
       plugin.code = plugin.content;
@@ -4492,14 +4518,14 @@ code, pre {
             if (jsTxt && jsTxt.includes('bbi-app-host')) {
               plugin.code = jsTxt;
               await saveTavernStore();
-              executeUserPluginScript(plugin);
+              executeUserPluginScript(plugin, { forceRerun: true });
             }
           })
           .catch(() => {})
           .finally(() => { baiBaiUpgradeInFlight = false; });
         return;
       }
-      if (document.getElementById('bbi-app-host') && document.getElementById('bbi-menu-item')) {
+      if (document.getElementById('bbi-app-host') && document.getElementById('bbi-menu-item') && !execOpts.forceRerun) {
         syncBaiBaiShadowDomCss();
         return;
       }
@@ -4515,7 +4541,7 @@ code, pre {
             if (jsTxt && jsTxt.includes('bbs-app-host')) {
               plugin.code = jsTxt;
               await saveTavernStore();
-              executeUserPluginScript(plugin);
+              executeUserPluginScript(plugin, { forceRerun: true });
             }
           })
           .catch(() => {})
@@ -4523,11 +4549,11 @@ code, pre {
         return;
       }
       const existingBbsHost = document.getElementById('bbs-app-host');
-      if (existingBbsHost && document.getElementById('bbs-menu-item') && existingBbsHost.getAttribute('data-bbs-auto-patched') === '1') {
+      if (existingBbsHost && document.getElementById('bbs-menu-item') && existingBbsHost.getAttribute('data-bbs-auto-patched') === '1' && !execOpts.forceRerun) {
         syncBaiBaiShadowDomCss();
         return;
       }
-      if (existingBbsHost && existingBbsHost.getAttribute('data-bbs-auto-patched') !== '1') {
+      if (existingBbsHost && (existingBbsHost.getAttribute('data-bbs-auto-patched') !== '1' || execOpts.forceRerun)) {
         try { existingBbsHost.remove(); } catch (_) {}
         try { document.getElementById('bbs-menu-item')?.remove(); } catch (_) {}
       }
@@ -4553,6 +4579,12 @@ code, pre {
       return;
     }
 
+    if (!execOpts.forceRerun && executedPluginScriptKeys.has(pluginKey)) {
+      return;
+    }
+    executedPluginScriptKeys.add(pluginKey);
+    tavernEventSource.clearByPluginKey(pluginKey);
+
     const effectiveEventSource = ownerCardId ? {
       on(evt, cb) {
         if (!evt || typeof cb !== 'function') return;
@@ -4560,6 +4592,8 @@ code, pre {
           if (getActiveCard()?.id !== ownerCardId) return;
           return await cb(...args);
         };
+        wrappedCb._tavernPluginKey = pluginKey;
+        wrappedCb._tavernOwnerCardId = ownerCardId;
         tavernEventSource.on(evt, wrappedCb);
       },
       off(evt, cb) {
@@ -4580,6 +4614,8 @@ code, pre {
       getContext: effectiveGetContext
     } : window.SillyTavern;
 
+    const prevRegCtx = activePluginRegistrationContext;
+    activePluginRegistrationContext = { pluginKey, ownerCardId };
     try {
       const transformedCode = transpilePluginImports(codeStr, plugin);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -4628,6 +4664,8 @@ code, pre {
       });
     } catch (err) {
       console.error('Plugin script execution error:', plugin.name, err);
+    } finally {
+      activePluginRegistrationContext = prevRegCtx;
     }
   }
 
@@ -5140,14 +5178,16 @@ code, pre {
   function executeCardHelperScripts(cardObj, forceRun = false) {
     const card = cardObj || getActiveCard();
     if (!card) return;
+    tavernEventSource.clearByOwnerCardExclude(card.id);
     const scripts = (Array.isArray(card.helperScripts) ? card.helperScripts : []).filter(hs => hs && hs.enabled !== false && (hs.content || hs.code));
     if (scripts.length === 0) {
       lastExecutedHelperCardId = card.id;
       syncCardScopedFloatingWidgets();
       return;
     }
+    const needsFloatingBall = cardHasFloatingWidgetScript(card);
     const ballInDom = document.getElementById('gourmet-fixed-ball-ui') || document.getElementById('adv-codex-toggle');
-    if (!forceRun && lastExecutedHelperCardId === card.id && ballInDom) {
+    if (!forceRun && lastExecutedHelperCardId === card.id && (!needsFloatingBall || ballInDom)) {
       enhanceFloatingHelperWidgets();
       return;
     }
@@ -5161,7 +5201,7 @@ code, pre {
         enabled: true,
         code: hs.content || hs.code,
         buttons: hs.buttons || []
-      }, { ownerCardId: card.id });
+      }, { ownerCardId: card.id, forceRerun: Boolean(forceRun || (needsFloatingBall && !ballInDom)) });
     });
     setTimeout(() => {
       syncCardScopedFloatingWidgets();
@@ -7536,6 +7576,7 @@ code, pre {
   function extractReasoningAndCleanReply(rawReply, options = {}) {
     if (!rawReply) return { reasoning: '', cleanReply: '' };
     let text = String(rawReply);
+    const isLiveStream = Boolean(options && options.isLiveStream);
     const reasoningChunks = [];
     const pairs = getActiveReasoningTagPairs();
 
@@ -7579,7 +7620,7 @@ code, pre {
       text = text.slice(prefillStdMatch[0].length);
     }
 
-    // 4. Unclosed opening tag during live streaming
+    // 4. Unclosed opening tag: during live streaming, hold inside reasoning; after completion, never swallow the entire reply if unclosed
     for (const pair of pairs) {
       const startTag = String(pair?.start || '').trim();
       if (!startTag) continue;
@@ -7587,14 +7628,24 @@ code, pre {
       const unclosedCustomRx = new RegExp(escStart + '([\\s\\S]*)$', 'i');
       const uCustom = text.match(unclosedCustomRx);
       if (uCustom) {
-        if (uCustom[1].trim()) reasoningChunks.push(uCustom[1].trim());
-        text = text.slice(0, uCustom.index);
+        const beforeText = text.slice(0, uCustom.index).trim();
+        if (isLiveStream || beforeText.length > 0) {
+          if (uCustom[1].trim()) reasoningChunks.push(uCustom[1].trim());
+          text = text.slice(0, uCustom.index);
+        } else {
+          text = uCustom[1];
+        }
       }
     }
     const unclosedStdMatch = text.match(/<(?:think|thinking|thought|reasoning|cot)>([\s\S]*)$/i);
     if (unclosedStdMatch) {
-      if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
-      text = text.slice(0, unclosedStdMatch.index);
+      const beforeStd = text.slice(0, unclosedStdMatch.index).trim();
+      if (isLiveStream || beforeStd.length > 0) {
+        if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
+        text = text.slice(0, unclosedStdMatch.index);
+      } else {
+        text = unclosedStdMatch[1];
+      }
     }
 
     let cleanReply = text.trim();
@@ -7642,9 +7693,7 @@ code, pre {
 
     const cleanBase = normalizeTavernBaseUrl(creds.baseUrl);
     const cleanKey = cleanTavernApiKeyString(creds.apiKey);
-    const targetEndpoint = cleanBase.endsWith('/v1')
-      ? (cleanBase + '/chat/completions')
-      : (cleanBase + '/v1/chat/completions');
+    const targetEndpoint = formatTavernChatCompletionUrl(cleanBase);
 
     const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
     const rawWireMessages = Array.isArray(messages)
@@ -7652,7 +7701,7 @@ code, pre {
           .map(m => ({ role: m?.role || 'system', content: String(m?.content || '') }))
           .filter(m => m.content.trim().length > 0)
       : [];
-    const cleanWireMessages = [];
+    let cleanWireMessages = [];
     for (const msg of rawWireMessages) {
       const prev = cleanWireMessages[cleanWireMessages.length - 1];
       if (prev && prev.role === msg.role) {
@@ -7660,6 +7709,16 @@ code, pre {
       } else {
         cleanWireMessages.push({ role: msg.role, content: msg.content });
       }
+    }
+
+    const isClaudeOrRelay = /claude/i.test(creds.model || '') || /llmapi|anthropic/i.test(cleanBase);
+    if (isClaudeOrRelay && typeof window.normalizeMessagesForClaudeProxy === 'function') {
+      try {
+        const normalizedForProxy = window.normalizeMessagesForClaudeProxy(cleanWireMessages);
+        if (Array.isArray(normalizedForProxy) && normalizedForProxy.length > 0) {
+          cleanWireMessages = normalizedForProxy;
+        }
+      } catch (_) {}
     }
 
     const isClaudeModel = /claude/i.test(creds.model || '');
@@ -7694,16 +7753,20 @@ code, pre {
 
     let requestTimedOut = false;
     const timeoutMs = 480000;
-    const timeoutTimer = setTimeout(() => {
-      requestTimedOut = true;
-      try { abortCtrl.abort(); } catch (_) {}
-    }, timeoutMs);
+    let timeoutTimer = null;
+    const resetRequestTimeout = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      timeoutTimer = setTimeout(() => {
+        requestTimedOut = true;
+        try { abortCtrl.abort(); } catch (_) {}
+      }, timeoutMs);
+    };
+    resetRequestTimeout();
 
     try {
       const reqHeaders = {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + cleanKey,
-        'Accept': useStreaming ? 'text/event-stream' : 'application/json'
+        'Authorization': 'Bearer ' + cleanKey
       };
 
       const t0 = performance.now();
@@ -7715,7 +7778,7 @@ code, pre {
           body: JSON.stringify(payload),
           signal: abortCtrl.signal
         });
-        if (res.status === 400 && (performance.now() - t0) < 4000) {
+        if (res.status === 400 && (performance.now() - t0) < 4500) {
           const errProbe = await res.text().catch(() => '');
           if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
             const retryPayload = Object.assign({}, payload);
@@ -7759,8 +7822,6 @@ code, pre {
         throw new Error('API请求失败 HTTP ' + res.status + ': ' + detail);
       }
 
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-
       const extractErrorFromJson = (obj) => {
         if (!obj || typeof obj !== 'object') return null;
         if (obj.error) {
@@ -7785,42 +7846,198 @@ code, pre {
         return null;
       };
 
-      // Strictly Non-Streaming Mode
+      const extractFromParsedObject = (obj) => {
+        let content = '';
+        let reasoning = '';
+        let refusal = null;
+        if (!obj || typeof obj !== 'object') return { content, reasoning, refusal, apiErr: null };
+        const apiErr = extractErrorFromJson(obj);
+        if (apiErr) return { content, reasoning, refusal, apiErr };
+
+        if (Array.isArray(obj.choices) && obj.choices.length > 0) {
+          const choice = obj.choices[0];
+          const refErr = checkFinishReasonRefusal(choice, obj);
+          if (refErr) refusal = refErr;
+          const msgObj = choice.message || choice.delta || {};
+          if (typeof msgObj.content === 'string') {
+            content += msgObj.content;
+          } else if (Array.isArray(msgObj.content)) {
+            msgObj.content.forEach(part => {
+              if (typeof part === 'string') content += part;
+              else if (part && (part.type === 'thinking' || part.thinking)) reasoning += (part.thinking || part.text || '');
+              else if (part && typeof part.text === 'string') content += part.text;
+              else if (part && typeof part.content === 'string') content += part.content;
+            });
+          } else if (typeof choice.text === 'string') {
+            content += choice.text;
+          }
+          const rDelta = msgObj.reasoning_content || msgObj.reasoning || msgObj.thinking || choice.reasoning_content || choice.reasoning || '';
+          if (typeof rDelta === 'string' && rDelta) reasoning += rDelta;
+        } else if (obj.delta || obj.content_block || Array.isArray(obj.content)) {
+          if (obj.delta) {
+            if (typeof obj.delta.text === 'string') content += obj.delta.text;
+            if (typeof obj.delta.thinking === 'string') reasoning += obj.delta.thinking;
+            if (typeof obj.delta.reasoning_content === 'string') reasoning += obj.delta.reasoning_content;
+          }
+          if (obj.content_block) {
+            if (obj.content_block.type === 'thinking' && (obj.content_block.thinking || obj.content_block.text)) {
+              reasoning += (obj.content_block.thinking || obj.content_block.text);
+            } else if (typeof obj.content_block.text === 'string') {
+              content += obj.content_block.text;
+            }
+          }
+          if (Array.isArray(obj.content)) {
+            obj.content.forEach(block => {
+              if (!block) return;
+              if (typeof block === 'string') content += block;
+              else if (block.type === 'thinking' && (block.thinking || block.text)) reasoning += (block.thinking || block.text);
+              else if (typeof block.text === 'string') content += block.text;
+              else if (typeof block.content === 'string') content += block.content;
+            });
+          }
+        } else if (Array.isArray(obj.candidates) && obj.candidates[0]) {
+          const refErr = checkFinishReasonRefusal(null, obj);
+          if (refErr) refusal = refErr;
+          const parts = obj.candidates[0]?.content?.parts || [];
+          parts.forEach(p => {
+            if (!p || typeof p.text !== 'string') return;
+            if (p.thought) reasoning += p.text;
+            else content += p.text;
+          });
+        } else if (typeof obj.content === 'string') {
+          content += obj.content;
+        } else if (typeof obj.output_text === 'string') {
+          content += obj.output_text;
+        } else if (typeof obj.response === 'string') {
+          content += obj.response;
+        } else if (typeof obj.text === 'string') {
+          content += obj.text;
+        } else if (obj.data && typeof obj.data === 'object') {
+          return extractFromParsedObject(obj.data);
+        }
+        return { content, reasoning, refusal, apiErr: null };
+      };
+
+      const parseUniversalAiPayloadText = (rawBodyStr) => {
+        let aggContent = '';
+        let aggReasoning = '';
+        let aggRefusal = null;
+        const stripped = String(rawBodyStr || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
+        if (!stripped) return { content: '', reasoning: '', refusal: null };
+
+        // 1. Check if it contains SSE data: lines
+        if (/^\s*data:\s*/m.test(stripped)) {
+          const lines = stripped.split(/\r?\n/);
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+            const dataStr = line.slice(5).trim();
+            if (!dataStr || dataStr === '[DONE]') continue;
+            try {
+              const chunk = JSON.parse(dataStr);
+              const piece = extractFromParsedObject(chunk);
+              if (piece.apiErr) throw new Error('API返回错误: ' + piece.apiErr);
+              if (piece.refusal) aggRefusal = piece.refusal;
+              if (piece.content) aggContent += piece.content;
+              if (piece.reasoning) aggReasoning += piece.reasoning;
+            } catch (e) {
+              if (e && e.message && e.message.startsWith('API返回错误:')) throw e;
+            }
+          }
+          if (aggContent || aggReasoning || aggRefusal) {
+            return { content: aggContent, reasoning: aggReasoning, refusal: aggRefusal };
+          }
+        }
+
+        // 2. Try parsing as full JSON or JSON embedded between braces
+        let dataObj = null;
+        try {
+          dataObj = JSON.parse(stripped);
+        } catch (_) {
+          const firstBrace = stripped.indexOf('{');
+          const lastBrace = stripped.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace > firstBrace) {
+            try {
+              dataObj = JSON.parse(stripped.slice(firstBrace, lastBrace + 1));
+            } catch (_) {}
+          }
+        }
+
+        if (dataObj && typeof dataObj === 'object') {
+          const piece = extractFromParsedObject(dataObj);
+          if (piece.apiErr) throw new Error('API返回错误: ' + piece.apiErr);
+          return { content: piece.content, reasoning: piece.reasoning, refusal: piece.refusal };
+        }
+
+        // 3. Try parsing newline-delimited JSON chunks (NDJSON)
+        const ndLines = stripped.split(/\r?\n/);
+        let parsedAnyNd = false;
+        for (const rawLine of ndLines) {
+          const line = rawLine.trim();
+          if (!line.startsWith('{') || !line.endsWith('}')) continue;
+          try {
+            const chunk = JSON.parse(line);
+            parsedAnyNd = true;
+            const piece = extractFromParsedObject(chunk);
+            if (piece.apiErr) throw new Error('API返回错误: ' + piece.apiErr);
+            if (piece.refusal) aggRefusal = piece.refusal;
+            if (piece.content) aggContent += piece.content;
+            if (piece.reasoning) aggReasoning += piece.reasoning;
+          } catch (e) {
+            if (e && e.message && e.message.startsWith('API返回错误:')) throw e;
+          }
+        }
+        if (parsedAnyNd) {
+          return { content: aggContent, reasoning: aggReasoning, refusal: aggRefusal };
+        }
+
+        // 4. Plain text fallback (if a custom relay returns raw text directly, provided it's not an HTML error page)
+        if (!/^<!DOCTYPE\s+html|^<html\b/i.test(stripped)) {
+          return { content: stripped, reasoning: '', refusal: null };
+        }
+        throw new Error('API返回了网页错误而非有效数据: ' + stripped.slice(0, 120));
+      };
+
+      const finalizeAiCompletionResult = (rawContent, nativeReasoning, refusalReason, elapsedSec, fireStreamEnd = false) => {
+        const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
+        const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
+        let finalCleanReply = parsed.cleanReply;
+        // Never lose what the AI already spoke: mirror outside EPhone's fallback
+        if (!finalCleanReply && rawContent && String(rawContent).trim()) {
+          finalCleanReply = combinedReasoning || String(rawContent).trim();
+        }
+        if (!finalCleanReply && !combinedReasoning) {
+          if (refusalReason) {
+            throw new Error(refusalReason);
+          }
+          throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
+        }
+        if (!finalCleanReply) {
+          finalCleanReply = refusalReason
+            ? ('【' + refusalReason + '】')
+            : (combinedReasoning || '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
+        }
+        if (fireStreamEnd && typeof onStreamUpdate === 'function') {
+          onStreamUpdate({
+            content: finalCleanReply,
+            reasoning: combinedReasoning,
+            genTime: elapsedSec,
+            isStreaming: false
+          });
+        }
+        return {
+          content: finalCleanReply,
+          reasoning: combinedReasoning,
+          rawContent: rawContent || finalCleanReply,
+          genTime: elapsedSec
+        };
+      };
+
+      // Non-Streaming Mode (mirrors outside EPhone non-streaming reader + universal parser)
       if (!useStreaming) {
         let rawText = '';
         try {
-          if (res.body && typeof res.body.getReader === 'function') {
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            while (true) {
-              const { value, done } = await reader.read();
-              if (typeof window.ensureBackgroundKeepAlive === 'function') {
-                window.ensureBackgroundKeepAlive();
-              }
-              if (done) {
-                rawText += decoder.decode();
-                break;
-              }
-              rawText += decoder.decode(value, { stream: true });
-              const trimmedSoFar = rawText.replace(/^\s*(?::[^\r\n]*\r?\n\s*)*/g, '').trim();
-              if (!trimmedSoFar) continue;
-              if (/(?:^|\n)\s*data:\s*\[DONE\]/i.test(trimmedSoFar) || trimmedSoFar.includes('"message_stop"')) {
-                try { await reader.cancel(); } catch (_) {}
-                break;
-              }
-              if (trimmedSoFar.startsWith('{') && trimmedSoFar.endsWith('}')) {
-                try {
-                  const probeJson = JSON.parse(trimmedSoFar);
-                  if (probeJson && typeof probeJson === 'object' && (probeJson.choices || probeJson.candidates || probeJson.content || probeJson.error)) {
-                    try { await reader.cancel(); } catch (_) {}
-                    break;
-                  }
-                } catch (_) {}
-              }
-            }
-          } else {
-            rawText = await res.text();
-          }
+          rawText = await res.text();
         } catch (readTxtErr) {
           if (readTxtErr && readTxtErr.name === 'AbortError') {
             if (requestTimedOut && !rawText.trim()) {
@@ -7833,303 +8050,143 @@ code, pre {
             throw readTxtErr;
           }
         }
+        const extracted = parseUniversalAiPayloadText(rawText);
+        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        return finalizeAiCompletionResult(extracted.content, extracted.reasoning, extracted.refusal, elapsedSec, false);
+      }
 
-        let rawContent = '';
-        let nativeReasoning = '';
+      // Real-Time Streaming Mode (mirrors outside EPhone requestLlmapiWithFallback with full rawStreamText recovery)
+      if (res.body && typeof res.body.getReader === 'function') {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let sseBuffer = '';
+        let rawStreamText = '';
+        let networkContent = '';
+        let nativeReasoningAccum = '';
         let refusalReason = null;
-        const strippedKeepAlive = rawText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
+        let streamErrorMsg = null;
+        let lastDomFlushTs = 0;
 
-        if (/^\s*data:\s*/m.test(strippedKeepAlive)) {
-          const lines = strippedKeepAlive.split(/\r?\n/);
-          for (const rawLine of lines) {
+        const parseSseLines = (linesArr) => {
+          for (const rawLine of linesArr) {
             const line = rawLine.trim();
-            if (!line.startsWith('data:')) continue;
-            const dataStr = line.slice(5).trim();
-            if (!dataStr || dataStr === '[DONE]') continue;
-            let parsedChunk;
-            try {
-              parsedChunk = JSON.parse(dataStr);
-            } catch (_) {
+            if (!line || line.startsWith(':')) continue;
+            let dataStr = '';
+            if (line.startsWith('data:')) {
+              dataStr = line.slice(5).trim();
+            } else if (line.startsWith('{') && line.endsWith('}')) {
+              dataStr = line;
+            } else {
               continue;
             }
-            const apiErr = extractErrorFromJson(parsedChunk);
-            if (apiErr) throw new Error('API返回错误: ' + apiErr);
-            const choice = parsedChunk.choices && parsedChunk.choices[0];
-            if (choice) {
-              const refErr = checkFinishReasonRefusal(choice, parsedChunk);
-              if (refErr) refusalReason = refErr;
-              const delta = choice.delta || choice.message || {};
-              if (typeof delta.content === 'string') {
-                rawContent += delta.content;
-              } else if (Array.isArray(delta.content)) {
-                delta.content.forEach(part => {
-                  if (typeof part === 'string') rawContent += part;
-                  else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
-                  else if (part && part.text) rawContent += part.text;
-                });
-              } else if (typeof choice.text === 'string') {
-                rawContent += choice.text;
+            if (!dataStr || dataStr === '[DONE]') continue;
+            try {
+              const parsedChunk = JSON.parse(dataStr);
+              const piece = extractFromParsedObject(parsedChunk);
+              if (piece.apiErr) {
+                streamErrorMsg = piece.apiErr;
+                return;
               }
-              const rDelta = delta.reasoning_content || delta.reasoning || delta.thinking || '';
-              if (rDelta) nativeReasoning += rDelta;
-            } else if (parsedChunk.delta || parsedChunk.content_block || Array.isArray(parsedChunk.content)) {
-              const dText = parsedChunk.delta?.text || parsedChunk.content_block?.text || parsedChunk.content?.[0]?.text || '';
-              const dThink = (parsedChunk.delta?.type === 'thinking_delta' ? parsedChunk.delta.thinking : '') || '';
-              if (dText) rawContent += dText;
-              if (dThink) nativeReasoning += dThink;
-            } else if (Array.isArray(parsedChunk.candidates) && parsedChunk.candidates[0]?.content?.parts) {
-              parsedChunk.candidates[0].content.parts.forEach(p => {
-                if (!p || typeof p.text !== 'string') return;
-                if (p.thought) nativeReasoning += p.text;
-                else rawContent += p.text;
-              });
-            }
+              if (piece.refusal) refusalReason = piece.refusal;
+              if (piece.content) networkContent += piece.content;
+              if (piece.reasoning) nativeReasoningAccum += piece.reasoning;
+            } catch (_) {}
           }
-        } else {
-          let data = null;
-          try {
-            data = JSON.parse(strippedKeepAlive);
-          } catch (_) {
-            const firstBrace = strippedKeepAlive.indexOf('{');
-            const lastBrace = strippedKeepAlive.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace > firstBrace) {
-              try {
-                data = JSON.parse(strippedKeepAlive.slice(firstBrace, lastBrace + 1));
-              } catch (_) {}
-            }
-          }
-          if (!data || typeof data !== 'object') {
-            throw new Error('API返回了非JSON格式响应: ' + strippedKeepAlive.slice(0, 120));
-          }
-          const apiErr = extractErrorFromJson(data);
-          if (apiErr) throw new Error('API返回错误: ' + apiErr);
-
-          if (Array.isArray(data.choices) && data.choices[0]) {
-            const choice = data.choices[0];
-            const refErr = checkFinishReasonRefusal(choice, data);
-            if (refErr) refusalReason = refErr;
-            const msgObj = choice.message || choice.delta || {};
-            if (typeof msgObj.content === 'string') {
-              rawContent = msgObj.content;
-            } else if (Array.isArray(msgObj.content)) {
-              msgObj.content.forEach(part => {
-                if (typeof part === 'string') rawContent += part;
-                else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoning += (part.thinking || part.text || '');
-                else if (part && part.text) rawContent += part.text;
-              });
-            } else if (typeof choice.text === 'string') {
-              rawContent = choice.text;
-            }
-            nativeReasoning += (msgObj.reasoning_content || msgObj.reasoning || msgObj.thinking || '');
-          } else if (Array.isArray(data.content)) {
-            data.content.forEach(block => {
-              if (!block) return;
-              if (block.type === 'thinking' && (block.thinking || block.text)) {
-                nativeReasoning += (block.thinking || block.text);
-              } else if (typeof block.text === 'string') {
-                rawContent += block.text;
-              } else if (typeof block === 'string') {
-                rawContent += block;
-              }
-            });
-          } else if (Array.isArray(data.candidates) && data.candidates[0]) {
-            const refErr = checkFinishReasonRefusal(null, data);
-            if (refErr) refusalReason = refErr;
-            const parts = data.candidates[0]?.content?.parts || [];
-            parts.forEach(p => {
-              if (!p || typeof p.text !== 'string') return;
-              if (p.thought) nativeReasoning += p.text;
-              else rawContent += p.text;
-            });
-          } else if (typeof data.content === 'string') {
-            rawContent = data.content;
-          }
-        }
-
-        const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
-        const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
-        if (!parsed.cleanReply && !combinedReasoning) {
-          if (refusalReason) {
-            throw new Error(refusalReason);
-          }
-          throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
-        }
-        const finalCleanReply = parsed.cleanReply || (refusalReason ? ('【' + refusalReason + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
-        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-        return {
-          content: finalCleanReply,
-          reasoning: combinedReasoning,
-          rawContent,
-          genTime: elapsedSec
         };
-      }
 
-    // Real-Time Streaming Mode: Render tokens immediately as they arrive from the network socket
-    if (res.body && !contentType.includes('application/json')) {
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let sseBuffer = '';
-      let networkContent = '';
-      let nativeReasoningAccum = '';
-      let streamErrorMsg = null;
-
-      const parseSseLines = (linesArr) => {
-        for (const rawLine of linesArr) {
-          const line = rawLine.trim();
-          if (!line) continue;
-          let dataStr = '';
-          if (line.startsWith('data:')) {
-            dataStr = line.slice(5).trim();
-          } else if (line.startsWith('{') && line.endsWith('}')) {
-            dataStr = line;
-          } else {
-            continue;
-          }
-          if (!dataStr || dataStr === '[DONE]') continue;
-          try {
-            const parsedChunk = JSON.parse(dataStr);
-            const apiErr = extractErrorFromJson(parsedChunk);
-            if (apiErr) {
-              streamErrorMsg = apiErr;
-              return;
-            }
-            const choice = parsedChunk.choices && parsedChunk.choices[0];
-            if (!choice) continue;
-            const delta = choice.delta || choice.message || {};
-            if (typeof delta.content === 'string' && delta.content) {
-              networkContent += delta.content;
-            } else if (Array.isArray(delta.content)) {
-              delta.content.forEach(part => {
-                if (typeof part === 'string') networkContent += part;
-                else if (part && (part.type === 'thinking' || part.thinking)) nativeReasoningAccum += (part.thinking || part.text || '');
-                else if (part && part.text) networkContent += part.text;
-              });
-            } else if (typeof choice.text === 'string' && choice.text) {
-              networkContent += choice.text;
-            }
-            const rDelta = delta.reasoning_content || delta.reasoning || '';
-            if (rDelta) {
-              nativeReasoningAccum += rDelta;
-            }
-          } catch (_) {}
-        }
-      };
-
-      const flushLiveDom = (isLive) => {
-        const liveParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: isLive });
-        const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
-        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-        onStreamUpdate({
-          content: liveParsed.cleanReply,
-          reasoning: liveReasoning,
-          genTime: elapsedSec,
-          isStreaming: isLive
-        });
-      };
-
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            sseBuffer += decoder.decode();
-            if (sseBuffer.trim()) {
-              parseSseLines(sseBuffer.split(/\r?\n/));
-              sseBuffer = '';
-            }
-            break;
-          }
-          sseBuffer += decoder.decode(value, { stream: true });
-          const lines = sseBuffer.split(/\r?\n/);
-          sseBuffer = lines.pop() || '';
-          parseSseLines(lines);
-          if (streamErrorMsg) {
-            throw new Error('API流式返回错误: ' + streamErrorMsg);
-          }
-          flushLiveDom(true);
-        }
-      } catch (readErr) {
-        if (readErr && readErr.name === 'AbortError') {
-          const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-          const partialParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
-          const partialReasoning = [nativeReasoningAccum, partialParsed.reasoning].filter(Boolean).join('\n\n');
-          return {
-            content: partialParsed.cleanReply,
-            reasoning: partialReasoning,
+        const flushLiveDom = (isLive, forceFlush = false) => {
+          const nowPerf = performance.now();
+          if (isLive && !forceFlush && (nowPerf - lastDomFlushTs) < 45) return;
+          lastDomFlushTs = nowPerf;
+          const liveParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: isLive });
+          const liveReasoning = [nativeReasoningAccum, liveParsed.reasoning].filter(Boolean).join('\n\n');
+          const elapsedSec = ((nowPerf - t0) / 1000).toFixed(1) + 's';
+          onStreamUpdate({
+            content: liveParsed.cleanReply,
+            reasoning: liveReasoning,
             genTime: elapsedSec,
-            aborted: true
-          };
-        }
-        throw readErr;
-      }
+            isStreaming: isLive
+          });
+        };
 
-      if (streamErrorMsg) {
-        throw new Error('API流式返回错误: ' + streamErrorMsg);
-      }
-
-      // Check if proxy returned a raw JSON body without SSE "data:" prefixes
-      if (!networkContent && !nativeReasoningAccum && sseBuffer.trim().startsWith('{')) {
         try {
-          const fallbackJson = JSON.parse(sseBuffer.trim());
-          const apiErr = extractErrorFromJson(fallbackJson);
-          if (apiErr) throw new Error('API返回错误: ' + apiErr);
-          const choice = fallbackJson.choices && fallbackJson.choices[0];
-          const msgObj = choice ? (choice.message || choice.delta || {}) : {};
-          networkContent = msgObj.content || '';
-          nativeReasoningAccum = msgObj.reasoning_content || msgObj.reasoning || '';
-        } catch (e) {
-          if (e.message && e.message.startsWith('API')) throw e;
+          while (true) {
+            const { value, done } = await reader.read();
+            resetRequestTimeout();
+            if (typeof window.ensureBackgroundKeepAlive === 'function') {
+              window.ensureBackgroundKeepAlive();
+            }
+            if (done) {
+              const tailText = decoder.decode();
+              if (tailText) {
+                rawStreamText += tailText;
+                sseBuffer += tailText;
+              }
+              if (sseBuffer.trim()) {
+                parseSseLines(sseBuffer.split(/\r?\n/));
+                sseBuffer = '';
+              }
+              break;
+            }
+            const chunkText = decoder.decode(value, { stream: true });
+            rawStreamText += chunkText;
+            sseBuffer += chunkText;
+            const lines = sseBuffer.split(/\r?\n/);
+            sseBuffer = lines.pop() || '';
+            parseSseLines(lines);
+            if (streamErrorMsg) {
+              throw new Error('API流式返回错误: ' + streamErrorMsg);
+            }
+            flushLiveDom(true, false);
+          }
+        } catch (readErr) {
+          if (readErr && readErr.name === 'AbortError') {
+            if (networkContent.trim() || nativeReasoningAccum.trim()) {
+              const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+              const partialParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
+              const partialReasoning = [nativeReasoningAccum, partialParsed.reasoning].filter(Boolean).join('\n\n');
+              return {
+                content: partialParsed.cleanReply || partialReasoning || networkContent.trim(),
+                reasoning: partialReasoning,
+                rawContent: networkContent,
+                genTime: elapsedSec,
+                aborted: true
+              };
+            }
+            if (requestTimedOut) {
+              throw new Error('API流式响应超时，请检查反代或模型状态');
+            }
+            throw new Error('已手动停止生成');
+          }
+          // If stream disconnected mid-way after already receiving content, preserve what the AI already spoke!
+          if (!networkContent.trim() && !nativeReasoningAccum.trim() && !rawStreamText.trim()) {
+            throw readErr;
+          }
         }
+
+        if (streamErrorMsg && !networkContent.trim() && !nativeReasoningAccum.trim()) {
+          throw new Error('API流式返回错误: ' + streamErrorMsg);
+        }
+
+        // Crucial fallback: if proxy ignored stream:true and returned a multi-line JSON response, recover from rawStreamText!
+        if (!networkContent && !nativeReasoningAccum && rawStreamText.trim()) {
+          const recovered = parseUniversalAiPayloadText(rawStreamText);
+          networkContent = recovered.content;
+          nativeReasoningAccum = recovered.reasoning;
+          if (recovered.refusal) refusalReason = recovered.refusal;
+        }
+
+        const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+        return finalizeAiCompletionResult(networkContent, nativeReasoningAccum, refusalReason, elapsedSec, true);
       }
 
+      // Fallback when res.body is unavailable
+      const fallbackRawText = await res.text();
+      const extracted = parseUniversalAiPayloadText(fallbackRawText);
       const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-      const finalParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
-      const finalReasoning = [nativeReasoningAccum, finalParsed.reasoning].filter(Boolean).join('\n\n');
-      if (!finalParsed.cleanReply && !finalReasoning) {
-        throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
-      }
-      const finalCleanStreamReply = finalParsed.cleanReply || '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】';
-      return {
-        content: finalCleanStreamReply,
-        reasoning: finalReasoning,
-        genTime: elapsedSec
-      };
-    }
-
-    // Fallback when proxy returns application/json even though stream:true was requested
-    const data = await res.json();
-    const apiErr = extractErrorFromJson(data);
-    if (apiErr) throw new Error('API返回错误: ' + apiErr);
-    const choice = data.choices && data.choices[0];
-    const refErr = checkFinishReasonRefusal(choice, data);
-    const msgObj = choice ? (choice.message || choice.delta || {}) : {};
-    const rawContent = msgObj.content || '';
-    const nativeReasoning = msgObj.reasoning_content || msgObj.reasoning || '';
-
-    const parsed = extractReasoningAndCleanReply(rawContent, { hasPrefill, isLiveStream: false });
-    const combinedReasoning = [nativeReasoning, parsed.reasoning].filter(Boolean).join('\n\n');
-    if (!parsed.cleanReply && !combinedReasoning) {
-      if (refErr) throw new Error(refErr);
-      throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
-    }
-    const finalCleanFallbackReply = parsed.cleanReply || (refErr ? ('【' + refErr + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
-
-    const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
-    if (useStreaming && typeof onStreamUpdate === 'function') {
-      onStreamUpdate({
-        content: finalCleanFallbackReply,
-        reasoning: combinedReasoning,
-        genTime: elapsedSec,
-        isStreaming: false
-      });
-    }
-
-    return {
-      content: finalCleanFallbackReply,
-      reasoning: combinedReasoning,
-      genTime: elapsedSec
-    };
+      return finalizeAiCompletionResult(extracted.content, extracted.reasoning, extracted.refusal, elapsedSec, useStreaming);
     } finally {
-      clearTimeout(timeoutTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
       clearInterval(keepAlivePulseTimer);
       if (typeof releaseKeepAlive === 'function') {
         releaseKeepAlive();
@@ -12892,7 +12949,7 @@ code, pre {
           if (isBurntChickenWingsPlugin(p)) {
             try { window.__presetAtelier?.destroy?.(); } catch (_) {}
           }
-          executeUserPluginScript(p);
+          executeUserPluginScript(p, { forceRerun: true });
           await saveTavernStore();
           refreshOpenDrawerOnly();
           showTavernToast('已重新加载并执行插件: ' + p.name);
