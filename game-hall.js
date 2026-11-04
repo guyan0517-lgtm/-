@@ -2084,9 +2084,15 @@ code, pre {
           return parseHtmlNodes(trimmed);
         }
         if (trimmed === 'body') {
+          if (context && context !== document && context.body) {
+            return [context.body];
+          }
           return [document.getElementById('tavern-stage-root') || document.body];
         }
         if (trimmed === 'head') {
+          if (context && context !== document && context.head) {
+            return [context.head];
+          }
           return [document.head];
         }
         if (trimmed === '#extensions_settings') {
@@ -2213,6 +2219,48 @@ code, pre {
           if (val === undefined) return arr[0] ? arr[0].innerHTML : '';
           if (typeof val === 'string' && isHostAppHtmlFallback(val)) return api;
           arr.forEach(el => { if (el) el.innerHTML = String(val); });
+          return api;
+        },
+        load(urlOrFn, dataOrCb, maybeCb) {
+          if (typeof urlOrFn === 'function') {
+            return api.on('load', urlOrFn);
+          }
+          if (typeof urlOrFn === 'string' && urlOrFn.trim()) {
+            const cb = typeof dataOrCb === 'function' ? dataOrCb : (typeof maybeCb === 'function' ? maybeCb : null);
+            const parts = urlOrFn.trim().split(/\s+/);
+            const fetchUrl = parts[0];
+            const subSel = parts.slice(1).join(' ');
+            fetch(fetchUrl).then(r => r.ok ? r.text() : '').then(rawHtml => {
+              if (!rawHtml || isHostAppHtmlFallback(rawHtml)) return;
+              const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+              const shouldDark = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
+              const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawHtml) : rawHtml;
+              arr.forEach(el => {
+                if (!el) return;
+                const ownerDoc = el.ownerDocument || document;
+                if (subSel) {
+                  const tmp = ownerDoc.createElement('div');
+                  tmp.innerHTML = finalHtml;
+                  const matched = tmp.querySelector(subSel);
+                  el.innerHTML = matched ? matched.innerHTML : '';
+                } else {
+                  el.innerHTML = finalHtml;
+                }
+                const scripts = Array.from(el.querySelectorAll('script'));
+                scripts.forEach(oldScript => {
+                  const newScript = ownerDoc.createElement('script');
+                  Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                  newScript.textContent = oldScript.textContent;
+                  if (oldScript.parentNode) {
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                  }
+                });
+              });
+              if (cb) cb(finalHtml, 'success');
+            }).catch(() => {
+              if (cb) cb('', 'error');
+            });
+          }
           return api;
         },
         text(val) {
@@ -5379,12 +5427,188 @@ code, pre {
   let baiBaiBookUpgradeInFlight = false;
   let baiBaiShadowObserverBound = false;
 
+  function parseColorComponents(colorStr) {
+    if (!colorStr || typeof colorStr !== 'string') return null;
+    const s = colorStr.trim();
+    const rgbMatch = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+    if (rgbMatch) {
+      return {
+        r: Math.min(255, Number(rgbMatch[1])),
+        g: Math.min(255, Number(rgbMatch[2])),
+        b: Math.min(255, Number(rgbMatch[3])),
+        a: rgbMatch[4] !== undefined ? Number(rgbMatch[4]) : 1
+      };
+    }
+    const hexMatch = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+    if (hexMatch) {
+      let h = hexMatch[1];
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      const a = h.length === 8 ? (parseInt(h.slice(6, 8), 16) / 255) : 1;
+      return { r, g, b, a };
+    }
+    const namedLight = {
+      white: { r: 255, g: 255, b: 255, a: 1 },
+      ivory: { r: 255, g: 255, b: 240, a: 1 },
+      snow: { r: 255, g: 250, b: 250, a: 1 },
+      floralwhite: { r: 255, g: 250, b: 240, a: 1 },
+      oldlace: { r: 253, g: 245, b: 230, a: 1 },
+      linen: { r: 250, g: 240, b: 230, a: 1 },
+      seashell: { r: 255, g: 245, b: 238, a: 1 },
+      cornsilk: { r: 255, g: 248, b: 220, a: 1 },
+      beige: { r: 245, g: 245, b: 220, a: 1 },
+      whitesmoke: { r: 245, g: 245, b: 245, a: 1 },
+      black: { r: 0, g: 0, b: 0, a: 1 }
+    };
+    const lower = s.toLowerCase();
+    if (namedLight[lower]) return namedLight[lower];
+    return null;
+  }
+
+  function parseColorLuminance(colorStr) {
+    const c = parseColorComponents(colorStr);
+    if (!c) return null;
+    return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+  }
+
+  function isTavernThemeDark(theme) {
+    if (!theme) return false;
+    if (theme.id === 'theme_gousu_night') return true;
+    if (/night|dark|夜|暗|黑/i.test(String(theme.name || ''))) return true;
+    const textLum = parseColorLuminance(theme.main_text_color);
+    if (textLum !== null && textLum > 0.62) return true;
+    const blurLum = parseColorLuminance(theme.blur_tint_color);
+    if (blurLum !== null && blurLum < 0.38) return true;
+    const chatLum = parseColorLuminance(theme.chat_tint_color);
+    if (chatLum !== null && chatLum < 0.38) return true;
+    return false;
+  }
+
+  function convertCssDeclBlockToSoftDark(cssBlockText, selectorContext = '') {
+    if (!cssBlockText || typeof cssBlockText !== 'string') return cssBlockText;
+    const isInteractiveActiveRule = /(?:^|[\s.#:\-_])(?:active|selected|submit|primary|btn-dark)(?:$|[\s.#:\-_])/i.test(selectorContext || '');
+    const colorTokenRx = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[0-9.]+)?\s*\)|\b(?:white|ivory|snow|floralwhite|oldlace|linen|seashell|cornsilk|beige|whitesmoke|black)\b/gi;
+
+    return cssBlockText.replace(/([a-zA-Z-]+|--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+)/g, (fullDecl, rawProp, rawVal) => {
+      const prop = String(rawProp || '').trim().toLowerCase();
+      const val = String(rawVal || '');
+      if (/url\s*\(/i.test(val)) return fullDecl;
+
+      const isBgProp = (
+        prop === 'background' ||
+        prop === 'background-color' ||
+        (prop.startsWith('--') && /(?:bg|background|paper|surface|card|panel|box|canvas|fill)/i.test(prop) && !/text|ink|font|border|line/i.test(prop))
+      );
+      const isTextProp = (
+        prop === 'color' ||
+        (prop.startsWith('--') && /(?:text|ink|font|fg|title|color)/i.test(prop) && !/bg|background|border|line|shadow/i.test(prop))
+      );
+      const isBorderProp = (
+        prop.startsWith('border') ||
+        prop === 'outline' ||
+        prop === 'outline-color' ||
+        (prop.startsWith('--') && /(?:border|line|divider|frame|stroke)/i.test(prop))
+      );
+
+      if (!isBgProp && !isTextProp && !isBorderProp) return fullDecl;
+
+      const nextVal = val.replace(colorTokenRx, (token) => {
+        const comp = parseColorComponents(token);
+        if (!comp) return token;
+        const { r, g, b, a } = comp;
+        if (a <= 0.05) return token;
+        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
+
+        if (isBgProp) {
+          if (isInteractiveActiveRule && lum < 0.18 && sat < 0.28) {
+            return '#56617a';
+          }
+          if (lum > 0.92 && sat < 0.36) {
+            return a < 0.96 ? `rgba(34, 37, 46, ${Number(a.toFixed(2))})` : '#22252e';
+          }
+          if (lum > 0.80 && sat < 0.44) {
+            return a < 0.96 ? `rgba(43, 47, 58, ${Number(a.toFixed(2))})` : '#2b2f3a';
+          }
+          if (lum > 0.66 && sat < 0.48) {
+            return a < 0.96 ? `rgba(52, 57, 70, ${Number(a.toFixed(2))})` : '#343946';
+          }
+          return token;
+        }
+
+        if (isTextProp) {
+          if (lum < 0.26 && sat < 0.48) {
+            return '#e5e2dc';
+          }
+          if (lum >= 0.26 && lum < 0.50 && sat < 0.52) {
+            return '#b8b4ac';
+          }
+          return token;
+        }
+
+        if (isBorderProp) {
+          if (lum > 0.64 && sat < 0.48) {
+            return a < 0.96 ? `rgba(66, 71, 86, ${Number(a.toFixed(2))})` : '#3e4352';
+          }
+          if (lum < 0.20 && sat < 0.30) {
+            return '#555b6e';
+          }
+          return token;
+        }
+
+        return token;
+      });
+
+      return `${rawProp}: ${nextVal}`;
+    });
+  }
+
+  function convertHtmlDocToSoftDark(rawHtml) {
+    if (!rawHtml || typeof rawHtml !== 'string') return rawHtml;
+    let lightSurfaceHits = 0;
+    let darkSurfaceHits = 0;
+    const bgScanRx = /(?:background(?:-color)?|--[a-zA-Z0-9_-]*(?:bg|paper|surface|card)[a-zA-Z0-9_-]*)\s*:\s*([^;"{}>]+)/gi;
+    let m;
+    while ((m = bgScanRx.exec(rawHtml)) !== null) {
+      const val = m[1] || '';
+      const tokMatch = val.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[0-9.]+)?\s*\)|\b(?:white|ivory|snow|floralwhite|oldlace|linen|black)\b/i);
+      if (tokMatch) {
+        const comp = parseColorComponents(tokMatch[0]);
+        if (comp && comp.a > 0.2) {
+          const lum = (0.299 * comp.r + 0.587 * comp.g + 0.114 * comp.b) / 255;
+          if (lum > 0.68) lightSurfaceHits++;
+          else if (lum < 0.24) darkSurfaceHits++;
+        }
+      }
+    }
+    if (lightSurfaceHits === 0 && darkSurfaceHits > 0) {
+      return rawHtml;
+    }
+
+    let transformed = rawHtml.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (fullTag, attrs, cssContent) => {
+      const updatedCss = String(cssContent || '').replace(/([^{}]+)\{([^{}]*)\}/g, (ruleMatch, sel, body) => {
+        return sel + '{' + convertCssDeclBlockToSoftDark(body, sel) + '}';
+      });
+      return `<style${attrs}>${updatedCss}</style>`;
+    });
+
+    transformed = transformed.replace(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/gi, (fullAttr, quote, inlineCss) => {
+      return `style=${quote}${convertCssDeclBlockToSoftDark(inlineCss, '')}${quote}`;
+    });
+
+    return transformed;
+  }
+
   function buildBaiBaiBookBeautifyCss() {
     const activeTheme = tavernState.themes.find(t => t.id === tavernState.activeThemeId) || tavernState.themes[0] || DEFAULT_GOUSU_THEME;
     const mainText = activeTheme.main_text_color || '#4a4745';
     const subText = activeTheme.italics_text_color || '#8c8580';
     const quoteAccent = activeTheme.quote_text_color || '#b8948e';
-    const isNight = /night|dark|夜|暗|黑/i.test(activeTheme.name || '');
+    const isNight = isTavernThemeDark(activeTheme);
     const bgBase = isNight ? '#232226' : '#f8f6f3';
     const bgPanel = isNight ? '#2b292e' : '#fdfcfb';
     const bgSubtle = isNight ? '#343238' : '#f1ede8';
@@ -6975,9 +7199,28 @@ code, pre {
         for (let i = 0; i < c; i++) sum += Math.floor(Math.random() * s) + 1;
         return String(sum);
       })
-      .replace(/\{\{(?:random|pick):([^}]+)\}\}/gi, (_, listStr) => {
-        const parts = listStr.split(',').map(s => s.trim()).filter(Boolean);
-        return parts.length > 0 ? parts[Math.floor(Math.random() * parts.length)] : '';
+      .replace(/\{\{random\s?::?([^}]+)\}\}/gi, (_, listString) => {
+        const list = listString.includes('::')
+          ? listString.split('::')
+          : listString.replace(/\\,/g, '##COMMA##').split(',').map(item => item.trim().replace(/##COMMA##/g, ','));
+        if (list.length === 0) return '';
+        return list[Math.floor(Math.random() * list.length)];
+      })
+      .replace(/\{\{pick\s?::?([^}]+)\}\}/gi, (_, listString, offset) => {
+        const list = listString.includes('::')
+          ? listString.split('::')
+          : listString.replace(/\\,/g, '##COMMA##').split(',').map(item => item.trim().replace(/##COMMA##/g, ','));
+        if (list.length === 0) return '';
+        const sess = getActiveChatSession();
+        const chatSeedId = (sess && sess.chatId) ? String(sess.chatId) : (card && card.id ? String(card.id) : 'default');
+        const seedInput = `${chatSeedId}-${str.length}-${offset}-${listString.length}`;
+        let hash = 2166136261;
+        for (let i = 0; i < seedInput.length; i++) {
+          hash ^= seedInput.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        const idx = (hash >>> 0) % list.length;
+        return list[idx];
       });
   }
 
@@ -7595,6 +7838,8 @@ code, pre {
     const isFullModal = Boolean(options && options.isModal);
     const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
     const allowAudioInFrame = isFullModal || isLastFloor;
+    const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+    const shouldAdaptDarkHtml = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
     let cleaned = String(rawHtmlDoc || '')
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
       .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '');
@@ -7607,6 +7852,10 @@ code, pre {
       cleaned = cleaned
         .replace(/min-height\s*:\s*100d?vh/gi, 'min-height:auto')
         .replace(/height\s*:\s*100d?vh/gi, 'height:auto');
+    }
+
+    if (shouldAdaptDarkHtml) {
+      cleaned = convertHtmlDocToSoftDark(cleaned);
     }
 
     const sandboxClampCss = `<style>
@@ -7628,7 +7877,9 @@ code, pre {
         user-select: none !important;
         -webkit-touch-callout: none !important;
         -webkit-tap-highlight-color: transparent !important;
+        ${shouldAdaptDarkHtml ? 'color: #e5e2dc;' : ''}
       }
+      ${shouldAdaptDarkHtml ? 'input, select, textarea { color: #e5e2dc; }' : ''}
       body *, * {
         -webkit-touch-callout: none !important;
         -webkit-tap-highlight-color: transparent !important;
@@ -8401,8 +8652,9 @@ code, pre {
 
   function buildTavernThemeOverridePatch(theme, uiCfg) {
     const rules = [];
+    const activeThemeObj = theme || (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
     const isGousuStyle = theme && (theme.id === 'theme_gousu_default' || theme.id === 'theme_gousu_night' || String(theme.custom_css || '').includes('1ear.png') || String(theme.custom_css || '').includes('--text4'));
-    const isGousuNight = Boolean(theme && theme.id === 'theme_gousu_night');
+    const isDarkTheme = isTavernThemeDark(activeThemeObj);
     if (isGousuStyle) {
       rules.push(`
         /* Refined Gousu floor spacing, smaller non-overlapping avatar, connected metadata capsule, and two-row bottom bar */
@@ -8643,100 +8895,117 @@ code, pre {
           box-sizing: border-box !important;
         }
       `);
-      if (isGousuNight) {
-        rules.push(`
-          #game-hall-screen,
-          #tavern-app-shell,
-          #tavern-stage-root {
-            background-color: #1a1c22 !important;
-            color: #e2e0da !important;
-          }
-          #tavern-stage-root .mes .extraMesButtons {
-            background: rgba(36, 39, 48, 0.94) !important;
-            border: 1px solid #484c5c !important;
-          }
-          #tavern-stage-root .mes .tavern-mes-icon-btn {
-            background: #2b2e39 !important;
-            color: #d0cdc4 !important;
-            border: 1px solid #484c5c !important;
-            box-shadow: none !important;
-          }
-          #tavern-stage-root #qr--bar .qr--button {
-            background: rgba(40, 43, 52, 0.94) !important;
-            color: #dcd9d2 !important;
-            border: 1px solid #4a4e5e !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
-          }
-          #tavern-stage-root .tavern-stop-gen-btn {
-            background: rgba(68, 42, 46, 0.95) !important;
-            color: #f0b8c0 !important;
-            border: 1px solid rgba(180, 100, 112, 0.65) !important;
-          }
-          #tavern-stage-root #tavern-drawer-host {
-            background: rgba(24, 26, 32, 0.97) !important;
-            border-bottom: 1px solid #3c404e !important;
-          }
-          #tavern-stage-root .tavern-drawer-header {
-            border-bottom: 1px solid #383c4a !important;
-          }
-          #tavern-stage-root .tavern-drawer-title,
-          #tavern-stage-root .tavern-section-label,
-          #tavern-stage-root .tavern-list-row-main,
-          #tavern-stage-root .inline-drawer-header {
-            color: #e2e0da !important;
-          }
-          #tavern-stage-root .tavern-section-card,
-          #tavern-stage-root .inline-drawer {
-            background: rgba(34, 37, 45, 0.95) !important;
-            border: 1px solid #3e4250 !important;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;
-          }
-          #tavern-stage-root .tavern-list-row {
-            background: rgba(42, 45, 55, 0.92) !important;
-            border: 1px solid #464a58 !important;
-          }
-          #tavern-stage-root .tavern-field-group label,
-          #tavern-stage-root .tavern-field-hint,
-          #tavern-stage-root .tavern-list-row-sub {
-            color: #9e9b93 !important;
-          }
-          #tavern-stage-root .drawer-content .tavern-input,
-          #tavern-stage-root .drawer-content .tavern-textarea,
-          #tavern-stage-root .drawer-content .tavern-select {
-            background-color: #22252e !important;
-            color: #e2e0da !important;
-            border: 1px solid #454958 !important;
-          }
-          #tavern-stage-root .tavern-btn {
-            background: #2e313c !important;
-            color: #dcd9d2 !important;
-            border: 1px solid #484c5c !important;
-          }
-          #tavern-stage-root .tavern-btn.primary {
-            background: #4a5062 !important;
-            color: #f2f0ec !important;
-            border-color: #5c6378 !important;
-          }
-          #tavern-stage-root .tavern-btn.danger {
-            background: rgba(74, 38, 42, 0.9) !important;
-            color: #f0a8b0 !important;
-            border-color: rgba(168, 86, 94, 0.6) !important;
-          }
-          #tavern-stage-root .tavern-bottom-popup {
-            background: rgba(32, 35, 43, 0.98) !important;
-            border: 1px solid #454958 !important;
-            color: #e2e0da !important;
-          }
-          #tavern-stage-root .tavern-popup-item,
-          #tavern-stage-root #extensionsMenu > * {
-            color: #dcd9d2 !important;
-          }
-          #tavern-stage-root .tavern-popup-item:hover,
-          #tavern-stage-root #extensionsMenu > *:hover {
-            background: rgba(255, 255, 255, 0.06) !important;
-          }
-        `);
-      }
+    }
+
+    if (isDarkTheme) {
+      rules.push(`
+        #game-hall-screen,
+        #tavern-app-shell,
+        #tavern-stage-root {
+          background-color: #1a1c22 !important;
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+        }
+        #tavern-stage-root .mes .extraMesButtons {
+          background: rgba(36, 39, 48, 0.94) !important;
+          border: 1px solid #484c5c !important;
+        }
+        #tavern-stage-root .mes .tavern-mes-icon-btn {
+          background: #2b2e39 !important;
+          color: #d0cdc4 !important;
+          border: 1px solid #484c5c !important;
+          box-shadow: none !important;
+        }
+        #tavern-stage-root #qr--bar .qr--button {
+          background: rgba(40, 43, 52, 0.94) !important;
+          color: #dcd9d2 !important;
+          border: 1px solid #4a4e5e !important;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+        }
+        #tavern-stage-root .tavern-stop-gen-btn {
+          background: rgba(68, 42, 46, 0.95) !important;
+          color: #f0b8c0 !important;
+          border: 1px solid rgba(180, 100, 112, 0.65) !important;
+        }
+        #tavern-stage-root #tavern-drawer-host {
+          background: rgba(20, 22, 28, 0.92) !important;
+          border-bottom: 1px solid var(--SmartThemeBorderColor, #3c404e) !important;
+        }
+        #tavern-stage-root #tavern-drawer-host .drawer-content.openDrawer {
+          background-color: #1e2028 !important;
+          background-image: linear-gradient(var(--SmartThemeBlurTintColor, rgba(30, 32, 40, 0.96)), var(--SmartThemeBlurTintColor, rgba(30, 32, 40, 0.96))) !important;
+          border: 1.5px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.14)) !important;
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42) !important;
+        }
+        #tavern-stage-root .tavern-drawer-header {
+          border-bottom: 1px solid var(--SmartThemeBorderColor, #383c4a) !important;
+        }
+        #tavern-stage-root .tavern-drawer-title,
+        #tavern-stage-root .tavern-section-label,
+        #tavern-stage-root .tavern-list-row-main,
+        #tavern-stage-root .inline-drawer-header,
+        #tavern-stage-root .tavern-check-row,
+        #tavern-stage-root .tavern-check-row span {
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+        }
+        #tavern-stage-root .tavern-section-card,
+        #tavern-stage-root .inline-drawer {
+          background-color: #262934 !important;
+          background-image: linear-gradient(var(--SmartThemeBotMesBlurTintColor, rgba(38, 41, 52, 0.94)), var(--SmartThemeBotMesBlurTintColor, rgba(38, 41, 52, 0.94))) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #3e4250) !important;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28) !important;
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+        }
+        #tavern-stage-root .tavern-list-row {
+          background: rgba(42, 45, 55, 0.92) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #464a58) !important;
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+        }
+        #tavern-stage-root .tavern-field-group label,
+        #tavern-stage-root .tavern-field-hint,
+        #tavern-stage-root .tavern-list-row-sub {
+          color: var(--SmartThemeEmColor, #b5b0a8) !important;
+        }
+        #tavern-stage-root .drawer-content .tavern-input,
+        #tavern-stage-root .drawer-content .tavern-textarea,
+        #tavern-stage-root .drawer-content .tavern-select,
+        #tavern-stage-root .tavern-input,
+        #tavern-stage-root .tavern-textarea,
+        #tavern-stage-root .tavern-select {
+          background-color: #1c1f28 !important;
+          background: #1c1f28 !important;
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #454958) !important;
+        }
+        #tavern-stage-root .tavern-btn {
+          background: #2e313c !important;
+          color: var(--SmartThemeBodyColor, #dcd9d2) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #484c5c) !important;
+        }
+        #tavern-stage-root .tavern-btn.primary {
+          background: #4a5062 !important;
+          color: #f2f0ec !important;
+          border-color: #5c6378 !important;
+        }
+        #tavern-stage-root .tavern-btn.danger {
+          background: rgba(74, 38, 42, 0.9) !important;
+          color: #f0a8b0 !important;
+          border-color: rgba(168, 86, 94, 0.6) !important;
+        }
+        #tavern-stage-root .tavern-bottom-popup {
+          background: rgba(32, 35, 43, 0.98) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #454958) !important;
+          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+        }
+        #tavern-stage-root .tavern-popup-item,
+        #tavern-stage-root #extensionsMenu > * {
+          color: var(--SmartThemeBodyColor, #dcd9d2) !important;
+        }
+        #tavern-stage-root .tavern-popup-item:hover,
+        #tavern-stage-root #extensionsMenu > *:hover {
+          background: rgba(255, 255, 255, 0.06) !important;
+        }
+      `);
     }
 
     // Universal compatibility guards for all SillyTavern themes
@@ -9025,6 +9294,16 @@ code, pre {
       }
       #tavern-stage-root .mes[is_user="true"] {
         background-color: var(--SmartThemeUserMesBlurTintColor, rgba(245, 240, 242, 0.92));
+      }
+      #tavern-stage-root #tavern-drawer-host .drawer-content.openDrawer {
+        background-color: var(--SmartThemeBlurTintColor, rgba(250, 250, 252, 0.98)) !important;
+        border: 1.5px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.9)) !important;
+        color: var(--SmartThemeBodyColor, #2c2c2e);
+      }
+      #tavern-stage-root .tavern-section-card {
+        background-color: var(--SmartThemeBotMesBlurTintColor, rgba(255, 255, 255, 0.92));
+        border: 1px solid var(--SmartThemeBorderColor, rgba(224, 224, 230, 0.85));
+        color: var(--SmartThemeBodyColor, #2c2c2e);
       }
     ` : '';
 
@@ -14331,6 +14610,11 @@ code, pre {
           <span>覆盖柏宝书界面美化</span>
         </label>
         <div class="tavern-field-hint">开启后让柏宝书弹窗与酒馆当前日间或夜间柔和色调自动同步</div>
+        <label class="tavern-check-row" style="margin-top:6px;">
+          <input type="checkbox" data-ui-bool="enableHtmlDarkAdapt" ${uiCfg.enableHtmlDarkAdapt !== false ? 'checked' : ''} />
+          <span>深色</span>
+        </label>
+        <div class="tavern-field-hint">夜间主题下将角色卡内亮白底板柔和转为深色且保留图片原色</div>
       </div>
 
       <div class="tavern-section-card">
@@ -19045,6 +19329,7 @@ code, pre {
         await saveTavernStore();
         applyActiveTavernTheme();
         refreshOpenDrawerOnly();
+        renderTavernChatFloors(false);
         return;
       }
       if (changeType === 'switch-persona') {
