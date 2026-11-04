@@ -750,13 +750,21 @@ code, pre {
     }
   }
 
+  let savePendingImmediateTimer = null;
   async function saveTavernStore(immediate = false) {
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = null;
     }
+    if (savePendingImmediateTimer) {
+      clearTimeout(savePendingImmediateTimer);
+      savePendingImmediateTimer = null;
+    }
     if (immediate) {
-      await performTavernStoreSaveNow();
+      savePendingImmediateTimer = setTimeout(() => {
+        savePendingImmediateTimer = null;
+        performTavernStoreSaveNow();
+      }, 25);
       return;
     }
     saveTimer = setTimeout(() => {
@@ -4530,6 +4538,75 @@ code, pre {
         const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name || (name && b.name.includes(name)));
         return wb ? wb.entries : [];
       },
+      getWorldbookNames: () => (tavernState.worldBooks || []).map(b => b.name).filter(Boolean),
+      getGlobalWorldbookNames: () => (tavernState.worldBooks || []).filter(b => b && b.enabled).map(b => b.name).filter(Boolean),
+      getCharWorldbookNames: (target) => {
+        const card = (!target || target === 'current') ? getActiveCard() : (tavernState.cards || []).find(c => c && (c.name === target || c.id === target));
+        if (!card || !card.worldBookId) return { primary: null, additional: [] };
+        const wb = (tavernState.worldBooks || []).find(b => b && b.id === card.worldBookId);
+        return { primary: wb ? wb.name : null, additional: [] };
+      },
+      getChatWorldbookName: () => {
+        const card = getActiveCard();
+        if (card && card.worldBookId) {
+          const wb = (tavernState.worldBooks || []).find(b => b && b.id === card.worldBookId);
+          if (wb) return wb.name;
+        }
+        const firstWb = (tavernState.worldBooks || []).find(b => b && b.enabled);
+        return firstWb ? firstWb.name : '';
+      },
+      getOrCreateChatWorldbook: async (bookName) => {
+        const existName = window.TavernHelper.getChatWorldbookName();
+        if (existName) return existName;
+        const newName = bookName || ((getActiveCard()?.name || '当前聊天') + '世界书');
+        await window.TavernHelper.createOrReplaceWorldbook(newName, []);
+        return newName;
+      },
+      createOrReplaceWorldbook: async (name, entries = []) => {
+        if (!name) return;
+        let wb = (tavernState.worldBooks || []).find(b => b && (b.name === name || b.id === name));
+        const normEntries = Array.isArray(entries) ? entries.map((e, i) => normalizeSingleWorldEntry(e, i)) : [];
+        if (wb) {
+          wb.entries = normEntries;
+        } else {
+          wb = normalizeWorldBookObject({ name, enabled: true, entries: normEntries }, name);
+          tavernState.worldBooks.unshift(wb);
+        }
+        await saveTavernStore();
+        return wb.entries;
+      },
+      deleteWorldbook: async (name) => {
+        if (!name) return;
+        tavernState.worldBooks = (tavernState.worldBooks || []).filter(b => b && b.name !== name && b.id !== name);
+        await saveTavernStore();
+      },
+      createWorldbookEntries: async (name, newEntries = []) => {
+        const wb = (tavernState.worldBooks || []).find(b => b && (b.name === name || b.id === name || (name && b.name.includes(name))));
+        if (wb && Array.isArray(newEntries)) {
+          if (!Array.isArray(wb.entries)) wb.entries = [];
+          const added = newEntries.map((e, i) => normalizeSingleWorldEntry(e, wb.entries.length + i));
+          wb.entries.push(...added);
+          await saveTavernStore();
+          return { worldbook: wb.entries, new_entries: added };
+        }
+        return { worldbook: [], new_entries: [] };
+      },
+      deleteWorldbookEntries: async (name, predicateOrUids) => {
+        const wb = (tavernState.worldBooks || []).find(b => b && (b.name === name || b.id === name || (name && b.name.includes(name))));
+        if (wb && Array.isArray(wb.entries)) {
+          const removed = [];
+          wb.entries = wb.entries.filter(e => {
+            const match = typeof predicateOrUids === 'function'
+              ? Boolean(predicateOrUids(e))
+              : (Array.isArray(predicateOrUids) ? predicateOrUids.some(u => String(u) === String(e.uid)) : false);
+            if (match) removed.push(e);
+            return !match;
+          });
+          await saveTavernStore();
+          return { worldbook: wb.entries, deleted_entries: removed };
+        }
+        return { worldbook: [], deleted_entries: [] };
+      },
       replaceWorldbook: async (name, entries) => {
         const wb = (tavernState.worldBooks || []).find(b => b.name === name || b.id === name || (name && b.name.includes(name)));
         if (wb && Array.isArray(entries)) {
@@ -4543,7 +4620,100 @@ code, pre {
         if (Array.isArray(next)) {
           await window.TavernHelper.replaceWorldbook(name, next);
         }
-      }
+      },
+      deleteChatMessages: async (messageIds, opts = {}) => {
+        const sess = getActiveChatSession();
+        if (!sess || !Array.isArray(sess.messages)) return;
+        const idSet = new Set((Array.isArray(messageIds) ? messageIds : [messageIds]).map(Number));
+        sess.messages = sess.messages.filter((_, idx) => !idSet.has(idx));
+        sess.messages.forEach((m, i) => { m.mesid = i; });
+        await saveTavernStore();
+        if (!opts || opts.refresh !== 'none') renderTavernChatFloors(false);
+      },
+      rotateChatMessages: async (begin, middle, end, opts = {}) => {
+        const sess = getActiveChatSession();
+        if (!sess || !Array.isArray(sess.messages)) return;
+        const msgs = sess.messages;
+        if (begin >= 0 && middle >= begin && end >= middle && end <= msgs.length) {
+          const left = msgs.slice(begin, middle);
+          const right = msgs.slice(middle, end);
+          msgs.splice(begin, end - begin, ...right, ...left);
+          msgs.forEach((m, i) => { m.mesid = i; });
+          await saveTavernStore();
+          if (!opts || opts.refresh !== 'none') renderTavernChatFloors(false);
+        }
+      },
+      substitudeMacros: (text) => replaceTavernMacros(String(text ?? ''), getActiveCard()),
+      substituteMacros: (text) => replaceTavernMacros(String(text ?? ''), getActiveCard()),
+      formatAsTavernRegexedString: (text, source = 'ai_output', destination = 'display', opts = {}) => {
+        const isPrompt = destination === 'prompt';
+        const isUser = source === 'user_input';
+        const isWorldInfo = source === 'world_info';
+        return applyTavernRegexPipeline(String(text ?? ''), {
+          isPrompt,
+          isUser,
+          isWorldInfo,
+          depth: opts && opts.depth !== undefined ? opts.depth : undefined,
+          card: getActiveCard()
+        });
+      },
+      isCharacterTavernRegexesEnabled: () => true,
+      getPresetNames: () => (tavernState.presets || []).map(p => p && p.name).filter(Boolean),
+      getLoadedPresetName: () => getActivePreset()?.name || '标准酒馆预设',
+      loadPreset: async (name) => {
+        await getTavernPresetManager('openai').selectPreset(name);
+      },
+      getPreset: (name) => {
+        if (!name || name === 'in_use' || name === 'current') return getActivePreset();
+        return (tavernState.presets || []).find(p => p && (p.name === name || p.id === name)) || getActivePreset();
+      },
+      replacePreset: async (name, nextPreset) => {
+        const target = (!name || name === 'in_use' || name === 'current')
+          ? getActivePreset()
+          : (tavernState.presets || []).find(p => p && (p.name === name || p.id === name));
+        if (target && nextPreset && typeof nextPreset === 'object') {
+          Object.assign(target, nextPreset);
+          ensurePresetHasPromptOrder(target);
+          await saveTavernStore();
+        }
+      },
+      updatePresetWith: async (name, updaterFn) => {
+        const target = window.TavernHelper.getPreset(name);
+        if (target && typeof updaterFn === 'function') {
+          const updated = await updaterFn(target);
+          if (updated && typeof updated === 'object') {
+            Object.assign(target, updated);
+          }
+          ensurePresetHasPromptOrder(target);
+          await saveTavernStore();
+        }
+      },
+      getCharacterData: (target) => {
+        if (!target || target === 'current') return getActiveCard();
+        return (tavernState.cards || []).find(c => c && (c.name === target || c.id === target)) || getActiveCard();
+      },
+      getCharData: (target) => window.TavernHelper.getCharacterData(target),
+      getCharAvatarPath: (target) => {
+        const c = window.TavernHelper.getCharacterData(target);
+        return c ? resolveSafeAvatarUrl(c.avatar, false) : '';
+      },
+      getUserAvatarPath: () => {
+        const p = getActivePersona();
+        return p ? resolveSafeAvatarUrl(p.avatar, true) : '';
+      },
+      stopGenerationById: () => {
+        if (activeAbortController) {
+          try { activeAbortController.abort(); } catch (_) {}
+        }
+        uiRuntime.isGenerating = false;
+      },
+      stopAllGeneration: () => {
+        if (activeAbortController) {
+          try { activeAbortController.abort(); } catch (_) {}
+        }
+        uiRuntime.isGenerating = false;
+      },
+      registerVariableSchema: () => {}
     };
     window.getCurrentMessageId = window.TavernHelper.getCurrentMessageId;
     window.getLastMessageId = window.TavernHelper.getLastMessageId;
@@ -4552,12 +4722,124 @@ code, pre {
     window.setChatMessage = window.TavernHelper.setChatMessage;
     window.setChatMessages = window.TavernHelper.setChatMessages;
     window.createChatMessages = window.TavernHelper.createChatMessages;
+    window.deleteChatMessages = window.TavernHelper.deleteChatMessages;
+    window.rotateChatMessages = window.TavernHelper.rotateChatMessages;
+    window.getWorldbook = window.TavernHelper.getWorldbook;
+    window.replaceWorldbook = window.TavernHelper.replaceWorldbook;
+    window.updateWorldbookWith = window.TavernHelper.updateWorldbookWith;
+    window.getWorldbookNames = window.TavernHelper.getWorldbookNames;
+    window.getGlobalWorldbookNames = window.TavernHelper.getGlobalWorldbookNames;
+    window.getCharWorldbookNames = window.TavernHelper.getCharWorldbookNames;
+    window.getChatWorldbookName = window.TavernHelper.getChatWorldbookName;
+    window.getOrCreateChatWorldbook = window.TavernHelper.getOrCreateChatWorldbook;
+    window.createOrReplaceWorldbook = window.TavernHelper.createOrReplaceWorldbook;
+    window.deleteWorldbook = window.TavernHelper.deleteWorldbook;
+    window.createWorldbookEntries = window.TavernHelper.createWorldbookEntries;
+    window.deleteWorldbookEntries = window.TavernHelper.deleteWorldbookEntries;
+    window.substitudeMacros = window.TavernHelper.substitudeMacros;
+    window.substituteMacros = window.TavernHelper.substituteMacros;
+    window.formatAsTavernRegexedString = window.TavernHelper.formatAsTavernRegexedString;
+    window.isCharacterTavernRegexesEnabled = window.TavernHelper.isCharacterTavernRegexesEnabled;
+    window.getPresetNames = window.TavernHelper.getPresetNames;
+    window.getLoadedPresetName = window.TavernHelper.getLoadedPresetName;
+    window.loadPreset = window.TavernHelper.loadPreset;
+    window.getPreset = window.TavernHelper.getPreset;
+    window.replacePreset = window.TavernHelper.replacePreset;
+    window.updatePresetWith = window.TavernHelper.updatePresetWith;
+    window.getCharacterData = window.TavernHelper.getCharacterData;
+    window.getCharData = window.TavernHelper.getCharData;
+    window.getCharAvatarPath = window.TavernHelper.getCharAvatarPath;
+    window.getUserAvatarPath = window.TavernHelper.getUserAvatarPath;
+    window.stopGenerationById = window.TavernHelper.stopGenerationById;
+    window.stopAllGeneration = window.TavernHelper.stopAllGeneration;
     window.triggerSlash = executeTavernSlashCommand;
     window.triggerSlashWithResult = executeTavernSlashCommand;
     window.triggerSlashWithOptions = executeTavernSlashCommand;
     window.checkWorldInfo = runTavernCheckWorldInfo;
     window.getWorldInfoPrompt = runTavernCheckWorldInfo;
     window.doNewChat = async () => { await startNewChatForActiveCard(); };
+    if (!window._) {
+      window._ = {
+        get: (obj, path, defVal) => {
+          const res = getDeepVarByPath(obj, path);
+          return res === undefined ? defVal : res;
+        },
+        set: (obj, path, val) => {
+          setDeepVarByPath(obj, path, val);
+          return obj;
+        },
+        unset: (obj, path) => {
+          deleteDeepVarByPath(obj, path);
+          return true;
+        },
+        has: (obj, path) => getDeepVarByPath(obj, path) !== undefined,
+        cloneDeep: (val) => {
+          if (val === null || typeof val !== 'object') return val;
+          try { return JSON.parse(JSON.stringify(val)); } catch (_) { return val; }
+        },
+        merge: (target, ...sources) => {
+          sources.forEach(src => deepMergeVariables(target, src));
+          return target;
+        },
+        assign: Object.assign,
+        defaults: (target, ...sources) => {
+          if (!target || typeof target !== 'object') return target;
+          sources.forEach(src => {
+            if (!src || typeof src !== 'object') return;
+            Object.keys(src).forEach(k => {
+              if (target[k] === undefined) target[k] = src[k];
+            });
+          });
+          return target;
+        },
+        isEmpty: (v) => {
+          if (v == null) return true;
+          if (Array.isArray(v) || typeof v === 'string') return v.length === 0;
+          if (typeof v === 'object') return Object.keys(v).length === 0;
+          return false;
+        },
+        isObject: (v) => v !== null && typeof v === 'object',
+        isPlainObject: (v) => v !== null && typeof v === 'object' && !Array.isArray(v),
+        isArray: Array.isArray,
+        isString: (v) => typeof v === 'string',
+        isNumber: (v) => typeof v === 'number' && !Number.isNaN(v),
+        isBoolean: (v) => typeof v === 'boolean',
+        isNil: (v) => v === null || v === undefined,
+        random: (min = 0, max = 1, floating = false) => {
+          if (typeof max === 'boolean') { floating = max; max = min; min = 0; }
+          const r = min + Math.random() * (max - min);
+          return floating ? r : Math.floor(r);
+        },
+        sample: (arr) => Array.isArray(arr) && arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : undefined,
+        shuffle: (arr) => {
+          if (!Array.isArray(arr)) return [];
+          const copy = [...arr];
+          for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+          }
+          return copy;
+        },
+        clamp: (n, lower, upper) => Math.min(upper, Math.max(lower, Number(n) || 0)),
+        sum: (arr) => Array.isArray(arr) ? arr.reduce((a, b) => a + (Number(b) || 0), 0) : 0,
+        uniq: (arr) => Array.isArray(arr) ? Array.from(new Set(arr)) : [],
+        pick: (obj, keys) => {
+          const out = {};
+          if (!obj || typeof obj !== 'object') return out;
+          (Array.isArray(keys) ? keys : [keys]).forEach(k => { if (k in obj) out[k] = obj[k]; });
+          return out;
+        },
+        omit: (obj, keys) => {
+          if (!obj || typeof obj !== 'object') return {};
+          const out = Object.assign({}, obj);
+          (Array.isArray(keys) ? keys : [keys]).forEach(k => { delete out[k]; });
+          return out;
+        },
+        map: (col, fn) => Array.isArray(col) ? col.map(fn) : Object.values(col || {}).map(fn),
+        filter: (col, fn) => Array.isArray(col) ? col.filter(fn) : Object.values(col || {}).filter(fn),
+        find: (col, fn) => Array.isArray(col) ? col.find(fn) : Object.values(col || {}).find(fn)
+      };
+    }
     window.power_user = {
       get experimental_macro_engine() { return false; },
       get persona_description() { return getActivePersona()?.description || ''; }
@@ -4887,7 +5169,9 @@ code, pre {
         const existingBeauty = bbsHost.shadowRoot.getElementById('bbs-custom-theme-beautify');
         if (enableBbsBeautify) {
           if (existingBeauty) {
-            existingBeauty.textContent = bbsBeautifyCss;
+            if (existingBeauty.textContent !== bbsBeautifyCss) {
+              existingBeauty.textContent = bbsBeautifyCss;
+            }
           } else {
             const bEl = document.createElement('style');
             bEl.id = 'bbs-custom-theme-beautify';
@@ -4909,7 +5193,9 @@ code, pre {
         const existingFpBeauty = fpHost.shadowRoot.getElementById('bbs-custom-theme-beautify');
         if (enableBbsBeautify) {
           if (existingFpBeauty) {
-            existingFpBeauty.textContent = bbsBeautifyCss;
+            if (existingFpBeauty.textContent !== bbsBeautifyCss) {
+              existingFpBeauty.textContent = bbsBeautifyCss;
+            }
           } else {
             const bEl = document.createElement('style');
             bEl.id = 'bbs-custom-theme-beautify';
@@ -4973,7 +5259,10 @@ code, pre {
         }
         return 0;
       });
-      sorted.forEach(node => targetContainer.appendChild(node));
+      const orderChanged = sorted.some((node, i) => node !== children[i]);
+      if (orderChanged) {
+        sorted.forEach(node => targetContainer.appendChild(node));
+      }
     } catch (_) {}
   }
 
@@ -6247,19 +6536,203 @@ code, pre {
       });
   }
 
+  function evaluateStPromptTemplate(rawText, cardObj) {
+    if (!rawText || typeof rawText !== 'string' || !rawText.includes('<%')) return rawText;
+    try {
+      const card = cardObj || getActiveCard();
+      const persona = getActivePersona();
+      const sess = getActiveChatSession();
+      const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+      const localVars = getChatVariablesStore();
+      const globalVars = getGlobalVariablesStore();
+      const parseAutoValue = (v) => {
+        if (typeof v !== 'string') return v;
+        const t = v.trim();
+        if (t === 'true') return true;
+        if (t === 'false') return false;
+        if (t === 'null') return null;
+        if (/^-?\d+(?:\.\d+)?$/.test(t)) return Number(t);
+        if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
+          try { return JSON.parse(t); } catch (_) {}
+        }
+        return v;
+      };
+      const getvar = (key, opts) => {
+        const scope = (opts && typeof opts === 'object' && opts.scope) ? opts.scope : 'local';
+        const store = scope === 'global' ? globalVars : localVars;
+        const val = getDeepVarByPath(store, String(key ?? ''));
+        if (val !== undefined) return val;
+        if (scope === 'local') {
+          const gVal = getDeepVarByPath(globalVars, String(key ?? ''));
+          if (gVal !== undefined) return gVal;
+        }
+        return (opts && typeof opts === 'object' && 'defaults' in opts) ? opts.defaults : '';
+      };
+      const setvar = (key, val, opts) => {
+        const scope = (opts && typeof opts === 'object' && opts.scope) ? opts.scope : 'local';
+        const store = scope === 'global' ? globalVars : localVars;
+        const parsed = parseAutoValue(val);
+        setDeepVarByPath(store, String(key ?? ''), parsed);
+        saveTavernStore();
+        return '';
+      };
+      const addvar = (key, delta, opts) => {
+        const cur = getvar(key, opts);
+        const curNum = Number(cur);
+        const dNum = Number(delta);
+        const next = (cur !== '' && cur !== undefined && !Number.isNaN(curNum) && !Number.isNaN(dNum))
+          ? (curNum + dNum)
+          : (String(cur ?? '') + String(delta ?? ''));
+        setvar(key, next, opts);
+        return next;
+      };
+      const incvar = (key, opts) => addvar(key, 1, opts);
+      const decvar = (key, opts) => addvar(key, -1, opts);
+      const delvar = (key, opts) => {
+        const scope = (opts && typeof opts === 'object' && opts.scope) ? opts.scope : 'local';
+        deleteDeepVarByPath(scope === 'global' ? globalVars : localVars, String(key ?? ''));
+        saveTavernStore();
+        return '';
+      };
+      const getglobalvar = (key) => getvar(key, { scope: 'global' });
+      const setglobalvar = (key, val) => setvar(key, val, { scope: 'global' });
+      const addglobalvar = (key, val) => addvar(key, val, { scope: 'global' });
+      const getwi = (bookOrEntryName, maybeEntryName) => {
+        const books = tavernState.worldBooks || [];
+        if (maybeEntryName !== undefined) {
+          const wb = books.find(b => b && (b.name === bookOrEntryName || b.id === bookOrEntryName));
+          if (!wb || !Array.isArray(wb.entries)) return '';
+          const ent = wb.entries.find(e => e && (e.comment === maybeEntryName || String(e.uid) === String(maybeEntryName) || (Array.isArray(e.keys) && e.keys.includes(maybeEntryName))));
+          return ent ? (ent.content || '') : '';
+        }
+        for (const wb of books) {
+          if (!wb || wb.enabled === false || !Array.isArray(wb.entries)) continue;
+          const ent = wb.entries.find(e => e && !e.disable && (e.comment === bookOrEntryName || String(e.uid) === String(bookOrEntryName) || (Array.isArray(e.keys) && e.keys.includes(bookOrEntryName))));
+          if (ent) return ent.content || '';
+        }
+        return '';
+      };
+
+      const tokenRegex = /<%([_=-]?)([\s\S]*?)([_-]?)%>/g;
+      let fnBody = 'let __out = "";\nconst print = (...args) => { __out += args.join(""); };\nconst include = (name) => getwi(name);\n';
+      let cursor = 0;
+      let match;
+      while ((match = tokenRegex.exec(rawText)) !== null) {
+        let literal = rawText.slice(cursor, match.index);
+        const openMod = match[1];
+        const code = match[2];
+        const closeMod = match[3];
+        if (openMod === '_') {
+          literal = literal.replace(/[ \t]*$/, '');
+        }
+        if (literal) {
+          fnBody += `__out += ${JSON.stringify(literal)};\n`;
+        }
+        if (openMod === '=' || openMod === '-') {
+          fnBody += `{ const __v = (${code.trim()}); if (__v !== undefined && __v !== null) __out += String(__v); }\n`;
+        } else {
+          fnBody += `${code}\n`;
+        }
+        cursor = match.index + match[0].length;
+        if (closeMod === '_') {
+          const nextNewline = rawText.slice(cursor).match(/^[ \t]*\r?\n/);
+          if (nextNewline) cursor += nextNewline[0].length;
+        } else if (closeMod === '-') {
+          const nextNl = rawText.slice(cursor).match(/^\r?\n/);
+          if (nextNl) cursor += nextNl[0].length;
+        }
+      }
+      if (cursor < rawText.length) {
+        fnBody += `__out += ${JSON.stringify(rawText.slice(cursor))};\n`;
+      }
+      fnBody += 'return __out;';
+
+      const variablesProxy = new Proxy(localVars, {
+        get(target, prop) {
+          if (prop === 'local') return localVars;
+          if (prop === 'global') return globalVars;
+          if (prop in target) return target[prop];
+          if (prop in globalVars) return globalVars[prop];
+          return undefined;
+        },
+        set(target, prop, value) {
+          target[prop] = value;
+          return true;
+        }
+      });
+
+      const lastMsg = msgs.length > 0 ? (msgs[msgs.length - 1].mes || '') : '';
+      const lastUserMsgObj = [...msgs].reverse().find(m => m && m.is_user);
+      const lastCharMsgObj = [...msgs].reverse().find(m => m && !m.is_user);
+
+      const evaluator = new Function(
+        'getvar', 'setvar', 'addvar', 'incvar', 'decvar', 'delvar',
+        'getLocalVar', 'setLocalVar', 'getChatVar', 'setChatVar',
+        'getglobalvar', 'setglobalvar', 'addglobalvar', 'getGlobalVar', 'setGlobalVar',
+        'getwi', 'getWorldInfo', 'variables', 'chat_metadata',
+        'user', 'char', 'persona', 'card', 'messages', 'lastMessage', 'lastUserMessage', 'lastCharMessage', 'message_id',
+        '_', 'TavernHelper', 'SillyTavern',
+        fnBody
+      );
+      return evaluator(
+        getvar, setvar, addvar, incvar, decvar, delvar,
+        getvar, setvar, getvar, setvar,
+        getglobalvar, setglobalvar, addglobalvar, getglobalvar, setglobalvar,
+        getwi, getwi, variablesProxy, (sess && sess.metadata) ? sess.metadata : {},
+        getUserDisplayName(), card ? card.name : '角色', persona ? (persona.description || '') : '',
+        card || {}, msgs, lastMsg,
+        lastUserMsgObj ? (lastUserMsgObj.mes || '') : '',
+        lastCharMsgObj ? (lastCharMsgObj.mes || '') : '',
+        Math.max(0, msgs.length - 1),
+        window._ || {}, window.TavernHelper || {}, window.SillyTavern || {}
+      );
+    } catch (err) {
+      console.warn('ST-Prompt-Template evaluation warning:', err);
+      return rawText;
+    }
+  }
+
+  const _origReplaceTavernMacrosCore = replaceTavernMacros;
+  replaceTavernMacros = function(rawText, cardObj) {
+    if (!rawText) return '';
+    let step1 = String(rawText);
+    if (step1.includes('<%')) {
+      step1 = evaluateStPromptTemplate(step1, cardObj);
+    }
+    let step2 = _origReplaceTavernMacrosCore(step1, cardObj);
+    if (step2.includes('<%')) {
+      step2 = evaluateStPromptTemplate(step2, cardObj);
+    }
+    return step2;
+  };
+
+  const regexCompileCache = new Map();
   function parseFindRegexString(findRegexStr) {
     if (!findRegexStr || typeof findRegexStr !== 'string') return null;
     const trimmed = findRegexStr.trim();
+    if (!trimmed) return null;
+    if (regexCompileCache.has(trimmed)) {
+      const cached = regexCompileCache.get(trimmed);
+      if (cached) cached.lastIndex = 0;
+      return cached;
+    }
     const slashMatch = trimmed.match(/^\/([\s\S]*)\/([gimsuy]*)$/);
+    let compiled = null;
     try {
       if (slashMatch) {
-        return new RegExp(slashMatch[1], slashMatch[2] || 'g');
+        let flags = slashMatch[2] || 'g';
+        if (!flags.includes('g')) flags += 'g';
+        compiled = new RegExp(slashMatch[1], flags);
+      } else {
+        compiled = new RegExp(trimmed, 'g');
       }
-      return new RegExp(trimmed, 'g');
     } catch (err) {
       console.warn('Invalid regex pattern:', findRegexStr, err);
-      return null;
+      compiled = null;
     }
+    if (regexCompileCache.size > 600) regexCompileCache.clear();
+    regexCompileCache.set(trimmed, compiled);
+    return compiled;
   }
 
   function getActiveRegexScriptsForCard(cardObj) {
@@ -6345,11 +6818,14 @@ code, pre {
       const rx = parseFindRegexString(patternStr);
       if (!rx) continue;
 
-      const repStr = replaceTavernMacros(String(script.replaceString ?? ''), card);
-      const resolvedTrimStrings = (Array.isArray(script.trimStrings) && script.trimStrings.length > 0)
-        ? script.trimStrings.map(t => t ? replaceTavernMacros(String(t), card) : '').filter(Boolean)
-        : [];
       try {
+        rx.lastIndex = 0;
+        if (!rx.test(output)) continue;
+        rx.lastIndex = 0;
+        const repStr = replaceTavernMacros(String(script.replaceString ?? ''), card);
+        const resolvedTrimStrings = (Array.isArray(script.trimStrings) && script.trimStrings.length > 0)
+          ? script.trimStrings.map(t => t ? replaceTavernMacros(String(t), card) : '').filter(Boolean)
+          : [];
         const prevOutput = output;
         const nextOutput = output.replace(rx, (...matchArgs) => {
           const fullMatchedStr = String(matchArgs[0] || '');
@@ -7140,7 +7616,7 @@ code, pre {
     return out;
   }
 
-  function scopeTavernThemeCss(rawCss) {
+  function scopeTavernThemeCss(rawCss, isGousuStyle = false) {
     if (!rawCss || typeof rawCss !== 'string') return '';
     const noComments = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
     const imports = [];
@@ -7150,9 +7626,15 @@ code, pre {
       }
       return '';
     });
-    const cleaned = bodyWithoutImports
+    let cleaned = bodyWithoutImports
       .replace(/100dvh/g, '100%')
       .replace(/100vh/g, '100%');
+    if (!isGousuStyle) {
+      cleaned = cleaned
+        .replace(/100dvw/g, '100%')
+        .replace(/100vw/g, '100%')
+        .replace(/position\s*:\s*fixed\b/gi, 'position: absolute');
+    }
     return (imports.length > 0 ? imports.join('\n') + '\n' : '') + scopeCssBlockRecursive(cleaned);
   }
 
@@ -7586,6 +8068,69 @@ code, pre {
       }
     `);
 
+    if (!isGousuStyle && theme) {
+      rules.push(`
+        /* Containment and color adaptation for imported third-party SillyTavern themes */
+        #tavern-stage-root {
+          color: var(--SmartThemeBodyColor, #373737);
+          overflow: hidden !important;
+        }
+        #tavern-stage-root #top-bar,
+        #tavern-stage-root #top-settings-holder {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+        #tavern-stage-root #top-settings-holder .drawer-icon {
+          color: var(--SmartThemeBodyColor, inherit);
+          flex-shrink: 1 !important;
+          min-width: 0 !important;
+        }
+        #tavern-stage-root #sheld,
+        #tavern-stage-root #chat,
+        #tavern-stage-root #form_sheld,
+        #tavern-stage-root #send_form {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+        #tavern-stage-root #send_form #nonQRFormItems {
+          display: flex !important;
+          align-items: center !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+        }
+        #tavern-stage-root #leftSendForm,
+        #tavern-stage-root #rightSendForm {
+          display: flex !important;
+          align-items: center !important;
+          flex-shrink: 0 !important;
+          position: relative !important;
+          left: auto !important;
+          right: auto !important;
+          top: auto !important;
+          bottom: auto !important;
+          transform: none !important;
+        }
+        #tavern-stage-root #send_textarea {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          color: var(--SmartThemeBodyColor, inherit) !important;
+          box-sizing: border-box !important;
+        }
+        #tavern-stage-root .mes {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+        #tavern-stage-root .mes_block {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          overflow-wrap: break-word !important;
+        }
+      `);
+    }
+
     rules.push(`#tavern-stage-root .mes_text { color: var(--SmartThemeBodyColor, #373737) !important; }`);
     rules.push(`#tavern-stage-root .mesIDDisplay:empty, #tavern-stage-root .mes_timer:empty, #tavern-stage-root .tokenCounterDisplay:empty { display: none !important; }`);
 
@@ -7627,6 +8172,7 @@ code, pre {
     if (!theme) theme = tavernState.themes[0] || DEFAULT_GOUSU_THEME;
 
     const uiCfg = tavernState.uiSettings || {};
+    const isGousuStyle = Boolean(theme && (theme.id === 'theme_gousu_default' || theme.id === 'theme_gousu_night' || String(theme.custom_css || '').includes('1ear.png') || String(theme.custom_css || '').includes('--text4')));
     const varPairs = [
       ['--SmartThemeBodyColor', theme.main_text_color || 'rgba(55, 55, 55, 1)'],
       ['--SmartThemeEmColor', theme.italics_text_color || 'rgba(153, 153, 153, 1)'],
@@ -7646,12 +8192,44 @@ code, pre {
       ['--tavernPageMargin', (uiCfg.pageMargin ?? 10) + 'px']
     ];
 
-    varPairs.forEach(([k, v]) => stageRoot.style.setProperty(k, v));
+    if (isGousuStyle) {
+      varPairs.forEach(([k, v]) => stageRoot.style.setProperty(k, v));
+    } else {
+      // For imported/custom non-Gousu themes, remove inline --SmartTheme* properties from stageRoot so :root / #tavern-stage-root variables in custom_css can override defaults naturally
+      varPairs.forEach(([k, v]) => {
+        if (k.startsWith('--SmartTheme')) {
+          stageRoot.style.removeProperty(k);
+        } else {
+          stageRoot.style.setProperty(k, v);
+        }
+      });
+    }
+
+    const baseThemeVarsCss = !isGousuStyle ? `
+      #tavern-stage-root {
+        ${varPairs.map(([k, v]) => `${k}: ${v};`).join('\n        ')}
+      }
+      #tavern-stage-root #top-bar {
+        background: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.88));
+        border-bottom-color: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.65));
+      }
+      #tavern-stage-root #send_form {
+        background: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.92));
+        border-color: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.85));
+      }
+      #tavern-stage-root .mes {
+        background: var(--SmartThemeBotMesBlurTintColor, rgba(255, 255, 255, 0.88));
+        border-color: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.9));
+      }
+      #tavern-stage-root .mes[is_user="true"] {
+        background: var(--SmartThemeUserMesBlurTintColor, rgba(245, 240, 242, 0.92));
+      }
+    ` : '';
 
     if (uiCfg.enableThemeCustomCss === false) {
-      styleEl.textContent = buildTavernThemeOverridePatch(null, uiCfg);
+      styleEl.textContent = baseThemeVarsCss + '\n' + buildTavernThemeOverridePatch(null, uiCfg);
     } else {
-      styleEl.textContent = scopeTavernThemeCss(theme.custom_css || '') + '\n' + buildTavernThemeOverridePatch(theme, uiCfg);
+      styleEl.textContent = baseThemeVarsCss + '\n' + scopeTavernThemeCss(theme.custom_css || '', isGousuStyle) + '\n' + buildTavernThemeOverridePatch(theme, uiCfg);
     }
     applyCachedBaiBaiCssToShadowRoots();
   }
@@ -9318,12 +9896,12 @@ code, pre {
       const prevIsCtx = idx > 0 ? Boolean(blocks[idx - 1]?._isChatContext) : false;
       const nextIsCtx = idx < blocks.length - 1 ? Boolean(blocks[idx + 1]?._isChatContext) : false;
 
-      let blockStr = `=== 第 ${idx + 1} 块消息 · ${baseRoleTitle}${detailLabel} · ${role} · ${itemTokens} Tokens ===\n${rawContent}`;
+      let blockStr = `【第 ${idx + 1} 块消息 · ${baseRoleTitle}${detailLabel} · ${role} · ${itemTokens} Tokens】\n${rawContent}`;
       if (curIsCtx && !prevIsCtx) {
-        blockStr = `==================================================\n【上下文 开始】\n${blockStr}`;
+        blockStr = `【上下文 开始】\n${blockStr}`;
       }
       if (curIsCtx && !nextIsCtx) {
-        blockStr = `${blockStr}\n【上下文 结束】\n==================================================`;
+        blockStr = `${blockStr}\n【上下文 结束】`;
       }
       textBlocks.push(blockStr);
     });
@@ -9670,9 +10248,8 @@ code, pre {
         padding: 14px 12px 32px 12px !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
-        background: rgba(250, 250, 252, 0.97) !important;
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        background: rgba(250, 250, 252, 0.99) !important;
+        contain: layout paint;
         border-radius: 20px !important;
         border: 1.5px solid rgba(255, 255, 255, 0.9) !important;
         box-shadow: 0 14px 36px rgba(0, 0, 0, 0.14) !important;
@@ -11794,76 +12371,110 @@ code, pre {
         ` : ''}
 
         <div id="completion_prompt_manager_list">
-          ${prompts.map((item, idx) => {
-            const isEditingThis = uiRuntime.editingPromptId === item.identifier;
-            const cleanTitle = stripUiEmojis(item.name || item.identifier) || item.identifier;
-            return `
-              <div class="tavern-prompt-item-wrap" data-prompt-wrap="${item.identifier}">
-                <div class="tavern-list-row" style="${isEditingThis ? 'border-color:#6b6b75;background:#eff1f8;' : ''}">
-                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-prompt-item" data-prompt-id="${item.identifier}" ${item.enabled ? 'checked' : ''} />
-                  <div class="tavern-list-row-main">
-                    <div>
-                      <span class="tavern-vec-badge"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span>${escapeHtmlSimple(cleanTitle)}
-                    </div>
-                    <div class="tavern-list-row-sub">角色: ${item.role || 'system'} | ${Number(item.injection_position) === 1 ? '深度:' + item.injection_depth : '顺序排列'}</div>
-                  </div>
-                  <div class="tavern-list-row-actions">
-                    <button type="button" class="tavern-btn small" data-action="move-prompt-up" data-idx="${idx}">上移</button>
-                    <button type="button" class="tavern-btn small" data-action="move-prompt-down" data-idx="${idx}">下移</button>
-                    ${!item.marker ? `<button type="button" class="tavern-btn small" data-action="copy-prompt-item" data-prompt-id="${item.identifier}">复制</button>` : ''}
-                    ${!item.marker ? `<button type="button" class="tavern-btn small ${isEditingThis ? 'primary' : ''}" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">${isEditingThis ? '收起' : '编辑'}</button>` : ''}
-                  </div>
-                </div>
-                ${isEditingThis ? `
-                  <div class="tavern-section-card" style="background:#f8f9fc;border-color:#cfd5e6;margin:4px 0 10px 0;">
-                    <div class="tavern-section-label">
-                      <span>编辑条目: ${escapeHtmlSimple(cleanTitle)}</span>
-                      <button type="button" class="tavern-btn small" data-action="close-prompt-item-editor">收起</button>
-                    </div>
-                    <div class="tavern-grid-2">
-                      <div class="tavern-field-group">
-                        <label>条目名称</label>
-                        <input type="text" class="tavern-input" id="edit-prompt-name" value="${escapeHtmlSimple(cleanTitle)}" />
-                        <div class="tavern-field-hint">列表里方便辨认的标题，不影响发给AI的实际内容</div>
-                      </div>
-                      <div class="tavern-field-group">
-                        <label>发送角色</label>
-                        <select class="tavern-select" id="edit-prompt-role">
-                          <option value="system" ${item.role === 'system' ? 'selected' : ''}>系统 System</option>
-                          <option value="user" ${item.role === 'user' ? 'selected' : ''}>用户 User</option>
-                          <option value="assistant" ${item.role === 'assistant' ? 'selected' : ''}>助手 Assistant</option>
-                        </select>
-                        <div class="tavern-field-hint">以谁的口吻发给AI，常规设定选系统，破限或预填选助手</div>
-                      </div>
-                      <div class="tavern-field-group">
-                        <label>注入位置</label>
-                        <select class="tavern-select" id="edit-prompt-pos">
-                          <option value="0" ${Number(item.injection_position) === 0 ? 'selected' : ''}>按顺序排列</option>
-                          <option value="1" ${Number(item.injection_position) === 1 ? 'selected' : ''}>按深度插入</option>
-                        </select>
-                        <div class="tavern-field-hint">按列表上下顺序排，或强行插进最近几层聊天记录中间</div>
-                      </div>
-                      <div class="tavern-field-group">
-                        <label>注入深度</label>
-                        <input type="number" class="tavern-input" id="edit-prompt-depth" value="${Number(item.injection_depth ?? 4)}" min="0" max="200" />
-                        <div class="tavern-field-hint">仅按深度插入时生效，填0插在最末尾，填4插在倒数第4层前</div>
-                      </div>
-                    </div>
-                    <div class="tavern-field-group">
-                      <label>提示词内容 支持宏变量</label>
-                      <textarea class="tavern-textarea" id="edit-prompt-content" rows="5">${escapeHtmlSimple(item.content || '')}</textarea>
-                    </div>
-                    <div style="display:flex;justify-content:flex-end;gap:8px;">
-                      <button type="button" class="tavern-btn small primary" data-action="save-prompt-item-editor" data-prompt-id="${item.identifier}">保存此条目</button>
-                    </div>
-                  </div>
-                ` : ''}
-              </div>
-            `;
-          }).join('')}
+          ${renderPromptManagerListHtml(preset)}
         </div>
       </div>
     `;
+  }
+
+  function renderPromptManagerListHtml(presetObj) {
+    const preset = presetObj || getActivePreset();
+    const prompts = Array.isArray(preset?.prompts) ? preset.prompts : [];
+    const iconBtnStyle = 'width:26px;height:26px;min-width:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;flex-shrink:0;';
+    return prompts.map((item, idx) => {
+      const isEditingThis = uiRuntime.editingPromptId === item.identifier;
+      const cleanTitle = stripUiEmojis(item.name || item.identifier) || item.identifier;
+      return `
+        <div class="tavern-prompt-item-wrap" data-prompt-wrap="${item.identifier}">
+          <div class="tavern-list-row" style="${isEditingThis ? 'border-color:#6b6b75;background:#eff1f8;' : ''}">
+            <input type="checkbox" class="tavern-fixed-check" data-action="toggle-prompt-item" data-prompt-id="${item.identifier}" ${item.enabled ? 'checked' : ''} />
+            <div class="tavern-list-row-main">
+              <div>
+                <span class="tavern-vec-badge"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span>${escapeHtmlSimple(cleanTitle)}
+              </div>
+              <div class="tavern-list-row-sub">角色: ${item.role || 'system'} | ${Number(item.injection_position) === 1 ? '深度:' + item.injection_depth : '顺序排列'}</div>
+            </div>
+            <div class="tavern-list-row-actions" style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+              <button type="button" class="tavern-btn small" style="${iconBtnStyle}" title="上移" data-action="move-prompt-up" data-idx="${idx}">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+              </button>
+              <button type="button" class="tavern-btn small" style="${iconBtnStyle}" title="下移" data-action="move-prompt-down" data-idx="${idx}">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <button type="button" class="tavern-btn small" style="${iconBtnStyle}" title="在下方新增条目" data-action="insert-prompt-below" data-idx="${idx}">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </button>
+              <button type="button" class="tavern-btn small ${isEditingThis ? 'primary' : ''}" style="${iconBtnStyle}" title="${isEditingThis ? '收起' : '编辑'}" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">
+                ${isEditingThis
+                  ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+                  : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`}
+              </button>
+            </div>
+          </div>
+          ${isEditingThis ? `
+            <div class="tavern-section-card" style="background:#f8f9fc;border-color:#cfd5e6;margin:4px 0 10px 0;">
+              <div class="tavern-section-label">
+                <span>编辑条目: ${escapeHtmlSimple(cleanTitle)}</span>
+                <button type="button" class="tavern-btn small" data-action="close-prompt-item-editor">收起</button>
+              </div>
+              <div class="tavern-grid-2">
+                <div class="tavern-field-group">
+                  <label>条目名称</label>
+                  <input type="text" class="tavern-input" id="edit-prompt-name" value="${escapeHtmlSimple(cleanTitle)}" />
+                  <div class="tavern-field-hint">列表里方便辨认的标题，不影响发给AI的实际内容</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>发送角色</label>
+                  <select class="tavern-select" id="edit-prompt-role">
+                    <option value="system" ${item.role === 'system' ? 'selected' : ''}>系统 System</option>
+                    <option value="user" ${item.role === 'user' ? 'selected' : ''}>用户 User</option>
+                    <option value="assistant" ${item.role === 'assistant' ? 'selected' : ''}>助手 Assistant</option>
+                  </select>
+                  <div class="tavern-field-hint">以谁的口吻发给AI，常规设定选系统，破限或预填选助手</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>注入位置</label>
+                  <select class="tavern-select" id="edit-prompt-pos">
+                    <option value="0" ${Number(item.injection_position) === 0 ? 'selected' : ''}>按顺序排列</option>
+                    <option value="1" ${Number(item.injection_position) === 1 ? 'selected' : ''}>按深度插入</option>
+                  </select>
+                  <div class="tavern-field-hint">按列表上下顺序排，或强行插进最近几层聊天记录中间</div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>注入深度</label>
+                  <input type="number" class="tavern-input" id="edit-prompt-depth" value="${Number(item.injection_depth ?? 4)}" min="0" max="200" />
+                  <div class="tavern-field-hint">仅按深度插入时生效，填0插在最末尾，填4插在倒数第4层前</div>
+                </div>
+              </div>
+              <div class="tavern-field-group">
+                <label>提示词内容 支持宏变量</label>
+                <textarea class="tavern-textarea" id="edit-prompt-content" rows="5">${escapeHtmlSimple(item.content || '')}</textarea>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="save-prompt-item-editor" data-prompt-id="${item.identifier}">保存此条目</button>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function refreshPromptManagerListOnly() {
+    const listEl = document.getElementById('completion_prompt_manager_list');
+    if (!listEl) {
+      refreshOpenDrawerOnly();
+      return;
+    }
+    const preset = getActivePreset();
+    listEl.innerHTML = renderPromptManagerListHtml(preset);
+    const mgrCard = document.getElementById('completion_prompt_manager');
+    if (mgrCard) {
+      const labelSpan = mgrCard.querySelector('.tavern-section-label > span');
+      if (labelSpan && Array.isArray(preset?.prompts)) {
+        labelSpan.textContent = `提示词排序与开关列表 共${preset.prompts.length}项`;
+      }
+    }
   }
 
   // Drawer 2: fa-plug (API Connection Settings & Built-in API Presets)
@@ -15330,20 +15941,46 @@ code, pre {
           const tmp = list[idx];
           list[idx] = list[swapIdx];
           list[swapIdx] = tmp;
-          await saveTavernStore();
-          refreshOpenDrawerOnly();
+          ensurePresetHasPromptOrder(preset);
+          saveTavernStore();
+          refreshPromptManagerListOnly();
         }
+        return;
+      }
+      if (action === 'insert-prompt-below') {
+        const idx = Number(actionEl.getAttribute('data-idx'));
+        const preset = getActivePreset();
+        if (!Array.isArray(preset.prompts)) preset.prompts = [];
+        const newId = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+        const newPromptItem = {
+          identifier: newId,
+          name: '新增提示词条目',
+          enabled: true,
+          role: 'system',
+          content: '',
+          marker: false,
+          injection_position: 0,
+          injection_depth: 4,
+          injection_order: 100
+        };
+        const insertIdx = (!Number.isNaN(idx) && idx >= 0 && idx < preset.prompts.length) ? (idx + 1) : preset.prompts.length;
+        preset.prompts.splice(insertIdx, 0, newPromptItem);
+        ensurePresetHasPromptOrder(preset);
+        uiRuntime.editingPromptId = newId;
+        saveTavernStore();
+        refreshPromptManagerListOnly();
+        showTavernToast('已在下方新增提示词条目');
         return;
       }
       if (action === 'edit-prompt-item') {
         const clickedId = actionEl.getAttribute('data-prompt-id');
         uiRuntime.editingPromptId = uiRuntime.editingPromptId === clickedId ? null : clickedId;
-        refreshOpenDrawerOnly();
+        refreshPromptManagerListOnly();
         return;
       }
       if (action === 'close-prompt-item-editor') {
         uiRuntime.editingPromptId = null;
-        refreshOpenDrawerOnly();
+        refreshPromptManagerListOnly();
         return;
       }
       if (action === 'save-prompt-item-editor') {
@@ -15356,29 +15993,12 @@ code, pre {
           item.injection_position = Number(document.getElementById('edit-prompt-pos')?.value || 0);
           item.injection_depth = Number(document.getElementById('edit-prompt-depth')?.value || 4);
           item.content = document.getElementById('edit-prompt-content')?.value || '';
+          item.marker = false;
           uiRuntime.editingPromptId = null;
-          await saveTavernStore();
-          refreshOpenDrawerOnly();
-          showTavernToast('已保存提示词条目');
-        }
-        return;
-      }
-      if (action === 'copy-prompt-item') {
-        const pid = actionEl.getAttribute('data-prompt-id');
-        const preset = getActivePreset();
-        const list = preset.prompts || [];
-        const idx = list.findIndex(p => p && p.identifier === pid);
-        if (idx >= 0) {
-          const orig = list[idx];
-          const cloned = JSON.parse(JSON.stringify(orig));
-          cloned.identifier = 'custom_copy_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
-          cloned.name = (orig.name || orig.identifier || '提示词') + ' 副本';
-          cloned.marker = false;
-          list.splice(idx + 1, 0, cloned);
           ensurePresetHasPromptOrder(preset);
-          await saveTavernStore();
-          refreshOpenDrawerOnly();
-          showTavernToast('已复制条目: ' + cloned.name);
+          saveTavernStore();
+          refreshPromptManagerListOnly();
+          showTavernToast('已保存提示词条目');
         }
         return;
       }
@@ -15445,9 +16065,10 @@ code, pre {
           injection_depth: 4,
           injection_order: 100
         });
+        ensurePresetHasPromptOrder(preset);
         uiRuntime.editingPromptId = newId;
-        await saveTavernStore();
-        refreshOpenDrawerOnly();
+        saveTavernStore();
+        refreshPromptManagerListOnly();
         return;
       }
 
@@ -16138,16 +16759,23 @@ code, pre {
             Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [],
             Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : []
           ];
+          const syncedIds = new Set([rxId]);
           allLists.forEach(arr => {
             arr.forEach(r => {
               if (r && (r.id === rxId || (String(r.scriptName || '').trim() + '::' + String(r.findRegex || '').trim()) === matchKey)) {
                 r.disabled = nextDisabled;
+                if (r.id) syncedIds.add(r.id);
               }
             });
           });
-          await saveTavernStore();
-          refreshOpenDrawerOnly();
+          document.querySelectorAll('input[data-action="toggle-regex-script"]').forEach(chk => {
+            const cid = chk.getAttribute('data-rx-id');
+            if (cid && syncedIds.has(cid)) {
+              chk.checked = !nextDisabled;
+            }
+          });
           renderTavernChatFloors(false);
+          saveTavernStore();
         }
         return;
       }
@@ -17144,6 +17772,44 @@ code, pre {
       if (ghRepoMatch) {
         const owner = ghRepoMatch[1];
         const repo = ghRepoMatch[2];
+        if (/^JS-Slash-Runner$/i.test(repo) || /^TavernHelper$/i.test(repo)) {
+          const pluginName = '酒馆助手 JS-Slash-Runner';
+          const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || /JS-Slash-Runner/i.test(x.name || '') || /JS-Slash-Runner/i.test(x.repoBaseUrl || '')));
+          const plugin = {
+            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_js_slash_runner_' + Date.now()),
+            name: pluginName,
+            enabled: true,
+            code: '/* Native Built-in JS-Slash-Runner Engine Active */ window.TavernHelper = window.TavernHelper || {};',
+            uiHtml: '<div style="font-size:12px;color:#555;line-height:1.6;">已启用内置原生酒馆助手 JS-Slash-Runner 完整运行环境，支持 TavernHelper 变量读写、聊天楼层读写、世界书与预设控制、事件监听与前端沙盒通信。</div>',
+            repoBaseUrl: `https://github.com/${owner}/${repo}`,
+            description: '酒馆助手 JS-Slash-Runner 原生兼容核心'
+          };
+          if (existingIdx >= 0) tavernState.plugins[existingIdx] = plugin;
+          else tavernState.plugins.push(plugin);
+          saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已安装并激活: ' + pluginName);
+          return;
+        }
+        if (/^ST-Prompt-Template$/i.test(repo)) {
+          const pluginName = '提示词模板 ST-Prompt-Template';
+          const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || /ST-Prompt-Template/i.test(x.name || '') || /ST-Prompt-Template/i.test(x.repoBaseUrl || '')));
+          const plugin = {
+            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_st_prompt_template_' + Date.now()),
+            name: pluginName,
+            enabled: true,
+            code: '/* Native Built-in ST-Prompt-Template Engine Active */',
+            uiHtml: '<div style="font-size:12px;color:#555;line-height:1.6;">已启用内置原生 ST-Prompt-Template 模板引擎，支持在预设、世界书、角色设定与聊天消息中运行 EJS 脚本语法与 getvar/setvar/getwi/_ 等全部模板函数。</div>',
+            repoBaseUrl: `https://github.com/${owner}/${repo}`,
+            description: 'ST-Prompt-Template 提示词模板原生兼容引擎'
+          };
+          if (existingIdx >= 0) tavernState.plugins[existingIdx] = plugin;
+          else tavernState.plugins.push(plugin);
+          saveTavernStore();
+          refreshOpenDrawerOnly();
+          showTavernToast('已安装并激活: ' + pluginName);
+          return;
+        }
         let branch = 'main';
         let manifest = null;
         for (const tryBranch of ['main', 'master']) {
