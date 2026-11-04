@@ -3469,6 +3469,76 @@ code, pre {
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
     const isLocalLoopback = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)/i.test(String(url || ''));
+    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
+    const canUseHeartbeatProxy =
+      Boolean(options?._isNonStreamCompletion) &&
+      !isStaticHost &&
+      /^https?:\/\//i.test(url) &&
+      !url.startsWith(window.location.origin) &&
+      (!isLocalLoopback || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (canUseHeartbeatProxy) {
+      let parsedBody = undefined;
+      if (options && options.body !== undefined) {
+        try {
+          parsedBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        } catch (_) {
+          parsedBody = options.body;
+        }
+      }
+      const proxyRes = await rawFetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          method: (options && options.method) || 'POST',
+          headers: (options && options.headers) || {},
+          body: parsedBody,
+          keepAliveHeartbeat: true
+        }),
+        signal: options?.signal
+      });
+      if (proxyRes && proxyRes.status !== 404 && proxyRes.status !== 405) {
+        if (proxyRes.body && typeof proxyRes.body.getReader === 'function') {
+          const reader = proxyRes.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let accText = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (typeof window.ensureBackgroundKeepAlive === 'function') {
+              window.ensureBackgroundKeepAlive();
+            }
+            if (done) {
+              accText += decoder.decode();
+              break;
+            }
+            if (value && value.byteLength > 0) {
+              accText += decoder.decode(value, { stream: true });
+            }
+          }
+          const trimmedAcc = accText.trim();
+          if (trimmedAcc.startsWith('{') && trimmedAcc.includes('"_proxy_error":true')) {
+            try {
+              const pErr = JSON.parse(trimmedAcc);
+              if (pErr && pErr._proxy_error) {
+                const statusNum = Number(pErr._proxy_status) || 502;
+                const rawErrStr = typeof pErr.message === 'string' ? pErr.message : JSON.stringify(pErr);
+                return new Response(rawErrStr, {
+                  status: statusNum,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            } catch (_) {}
+          }
+          return new Response(trimmedAcc, {
+            status: proxyRes.status || 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        return proxyRes;
+      }
+    }
+
     let directErr = null;
     const attemptStart = performance.now();
     try {
@@ -3479,7 +3549,6 @@ code, pre {
       directErr = err;
     }
     const elapsedMs = performance.now() - attemptStart;
-    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
     // Only use /api/proxy if browser preflight blocked an external non-local URL immediately (< 800ms) and auto-retry is not disabled
     if (
       elapsedMs < 800 &&
@@ -3700,7 +3769,9 @@ code, pre {
                   method: 'POST',
                   headers,
                   body: JSON.stringify(openAiPayload),
-                  signal: init?.signal
+                  signal: init?.signal,
+                  _noAutoRetry: true,
+                  _isNonStreamCompletion: !wantStream
                 });
               } catch (err) {
                 if (err && err.name === 'AbortError') throw err;
@@ -9658,7 +9729,9 @@ code, pre {
           method: 'POST',
           headers: reqHeaders,
           body: JSON.stringify(payload),
-          signal: abortCtrl.signal
+          signal: abortCtrl.signal,
+          _noAutoRetry: true,
+          _isNonStreamCompletion: !useStreaming
         });
       } catch (netErr) {
         if (netErr && netErr.name === 'AbortError') {

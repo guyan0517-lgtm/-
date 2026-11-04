@@ -951,6 +951,24 @@ app.post('/api/anime-tts', async (req, res) => {
 });
 
 
+// Configure Node built-in fetch (Undici) global dispatcher for 10-minute (600s) header and body timeouts
+try {
+  fetch('http://127.0.0.1:1').catch(() => {});
+  setTimeout(() => {
+    try {
+      const sym = Symbol.for('undici.globalDispatcher.1') || Object.getOwnPropertySymbols(globalThis).find(s => s.toString().includes('undici.globalDispatcher'));
+      const Agent = sym && globalThis[sym] && globalThis[sym].constructor;
+      if (Agent) {
+        globalThis[sym] = new Agent({
+          headersTimeout: 600000,
+          bodyTimeout: 600000,
+          connectTimeout: 60000
+        });
+      }
+    } catch (_) {}
+  }, 50);
+} catch (_) {}
+
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
   req.setTimeout(600000);
@@ -958,6 +976,18 @@ app.post('/api/proxy', async (req, res) => {
 
   const proxyCtrl = new AbortController();
   let proxyTimer = null;
+  let heartbeatTimer = null;
+  let heartbeatStarted = false;
+  const clearAllTimers = () => {
+    if (proxyTimer) {
+      clearTimeout(proxyTimer);
+      proxyTimer = null;
+    }
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  };
   const resetProxyTimeout = () => {
     if (proxyTimer) clearTimeout(proxyTimer);
     proxyTimer = setTimeout(() => {
@@ -966,10 +996,14 @@ app.post('/api/proxy', async (req, res) => {
   };
   resetProxyTimeout();
 
+  res.on('close', () => {
+    clearAllTimers();
+  });
+
   try {
-    const { url, method = 'POST', headers = {}, body } = req.body;
+    const { url, method = 'POST', headers = {}, body, keepAliveHeartbeat = false } = req.body;
     if (!url) {
-      if (proxyTimer) clearTimeout(proxyTimer);
+      clearAllTimers();
       return res.status(400).json({ error: 'Missing target url' });
     }
 
@@ -988,8 +1022,71 @@ app.post('/api/proxy', async (req, res) => {
       fetchOptions.body = typeof body === 'object' ? JSON.stringify(body) : body;
     }
 
+    if (keepAliveHeartbeat) {
+      heartbeatStarted = true;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+      res.write('\n');
+      heartbeatTimer = setInterval(() => {
+        try {
+          resetProxyTimeout();
+          if (!res.writableEnded) {
+            res.write('\n');
+          }
+        } catch (_) {}
+      }, 10000);
+    }
+
     const response = await fetch(url, fetchOptions);
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
     resetProxyTimeout();
+
+    if (heartbeatStarted) {
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        clearAllTimers();
+        res.write(JSON.stringify({
+          _proxy_error: true,
+          _proxy_status: response.status,
+          error: { message: errText || ('HTTP ' + response.status), code: response.status },
+          message: errText || ('HTTP ' + response.status)
+        }));
+        return res.end();
+      }
+      if (response.body && typeof response.body.getReader === 'function') {
+        const reader = response.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            resetProxyTimeout();
+            if (done) break;
+            if (value && value.byteLength > 0) {
+              res.write(Buffer.from(value));
+            }
+          }
+        } catch (hbStreamErr) {
+          console.warn('[Proxy Heartbeat Stream] Reading error:', hbStreamErr.message);
+        } finally {
+          clearAllTimers();
+          res.end();
+        }
+        return;
+      }
+      const text = await response.text();
+      clearAllTimers();
+      res.write(text);
+      return res.end();
+    }
+
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
 
@@ -1017,7 +1114,7 @@ app.post('/api/proxy', async (req, res) => {
         } catch (streamErr) {
           console.warn('[Proxy Stream] Stream reading error:', streamErr.message);
         } finally {
-          if (proxyTimer) clearTimeout(proxyTimer);
+          clearAllTimers();
           res.end();
         }
         return;
@@ -1044,7 +1141,7 @@ app.post('/api/proxy', async (req, res) => {
       } catch (bodyStreamErr) {
         console.warn('[Proxy Body Stream] Reading error:', bodyStreamErr.message);
       } finally {
-        if (proxyTimer) clearTimeout(proxyTimer);
+        clearAllTimers();
         res.end();
       }
       return;
@@ -1052,17 +1149,30 @@ app.post('/api/proxy', async (req, res) => {
 
     if (contentType.includes('application/json') || contentType.includes('text/')) {
       const text = await response.text();
-      if (proxyTimer) clearTimeout(proxyTimer);
+      clearAllTimers();
       return res.send(text);
     } else {
       const arrayBuffer = await response.arrayBuffer();
-      if (proxyTimer) clearTimeout(proxyTimer);
+      clearAllTimers();
       return res.send(Buffer.from(arrayBuffer));
     }
   } catch (err) {
-    if (proxyTimer) clearTimeout(proxyTimer);
+    clearAllTimers();
     console.error('Proxy request error:', err);
-    res.status(500).json({ error: err.message || 'Proxy request failed' });
+    if (heartbeatStarted && !res.writableEnded) {
+      res.write(JSON.stringify({
+        _proxy_error: true,
+        _proxy_status: 502,
+        error: { message: err.message || 'Proxy request failed', code: 502 },
+        message: err.message || 'Proxy request failed'
+      }));
+      return res.end();
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message || 'Proxy request failed' });
+    } else if (!res.writableEnded) {
+      res.end();
+    }
   }
 });
 
