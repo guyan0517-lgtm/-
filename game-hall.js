@@ -981,11 +981,6 @@ code, pre {
               if (p.presence_penalty === undefined) p.presence_penalty = p.presPenalty ?? 0;
               if (p.repetition_penalty === undefined) p.repetition_penalty = p.repPenalty ?? 1.0;
               if (!Array.isArray(p.regexScripts)) p.regexScripts = [];
-              const pNote1 = p.regexScripts.find(r => r && String(r.scriptName || '').includes('复古笔记1') && !r.disabled);
-              const pNote2 = p.regexScripts.find(r => r && String(r.scriptName || '').includes('复古笔记2'));
-              if (pNote1 && pNote2 && !pNote2.disabled) {
-                pNote2.disabled = true;
-              }
               if (!Array.isArray(p.prompts) || p.prompts.length === 0) {
                 p.prompts = getDefaultPromptOrderItems();
               }
@@ -5411,7 +5406,9 @@ code, pre {
         trimStrings: Array.isArray(item.trimStrings) ? item.trimStrings : (Array.isArray(item.trim_strings) ? item.trim_strings : []),
         placement: Array.isArray(item.placement) && item.placement.length > 0 ? item.placement.map(Number) : [2],
         disabled: Boolean(item.disabled),
-        markdownOnly: item.markdownOnly !== undefined ? Boolean(item.markdownOnly) : (item.markdown_only !== undefined ? Boolean(item.markdown_only) : true),
+        markdownOnly: Boolean(item.promptOnly ?? item.prompt_only)
+          ? Boolean(item.markdownOnly ?? item.markdown_only ?? false)
+          : (item.markdownOnly !== undefined ? Boolean(item.markdownOnly) : (item.markdown_only !== undefined ? Boolean(item.markdown_only) : true)),
         promptOnly: Boolean(item.promptOnly ?? item.prompt_only),
         runOnEdit: item.runOnEdit !== undefined ? Boolean(item.runOnEdit) : (item.run_on_edit !== undefined ? Boolean(item.run_on_edit) : true),
         substituteRegex: Number(item.substituteRegex ?? item.substitute_regex) || 0,
@@ -5419,13 +5416,6 @@ code, pre {
         maxDepth: item.maxDepth ?? item.max_depth ?? null,
         scope: scopeName
       }));
-
-    // Prevent 复古笔记1 and 复古笔记2 from both being enabled at the same time
-    const note1 = normalized.find(r => String(r.scriptName).includes('复古笔记1') && !r.disabled);
-    const note2 = normalized.find(r => String(r.scriptName).includes('复古笔记2'));
-    if (note1 && note2 && !note2.disabled) {
-      note2.disabled = true;
-    }
     return normalized;
   }
 
@@ -6297,7 +6287,7 @@ code, pre {
     for (const script of scripts) {
       if (isEdit && script.runOnEdit === false) continue;
       if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
-      if (!isPrompt && script.promptOnly && !script.markdownOnly) continue;
+      if (!isPrompt && script.promptOnly) continue;
 
       if (isSystemOrCharBlock) {
         if (!Array.isArray(script.placement) || script.placement.length === 0) continue;
@@ -6309,13 +6299,13 @@ code, pre {
         if (!script.placement.includes(targetPlacement)) continue;
       }
 
-      if (hasDepthContext) {
+      if (isPrompt && hasDepthContext) {
         const minD = (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '') ? Number(script.minDepth) : null;
         const maxD = (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '') ? Number(script.maxDepth) : null;
         if (minD !== null && !Number.isNaN(minD) && minD > 0 && numericDepth < minD) {
           continue;
         }
-        if (maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
+        if (maxD !== null && !Number.isNaN(maxD) && maxD > 0 && numericDepth > maxD) {
           continue;
         }
       }
@@ -6349,7 +6339,7 @@ code, pre {
             return res;
           };
 
-          const replaced = repStr.replace(/\{\{\$?match\}\}|\$&|\$<([^>]+)>|\$(\d{1,2})/g, (token, namedGroup, numStr) => {
+          return repStr.replace(/\{\{\$?match\}\}|\$&|\$<([^>]+)>|\$(\d{1,2})/g, (token, namedGroup, numStr) => {
             if (token === '$&' || token === '{{match}}' || token === '{{$match}}') {
               return applyTrim(fullMatchedStr);
             }
@@ -6377,24 +6367,9 @@ code, pre {
             }
             return token;
           });
-
-          if (!isPrompt) {
-            const trimmedRep = replaced
-              .replace(/^\s*```(?:html|HTML|xml)?[ \t]*\r?\n?/i, '')
-              .replace(/\r?\n?[ \t]*```\s*$/i, '')
-              .trim();
-            if (/^(?:<!DOCTYPE\s+html|<html\b)/i.test(trimmedRep)) {
-              return trimmedRep;
-            }
-            if ((/<script\b[\s\S]*?<\/script>/i.test(trimmedRep) || /需要酒馆助手的前端渲染/i.test(trimmedRep)) && !/<html\b/i.test(trimmedRep)) {
-              return '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + trimmedRep + '</body></html>';
-            }
-          }
-          return replaced;
         });
 
-        // Prevent legacy preset regexes that had [1, 2] default placement from wiping out a user's own message into an empty bubble
-        if (isUser && !isPrompt && prevOutput.trim() && !nextOutput.trim()) {
+        if (!isPrompt && prevOutput.trim() && !nextOutput.trim()) {
           continue;
         }
         output = nextOutput;
@@ -6425,9 +6400,14 @@ code, pre {
     }
 
     const sandboxClampCss = `<style>
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
       html, body {
         margin: 0;
         padding: 0;
+        width: 100%;
+        max-width: 100%;
         height: auto !important;
         min-height: 0 !important;
         overflow-x: hidden !important;
@@ -6857,13 +6837,17 @@ code, pre {
     if (!cleanedForDisplay) return '';
     const afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
 
-    // 1. Unwrap markdown code fences (```html ... ``` or ``` ... ```) that wrap HTML documents or UI blocks
+    // 1. JS-Slash-Runner / SillyTavern 1-to-1: Extract fenced HTML blocks (```html ... ``` or ``` ... ```) directly into isolated sandboxed iframes first so multiple cards never bridge across story text or leak <style> into host DOM
+    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
+    const protectedBlocks = [];
     let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?([\s\S]*?)```/g, (full, inner) => {
       const trimmed = inner.trim();
-      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b|<script\b)/i.test(trimmed)) {
-        if ((/<script\b[\s\S]*?<\/script>/i.test(trimmed) || /^<(?:head|body)\b/i.test(trimmed) || /需要酒馆助手的前端渲染/i.test(trimmed)) && !/<html\b/i.test(trimmed)) {
-          return '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + trimmed + '</body></html>';
-        }
+      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<script\b)/i.test(trimmed) || /<(?:<!DOCTYPE\s+html|html\b|head\b|body\b|style\b|script\b)/i.test(trimmed)) {
+        const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+        protectedBlocks.push(buildSandboxIframeHtml(trimmed, { isLastFloor }));
+        return '\n' + token + '\n';
+      }
+      if (/^(?:<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b)/i.test(trimmed)) {
         return trimmed;
       }
       return full;
@@ -6874,14 +6858,15 @@ code, pre {
       .replace(/```(?:html|HTML)\s*(?=<)/g, '')
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
 
-    // 2. Extract each self-contained HTML document (<!DOCTYPE html>...</html> or <html...>...</html>) into its own sandboxed iframe without bridging across story text
-    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
-    const protectedBlocks = [];
+    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html> or <html...>...</html>) into its own sandboxed iframe
     working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html\b(?:(?!<html\b)[\s\S])*?<\/html>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
     });
+
+    // Strip residual XML wrapper tags like <content>...</content> so story paragraphs inside them always display cleanly
+    working = working.replace(/<\/?(?:content|正文)\b[^>]*>/gi, '');
 
     // 3. Protect standalone <style>...</style> + <script>...</script> + <pre>...</pre> blocks
     working = working.replace(/<style[\s\S]*?<\/style>/gi, match => {
@@ -8559,12 +8544,6 @@ code, pre {
       }
       const unclosedStdMatch = text.match(/<(?:think|thinking|thought|reasoning|cot)>([\s\S]*)$/i);
       if (unclosedStdMatch) {
-        if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
-        text = text.slice(0, unclosedStdMatch.index);
-      }
-    } else {
-      const unclosedStdMatch = text.match(/<(?:think|thinking|thought|reasoning|cot)>([\s\S]*)$/i);
-      if (unclosedStdMatch && text.slice(0, unclosedStdMatch.index).trim().length > 0) {
         if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
         text = text.slice(0, unclosedStdMatch.index);
       }
@@ -11159,9 +11138,7 @@ code, pre {
 
     const inlineExtracted = extractReasoningAndCleanReply(currentRawText, { hasPrefill: false, isLiveStream: false });
     const effectiveReasoning = (rawSavedReasoning && String(rawSavedReasoning).trim()) ? String(rawSavedReasoning).trim() : inlineExtracted.reasoning;
-    const effectiveCleanText = (rawSavedReasoning && String(rawSavedReasoning).trim())
-      ? currentRawText
-      : (inlineExtracted.cleanReply || (!uiRuntime.isGenerating ? currentRawText : ''));
+    const effectiveCleanText = inlineExtracted.cleanReply || (!uiRuntime.isGenerating ? currentRawText : '');
 
     const isWaitingFirstToken = uiRuntime.isGenerating && isLast && !isUser && !effectiveCleanText.trim();
     const isEditPass = Boolean(m._justEdited);

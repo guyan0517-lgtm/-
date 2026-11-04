@@ -2515,7 +2515,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v13.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v13.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -28414,8 +28414,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   };
                 }
 
-                if (parsedJson.entries && typeof parsedJson.entries === "object" && !Array.isArray(parsedJson.entries)) {
-                  const rawEntriesList = Object.values(parsedJson.entries).filter(e => e && typeof e === "object");
+                if (
+                  parsedJson.entries &&
+                  typeof parsedJson.entries === "object" &&
+                  (!Array.isArray(parsedJson.entries) ||
+                    parsedJson.entries.some(e => e && (e.comment !== undefined || Array.isArray(e.key) || e.disable !== undefined)))
+                ) {
+                  const rawEntriesList = (Array.isArray(parsedJson.entries)
+                    ? parsedJson.entries
+                    : Object.values(parsedJson.entries)
+                  ).filter(e => e && typeof e === "object");
                   if (rawEntriesList.length > 0) {
                     const defaultGid = "tcg_" + Date.now() + "_wb";
                     const stGroups = [{ id: defaultGid, name: "思维链模块组", enabled: true, collapsed: false }];
@@ -28485,6 +28493,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             entries: [],
           };
         }
+        window.parseThoughtChainFromText = parseThoughtChainFromText;
 
         async function exportThoughtChainPreset(presetId) {
           const preset = await db.thoughtChainPresets.get(presetId);
@@ -28683,6 +28692,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (!preset.generalContent && localPreset.generalContent) preset.generalContent = localPreset.generalContent;
                 if (!preset.cocContent && localPreset.cocContent) preset.cocContent = localPreset.cocContent;
                 await db.thoughtChainPresets.put(localPreset);
+              }
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
               }
             }
           } catch (e) {}
@@ -33529,9 +33541,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   (!Array.isArray(p.entries) || p.entries.length === 0) &&
                   typeof p.generalContent === "string" &&
                   p.generalContent.trim().startsWith("{") &&
-                  typeof parseThoughtChainFromText === "function"
+                  typeof window.parseThoughtChainFromText === "function"
                 ) {
-                  const reparsed = parseThoughtChainFromText(p.generalContent, p.name || "导入思维链");
+                  const reparsed = window.parseThoughtChainFromText(p.generalContent, p.name || "导入思维链");
                   if (reparsed && Array.isArray(reparsed.entries) && reparsed.entries.length > 0) {
                     p.generalContent = reparsed.generalContent;
                     p.groups = reparsed.groups;
@@ -33584,42 +33596,74 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return JSON.stringify({ totalRegexRules: allRules.length, rules: matched.slice(0, 25) }, null, 2);
             }
             if (targetType === "thought_chain" || targetType === "cot") {
-              const presets = Array.isArray(window._cachedMashuThoughtChains) ? window._cachedMashuThoughtChains : [];
+              const basePresets = Array.isArray(window._cachedMashuThoughtChains) ? window._cachedMashuThoughtChains : [];
+              const mergedMap = new Map();
+              basePresets.forEach(p => {
+                if (p && (p.id || p.name)) {
+                  mergedMap.set(String(p.id || p.name), p);
+                }
+              });
+              if (state && state.chats && typeof state.chats === "object") {
+                Object.values(state.chats).forEach(c => {
+                  const bound = c && c.settings && c.settings.boundThoughtChainPreset;
+                  if (bound && (bound.id || bound.name)) {
+                    const key = String(bound.id || bound.name);
+                    const existing = mergedMap.get(key);
+                    if (!existing || (bound.updatedAt && (!existing.updatedAt || bound.updatedAt >= existing.updatedAt))) {
+                      mergedMap.set(key, bound);
+                    }
+                  }
+                });
+              }
+              const presets = Array.from(mergedMap.values());
               const matched = qName
                 ? presets.filter(p => p && (String(p.name || "").includes(qName) || qName.includes(String(p.name || "")) || String(p.id) === qName))
                 : presets;
               const list = (matched.length > 0 ? matched : presets).map(p => {
+                let effectivePreset = p;
+                if (
+                  (!Array.isArray(p.entries) || p.entries.length === 0) &&
+                  typeof p.generalContent === "string" &&
+                  p.generalContent.trim().startsWith("{") &&
+                  typeof window.parseThoughtChainFromText === "function"
+                ) {
+                  const reparsed = window.parseThoughtChainFromText(p.generalContent, p.name || "导入思维链");
+                  if (reparsed && Array.isArray(reparsed.entries) && reparsed.entries.length > 0) {
+                    effectivePreset = Object.assign({}, p, reparsed);
+                  }
+                }
                 const groupMap = {};
-                if (Array.isArray(p.groups)) {
-                  p.groups.forEach(g => {
+                if (Array.isArray(effectivePreset.groups)) {
+                  effectivePreset.groups.forEach(g => {
                     if (g && g.id) groupMap[g.id] = g;
                   });
                 }
-                const allEntries = Array.isArray(p.entries) ? p.entries : [];
+                const allEntries = Array.isArray(effectivePreset.entries) ? effectivePreset.entries : [];
+                const mappedEntries = allEntries.map(e => {
+                  const grp = e && e.groupId ? groupMap[e.groupId] : null;
+                  const isEntryEnabled = Boolean(e && e.enabled !== false && (!grp || grp.enabled !== false));
+                  return {
+                    id: e.id,
+                    key: e.key || e.name || e.title || "未命名条目",
+                    groupName: grp ? (grp.name || "") : "",
+                    enabled: isEntryEnabled,
+                    content: String(e.content || "").slice(0, 260)
+                  };
+                });
+                const enabledEntryNames = mappedEntries.filter(e => e.enabled).map(e => e.key);
+                const disabledEntryNames = mappedEntries.filter(e => !e.enabled).map(e => e.key);
                 return {
-                  id: p.id,
-                  name: p.name,
-                  headerContent: String(p.headerContent || "").slice(0, 500),
-                  generalContent: String(p.generalContent || "").slice(0, 800),
-                  cocContent: String(p.cocContent || "").slice(0, 500),
-                  groupCount: Array.isArray(p.groups) ? p.groups.length : 0,
+                  id: effectivePreset.id,
+                  name: effectivePreset.name,
+                  headerContent: String(effectivePreset.headerContent || "").slice(0, 500),
+                  generalContent: String(effectivePreset.generalContent || "").slice(0, 800),
+                  cocContent: String(effectivePreset.cocContent || "").slice(0, 500),
+                  groupCount: Array.isArray(effectivePreset.groups) ? effectivePreset.groups.length : 0,
                   entryCount: allEntries.length,
-                  enabledEntryCount: allEntries.filter(e => {
-                    if (!e || e.enabled === false) return false;
-                    const grp = e.groupId ? groupMap[e.groupId] : null;
-                    return !grp || grp.enabled !== false;
-                  }).length,
-                  entries: allEntries.slice(0, 80).map(e => {
-                    const grp = e && e.groupId ? groupMap[e.groupId] : null;
-                    const isEntryEnabled = Boolean(e && e.enabled !== false && (!grp || grp.enabled !== false));
-                    return {
-                      id: e.id,
-                      key: e.key || e.name || e.title || "未命名条目",
-                      groupName: grp ? (grp.name || "") : "",
-                      enabled: isEntryEnabled,
-                      content: String(e.content || "").slice(0, 260)
-                    };
-                  })
+                  enabledEntryCount: enabledEntryNames.length,
+                  enabledEntryNames: enabledEntryNames,
+                  disabledEntryNames: disabledEntryNames,
+                  entries: mappedEntries.slice(0, 80)
                 };
               });
               return JSON.stringify({ totalPresets: presets.length, presets: list }, null, 2);
@@ -35003,7 +35047,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   savedWbId = existing.id;
                 } else {
                   isNewWb = true;
+                  savedWbId = "wb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
                   const newWb = {
+                    id: savedWbId,
                     name: wbName,
                     content: wbContent,
                     categoryId: null,
@@ -35013,13 +35059,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     position: edit.position || "before_char"
                   };
                   if (typeof db !== "undefined" && db.worldBooks) {
-                    savedWbId = await db.worldBooks.add(newWb);
-                    newWb.id = savedWbId;
-                  } else {
-                    savedWbId = "wb_" + Date.now();
-                    newWb.id = savedWbId;
+                    await db.worldBooks.put(newWb);
                   }
+                  if (!Array.isArray(state.worldBooks)) state.worldBooks = [];
                   state.worldBooks.push(newWb);
+                  if (typeof renderWorldBookScreen === "function") {
+                    try {
+                      renderWorldBookScreen();
+                    } catch (_) {}
+                  }
                 }
                 let linkedLabel = "";
                 if (edit.linkToChat && savedWbId !== null) {
@@ -54680,18 +54728,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (e) {
               console.warn("AI回复不是有效的JSON，退回到标准解析模式。", e);
               messagesArray = parseAiResponse(aiResponseContent);
-              if (
-                (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) &&
-                !pendingMashuMouseActions
-              ) {
-                const mActMatch = String(aiResponseContent || "").match(/"mouseActions"\s*:\s*(\[[\s\S]*?\])/i);
-                if (mActMatch) {
-                  try {
-                    const parsedMAct = JSON.parse(mActMatch[1]);
-                    if (Array.isArray(parsedMAct) && parsedMAct.length > 0) {
-                      pendingMashuMouseActions = parsedMAct;
-                    }
-                  } catch (_) {}
+              if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
+                if (!pendingMashuMouseActions) {
+                  const mActMatch = String(aiResponseContent || "").match(/"mouseActions"\s*:\s*(\[[\s\S]*?\])/i);
+                  if (mActMatch) {
+                    try {
+                      const parsedMAct = JSON.parse(mActMatch[1]);
+                      if (Array.isArray(parsedMAct) && parsedMAct.length > 0) {
+                        pendingMashuMouseActions = parsedMAct;
+                      }
+                    } catch (_) {}
+                  }
+                }
+                if (!pendingMashuPhoneEdits) {
+                  const pEditsMatch = String(aiResponseContent || "").match(/"(?:phoneEdits|mashuEdits|directEdits)"\s*:\s*(\[[\s\S]*?\])/i);
+                  if (pEditsMatch) {
+                    try {
+                      const parsedPEdits = JSON.parse(pEditsMatch[1]);
+                      if (Array.isArray(parsedPEdits) && parsedPEdits.length > 0) {
+                        pendingMashuPhoneEdits = parsedPEdits;
+                      }
+                    } catch (_) {}
+                  }
                 }
               }
               console.log(messagesArray);
@@ -54699,6 +54757,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
               const collectedInlineMouseSteps = [];
+              const collectedInlinePhoneEdits = [];
               const filteredMsgsForMouse = [];
               let seenInlineMouseStep = false;
               for (const mItem of messagesArray) {
@@ -54706,6 +54765,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (Array.isArray(mItem.mouseActions) && mItem.mouseActions.length > 0) {
                   collectedInlineMouseSteps.push(...mItem.mouseActions);
                   seenInlineMouseStep = true;
+                }
+                const inlineEdits = mItem.phoneEdits || mItem.mashuEdits || mItem.directEdits;
+                if (Array.isArray(inlineEdits) && inlineEdits.length > 0) {
+                  collectedInlinePhoneEdits.push(...inlineEdits);
+                }
+                const mAct = String(mItem.action || mItem.type || "").toLowerCase().trim();
+                if (
+                  mAct === "upsert_world_book" ||
+                  mAct === "create_world_book" ||
+                  mAct === "add_world_book" ||
+                  mAct === "upsert_regex" ||
+                  mAct === "create_regex" ||
+                  mAct === "update_chat_persona" ||
+                  mAct === "update_thought_chain" ||
+                  mAct === "create_thought_chain" ||
+                  mAct === "update_tavern_card" ||
+                  mAct === "create_tavern_card"
+                ) {
+                  collectedInlinePhoneEdits.push(Object.assign({}, mItem, { action: mAct }));
+                  if (!mItem.content && !mItem.message) continue;
                 }
                 const mType = String(mItem.type || "").toLowerCase().trim();
                 if (mType === "mouseactions" || mType === "mouse_action" || mType === "mouse" || mType === "peek_scroll") {
@@ -54727,6 +54806,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               messagesArray = filteredMsgsForMouse;
               if ((!pendingMashuMouseActions || pendingMashuMouseActions.length === 0) && collectedInlineMouseSteps.length > 0) {
                 pendingMashuMouseActions = collectedInlineMouseSteps;
+              }
+              if ((!pendingMashuPhoneEdits || pendingMashuPhoneEdits.length === 0) && collectedInlinePhoneEdits.length > 0) {
+                pendingMashuPhoneEdits = collectedInlinePhoneEdits;
               }
             }
 
@@ -116250,47 +116332,6 @@ ${specificRules}`;
                     restoredItemsCount++;
                   }
 
-                  // B. 提取群控中的 AI 人设与玩家绑定人设写入 db.personaPresets
-                  if (g && db.personaPresets) {
-                    if (g.aiPersona && g.aiPersona.trim().length > 10) {
-                      const hasAiP = existingPersonas.some(
-                        (p) => p && String(p.persona || "").trim() === g.aiPersona.trim(),
-                      );
-                      if (!hasAiP) {
-                        const newPid = g.personaId || "persona_qq_" + gid;
-                        const pObj = {
-                          id: newPid,
-                          name: gName + " 守秘人人设",
-                          persona: g.aiPersona.trim(),
-                          avatar: "",
-                        };
-                        await db.personaPresets.put(pObj);
-                        existingPersonas.push(pObj);
-                        restoredItemsCount++;
-                      }
-                    }
-                    if (Array.isArray(g.playerBindings)) {
-                      for (const pb of g.playerBindings) {
-                        if (!pb || !pb.persona || pb.persona.trim().length < 5) continue;
-                        const pName = pb.cardName || pb.qqRemark || pb.alias || pb.qq || "调查员";
-                        const hasPb = existingPersonas.some(
-                          (p) => p && String(p.persona || "").trim() === pb.persona.trim(),
-                        );
-                        if (!hasPb) {
-                          const pObj = {
-                            id: pb.cardId || "persona_pb_" + gid + "_" + (pb.qq || pName),
-                            name: pName,
-                            persona: pb.persona.trim(),
-                            avatar: "",
-                          };
-                          await db.personaPresets.put(pObj);
-                          existingPersonas.push(pObj);
-                          restoredItemsCount++;
-                        }
-                      }
-                    }
-                  }
-
                   // C. 清理之前误插入到小手机聊天列表里的外部QQ机器人控制台群聊条目，只允许合并原本就属于小手机的同名群聊
                   if (db.chats) {
                     try {
@@ -116298,89 +116339,6 @@ ${specificRules}`;
                     } catch (_) {}
                   }
                 }
-
-                // D. 提取私聊配置 privateChats
-                if (qCfg.privateChats && typeof qCfg.privateChats === "object" && db.personaPresets) {
-                  for (const [uid, pCfg] of Object.entries(qCfg.privateChats)) {
-                    if (!pCfg || typeof pCfg !== "object") continue;
-                    const pText = pCfg.aiPersona || pCfg.userPersona || pCfg.persona || "";
-                    if (pText && pText.trim().length > 5) {
-                      const hasPrivP = existingPersonas.some(
-                        (p) => p && String(p.persona || "").trim() === pText.trim(),
-                      );
-                      if (!hasPrivP) {
-                        const pObj = {
-                          id: "persona_priv_" + uid,
-                          name: pCfg.nickname || pCfg.name || "私聊设定 " + uid,
-                          persona: pText.trim(),
-                          avatar: "",
-                        };
-                        await db.personaPresets.put(pObj);
-                        existingPersonas.push(pObj);
-                        restoredItemsCount++;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-
-            // 2B. 从 tavern_store.json 合并世界书、角色人设与 API 配置
-            if (tavernStore && typeof tavernStore === "object" && typeof db !== "undefined") {
-              try {
-                if (Array.isArray(tavernStore.worldBooks) && tavernStore.worldBooks.length > 0 && db.worldBooks) {
-                  const existingWbs = await db.worldBooks.toArray();
-                  for (const twb of tavernStore.worldBooks) {
-                    if (!twb || !twb.name) continue;
-                    const entriesArr = Array.isArray(twb.entries) ? twb.entries : [];
-                    const formattedContent = entriesArr
-                      .map((ent) => {
-                        const parts = [];
-                        if (ent.comment) parts.push(`[备注: ${ent.comment}]`);
-                        if (Array.isArray(ent.keys) && ent.keys.length > 0) {
-                          parts.push(`[关键词: ${ent.keys.join(", ")}]`);
-                        }
-                        if (ent.content) parts.push(ent.content);
-                        return parts.join("\n");
-                      })
-                      .join("\n\n---\n\n");
-                    const matchedWb = existingWbs.find(
-                      (w) => w && (String(w.id) === String(twb.id) || String(w.name).trim() === String(twb.name).trim()),
-                    );
-                    if (!matchedWb && formattedContent) {
-                      await db.worldBooks.put({
-                        id: String(twb.id || "wb_tavern_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
-                        name: twb.name,
-                        content: formattedContent,
-                        entries: entriesArr,
-                        categoryId: null,
-                      });
-                      restoredItemsCount++;
-                    }
-                  }
-                }
-                if (Array.isArray(tavernStore.cards) && tavernStore.cards.length > 0 && db.personaPresets) {
-                  const existingPersonas = await db.personaPresets.toArray();
-                  for (const card of tavernStore.cards) {
-                    if (!card || card.id === "card_default_starter" || !card.name) continue;
-                    const desc = [card.description, card.personality, card.scenario].filter(Boolean).join("\n");
-                    if (!desc || desc.trim().length < 5) continue;
-                    const exists = existingPersonas.some(
-                      (p) => p && (String(p.id) === String(card.id) || String(p.name || "").trim() === String(card.name).trim()),
-                    );
-                    if (!exists) {
-                      await db.personaPresets.put({
-                        id: String(card.id),
-                        name: card.name,
-                        persona: desc.trim(),
-                        avatar: card.avatar || "",
-                      });
-                      restoredItemsCount++;
-                    }
-                  }
-                }
-              } catch (e) {
-                console.warn("从酒馆存档合并世界书与人设时出现非致命警告:", e);
               }
             }
 
