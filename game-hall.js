@@ -3562,74 +3562,6 @@ code, pre {
     const rawFetch = getTavernRawFetch();
     const isLocalLoopback = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)/i.test(String(url || ''));
     const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
-    const canUseHeartbeatProxy =
-      Boolean(options?._isNonStreamCompletion) &&
-      !isStaticHost &&
-      /^https?:\/\//i.test(url) &&
-      !url.startsWith(window.location.origin) &&
-      (!isLocalLoopback || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-    if (canUseHeartbeatProxy) {
-      let parsedBody = undefined;
-      if (options && options.body !== undefined) {
-        try {
-          parsedBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-        } catch (_) {
-          parsedBody = options.body;
-        }
-      }
-      const proxyRes = await rawFetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          method: (options && options.method) || 'POST',
-          headers: (options && options.headers) || {},
-          body: parsedBody,
-          keepAliveHeartbeat: true
-        }),
-        signal: options?.signal
-      });
-      if (proxyRes && proxyRes.status !== 404 && proxyRes.status !== 405) {
-        if (proxyRes.body && typeof proxyRes.body.getReader === 'function') {
-          const reader = proxyRes.body.getReader();
-          const decoder = new TextDecoder('utf-8');
-          let accText = '';
-          while (true) {
-            const { done, value } = await reader.read();
-            if (typeof window.ensureBackgroundKeepAlive === 'function') {
-              window.ensureBackgroundKeepAlive();
-            }
-            if (done) {
-              accText += decoder.decode();
-              break;
-            }
-            if (value && value.byteLength > 0) {
-              accText += decoder.decode(value, { stream: true });
-            }
-          }
-          const trimmedAcc = accText.trim();
-          if (trimmedAcc.startsWith('{') && trimmedAcc.includes('"_proxy_error":true')) {
-            try {
-              const pErr = JSON.parse(trimmedAcc);
-              if (pErr && pErr._proxy_error) {
-                const statusNum = Number(pErr._proxy_status) || 502;
-                const rawErrStr = typeof pErr.message === 'string' ? pErr.message : JSON.stringify(pErr);
-                return new Response(rawErrStr, {
-                  status: statusNum,
-                  headers: { 'Content-Type': 'application/json' }
-                });
-              }
-            } catch (_) {}
-          }
-          return new Response(trimmedAcc, {
-            status: proxyRes.status || 200,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-        return proxyRes;
-      }
-    }
 
     let directErr = null;
     const attemptStart = performance.now();
@@ -5457,12 +5389,30 @@ code, pre {
     const bgPanel = isNight ? '#2b292e' : '#fdfcfb';
     const bgSubtle = isNight ? '#343238' : '#f1ede8';
     const borderSoft = isNight ? 'rgba(255, 255, 255, 0.09)' : 'rgba(138, 128, 120, 0.16)';
+    const borderStrong = isNight ? 'rgba(255, 255, 255, 0.16)' : 'rgba(138, 128, 120, 0.28)';
+    const accentSoft = isNight ? 'rgba(184, 148, 142, 0.18)' : 'rgba(184, 148, 142, 0.14)';
+    const overlayColor = isNight ? 'rgba(15, 14, 18, 0.56)' : 'rgba(45, 40, 36, 0.28)';
     return `
       .bbs-root,
       .bbs-root[data-theme="day"],
       .bbs-root[data-theme="night"],
       .bbs-root[data-theme="pastel"],
+      .bbs-root[data-theme="green"],
+      .bbs-root[data-theme="st"],
       :host {
+        --bbs-bg: ${bgBase} !important;
+        --bbs-surface: ${bgPanel} !important;
+        --bbs-surface-2: ${bgSubtle} !important;
+        --bbs-ink: ${mainText} !important;
+        --bbs-ink-soft: ${subText} !important;
+        --bbs-ink-muted: ${subText} !important;
+        --bbs-accent: ${quoteAccent} !important;
+        --bbs-accent-soft: ${accentSoft} !important;
+        --bbs-accent-ink: #ffffff !important;
+        --bbs-line: ${borderSoft} !important;
+        --bbs-line-strong: ${borderStrong} !important;
+        --bbs-overlay: ${overlayColor} !important;
+        --bbs-shadow: 0 16px 42px -18px rgba(45, 40, 36, 0.18), 0 4px 12px -6px rgba(45, 40, 36, 0.08) !important;
         --bbs-bg-primary: ${bgBase} !important;
         --bbs-bg-secondary: ${bgSubtle} !important;
         --bbs-bg-tertiary: ${bgSubtle} !important;
@@ -5473,16 +5423,14 @@ code, pre {
         --bbs-text-secondary: ${subText} !important;
         --bbs-text-muted: ${subText} !important;
         --bbs-border: ${borderSoft} !important;
-        --bbs-border-strong: ${borderSoft} !important;
-        --bbs-accent: ${quoteAccent} !important;
+        --bbs-border-strong: ${borderStrong} !important;
         --bbs-accent-hover: ${quoteAccent} !important;
-        --bbs-accent-soft: ${bgSubtle} !important;
+        --bbs-radius: 12px !important;
         --bbs-radius-sm: 10px !important;
         --bbs-radius-md: 14px !important;
         --bbs-radius-lg: 18px !important;
-        --bbs-shadow-sm: 0 2px 10px rgba(45, 40, 36, 0.04) !important;
-        --bbs-shadow-md: 0 6px 20px rgba(45, 40, 36, 0.06) !important;
-        --bbs-shadow-lg: 0 12px 32px rgba(45, 40, 36, 0.09) !important;
+        --bbs-radius-win: 20px !important;
+        --bbs-font-sans: var(--app-font-family, inherit) !important;
         font-family: var(--app-font-family, inherit) !important;
       }
       .bbs-root *,
@@ -5490,6 +5438,17 @@ code, pre {
       .bbs-fp-card * {
         font-family: var(--app-font-family, inherit) !important;
         box-sizing: border-box !important;
+      }
+      .bbs-window {
+        background: var(--bbs-bg) !important;
+        border: 1px solid var(--bbs-line-strong) !important;
+        border-radius: var(--bbs-radius-win) !important;
+        color: var(--bbs-ink) !important;
+      }
+      .bbs-head,
+      .bbs-nav {
+        background: var(--bbs-surface) !important;
+        border-color: var(--bbs-line) !important;
       }
       .bbs-fp-card {
         background: ${bgPanel} !important;
@@ -5505,7 +5464,8 @@ code, pre {
       .bbs-fp-item,
       .bbs-card,
       .bbs-panel,
-      .bbs-modal-window {
+      .bbs-modal-window,
+      .bbs-modal {
         background: ${bgPanel} !important;
         border-color: ${borderSoft} !important;
         color: ${mainText} !important;
@@ -5533,13 +5493,12 @@ code, pre {
       }
       .bbs-btn,
       .bbs-fp-btn,
-      .bbs-root button {
+      .bbs-root button:not(.bbs-btn-primary):not(.primary):not(.bbs-icon-btn) {
         border-radius: 10px !important;
         border: 1px solid ${borderSoft} !important;
         background: ${bgSubtle} !important;
         color: ${mainText} !important;
         box-shadow: none !important;
-        transition: all 0.16s ease !important;
       }
       .bbs-btn-primary,
       .bbs-root button.primary {
@@ -5551,7 +5510,7 @@ code, pre {
       .bbs-root input[type="text"],
       .bbs-root input[type="number"],
       .bbs-root textarea {
-        background: ${bgBase} !important;
+        background: ${bgPanel} !important;
         color: ${mainText} !important;
         border: 1px solid ${borderSoft} !important;
         border-radius: 10px !important;
@@ -5567,7 +5526,7 @@ code, pre {
     `;
   }
 
-  function applyCachedBaiBaiCssToShadowRoots() {
+  function applyCachedBaiBaiCssToShadowRoots(skipMenuSort = false) {
     try {
       const bbiHost = document.getElementById('bbi-app-host');
       if (bbiHost && bbiHost.shadowRoot && cachedBaiBaiShadowCss && !bbiHost.shadowRoot.getElementById('bbi-inline-shadow-css')) {
@@ -5627,8 +5586,10 @@ code, pre {
           existingFpBeauty.remove();
         }
       });
-      syncBookExcerptDomAvatars();
-      sortExtensionsMenuDeterministically();
+      if (!skipMenuSort) {
+        syncBookExcerptDomAvatars();
+        sortExtensionsMenuDeterministically();
+      }
     } catch (_) {}
   }
 
@@ -5690,18 +5651,21 @@ code, pre {
   let baiBaiShadowSyncTimer = null;
   async function syncBaiBaiShadowDomCss() {
     try {
-      if (!baiBaiShadowObserverBound && document.body) {
+      const chatEl = document.getElementById('chat');
+      if (!baiBaiShadowObserverBound && chatEl) {
         baiBaiShadowObserverBound = true;
-        const obs = new MutationObserver(() => {
+        const obs = new MutationObserver((mutations) => {
+          const hasBbsFpAdded = mutations.some(m =>
+            Array.from(m.addedNodes || []).some(n => n && n.nodeType === 1 && (n.classList?.contains('bbs-fp-host') || n.querySelector?.('.bbs-fp-host')))
+          );
+          if (!hasBbsFpAdded) return;
           if (baiBaiShadowSyncTimer) return;
           baiBaiShadowSyncTimer = setTimeout(() => {
             baiBaiShadowSyncTimer = null;
-            if (document.getElementById('bbi-app-host') || document.getElementById('bbs-app-host') || document.querySelector('.bbs-fp-host')) {
-              applyCachedBaiBaiCssToShadowRoots();
-            }
+            applyCachedBaiBaiCssToShadowRoots(true);
           }, 120);
         });
-        obs.observe(document.body, { childList: true, subtree: true });
+        obs.observe(chatEl, { childList: true, subtree: true });
       }
       const bbiHost = document.getElementById('bbi-app-host');
       if (bbiHost && !cachedBaiBaiShadowCss) {
@@ -16552,15 +16516,18 @@ code, pre {
       if (action === 'open-plugin-modal') {
         const pid = actionEl.getAttribute('data-plugin-id');
         const p = (tavernState.plugins || []).find(x => x.id === pid);
+        const hadOpenDrawer = Boolean(uiRuntime.openDrawerKey);
         uiRuntime.showExtensionsPopup = false;
         uiRuntime.showOptionsPopup = false;
         uiRuntime.openDrawerKey = null;
         refreshBottomPopupsOnly();
-        refreshOpenDrawerOnly();
-        if (p && p.enabled) {
-          executeUserPluginScript(p);
+        if (hadOpenDrawer) {
+          refreshOpenDrawerOnly();
         }
         if (isBaiBaiImagePlugin(p)) {
+          if (!document.getElementById('bbi-app-host') && p && p.enabled) {
+            executeUserPluginScript(p);
+          }
           await syncBaiBaiShadowDomCss();
           const bbiMenu = document.getElementById('bbi-menu-item') || document.getElementById('bbi-topbar-button');
           if (bbiMenu) {
@@ -16569,12 +16536,18 @@ code, pre {
           }
         }
         if (isBaiBaiBookPlugin(p)) {
+          if (!document.getElementById('bbs-app-host') && p && p.enabled) {
+            executeUserPluginScript(p);
+          }
           await syncBaiBaiShadowDomCss();
           const bbsMenu = document.getElementById('bbs-menu-item') || document.getElementById('bbs-topbar-button') || document.getElementById('bbs-qr-button');
           if (bbsMenu) {
             bbsMenu.click();
             return;
           }
+        }
+        if (p && p.enabled) {
+          executeUserPluginScript(p);
         }
         if (isBookExcerptPlugin(p)) {
           const beMenu = document.getElementById('be-menu-entry');

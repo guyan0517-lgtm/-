@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v13.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22453,80 +22453,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
-              const isNonStreamAiCall =
-                method === "POST" &&
-                !(activeBodyObj && typeof activeBodyObj === "object" && activeBodyObj.stream === true) &&
-                !finalUrl.includes("streamGenerateContent") &&
-                (finalUrl.includes("/chat/completions") || finalUrl.includes(":generateContent") || finalUrl.includes("/messages"));
-              const isLocalLoopback = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)/i.test(finalUrl);
               const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-              const canUseHeartbeatProxy =
-                isNonStreamAiCall &&
-                !isStaticHost &&
-                (!isLocalLoopback || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-
-              if (canUseHeartbeatProxy) {
-                try {
-                  ensureBackgroundKeepAlive();
-                  resetTimeout();
-                  const proxyRes = await origFetch("/api/proxy", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    signal: controller.signal,
-                    body: JSON.stringify({
-                      url: finalUrl,
-                      method,
-                      headers,
-                      body: activeBodyObj,
-                      keepAliveHeartbeat: true,
-                    }),
-                  });
-                  if (proxyRes && proxyRes.status !== 404 && proxyRes.status !== 405) {
-                    if (proxyRes.body && typeof proxyRes.body.getReader === "function") {
-                      const reader = proxyRes.body.getReader();
-                      const decoder = new TextDecoder("utf-8");
-                      let accText = "";
-                      while (true) {
-                        const { done, value } = await reader.read();
-                        resetTimeout();
-                        ensureBackgroundKeepAlive();
-                        if (done) {
-                          accText += decoder.decode();
-                          break;
-                        }
-                        if (value && value.byteLength > 0) {
-                          accText += decoder.decode(value, { stream: true });
-                        }
-                      }
-                      const trimmedAcc = accText.trim();
-                      if (trimmedAcc.startsWith("{") && trimmedAcc.includes('"_proxy_error":true')) {
-                        try {
-                          const pErr = JSON.parse(trimmedAcc);
-                          if (pErr && pErr._proxy_error) {
-                            const statusNum = Number(pErr._proxy_status) || 502;
-                            const rawErrStr = typeof pErr.message === "string" ? pErr.message : JSON.stringify(pErr);
-                            currentRes = new Response(rawErrStr, {
-                              status: statusNum,
-                              headers: { "Content-Type": "application/json" },
-                            });
-                            return { res: currentRes, directErr: null };
-                          }
-                        } catch (_) {}
-                      }
-                      currentRes = new Response(trimmedAcc, {
-                        status: proxyRes.status || 200,
-                        headers: { "Content-Type": "application/json" },
-                      });
-                      return { res: currentRes, directErr: null };
-                    }
-                    currentRes = proxyRes;
-                    return { res: currentRes, directErr: null };
-                  }
-                } catch (hbErr) {
-                  currentDirectErr = hbErr;
-                  return { res: null, directErr: currentDirectErr };
-                }
-              }
 
               try {
                 ensureBackgroundKeepAlive();
