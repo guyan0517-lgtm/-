@@ -1027,6 +1027,28 @@ app.post('/api/proxy', async (req, res) => {
     if (contentType) {
       res.setHeader('Content-Type', contentType);
     }
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    if (response.body && typeof response.body.getReader === 'function') {
+      const reader = response.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          resetProxyTimeout();
+          if (done) break;
+          if (value && value.byteLength > 0) {
+            res.write(Buffer.from(value));
+          }
+        }
+      } catch (bodyStreamErr) {
+        console.warn('[Proxy Body Stream] Reading error:', bodyStreamErr.message);
+      } finally {
+        if (proxyTimer) clearTimeout(proxyTimer);
+        res.end();
+      }
+      return;
+    }
 
     if (contentType.includes('application/json') || contentType.includes('text/')) {
       const text = await response.text();

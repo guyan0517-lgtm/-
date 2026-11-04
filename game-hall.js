@@ -1869,6 +1869,10 @@ code, pre {
           clearTimeout(pendingAutoTriggerTimer);
           pendingAutoTriggerTimer = null;
         }
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         await saveTavernStore();
         if (sentUserMessageInBatch) {
@@ -1882,11 +1886,19 @@ code, pre {
         await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
       } else if (/^\/continue\b/i.test(line)) {
         triggeredGenerationInBatch = true;
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         await saveTavernStore();
         await triggerCharacterReplyGeneration({ isContinue: true, isSwipeRegen: false });
       } else if (/^\/impersonate\b/i.test(line)) {
         triggeredGenerationInBatch = true;
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         await saveTavernStore();
         await triggerCharacterReplyGeneration({ isImpersonate: true });
@@ -1894,6 +1906,10 @@ code, pre {
         const countMatch = line.match(/(\d+)/);
         const delCount = countMatch ? Math.max(1, Number(countMatch[1])) : 1;
         const sess = getActiveChatSession();
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         if (sess && sess.messages.length > 1) {
           sess.messages.splice(Math.max(1, sess.messages.length - delCount));
@@ -1962,6 +1978,10 @@ code, pre {
         if (pendingAutoTriggerTimer) clearTimeout(pendingAutoTriggerTimer);
         pendingAutoTriggerTimer = setTimeout(async () => {
           pendingAutoTriggerTimer = null;
+          if (uiRuntime.abortController) {
+            try { uiRuntime.abortController.abort(); } catch (_) {}
+            uiRuntime.abortController = null;
+          }
           uiRuntime.isGenerating = false;
           await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
         }, 90);
@@ -3448,6 +3468,7 @@ code, pre {
 
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
+    const isLocalLoopback = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)/i.test(String(url || ''));
     let directErr = null;
     const attemptStart = performance.now();
     try {
@@ -3459,8 +3480,10 @@ code, pre {
     }
     const elapsedMs = performance.now() - attemptStart;
     const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
+    // Only use /api/proxy if browser preflight blocked an external non-local URL immediately (< 800ms) and auto-retry is not disabled
     if (
-      elapsedMs < 3500 &&
+      elapsedMs < 800 &&
+      !isLocalLoopback &&
       !isStaticHost &&
       !options?._noAutoRetry &&
       !(options?.signal && options.signal.aborted) &&
@@ -3669,38 +3692,19 @@ code, pre {
                 ...(key ? { 'Authorization': 'Bearer ' + key } : {}),
                 ...(wantStream ? { 'Accept': 'text/event-stream' } : { 'Accept': 'application/json' })
               };
+              const ep = endpoints[0];
               let upstreamRes = null;
               let lastErr = null;
-              for (const ep of endpoints) {
-                try {
-                  upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(openAiPayload),
-                    signal: init?.signal
-                  });
-                  if (upstreamRes.status === 400) {
-                    const errTxt = await upstreamRes.text().catch(() => '');
-                    if (/max_tokens|max_completion_tokens|maximum|token/i.test(errTxt)) {
-                      const retryPayload = Object.assign({}, openAiPayload);
-                      delete retryPayload.max_tokens;
-                      upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(retryPayload),
-                        signal: init?.signal
-                      });
-                    } else {
-                      return new Response(errTxt, { status: 400, headers: { 'Content-Type': 'application/json' } });
-                    }
-                  }
-                  if (upstreamRes.status !== 404 && upstreamRes.status !== 405) {
-                    break;
-                  }
-                } catch (err) {
-                  if (err && err.name === 'AbortError') throw err;
-                  lastErr = err;
-                }
+              try {
+                upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                  method: 'POST',
+                  headers,
+                  body: JSON.stringify(openAiPayload),
+                  signal: init?.signal
+                });
+              } catch (err) {
+                if (err && err.name === 'AbortError') throw err;
+                lastErr = err;
               }
               if (!upstreamRes) {
                 return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
@@ -6600,15 +6604,160 @@ code, pre {
       });
   }
 
+  function getStPromptTemplateConfig() {
+    if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
+    if (!tavernState.extensionSettings.PromptTemplate || typeof tavernState.extensionSettings.PromptTemplate !== 'object') {
+      tavernState.extensionSettings.PromptTemplate = {};
+    }
+    const cfg = tavernState.extensionSettings.PromptTemplate;
+    if (cfg.enabled === undefined) cfg.enabled = true;
+    if (cfg.generate_enabled === undefined) cfg.generate_enabled = true;
+    if (cfg.generate_loader_enabled === undefined) cfg.generate_loader_enabled = true;
+    if (cfg.inject_loader_enabled === undefined) cfg.inject_loader_enabled = true;
+    if (cfg.render_enabled === undefined) cfg.render_enabled = true;
+    if (cfg.render_loader_enabled === undefined) cfg.render_loader_enabled = true;
+    if (cfg.code_blocks_enabled === undefined) cfg.code_blocks_enabled = true;
+    if (cfg.raw_message_enabled === undefined) cfg.raw_message_enabled = false;
+    if (cfg.filter_message_enabled === undefined) cfg.filter_message_enabled = false;
+    if (cfg.depth_limit === undefined) cfg.depth_limit = -1;
+    if (cfg.variables_auto_save === undefined) cfg.variables_auto_save = false;
+    if (cfg.worldinfo_Waiting === undefined) cfg.worldinfo_Waiting = false;
+    if (cfg.with_context_disabled === undefined) cfg.with_context_disabled = false;
+    if (cfg.debug_enabled === undefined) cfg.debug_enabled = false;
+    if (cfg.invert_enabled === undefined) cfg.invert_enabled = true;
+    if (cfg.preload_enabled === undefined) cfg.preload_enabled = false;
+    if (cfg.sandbox_enabled === undefined) cfg.sandbox_enabled = false;
+    if (cfg.ace_enabled === undefined) cfg.ace_enabled = false;
+    return cfg;
+  }
+
+  function parseSimpleYamlOrJsonInitVars(rawContent) {
+    if (!rawContent || typeof rawContent !== 'string') return null;
+    const cleaned = rawContent
+      .replace(/^\s*@@[a-zA-Z0-9_-]+[^\r\n]*$/gm, '')
+      .replace(/```(?:yaml|json|yml)?\s*([\s\S]*?)```/gi, '$1')
+      .trim();
+    if (!cleaned) return null;
+    try {
+      return JSON.parse(cleaned);
+    } catch (_) {}
+    const root = {};
+    const stack = [{ indent: -1, obj: root }];
+    const lines = cleaned.split(/\r?\n/);
+    for (const rawLine of lines) {
+      if (!rawLine.trim() || rawLine.trim().startsWith('#')) continue;
+      const indentMatch = rawLine.match(/^(\s*)/);
+      const indent = indentMatch ? indentMatch[1].replace(/\t/g, '  ').length : 0;
+      const trimmed = rawLine.trim();
+      const kvMatch = trimmed.match(/^([^:#]+?)\s*:\s*(.*)$/);
+      if (!kvMatch) continue;
+      const key = kvMatch[1].trim().replace(/^['"]|['"]$/g, '');
+      let valStr = kvMatch[2].trim();
+      if (valStr.includes(' #')) {
+        valStr = valStr.split(' #')[0].trim();
+      }
+      while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+        stack.pop();
+      }
+      const parent = stack[stack.length - 1].obj;
+      if (!valStr) {
+        const child = {};
+        parent[key] = child;
+        stack.push({ indent, obj: child });
+      } else {
+        let parsedVal = valStr;
+        if (valStr === 'true') parsedVal = true;
+        else if (valStr === 'false') parsedVal = false;
+        else if (valStr === 'null' || valStr === '~') parsedVal = null;
+        else if (/^-?\d+(?:\.\d+)?$/.test(valStr)) parsedVal = Number(valStr);
+        else if ((valStr.startsWith('{') && valStr.endsWith('}')) || (valStr.startsWith('[') && valStr.endsWith(']'))) {
+          try { parsedVal = JSON.parse(valStr); } catch (_) {}
+        } else if ((valStr.startsWith('"') && valStr.endsWith('"')) || (valStr.startsWith("'") && valStr.endsWith("'"))) {
+          parsedVal = valStr.slice(1, -1);
+        }
+        parent[key] = parsedVal;
+      }
+    }
+    return Object.keys(root).length > 0 ? root : null;
+  }
+
+  function ensureCardStptPreloadAndInitialVars(cardObj) {
+    if (!uiRuntime.stptSharedDefines || typeof uiRuntime.stptSharedDefines !== 'object') {
+      uiRuntime.stptSharedDefines = {};
+    }
+    if (uiRuntime._inStptPreload) return;
+    const card = cardObj || getActiveCard();
+    const sess = getActiveChatSession();
+    const sessionKey = (card ? card.id : 'default') + '::' + (sess ? (sess.chatId || 'main') : 'main');
+    if (uiRuntime._lastStptPreloadSessionKey === sessionKey) return;
+    uiRuntime._lastStptPreloadSessionKey = sessionKey;
+    uiRuntime._inStptPreload = true;
+    try {
+      const stptCfg = getStPromptTemplateConfig();
+      const invertEnabled = stptCfg.invert_enabled !== false;
+      const localVars = getChatVariablesStore();
+      const books = (tavernState.worldBooks || []).filter(wb => {
+        if (!wb || !Array.isArray(wb.entries)) return false;
+        const boundIds = (card && Array.isArray(card.worldBookIds)) ? card.worldBookIds : [];
+        return wb.enabled !== false || boundIds.includes(wb.id) || (card && wb.name === card.name);
+      });
+      const preloadEntries = [];
+      for (const wb of books) {
+        for (const ent of wb.entries) {
+          if (!ent) continue;
+          const comment = String(ent.comment || '').trim();
+          const content = String(ent.content || '');
+          const isInitVar = comment === '[InitialVariables]' || /^\[InitialVariables\]/i.test(comment) || /^\s*@@initial_variables\b/m.test(content);
+          const isPreload = /^\s*@@preload\b/m.test(content) || /^\[(?:RENDER|GENERATE):(?:BEFORE|AFTER)\]/i.test(comment) || /^\s*@@(?:render|generate)_(?:before|after)\b/m.test(content);
+          if (!isInitVar && !isPreload) continue;
+          if (ent.disable && !invertEnabled && !isInitVar && !isPreload) continue;
+          if (isInitVar) {
+            const parsedInit = parseSimpleYamlOrJsonInitVars(content);
+            if (parsedInit && typeof parsedInit === 'object') {
+              const deepMergeInit = (target, src) => {
+                Object.keys(src).forEach(k => {
+                  if (src[k] && typeof src[k] === 'object' && !Array.isArray(src[k])) {
+                    if (!target[k] || typeof target[k] !== 'object') target[k] = {};
+                    deepMergeInit(target[k], src[k]);
+                  } else if (target[k] === undefined) {
+                    target[k] = src[k];
+                  }
+                });
+              };
+              deepMergeInit(localVars, parsedInit);
+              deepMergeInit(uiRuntime.stptSharedDefines, parsedInit);
+            }
+          }
+          if (isPreload && content.includes('<%')) {
+            preloadEntries.push(ent);
+          }
+        }
+      }
+      preloadEntries.sort((a, b) => (Number(a.order) || 100) - (Number(b.order) || 100));
+      for (const ent of preloadEntries) {
+        const cleanedPreload = String(ent.content || '').replace(/^\s*@@[a-zA-Z0-9_-]+[^\r\n]*$/gm, '');
+        evaluateStPromptTemplate(cleanedPreload, card);
+      }
+    } catch (e) {
+      console.warn('ST-Prompt-Template preload warning:', e);
+    } finally {
+      uiRuntime._inStptPreload = false;
+    }
+  }
+
   function evaluateStPromptTemplate(rawText, cardObj) {
     if (!rawText || typeof rawText !== 'string' || !rawText.includes('<%')) return rawText;
+    const stptCfg = getStPromptTemplateConfig();
+    if (stptCfg.enabled === false) return rawText;
     try {
+      ensureCardStptPreloadAndInitialVars(cardObj);
       const card = cardObj || getActiveCard();
       const persona = getActivePersona();
       const sess = getActiveChatSession();
       const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
       const localVars = getChatVariablesStore();
       const globalVars = getGlobalVariablesStore();
+      const sharedDefines = uiRuntime.stptSharedDefines || (uiRuntime.stptSharedDefines = {});
       const parseAutoValue = (v) => {
         if (typeof v !== 'string') return v;
         const t = v.trim();
@@ -6629,6 +6778,8 @@ code, pre {
         if (scope === 'local') {
           const gVal = getDeepVarByPath(globalVars, String(key ?? ''));
           if (gVal !== undefined) return gVal;
+          const dVal = getDeepVarByPath(sharedDefines, String(key ?? ''));
+          if (dVal !== undefined) return dVal;
         }
         return (opts && typeof opts === 'object' && 'defaults' in opts) ? opts.defaults : '';
       };
@@ -6670,15 +6821,40 @@ code, pre {
           return ent ? (ent.content || '') : '';
         }
         for (const wb of books) {
-          if (!wb || wb.enabled === false || !Array.isArray(wb.entries)) continue;
-          const ent = wb.entries.find(e => e && !e.disable && (e.comment === bookOrEntryName || String(e.uid) === String(bookOrEntryName) || (Array.isArray(e.keys) && e.keys.includes(bookOrEntryName))));
+          if (!wb || !Array.isArray(wb.entries)) continue;
+          const ent = wb.entries.find(e => e && (e.comment === bookOrEntryName || String(e.uid) === String(bookOrEntryName) || (Array.isArray(e.keys) && e.keys.includes(bookOrEntryName))));
           if (ent) return ent.content || '';
         }
         return '';
       };
 
+      const defineFn = function(keyOrObj, val) {
+        if (keyOrObj && typeof keyOrObj === 'object') {
+          Object.assign(sharedDefines, keyOrObj);
+          return sharedDefines;
+        }
+        if (typeof keyOrObj === 'string') {
+          sharedDefines[keyOrObj] = val;
+          return val;
+        }
+        return sharedDefines;
+      };
+      const defineProxy = new Proxy(defineFn, {
+        get(target, prop) {
+          if (prop in sharedDefines) return sharedDefines[prop];
+          return target[prop];
+        },
+        set(target, prop, value) {
+          sharedDefines[prop] = value;
+          return true;
+        },
+        has(target, prop) {
+          return (prop in sharedDefines) || (prop in target);
+        }
+      });
+
       const tokenRegex = /<%([_=-]?)([\s\S]*?)([_-]?)%>/g;
-      let fnBody = 'let __out = "";\nconst print = (...args) => { __out += args.join(""); };\nconst include = (name) => getwi(name);\n';
+      let innerBody = '';
       let cursor = 0;
       let match;
       while ((match = tokenRegex.exec(rawText)) !== null) {
@@ -6690,12 +6866,12 @@ code, pre {
           literal = literal.replace(/[ \t]*$/, '');
         }
         if (literal) {
-          fnBody += `__out += ${JSON.stringify(literal)};\n`;
+          innerBody += `__out += ${JSON.stringify(literal)};\n`;
         }
         if (openMod === '=' || openMod === '-') {
-          fnBody += `{ const __v = (${code.trim()}); if (__v !== undefined && __v !== null) __out += String(__v); }\n`;
+          innerBody += `{ const __v = (${code.trim()}); if (__v !== undefined && __v !== null) __out += String(__v); }\n`;
         } else {
-          fnBody += `${code}\n`;
+          innerBody += `${code}\n`;
         }
         cursor = match.index + match[0].length;
         if (closeMod === '_') {
@@ -6707,9 +6883,12 @@ code, pre {
         }
       }
       if (cursor < rawText.length) {
-        fnBody += `__out += ${JSON.stringify(rawText.slice(cursor))};\n`;
+        innerBody += `__out += ${JSON.stringify(rawText.slice(cursor))};\n`;
       }
-      fnBody += 'return __out;';
+
+      const fnBody = stptCfg.with_context_disabled
+        ? `let __out = "";\nconst print = (...args) => { __out += args.join(""); };\nconst include = (name) => getwi(name);\n${innerBody}\nreturn __out;`
+        : `let __out = "";\nconst print = (...args) => { __out += args.join(""); };\nconst include = (name) => getwi(name);\nwith (__scopeProxy) {\n${innerBody}\n}\nreturn __out;`;
 
       const variablesProxy = new Proxy(localVars, {
         get(target, prop) {
@@ -6717,10 +6896,35 @@ code, pre {
           if (prop === 'global') return globalVars;
           if (prop in target) return target[prop];
           if (prop in globalVars) return globalVars[prop];
+          if (prop in sharedDefines) return sharedDefines[prop];
           return undefined;
         },
         set(target, prop, value) {
           target[prop] = value;
+          return true;
+        }
+      });
+
+      const scopeProxy = new Proxy(sharedDefines, {
+        has(target, prop) {
+          if (prop === Symbol.unscopables) return false;
+          if (prop in target || prop in localVars || prop in globalVars) return true;
+          if (prop === 'stat_data' && ('stat_data' in localVars || 'stat_data' in target)) return true;
+          return false;
+        },
+        get(target, prop) {
+          if (prop === Symbol.unscopables) return undefined;
+          if (prop in target) return target[prop];
+          if (prop in localVars) return localVars[prop];
+          if (prop in globalVars) return globalVars[prop];
+          return undefined;
+        },
+        set(target, prop, value) {
+          if (prop in localVars || !(prop in target)) {
+            localVars[prop] = value;
+          } else {
+            target[prop] = value;
+          }
           return true;
         }
       });
@@ -6730,6 +6934,7 @@ code, pre {
       const lastCharMsgObj = [...msgs].reverse().find(m => m && !m.is_user);
 
       const evaluator = new Function(
+        '__scopeProxy', 'define', 'SharedDefines',
         'getvar', 'setvar', 'addvar', 'incvar', 'decvar', 'delvar',
         'getLocalVar', 'setLocalVar', 'getChatVar', 'setChatVar',
         'getglobalvar', 'setglobalvar', 'addglobalvar', 'getGlobalVar', 'setGlobalVar',
@@ -6739,6 +6944,7 @@ code, pre {
         fnBody
       );
       return evaluator(
+        scopeProxy, defineProxy, sharedDefines,
         getvar, setvar, addvar, incvar, decvar, delvar,
         getvar, setvar, getvar, setvar,
         getglobalvar, setglobalvar, addglobalvar, getglobalvar, setglobalvar,
@@ -6810,11 +7016,11 @@ code, pre {
     const seenKeys = new Set();
     const deduped = [];
     for (const s of combined) {
-      if (!s || !s.findRegex) continue;
-      const key = String(s.scriptName || '').trim() + '::' + String(s.findRegex || '').trim();
+      if (!s || !s.findRegex || s.disabled) continue;
+      const key = String(s.id || '') + '::' + String(s.scriptName || '').trim() + '::' + String(s.findRegex || '').trim() + '::' + String(s.replaceString ?? '');
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
-      if (!s.disabled) deduped.push(s);
+      deduped.push(s);
     }
     return deduped;
   }
@@ -6886,7 +7092,7 @@ code, pre {
         rx.lastIndex = 0;
         if (!rx.test(output)) continue;
         rx.lastIndex = 0;
-        const repStr = replaceTavernMacros(String(script.replaceString ?? ''), card);
+        const rawRepTemplate = String(script.replaceString ?? '');
         const resolvedTrimStrings = (Array.isArray(script.trimStrings) && script.trimStrings.length > 0)
           ? script.trimStrings.map(t => t ? replaceTavernMacros(String(t), card) : '').filter(Boolean)
           : [];
@@ -6907,7 +7113,7 @@ code, pre {
             return res;
           };
 
-          return repStr.replace(/\{\{\$?match\}\}|\$&|\$<([^>]+)>|\$(\d{1,2})/g, (token, namedGroup, numStr) => {
+          const substituted = rawRepTemplate.replace(/\{\{\$?match\}\}|\$&|\$<([^>]+)>|\$(\d{1,2})/g, (token, namedGroup, numStr) => {
             if (token === '$&' || token === '{{match}}' || token === '{{$match}}') {
               return applyTrim(fullMatchedStr);
             }
@@ -6935,6 +7141,7 @@ code, pre {
             }
             return token;
           });
+          return replaceTavernMacros(substituted, card);
         });
 
         if (!isPrompt && prevOutput.trim() && !nextOutput.trim()) {
@@ -7473,13 +7680,13 @@ code, pre {
       return holdHtmlChunk(`<code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.92em;">${escapeHtmlSimple(codeInner)}</code>`);
     });
 
-    working = working.replace(/<[^>]+>/g, tag => holdHtmlChunk(tag));
+    working = working.replace(/<[a-zA-Z!/](?:[^>"']|"[^"]*"|'[^']*')*>/g, tag => holdHtmlChunk(tag));
 
     working = working
       .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|data:image\/[^\s)]+|vault:\/\/[^\s)]+)\)/g, (_, altTxt, rawUrl) => {
         const safeSrc = resolveSafeAvatarUrl(rawUrl, false);
         const vaultAttr = String(rawUrl).startsWith('vault://') ? ` data-vault-ref="${escapeHtmlSimple(rawUrl)}"` : '';
-        return holdHtmlChunk(`<img src="${escapeHtmlSimple(safeSrc)}"${vaultAttr} alt="${escapeHtmlSimple(altTxt || '图片')}" style="max-width:100%;border-radius:10px;margin:4px 0;display:block;" />`);
+        return holdHtmlChunk(`<img class="tavern-md-img" src="${escapeHtmlSimple(safeSrc)}"${vaultAttr} alt="${escapeHtmlSimple(altTxt || '图片')}" />`);
       })
       .replace(/~~([^~\n]+)~~/g, (_, inner) => holdHtmlChunk('<del style="opacity:0.78;">') + inner + holdHtmlChunk('</del>'))
       .replace(/==([^=\n]+)==/g, (_, inner) => holdHtmlChunk('<mark style="background:rgba(255,215,100,0.38);color:inherit;padding:0 3px;border-radius:4px;">') + inner + holdHtmlChunk('</mark>'))
@@ -7492,7 +7699,7 @@ code, pre {
     if (!tavernState.formatting || tavernState.formatting.wrapQuotesInQ !== false) {
       working = working
         .replace(/“([^”\n]+)”/g, '<q>“$1”</q>')
-        .replace(/「([^」\n]+)」/g, '<q>「$1」</q>')
+        .replace(/「([^」\n]+)」/g, '<q>「$1”</q>'.replace('”', '」'))
         .replace(/『([^』\n]+)』/g, '<q>『$1』</q>')
         .replace(/"([^"\n]+)"/g, '<q>“$1”</q>');
     }
@@ -7532,7 +7739,7 @@ code, pre {
         return trimmed;
       }
 
-      const startsWithHtmlTag = /^<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|hr|h[1-6]|p|style|form|input|label|button|select|option|span|nav|main|aside|figure|figcaption|iframe|svg)\b/i.test(trimmed);
+      const startsWithHtmlTag = /^<\/?[a-zA-Z][a-zA-Z0-9-]*\b/i.test(trimmed);
       const wasInHtmlBlock = htmlBlockDepth > 0;
 
       let tagMatch;
@@ -9429,6 +9636,9 @@ code, pre {
           apiCallLogEntry.elapsed = elapsedStr;
           uiRuntime.apiRequestStats.received++;
           uiRuntime.apiRequestStats.success++;
+          if (uiRuntime.openDrawerKey === 'person') {
+            try { refreshOpenDrawerOnly(); } catch (_) {}
+          }
         }
       };
       const markApiCallFail = (errMsg) => {
@@ -9437,6 +9647,9 @@ code, pre {
           apiCallLogEntry.elapsed = ((performance.now() - t0) / 1000).toFixed(1) + 's';
           apiCallLogEntry.detail = String(errMsg || '请求失败').slice(0, 120);
           uiRuntime.apiRequestStats.fail++;
+          if (uiRuntime.openDrawerKey === 'person') {
+            try { refreshOpenDrawerOnly(); } catch (_) {}
+          }
         }
       };
       let res = null;
@@ -9447,22 +9660,6 @@ code, pre {
           body: JSON.stringify(payload),
           signal: abortCtrl.signal
         });
-        if (res.status === 400 && (performance.now() - t0) < 4000) {
-          const errProbe = await res.text().catch(() => '');
-          if (/max_tokens|max_completion_tokens|maximum|token/i.test(errProbe)) {
-            const retryPayload = Object.assign({}, payload);
-            delete retryPayload.max_tokens;
-            res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
-              method: 'POST',
-              headers: reqHeaders,
-              body: JSON.stringify(retryPayload),
-              signal: abortCtrl.signal,
-              _noAutoRetry: true
-            });
-          } else {
-            res = new Response(errProbe, { status: 400, headers: { 'Content-Type': 'application/json' } });
-          }
-        }
       } catch (netErr) {
         if (netErr && netErr.name === 'AbortError') {
           if (requestTimedOut) {
@@ -9517,42 +9714,11 @@ code, pre {
         return null;
       };
 
-      // Strictly Non-Streaming Mode
+      // Strictly Non-Streaming Mode: read complete response body reliably without premature reader.cancel()
       if (!useStreaming) {
         let rawText = '';
         try {
-          if (res.body && typeof res.body.getReader === 'function') {
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            while (true) {
-              const { value, done } = await reader.read();
-              if (typeof window.ensureBackgroundKeepAlive === 'function') {
-                window.ensureBackgroundKeepAlive();
-              }
-              if (done) {
-                rawText += decoder.decode();
-                break;
-              }
-              rawText += decoder.decode(value, { stream: true });
-              const trimmedSoFar = rawText.replace(/^\s*(?::[^\r\n]*\r?\n\s*)*/g, '').trim();
-              if (!trimmedSoFar) continue;
-              if (/(?:^|\n)\s*data:\s*\[DONE\]/i.test(trimmedSoFar) || trimmedSoFar.includes('"message_stop"')) {
-                try { await reader.cancel(); } catch (_) {}
-                break;
-              }
-              if (trimmedSoFar.startsWith('{') && trimmedSoFar.endsWith('}')) {
-                try {
-                  const probeJson = JSON.parse(trimmedSoFar);
-                  if (probeJson && typeof probeJson === 'object' && (probeJson.choices || probeJson.candidates || probeJson.content || probeJson.error)) {
-                    try { await reader.cancel(); } catch (_) {}
-                    break;
-                  }
-                } catch (_) {}
-              }
-            }
-          } else {
-            rawText = await res.text();
-          }
+          rawText = await res.text();
         } catch (readTxtErr) {
           if (readTxtErr && readTxtErr.name === 'AbortError') {
             if (requestTimedOut && !rawText.trim()) {
@@ -9790,6 +9956,7 @@ code, pre {
       } catch (readErr) {
         if (readErr && readErr.name === 'AbortError') {
           const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+          markApiCallFail(requestTimedOut ? '响应超时' : '已手动停止');
           const partialParsed = extractReasoningAndCleanReply(networkContent, { hasPrefill, isLiveStream: false });
           const partialReasoning = [nativeReasoningAccum, partialParsed.reasoning].filter(Boolean).join('\n\n');
           return {
@@ -11619,10 +11786,26 @@ code, pre {
     const globalHelperPlugins = (tavernState.plugins || []).filter(
       x => x && !x.builtInType && !isJsSlashRunnerPlugin(x) && !isStPromptTemplatePlugin(x) && !isBaiBaiPlugin(x) && !isBurntChickenWingsPlugin(x) && !isBookExcerptPlugin(x)
     );
-    const localVars = getChatVariablesStore() || {};
-    const globalVars = getGlobalVariablesStore() || {};
-    const localKeys = Object.keys(localVars);
-    const globalKeys = Object.keys(globalVars);
+    if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
+    if (!tavernState.extensionSettings.TavernHelper || typeof tavernState.extensionSettings.TavernHelper !== 'object') {
+      tavernState.extensionSettings.TavernHelper = {};
+    }
+    const jCfg = tavernState.extensionSettings.TavernHelper;
+    if (jCfg.render_enabled === undefined) jCfg.render_enabled = true;
+    if (jCfg.render_depth === undefined) jCfg.render_depth = 0;
+    if (jCfg.render_code_blocks === undefined) jCfg.render_code_blocks = true;
+    if (jCfg.use_blob_url === undefined) jCfg.use_blob_url = false;
+    if (jCfg.sandbox_mode === undefined) jCfg.sandbox_mode = false;
+    if (jCfg.show_floor_vars === undefined) jCfg.show_floor_vars = false;
+    if (jCfg.event_Macro === undefined) jCfg.event_Macro = true;
+    if (jCfg.chat_narrow_limit === undefined) jCfg.chat_narrow_limit = 30;
+    if (jCfg.disable_worldbook_scan === undefined) jCfg.disable_worldbook_scan = false;
+    if (jCfg.dev_mode === undefined) jCfg.dev_mode = false;
+    if (jCfg.dev_url === undefined) jCfg.dev_url = 'http://localhost:8080';
+
+    const activeTab = uiRuntime.jsrActiveTab || '渲染';
+    const tabs = ['渲染', '脚本', '工具', '优化', '开发'];
+
     const editingTargetId = uiRuntime.editingJsrScriptId || '';
     const editingScope = uiRuntime.editingJsrScriptScope || 'card';
     let editingScriptObj = null;
@@ -11652,6 +11835,10 @@ code, pre {
       });
     });
 
+    const localVars = getChatVariablesStore() || {};
+    const globalVars = getGlobalVariablesStore() || {};
+    const localKeys = Object.keys(localVars);
+    const globalKeys = Object.keys(globalVars);
     const formatVarPreview = (val) => {
       if (val === null || val === undefined) return 'null';
       if (typeof val === 'object') {
@@ -11662,189 +11849,244 @@ code, pre {
 
     return `
       <div class="tavern-modal-backdrop" id="tavern-jsr-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
-        <div class="drawer-content openDrawer" style="position:relative !important;inset:auto !important;flex:1;display:flex;flex-direction:column;padding:0 !important;overflow:hidden !important;border-radius:18px !important;background:#faf8f5 !important;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f3efe8;flex-shrink:0;">
-            <span style="font-weight:700;font-size:14px;color:#2c2c2e;display:inline-flex;align-items:center;gap:6px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-              <span>酒馆助手 JS-Slash-Runner 控制面板</span>
-            </span>
-            <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭面板</button>
+        <div class="drawer-content openDrawer" style="position:relative !important;inset:auto !important;flex:1;display:flex;flex-direction:column;padding:0 !important;overflow:hidden !important;border-radius:14px !important;background:var(--card-bg, #faf8f5) !important;color:var(--text-primary, #2c2c2e) !important;">
+          <div class="inline-drawer-toggle inline-drawer-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border-color, rgba(0,0,0,0.08));background:var(--secondary-bg, #f3efe8);flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;">
+              <span>酒馆助手</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button type="button" class="tavern-btn small" data-action="close-plugin-modal">收起</button>
+            </div>
           </div>
-          <div style="flex:1;overflow-y:auto;padding:12px;">
-            <div class="tavern-section-card">
-              <div class="tavern-section-label">
-                <span>运行引擎与快捷工具</span>
-                <label class="tavern-check-row" style="padding:0;">
-                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(p.id)}" ${p.enabled !== false ? 'checked' : ''} />
-                  <span style="font-size:12px;">已启用酒馆助手引擎</span>
-                </label>
-              </div>
-              <div class="tavern-btn-grid cols-3" style="margin-bottom:0;">
-                <button type="button" class="tavern-btn small primary" data-action="jsr-create-script" data-scope="card">新建角色脚本</button>
-                <button type="button" class="tavern-btn small" data-action="trigger-import-plugins">导入脚本文件</button>
-                <button type="button" class="tavern-btn small" data-action="jsr-rerun-all-card-scripts">重跑角色脚本</button>
+
+          <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--border-color, rgba(0,0,0,0.08));">
+              <label class="checkbox_label" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;margin:0;">
+                <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(p.id)}" ${p.enabled !== false ? 'checked' : ''} />
+                <span style="font-size:13px;font-weight:600;">启用酒馆助手</span>
+              </label>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button type="button" class="menu_button" style="width:auto;padding:4px 10px;margin:0;font-size:12px;" data-action="jsr-rerun-all-card-scripts">重载</button>
               </div>
             </div>
 
-            ${activeCustomButtons.length > 0 ? `
-              <div class="tavern-section-card">
-                <div class="tavern-section-label">
-                  <span>脚本注册的自定义按钮 共${activeCustomButtons.length}个</span>
+            <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;padding:4px;border-radius:10px;background:var(--secondary-bg, #f0ede6);">
+              ${tabs.map(t => `
+                <button type="button" class="tavern-btn small ${activeTab === t ? 'primary' : ''}" data-action="jsr-switch-tab" data-tab="${t}" style="justify-content:center;padding:6px 0;">${t}</button>
+              `).join('')}
+            </div>
+
+            ${activeTab === '渲染' ? `
+              <div style="display:flex;flex-direction:column;gap:10px;padding:4px 2px;">
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="render_enabled" ${jCfg.render_enabled !== false ? 'checked' : ''} />
+                  <span style="font-size:13px;">启用前端界面渲染</span>
+                </label>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <span style="font-size:13px;">渲染楼层深度 0为全部渲染</span>
+                  <input type="number" class="text_pole" style="width:90px;margin:0;padding:4px 8px;text-align:center;" data-action="jsr-input-setting" data-key="render_depth" value="${Number(jCfg.render_depth ?? 0)}" min="0" max="999" />
                 </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                  ${activeCustomButtons.map(btn => `
-                    <button type="button" class="tavern-btn small primary" data-action="trigger-plugin-btn" data-btn-name="${escapeHtmlSimple(btn.name)}">${escapeHtmlSimple(stripUiEmojis(btn.name))}</button>
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="render_code_blocks" ${jCfg.render_code_blocks !== false ? 'checked' : ''} />
+                  <span style="font-size:13px;">自动渲染代码块中的HTML前端界面</span>
+                </label>
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="use_blob_url" ${jCfg.use_blob_url ? 'checked' : ''} />
+                  <span style="font-size:13px;">使用 Blob URL 渲染前端界面</span>
+                </label>
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="sandbox_mode" ${jCfg.sandbox_mode ? 'checked' : ''} />
+                  <span style="font-size:13px;">开启 iframe 沙盒隔离模式</span>
+                </label>
+              </div>
+            ` : ''}
+
+            ${activeTab === '脚本' ? `
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div class="tavern-btn-grid cols-3" style="margin-bottom:0;">
+                  <button type="button" class="tavern-btn small primary" data-action="jsr-create-script" data-scope="card">新建角色脚本</button>
+                  <button type="button" class="tavern-btn small" data-action="jsr-create-script" data-scope="global">新建全局脚本</button>
+                  <button type="button" class="tavern-btn small" data-action="trigger-import-plugins">导入脚本</button>
+                </div>
+
+                ${activeCustomButtons.length > 0 ? `
+                  <div class="tavern-section-card" style="margin-bottom:0;">
+                    <div class="tavern-section-label"><span>脚本按钮 共${activeCustomButtons.length}个</span></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                      ${activeCustomButtons.map(btn => `
+                        <button type="button" class="tavern-btn small primary" data-action="trigger-plugin-btn" data-btn-name="${escapeHtmlSimple(btn.name)}">${escapeHtmlSimple(stripUiEmojis(btn.name))}</button>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+
+                ${editingScriptObj ? `
+                  <div class="tavern-section-card" style="margin-bottom:0;">
+                    <div class="tavern-section-label">
+                      <span>编辑脚本: ${escapeHtmlSimple(editingScriptObj.name || '未命名脚本')}</span>
+                      <button type="button" class="tavern-btn small" data-action="jsr-close-script-editor">收起</button>
+                    </div>
+                    <div class="tavern-grid-2">
+                      <div class="tavern-field-group">
+                        <label>脚本名称</label>
+                        <input type="text" class="tavern-input" id="jsr-edit-script-name" value="${escapeHtmlSimple(editingScriptObj.name || '')}" />
+                      </div>
+                      <div class="tavern-field-group">
+                        <label>自定义按钮 逗号分隔</label>
+                        <input type="text" class="tavern-input" id="jsr-edit-script-btns" value="${escapeHtmlSimple((Array.isArray(editingScriptObj.buttons) ? editingScriptObj.buttons.map(b => typeof b === 'string' ? b : (b?.name || '')).filter(Boolean) : []).join(', '))}" />
+                      </div>
+                    </div>
+                    <div class="tavern-field-group">
+                      <label>脚本说明</label>
+                      <input type="text" class="tavern-input" id="jsr-edit-script-info" value="${escapeHtmlSimple(editingScriptObj.info || editingScriptObj.description || '')}" />
+                    </div>
+                    <div class="tavern-field-group">
+                      <label>脚本内容</label>
+                      <textarea class="tavern-textarea" id="jsr-edit-script-code" rows="6" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(editingScriptObj.content || editingScriptObj.code || '')}</textarea>
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;">
+                      <button type="button" class="tavern-btn small primary" data-action="jsr-save-script-editor" data-script-id="${escapeHtmlSimple(editingScriptObj.id)}" data-scope="${escapeHtmlSimple(editingScope)}">保存并运行</button>
+                    </div>
+                  </div>
+                ` : ''}
+
+                <div class="tavern-section-card" style="margin-bottom:0;">
+                  <div class="tavern-section-label"><span>角色脚本库: ${escapeHtmlSimple(card?.name || '当前角色')} 共${cardScripts.length}个</span></div>
+                  ${cardScripts.length === 0 ? `<div style="font-size:12px;color:var(--text-secondary, #888);">暂无角色绑定脚本</div>` : cardScripts.map(hs => `
+                    <div class="tavern-list-row">
+                      <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-card-script" data-script-id="${escapeHtmlSimple(hs.id)}" ${hs.enabled !== false ? 'checked' : ''} />
+                      <div class="tavern-list-row-main">
+                        <div>${escapeHtmlSimple(stripUiEmojis(hs.name || '角色脚本'))}</div>
+                        <div class="tavern-list-row-sub">${escapeHtmlSimple(hs.info || '角色局部脚本')}</div>
+                      </div>
+                      <div class="tavern-list-row-actions">
+                        <button type="button" class="tavern-btn small primary" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">打开</button>
+                        <button type="button" class="tavern-btn small" data-action="jsr-edit-script" data-script-id="${escapeHtmlSimple(hs.id)}" data-scope="card">编辑</button>
+                        <button type="button" class="tavern-btn small danger" data-action="jsr-del-script" data-script-id="${escapeHtmlSimple(hs.id)}" data-scope="card">删</button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+
+                <div class="tavern-section-card" style="margin-bottom:0;">
+                  <div class="tavern-section-label"><span>全局脚本库 共${globalHelperPlugins.length}个</span></div>
+                  ${globalHelperPlugins.length === 0 ? `<div style="font-size:12px;color:var(--text-secondary, #888);">暂无全局脚本</div>` : globalHelperPlugins.map(gp => `
+                    <div class="tavern-list-row">
+                      <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(gp.id)}" ${gp.enabled ? 'checked' : ''} />
+                      <div class="tavern-list-row-main">
+                        <div>${escapeHtmlSimple(stripUiEmojis(gp.name || '全局脚本'))}</div>
+                        <div class="tavern-list-row-sub">${escapeHtmlSimple(gp.description || '全局脚本')}</div>
+                      </div>
+                      <div class="tavern-list-row-actions">
+                        <button type="button" class="tavern-btn small primary" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(gp.id)}">打开</button>
+                        <button type="button" class="tavern-btn small" data-action="jsr-edit-script" data-script-id="${escapeHtmlSimple(gp.id)}" data-scope="global">编辑</button>
+                        <button type="button" class="tavern-btn small danger" data-action="jsr-del-script" data-script-id="${escapeHtmlSimple(gp.id)}" data-scope="global">删</button>
+                      </div>
+                    </div>
                   `).join('')}
                 </div>
               </div>
             ` : ''}
 
-            ${editingScriptObj ? `
-              <div class="tavern-section-card" style="background:#f5f7fc;border-color:#cbd3e8;">
-                <div class="tavern-section-label">
-                  <span>编辑脚本: ${escapeHtmlSimple(editingScriptObj.name || '未命名脚本')}</span>
-                  <button type="button" class="tavern-btn small" data-action="jsr-close-script-editor">收起编辑</button>
-                </div>
-                <div class="tavern-grid-2">
-                  <div class="tavern-field-group">
-                    <label>脚本名称</label>
-                    <input type="text" class="tavern-input" id="jsr-edit-script-name" value="${escapeHtmlSimple(editingScriptObj.name || '')}" />
+            ${activeTab === '工具' ? `
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="show_floor_vars" ${jCfg.show_floor_vars ? 'checked' : ''} />
+                  <span style="font-size:13px;">在聊天楼层菜单中显示楼层变量按钮</span>
+                </label>
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="event_Macro" ${jCfg.event_Macro !== false ? 'checked' : ''} />
+                  <span style="font-size:13px;">启用酒馆助手扩展宏与变量读写</span>
+                </label>
+                <div class="tavern-section-card" style="margin-bottom:0;">
+                  <div class="tavern-section-label">
+                    <span>变量查看与修改</span>
+                    <button type="button" class="tavern-btn small danger" data-action="jsr-clear-vars" data-scope="local">清空聊天变量</button>
                   </div>
-                  <div class="tavern-field-group">
-                    <label>自定义按钮名 多个用逗号分隔</label>
-                    <input type="text" class="tavern-input" id="jsr-edit-script-btns" value="${escapeHtmlSimple((Array.isArray(editingScriptObj.buttons) ? editingScriptObj.buttons.map(b => typeof b === 'string' ? b : (b?.name || '')).filter(Boolean) : []).join(', '))}" placeholder="例如: 打开状态栏, 刷新地图" />
+                  <div class="tavern-grid-3" style="margin-bottom:8px;">
+                    <div class="tavern-field-group" style="margin-bottom:0;">
+                      <label>作用域</label>
+                      <select class="tavern-select" id="jsr-var-scope-select">
+                        <option value="local">聊天变量</option>
+                        <option value="global">全局变量</option>
+                      </select>
+                    </div>
+                    <div class="tavern-field-group" style="margin-bottom:0;">
+                      <label>变量名</label>
+                      <input type="text" class="tavern-input" id="jsr-var-key-input" placeholder="变量路径" />
+                    </div>
+                    <div class="tavern-field-group" style="margin-bottom:0;">
+                      <label>变量值</label>
+                      <input type="text" class="tavern-input" id="jsr-var-val-input" placeholder="数值或JSON" />
+                    </div>
                   </div>
-                </div>
-                <div class="tavern-field-group">
-                  <label>脚本说明</label>
-                  <input type="text" class="tavern-input" id="jsr-edit-script-info" value="${escapeHtmlSimple(editingScriptObj.info || editingScriptObj.description || '')}" placeholder="选填备注信息" />
-                </div>
-                <div class="tavern-field-group">
-                  <label>脚本代码 支持TavernHelper与jQuery及HTML面板</label>
-                  <textarea class="tavern-textarea" id="jsr-edit-script-code" rows="7" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(editingScriptObj.content || editingScriptObj.code || '')}</textarea>
-                </div>
-                <div style="display:flex;justify-content:flex-end;gap:8px;">
-                  <button type="button" class="tavern-btn small primary" data-action="jsr-save-script-editor" data-script-id="${escapeHtmlSimple(editingScriptObj.id)}" data-scope="${escapeHtmlSimple(editingScope)}">保存并立即运行</button>
+                  <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                    <button type="button" class="tavern-btn small primary" data-action="jsr-save-var">写入变量</button>
+                  </div>
+                  <div style="font-size:12px;font-weight:700;margin-bottom:4px;">聊天变量 共${localKeys.length}项</div>
+                  <div style="max-height:140px;overflow-y:auto;margin-bottom:8px;">
+                    ${localKeys.length === 0 ? `<div style="font-size:12px;color:#888;">暂无聊天变量</div>` : localKeys.map(k => `
+                      <div class="tavern-list-row" style="padding:6px 8px;">
+                        <div class="tavern-list-row-main">
+                          <div>${escapeHtmlSimple(k)}</div>
+                          <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(localVars[k]))}</div>
+                        </div>
+                        <div class="tavern-list-row-actions">
+                          <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="local" data-var-key="${escapeHtmlSimple(k)}">删</button>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                  <div style="font-size:12px;font-weight:700;margin-bottom:4px;">全局变量 共${globalKeys.length}项</div>
+                  <div style="max-height:120px;overflow-y:auto;">
+                    ${globalKeys.length === 0 ? `<div style="font-size:12px;color:#888;">暂无全局变量</div>` : globalKeys.map(k => `
+                      <div class="tavern-list-row" style="padding:6px 8px;">
+                        <div class="tavern-list-row-main">
+                          <div>${escapeHtmlSimple(k)}</div>
+                          <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(globalVars[k]))}</div>
+                        </div>
+                        <div class="tavern-list-row-actions">
+                          <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="global" data-var-key="${escapeHtmlSimple(k)}">删</button>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
                 </div>
               </div>
             ` : ''}
 
-            <div class="tavern-section-card">
-              <div class="tavern-section-label">
-                <span>当前角色卡脚本库: ${escapeHtmlSimple(card?.name || '默认角色')} 共${cardScripts.length}个</span>
-              </div>
-              ${cardScripts.length === 0 ? `
-                <div style="font-size:12px;color:#888;padding:4px 0;">当前角色卡暂无内嵌助手脚本，可点击上方新建角色脚本或导入带酒馆助手脚本的角色卡。</div>
-              ` : cardScripts.map(hs => `
-                <div class="tavern-list-row">
-                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-card-script" data-script-id="${escapeHtmlSimple(hs.id)}" ${hs.enabled !== false ? 'checked' : ''} />
-                  <div class="tavern-list-row-main">
-                    <div>${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌脚本'))}</div>
-                    <div class="tavern-list-row-sub">${escapeHtmlSimple(hs.info || '角色专属酒馆助手脚本')}</div>
-                  </div>
-                  <div class="tavern-list-row-actions">
-                    <button type="button" class="tavern-btn small primary" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">画面</button>
-                    <button type="button" class="tavern-btn small" data-action="jsr-edit-script" data-script-id="${escapeHtmlSimple(hs.id)}" data-scope="card">编辑</button>
-                    <button type="button" class="tavern-btn small danger" data-action="jsr-del-script" data-script-id="${escapeHtmlSimple(hs.id)}" data-scope="card">删</button>
-                  </div>
+            ${activeTab === '优化' ? `
+              <div style="display:flex;flex-direction:column;gap:10px;padding:4px 2px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <span style="font-size:13px;">聊天窄缩保留楼层数 减少DOM卡顿</span>
+                  <input type="number" class="text_pole" style="width:90px;margin:0;padding:4px 8px;text-align:center;" data-action="jsr-input-setting" data-key="chat_narrow_limit" value="${Number(uiRuntime.visibleFloorCount || jCfg.chat_narrow_limit || 30)}" min="5" max="500" />
                 </div>
-              `).join('')}
-            </div>
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="disable_worldbook_scan" ${jCfg.disable_worldbook_scan ? 'checked' : ''} />
+                  <span style="font-size:13px;">禁用耗时的世界书正则深度扫描</span>
+                </label>
+              </div>
+            ` : ''}
 
-            <div class="tavern-section-card">
-              <div class="tavern-section-label">
-                <span>全局脚本库 共${globalHelperPlugins.length}个</span>
-                <button type="button" class="tavern-btn small" data-action="jsr-create-script" data-scope="global">新建全局脚本</button>
-              </div>
-              ${globalHelperPlugins.length === 0 ? `
-                <div style="font-size:12px;color:#888;padding:4px 0;">暂无全局脚本，可点击新建全局脚本或导入本地JS与JSON脚本文件。</div>
-              ` : globalHelperPlugins.map(gp => `
-                <div class="tavern-list-row">
-                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(gp.id)}" ${gp.enabled ? 'checked' : ''} />
-                  <div class="tavern-list-row-main">
-                    <div>${escapeHtmlSimple(stripUiEmojis(gp.name || '全局脚本'))}</div>
-                    <div class="tavern-list-row-sub">${escapeHtmlSimple(gp.description || '全局酒馆助手脚本')}</div>
-                  </div>
-                  <div class="tavern-list-row-actions">
-                    <button type="button" class="tavern-btn small primary" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(gp.id)}">画面</button>
-                    <button type="button" class="tavern-btn small" data-action="jsr-edit-script" data-script-id="${escapeHtmlSimple(gp.id)}" data-scope="global">编辑</button>
-                    <button type="button" class="tavern-btn small danger" data-action="jsr-del-script" data-script-id="${escapeHtmlSimple(gp.id)}" data-scope="global">删</button>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-
-            <div class="tavern-section-card">
-              <div class="tavern-section-label">
-                <span>TavernHelper 变量管理器</span>
-                <button type="button" class="tavern-btn small danger" data-action="jsr-clear-vars" data-scope="local">清空当前聊天变量</button>
-              </div>
-              <div class="tavern-grid-3" style="margin-bottom:8px;">
+            ${activeTab === '开发' ? `
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-setting" data-key="dev_mode" ${jCfg.dev_mode ? 'checked' : ''} />
+                  <span style="font-size:13px;">启用监听外部开发服务器脚本推送</span>
+                </label>
                 <div class="tavern-field-group" style="margin-bottom:0;">
-                  <label>变量作用域</label>
-                  <select class="tavern-select" id="jsr-var-scope-select">
-                    <option value="local">当前聊天变量 Local</option>
-                    <option value="global">全局变量 Global</option>
-                  </select>
+                  <label>调试输入 斜杠指令或JS代码</label>
+                  <textarea class="tavern-textarea" id="jsr-console-input" rows="4" style="font-family:monospace;font-size:12px;" placeholder="输入斜杠指令或TavernHelper代码">${escapeHtmlSimple(uiRuntime.jsrConsoleDraft || '')}</textarea>
                 </div>
-                <div class="tavern-field-group" style="margin-bottom:0;">
-                  <label>变量名 Key</label>
-                  <input type="text" class="tavern-input" id="jsr-var-key-input" placeholder="例如: 好感度 或 stat.hp" />
+                <div class="tavern-btn-grid" style="margin-bottom:0;">
+                  <button type="button" class="tavern-btn small primary" data-action="jsr-run-slash">执行斜杠指令</button>
+                  <button type="button" class="tavern-btn small" data-action="jsr-run-js">执行JS脚本</button>
                 </div>
-                <div class="tavern-field-group" style="margin-bottom:0;">
-                  <label>变量值 Value</label>
-                  <input type="text" class="tavern-input" id="jsr-var-val-input" placeholder="数字、文本或JSON" />
-                </div>
+                ${uiRuntime.jsrConsoleOutput ? `
+                  <div style="padding:8px 10px;border-radius:10px;background:var(--secondary-bg, #f0f2f7);border:1px solid var(--border-color, #d5dbe8);font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;">${escapeHtmlSimple(uiRuntime.jsrConsoleOutput)}</div>
+                ` : ''}
               </div>
-              <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-                <button type="button" class="tavern-btn small primary" data-action="jsr-save-var">写入或更新变量</button>
-              </div>
-              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">当前聊天变量 共${localKeys.length}项</div>
-              <div style="max-height:150px;overflow-y:auto;margin-bottom:8px;">
-                ${localKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">当前对话暂无局部变量</div>` : localKeys.map(k => `
-                  <div class="tavern-list-row" style="padding:6px 8px;">
-                    <div class="tavern-list-row-main">
-                      <div>${escapeHtmlSimple(k)}</div>
-                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(localVars[k]))}</div>
-                    </div>
-                    <div class="tavern-list-row-actions">
-                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="local" data-var-key="${escapeHtmlSimple(k)}">删</button>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">全局变量 共${globalKeys.length}项</div>
-              <div style="max-height:130px;overflow-y:auto;">
-                ${globalKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">暂无全局变量</div>` : globalKeys.map(k => `
-                  <div class="tavern-list-row" style="padding:6px 8px;">
-                    <div class="tavern-list-row-main">
-                      <div>${escapeHtmlSimple(k)}</div>
-                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(globalVars[k]))}</div>
-                    </div>
-                    <div class="tavern-list-row-actions">
-                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="global" data-var-key="${escapeHtmlSimple(k)}">删</button>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
-            <div class="tavern-section-card" style="margin-bottom:0;">
-              <div class="tavern-section-label">
-                <span>斜杠指令与JS实时控制台</span>
-              </div>
-              <div class="tavern-field-group">
-                <label>输入斜杠指令 如 /setvar key=好感 80 或直接输入JS代码</label>
-                <textarea class="tavern-textarea" id="jsr-console-input" rows="3" style="font-family:monospace;font-size:12px;" placeholder="例如: /echo 当前角色是 {{char}} 或 TavernHelper.insertOrAssignVariables({ 好感度: 100 })">${escapeHtmlSimple(uiRuntime.jsrConsoleDraft || '')}</textarea>
-              </div>
-              <div class="tavern-btn-grid" style="margin-bottom:6px;">
-                <button type="button" class="tavern-btn small primary" data-action="jsr-run-slash">执行斜杠指令</button>
-                <button type="button" class="tavern-btn small" data-action="jsr-run-js">作为JS代码运行</button>
-              </div>
-              ${uiRuntime.jsrConsoleOutput ? `
-                <div style="padding:8px 10px;border-radius:10px;background:#f0f2f7;border:1px solid #d5dbe8;font-family:monospace;font-size:12px;color:#2c2c2e;white-space:pre-wrap;word-break:break-word;">${escapeHtmlSimple(uiRuntime.jsrConsoleOutput)}</div>
-              ` : ''}
-            </div>
+            ` : ''}
           </div>
         </div>
       </div>
@@ -11852,122 +12094,64 @@ code, pre {
   }
 
   function renderStPromptTemplateNativeModal(p) {
-    const localVars = getChatVariablesStore() || {};
-    const globalVars = getGlobalVariablesStore() || {};
-    const localKeys = Object.keys(localVars);
-    const globalKeys = Object.keys(globalVars);
-    const sampleTemplate = uiRuntime.stptTestDraft !== undefined
-      ? uiRuntime.stptTestDraft
-      : `<% const aff = Number(getvar('好感度', { defaults: 50 })); %>\n当前玩家: <%= user %> | 角色: <%= char %>\n当前好感度数值: <%= aff %>\n<% if (aff >= 80) { %>\n角色对玩家展现出极度信任与亲密的态度。\n<% } else { %>\n角色保持日常温和而礼貌的互动距离。\n<% } %>`;
-    let previewResult = uiRuntime.stptTestOutput;
-    if (previewResult === undefined) {
-      try {
-        previewResult = replaceTavernMacros(sampleTemplate, getActiveCard());
-      } catch (e) {
-        previewResult = '渲染出错: ' + (e.message || String(e));
-      }
-    }
-
-    const formatVarPreview = (val) => {
-      if (val === null || val === undefined) return 'null';
-      if (typeof val === 'object') {
-        try { return JSON.stringify(val); } catch (_) { return String(val); }
-      }
-      return String(val);
-    };
+    const cfg = getStPromptTemplateConfig();
+    const depthVal = Number(cfg.depth_limit ?? -1);
+    const renderHelpIcon = (tip) => `<span title="${escapeHtmlSimple(tip)}" style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#d9826c;color:#fff;font-size:10px;font-weight:700;margin-left:5px;flex-shrink:0;cursor:help;">?</span>`;
+    const renderCheckRow = (key, label, tip) => `
+      <label class="checkbox_label" style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;margin:0;line-height:1.4;">
+        <input type="checkbox" class="tavern-fixed-check" data-action="stpt-toggle-setting" data-key="${key}" ${cfg[key] ? 'checked' : ''} />
+        <span style="font-size:13.5px;color:var(--text-primary, #2c2c2e);">${label}</span>
+        ${renderHelpIcon(tip)}
+      </label>
+    `;
 
     return `
       <div class="tavern-modal-backdrop" id="tavern-stpt-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
-        <div class="drawer-content openDrawer" style="position:relative !important;inset:auto !important;flex:1;display:flex;flex-direction:column;padding:0 !important;overflow:hidden !important;border-radius:18px !important;background:#faf8f5 !important;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f3efe8;flex-shrink:0;">
-            <span style="font-weight:700;font-size:14px;color:#2c2c2e;display:inline-flex;align-items:center;gap:6px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-              <span>提示词模板 ST-Prompt-Template 面板</span>
-            </span>
-            <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭面板</button>
+        <div class="drawer-content openDrawer" style="position:relative !important;inset:auto !important;flex:1;display:flex;flex-direction:column;padding:0 !important;overflow:hidden !important;border-radius:14px !important;background:var(--card-bg, #faf8f5) !important;color:var(--text-primary, #2c2c2e) !important;">
+          <div class="inline-drawer-toggle inline-drawer-header" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border-color, rgba(0,0,0,0.1));background:var(--secondary-bg, #f3efe8);flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;">
+              <span>提示词模板</span>
+              <span data-action="stpt-reset-settings" title="重置为默认设置" style="display:inline-flex;align-items:center;justify-content:center;color:#d96648;cursor:pointer;padding:2px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+              </span>
+            </div>
+            <button type="button" class="tavern-btn small" data-action="close-plugin-modal">收起</button>
           </div>
-          <div style="flex:1;overflow-y:auto;padding:12px;">
-            <div class="tavern-section-card">
-              <div class="tavern-section-label">
-                <span>EJS 模板引擎状态与作用范围</span>
-                <label class="tavern-check-row" style="padding:0;">
-                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(p.id)}" ${p.enabled !== false ? 'checked' : ''} />
-                  <span style="font-size:12px;">已启用模板解析引擎</span>
-                </label>
+
+          <div class="inline-drawer-content" style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:4px;">
+            ${renderCheckRow('enabled', '是否启用扩展', '总开关，关闭后不再处理提示词模板语法')}
+
+            <div style="height:6px;"></div>
+            ${renderCheckRow('generate_enabled', '处理生成内容', '在发送提示词给AI前解析并执行所有EJS模板标签')}
+            ${renderCheckRow('generate_loader_enabled', '生成时注入 GENERATE 世界书条目', '在生成前自动加载并执行包含 GENERATE 标记的世界书条目')}
+            ${renderCheckRow('inject_loader_enabled', '生成时注入 @INJECT 世界书条目', '在生成时自动注入带有 @INJECT 标记的世界书条目')}
+
+            <div style="height:6px;"></div>
+            ${renderCheckRow('render_enabled', '处理楼层消息', '在渲染聊天楼层消息时解析并运行EJS模板语法')}
+            ${renderCheckRow('render_loader_enabled', '渲染楼层时注入 RENDER 世界书条目', '在渲染楼层前后自动执行包含 RENDER 标记的世界书条目')}
+            ${renderCheckRow('code_blocks_enabled', '处理代码块', '允许处理代码块内部的EJS模板内容')}
+            ${renderCheckRow('raw_message_enabled', '处理原始消息内容', '直接对未格式化的原始楼层消息执行模板处理')}
+            ${renderCheckRow('filter_message_enabled', '生成时忽略楼层消息处理', '在构造发送提示词时跳过对历史聊天楼层的模板处理')}
+
+            <div style="padding:6px 0;">
+              <div style="display:flex;align-items:center;margin-bottom:6px;">
+                <span style="font-size:13.5px;color:var(--text-primary, #2c2c2e);">楼层处理最大深度</span>
+                ${renderHelpIcon('限制渲染处理的楼层数量，-1表示不限制深度')}
               </div>
-              <div style="font-size:12px;color:#555;line-height:1.55;">
-                全面支持在预设提示词、世界书词条、角色卡设定与聊天记录中运行 EJS 模板标签，内置 getvar、setvar、addvar、incvar、decvar、getwi、variables、user、char、messages 与 Lodash 工具函数。
+              <div style="display:flex;align-items:center;gap:12px;">
+                <input type="range" id="stpt-depth-slider" data-action="stpt-depth-change" min="-1" max="99" step="1" value="${depthVal}" style="flex:1;accent-color:#3a3a3c;" />
+                <input type="number" id="stpt-depth-number" data-action="stpt-depth-change" min="-1" max="99" step="1" value="${depthVal}" class="text_pole" style="width:72px;text-align:center;padding:4px 8px;margin:0;border-radius:8px;border:1px solid var(--border-color, #ccc);" />
               </div>
             </div>
 
-            <div class="tavern-section-card">
-              <div class="tavern-section-label">
-                <span>实时模板语法测试台</span>
-                <button type="button" class="tavern-btn small primary" data-action="stpt-test-evaluate">立即测试渲染</button>
-              </div>
-              <div class="tavern-field-group">
-                <label>输入包含 EJS 标签或 getvar 宏的模板内容</label>
-                <textarea class="tavern-textarea" id="stpt-test-input" rows="5" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(sampleTemplate)}</textarea>
-              </div>
-              <div class="tavern-field-group" style="margin-bottom:0;">
-                <label>渲染结果预览</label>
-                <div id="stpt-test-output" style="padding:10px;border-radius:11px;background:#f2f4f9;border:1px solid #d5dce8;font-family:monospace;font-size:12px;color:#2c2c2e;white-space:pre-wrap;word-break:break-word;min-height:54px;">${escapeHtmlSimple(previewResult)}</div>
-              </div>
-            </div>
-
-            <div class="tavern-section-card" style="margin-bottom:0;">
-              <div class="tavern-section-label">
-                <span>模板变量实时读写器 getvar / setvar</span>
-              </div>
-              <div class="tavern-grid-3" style="margin-bottom:8px;">
-                <div class="tavern-field-group" style="margin-bottom:0;">
-                  <label>变量范围</label>
-                  <select class="tavern-select" id="stpt-var-scope-select">
-                    <option value="local">当前聊天变量 Local</option>
-                    <option value="global">全局变量 Global</option>
-                  </select>
-                </div>
-                <div class="tavern-field-group" style="margin-bottom:0;">
-                  <label>变量名 Key</label>
-                  <input type="text" class="tavern-input" id="stpt-var-key-input" placeholder="例如: 好感度" />
-                </div>
-                <div class="tavern-field-group" style="margin-bottom:0;">
-                  <label>变量值 Value</label>
-                  <input type="text" class="tavern-input" id="stpt-var-val-input" placeholder="例如: 85" />
-                </div>
-              </div>
-              <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-                <button type="button" class="tavern-btn small primary" data-action="stpt-save-var">保存模板变量</button>
-              </div>
-              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">当前聊天变量 共${localKeys.length}项</div>
-              <div style="max-height:150px;overflow-y:auto;margin-bottom:8px;">
-                ${localKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">当前聊天暂无模板变量</div>` : localKeys.map(k => `
-                  <div class="tavern-list-row" style="padding:6px 8px;">
-                    <div class="tavern-list-row-main">
-                      <div>${escapeHtmlSimple(k)}</div>
-                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(localVars[k]))}</div>
-                    </div>
-                    <div class="tavern-list-row-actions">
-                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="local" data-var-key="${escapeHtmlSimple(k)}">删</button>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">全局模板变量 共${globalKeys.length}项</div>
-              <div style="max-height:130px;overflow-y:auto;">
-                ${globalKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">暂无全局模板变量</div>` : globalKeys.map(k => `
-                  <div class="tavern-list-row" style="padding:6px 8px;">
-                    <div class="tavern-list-row-main">
-                      <div>${escapeHtmlSimple(k)}</div>
-                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(globalVars[k]))}</div>
-                    </div>
-                    <div class="tavern-list-row-actions">
-                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="global" data-var-key="${escapeHtmlSimple(k)}">删</button>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
+            ${renderCheckRow('variables_auto_save', '自动保存变量更新', '模板修改变量后自动同步保存到聊天存档')}
+            ${renderCheckRow('worldinfo_Waiting', '立即加载世界书', '切换角色或对话时立即预加载世界书初始变量')}
+            ${renderCheckRow('with_context_disabled', '禁用with语句块', '禁用with作用域解包，仅通过getvar或variables访问变量')}
+            ${renderCheckRow('debug_enabled', '控制台显示详细信息', '在浏览器控制台输出模板编译与运行日志')}
+            ${renderCheckRow('invert_enabled', 'GENERATE/RENDER/INJECT条目禁用视为启用', '世界书中被禁用的特殊控制条目依然由模板引擎正常加载运行')}
+            ${renderCheckRow('preload_enabled', '后台编译', '提前在后台预编译世界书与预设中的模板脚本')}
+            ${renderCheckRow('sandbox_enabled', '环境隔离', '在独立隔离作用域中运行模板代码')}
+            ${renderCheckRow('ace_enabled', '代码编辑器', '在编辑框中启用语法高亮增强支持')}
           </div>
         </div>
       </div>
@@ -12619,47 +12803,60 @@ code, pre {
             return origWinAdd(type, listener, options);
           };
           try {
-            const fn = new Function(
-              'SillyTavern',
-              'TavernHelper',
-              'getContext',
-              'getCurrentMessageId',
-              'getLastMessageId',
-              'getChatMessages',
-              'getChatMessage',
-              'setChatMessage',
-              'setChatMessages',
-              'getVariables',
-              'insertOrAssignVariables',
-              'replaceVariables',
-              'updateVariablesWith',
-              'deleteVariable',
-              'triggerSlash',
-              'triggerSlashWithResult',
-              '$',
-              'jQuery',
-              code
-            );
-            fn(
-              window.SillyTavern,
-              localHelper,
-              buildSillyTavernContextObject,
-              localGetCurId,
-              window.TavernHelper.getLastMessageId,
-              window.TavernHelper.getChatMessages,
-              window.TavernHelper.getChatMessage,
-              window.TavernHelper.setChatMessage,
-              window.TavernHelper.setChatMessages,
-              window.getVariables,
-              window.insertOrAssignVariables,
-              window.replaceVariables,
-              window.updateVariablesWith,
-              window.deleteVariable,
-              executeTavernSlashCommand,
-              executeTavernSlashCommand,
-              window.$,
-              window.jQuery
-            );
+            window.getCurrentMessageId = localGetCurId;
+            window.getLastMessageId = window.TavernHelper.getLastMessageId;
+            window.getChatMessages = window.TavernHelper.getChatMessages;
+            window.getChatMessage = window.TavernHelper.getChatMessage;
+            window.setChatMessage = window.TavernHelper.setChatMessage;
+            window.setChatMessages = window.TavernHelper.setChatMessages;
+            window.triggerSlash = executeTavernSlashCommand;
+            window.triggerSlashWithResult = executeTavernSlashCommand;
+            // Execute in global scope first so top-level function declarations are attached to window for onclick="..."
+            try {
+              (0, eval)(code);
+            } catch (globalEvalErr) {
+              const fn = new Function(
+                'SillyTavern',
+                'TavernHelper',
+                'getContext',
+                'getCurrentMessageId',
+                'getLastMessageId',
+                'getChatMessages',
+                'getChatMessage',
+                'setChatMessage',
+                'setChatMessages',
+                'getVariables',
+                'insertOrAssignVariables',
+                'replaceVariables',
+                'updateVariablesWith',
+                'deleteVariable',
+                'triggerSlash',
+                'triggerSlashWithResult',
+                '$',
+                'jQuery',
+                code
+              );
+              fn(
+                window.SillyTavern,
+                localHelper,
+                buildSillyTavernContextObject,
+                localGetCurId,
+                window.TavernHelper.getLastMessageId,
+                window.TavernHelper.getChatMessages,
+                window.TavernHelper.getChatMessage,
+                window.TavernHelper.setChatMessage,
+                window.TavernHelper.setChatMessages,
+                window.getVariables,
+                window.insertOrAssignVariables,
+                window.replaceVariables,
+                window.updateVariablesWith,
+                window.deleteVariable,
+                executeTavernSlashCommand,
+                executeTavernSlashCommand,
+                window.$,
+                window.jQuery
+              );
+            }
             pendingDomCbs.forEach(cb => {
               try { cb(); } catch (_) {}
             });
@@ -16013,6 +16210,65 @@ code, pre {
         return;
       }
 
+      if (action === 'jsr-switch-tab') {
+        const tab = actionEl.getAttribute('data-tab') || '渲染';
+        uiRuntime.jsrActiveTab = tab;
+        refreshActivePluginModalOnly();
+        return;
+      }
+
+      if (action === 'jsr-toggle-setting') {
+        const key = actionEl.getAttribute('data-key');
+        if (key) {
+          if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
+          if (!tavernState.extensionSettings.TavernHelper) tavernState.extensionSettings.TavernHelper = {};
+          tavernState.extensionSettings.TavernHelper[key] = Boolean(actionEl.checked);
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+        }
+        return;
+      }
+
+      if (action === 'stpt-toggle-setting') {
+        const key = actionEl.getAttribute('data-key');
+        if (key) {
+          const cfg = getStPromptTemplateConfig();
+          cfg[key] = Boolean(actionEl.checked);
+          if (key === 'enabled') {
+            const p = (tavernState.plugins || []).find(x => isStPromptTemplatePlugin(x));
+            if (p) p.enabled = cfg.enabled;
+          }
+          uiRuntime._lastStptPreloadSessionKey = null;
+          await saveTavernStore();
+          renderTavernChatFloors(false);
+        }
+        return;
+      }
+
+      if (action === 'stpt-depth-change') {
+        const val = Number(actionEl.value ?? -1);
+        const cfg = getStPromptTemplateConfig();
+        cfg.depth_limit = Number.isNaN(val) ? -1 : val;
+        const sliderEl = document.getElementById('stpt-depth-slider');
+        const numEl = document.getElementById('stpt-depth-number');
+        if (sliderEl && sliderEl !== actionEl) sliderEl.value = String(cfg.depth_limit);
+        if (numEl && numEl !== actionEl) numEl.value = String(cfg.depth_limit);
+        await saveTavernStore();
+        return;
+      }
+
+      if (action === 'stpt-reset-settings') {
+        if (!tavernState.extensionSettings) tavernState.extensionSettings = {};
+        tavernState.extensionSettings.PromptTemplate = {};
+        getStPromptTemplateConfig();
+        uiRuntime._lastStptPreloadSessionKey = null;
+        await saveTavernStore();
+        refreshActivePluginModalOnly();
+        renderTavernChatFloors(false);
+        showTavernToast('已重置提示词模板为默认设置');
+        return;
+      }
+
       if (action === 'stpt-test-evaluate') {
         const rawTpl = document.getElementById('stpt-test-input')?.value || '';
         uiRuntime.stptTestDraft = rawTpl;
@@ -16429,6 +16685,10 @@ code, pre {
         uiRuntime.openExtraMenuMesId = null;
         uiRuntime.editingFloorMesId = null;
         uiRuntime.editingFloorReasoning = false;
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         await triggerCharacterReplyGeneration({ isSwipeRegen: true, targetMesIndex: idx });
         return;
@@ -16491,6 +16751,10 @@ code, pre {
         }
         const confirmed = await callGenericPopupShim('确定要删除该楼层消息吗？删除后无法恢复。', 2);
         if (!confirmed) return;
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         uiRuntime.editingFloorMesId = null;
         uiRuntime.editingFloorReasoning = false;
@@ -16548,6 +16812,10 @@ code, pre {
         tavernState.chatArchivesByCardId[card.id].unshift(newSess);
         tavernState.chatsByCardId[card.id] = newSess;
         uiRuntime.showOptionsPopup = false;
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         uiRuntime.editingFloorMesId = null;
         uiRuntime.editingFloorReasoning = false;
@@ -16559,6 +16827,10 @@ code, pre {
 
       if (action === 'chat-regenerate-last') {
         uiRuntime.showOptionsPopup = false;
+        if (uiRuntime.abortController) {
+          try { uiRuntime.abortController.abort(); } catch (_) {}
+          uiRuntime.abortController = null;
+        }
         uiRuntime.isGenerating = false;
         uiRuntime.editingFloorMesId = null;
         uiRuntime.editingFloorReasoning = false;
@@ -16961,13 +17233,7 @@ code, pre {
           showTavernToast('未在手机外部设置中检测到API地址或密钥，请先在外部API设置中保存');
           return;
         }
-        try {
-          showTavernToast('已同步外部API · ' + creds.model + '，正在测试连接...');
-          const res = await callTavernAiCompletion([{ role: 'user', content: '请回复OK两个字母' }]);
-          showTavernToast('外部API调用成功: ' + (res.content || 'OK').slice(0, 20));
-        } catch (err) {
-          showTavernToast('外部API已同步，但连接测试报错: ' + (err.message || '连接失败'));
-        }
+        showTavernToast('已启用手机外部API设置 · ' + (creds.model || '默认模型'));
         return;
       }
       if (action === 'fetch-tavern-models') {
