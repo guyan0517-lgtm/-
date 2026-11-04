@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -21925,6 +21925,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         const origFetch = window.fetch.bind(window);
         window._origNativeFetch = origFetch;
+        window._rawNativeFetch = origFetch;
 
         function normalizeLlmapiBaseUrl(rawUrl) {
           let u = String(rawUrl || "").replace(/[\u200B-\u200D\uFEFF"'\s]+/g, "").trim();
@@ -22050,6 +22051,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             worker.onmessage = function(e) {
               const data = e.data;
               if (data && typeof data === "object" && data.type === "hb") {
+                try {
+                  if (typeof ensureBackgroundKeepAlive === "function") {
+                    ensureBackgroundKeepAlive();
+                  }
+                } catch (_) {}
                 return;
               }
               const id = data;
@@ -22453,8 +22459,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
-              const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:" || window.location.hostname.endsWith(".pages.dev");
-
               try {
                 ensureBackgroundKeepAlive();
                 resetTimeout();
@@ -22468,27 +22472,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 currentDirectErr = err;
               }
 
-              // 强制铁律：无论什么情况下都不能把非流式改成流式
-
-              if (!currentRes && !isStaticHost && !controller.signal.aborted && !options._noAutoRetry) {
-                try {
-                  resetTimeout();
-                  const proxyRes = await origFetch("/api/proxy", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    signal: controller.signal,
-                    body: JSON.stringify({
-                      url: finalUrl,
-                      method,
-                      headers,
-                      body: method !== "GET" && method !== "HEAD" ? activeBodyObj : undefined,
-                    }),
-                  });
-                  if (proxyRes.ok || !currentRes || (proxyRes.status !== 405 && proxyRes.status !== 404)) {
-                    currentRes = proxyRes;
-                  }
-                } catch (_) {}
-              }
               return { res: currentRes, directErr: currentDirectErr };
             };
 
@@ -22508,47 +22491,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               try {
                 errText = await res.text();
               } catch (_) {}
-              if (
-                !options._noAutoRetry &&
-                res.status === 400 &&
-                parsedBody &&
-                typeof parsedBody === "object" &&
-                (parsedBody.max_tokens || parsedBody.generationConfig?.maxOutputTokens) &&
-                /max_tokens|max_completion_tokens|maxoutputtokens|maximum|token|limit/i.test(errText)
-              ) {
-                const retryBody = JSON.parse(JSON.stringify(parsedBody));
-                delete retryBody.max_tokens;
-                if (retryBody.generationConfig) {
-                  delete retryBody.generationConfig.maxOutputTokens;
-                }
-                const retryAttempt = await executeUpstreamFetch(retryBody);
-                if (retryAttempt && retryAttempt.res && retryAttempt.res.ok) {
-                  res = retryAttempt.res;
-                  parsedBody = retryBody;
-                } else {
-                  if (timeoutId) clearTimeout(timeoutId);
-                  console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
-                  const simplifiedMsg = extractApiErrorMessage(res.status, errText);
-                  return {
-                    ok: false,
-                    status: res.status,
-                    text: errText,
-                    error: simplifiedMsg,
-                    headers: new Headers({ "Content-Type": "application/json" }),
-                  };
-                }
-              } else {
-                if (timeoutId) clearTimeout(timeoutId);
-                console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
-                const simplifiedMsg = extractApiErrorMessage(res.status, errText);
-                return {
-                  ok: false,
-                  status: res.status,
-                  text: errText,
-                  error: simplifiedMsg,
-                  headers: new Headers({ "Content-Type": "application/json" }),
-                };
-              }
+              if (timeoutId) clearTimeout(timeoutId);
+              console.error(`HTTP ${res.status} [${method}] (请求地址: ${finalUrl}): ${errText}`);
+              const simplifiedMsg = extractApiErrorMessage(res.status, errText);
+              return {
+                ok: false,
+                status: res.status,
+                text: errText,
+                error: simplifiedMsg,
+                headers: new Headers({ "Content-Type": "application/json" }),
+              };
             }
 
             // ====== 核心流式与非流式读写保护区开始：已加锁保护，严禁任何功能修改此区块 ======
@@ -22765,20 +22717,106 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 强制铁律：无论什么情况下都不能把非流式改成流式，非流式一次性完整读取响应文本
+            // 强制铁律：无论什么情况下都不能把非流式改成流式，非流式完整读取响应文本
+            const isCompleteNonStreamBody = (rawStr) => {
+              const stripped = String(rawStr || "").replace(/^\s*:[^\r\n]*$/gm, "").trim();
+              if (!stripped) return false;
+              if (
+                stripped.includes("data: [DONE]") ||
+                stripped.includes("data:[DONE]") ||
+                stripped.includes('"message_stop"')
+              ) {
+                return true;
+              }
+              if (stripped.startsWith("{") && stripped.endsWith("}")) {
+                try {
+                  const obj = JSON.parse(stripped);
+                  if (
+                    obj &&
+                    typeof obj === "object" &&
+                    (Array.isArray(obj.choices) ||
+                      Array.isArray(obj.candidates) ||
+                      Array.isArray(obj.content) ||
+                      typeof obj.content === "string" ||
+                      obj.error)
+                  ) {
+                    return true;
+                  }
+                } catch (_) {}
+              }
+              return false;
+            };
+
             let resText = "";
+            let nonStreamReadErr = null;
             try {
-              resText = await res.text();
-              resetTimeout();
+              if (res.body && typeof res.body.getReader === "function") {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    resetTimeout();
+                    ensureBackgroundKeepAlive();
+                    if (done) {
+                      const tail = decoder.decode();
+                      if (tail) resText += tail;
+                      break;
+                    }
+                    if (value && value.byteLength > 0) {
+                      resText += decoder.decode(value, { stream: true });
+                      if (isCompleteNonStreamBody(resText)) {
+                        const tail = decoder.decode();
+                        if (tail) resText += tail;
+                        try { await reader.cancel(); } catch (_) {}
+                        break;
+                      }
+                    }
+                  }
+                } catch (readErr) {
+                  try {
+                    const tail = decoder.decode();
+                    if (tail) resText += tail;
+                  } catch (_) {}
+                  nonStreamReadErr = readErr;
+                }
+              } else {
+                resText = await res.text();
+                resetTimeout();
+              }
             } finally {
               if (timeoutId) clearTimeout(timeoutId);
             }
 
-            if (res.ok && resText && /^\s*(?::[^\n]*\n\s*)*data:\s*/m.test(resText)) {
-              const salvagedNonStreamSse = parseSseTextToSynthesized(resText);
-              if (salvagedNonStreamSse) {
-                resText = JSON.stringify(salvagedNonStreamSse);
+            const strippedNonStream = String(resText || "").replace(/^\s*:[^\r\n]*$/gm, "").trim();
+            let hasValidNonStreamData = false;
+            if (strippedNonStream) {
+              if (/^\s*data:\s*/m.test(strippedNonStream)) {
+                const salvagedNonStreamSse = parseSseTextToSynthesized(strippedNonStream);
+                if (salvagedNonStreamSse) {
+                  resText = JSON.stringify(salvagedNonStreamSse);
+                  hasValidNonStreamData = true;
+                }
+              } else {
+                resText = strippedNonStream;
+                if (isCompleteNonStreamBody(resText)) {
+                  hasValidNonStreamData = true;
+                } else {
+                  const firstBrace = resText.indexOf("{");
+                  const lastBrace = resText.lastIndexOf("}");
+                  if (firstBrace !== -1 && lastBrace > firstBrace) {
+                    const candidateJson = resText.slice(firstBrace, lastBrace + 1);
+                    if (isCompleteNonStreamBody(candidateJson)) {
+                      resText = candidateJson;
+                      hasValidNonStreamData = true;
+                    }
+                  }
+                }
               }
+            }
+
+            if (nonStreamReadErr && !hasValidNonStreamData) {
+              throw nonStreamReadErr;
             }
 
             return {

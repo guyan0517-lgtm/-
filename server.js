@@ -956,7 +956,7 @@ try {
   fetch('http://127.0.0.1:1').catch(() => {});
   setTimeout(() => {
     try {
-      const sym = Symbol.for('undici.globalDispatcher.1') || Object.getOwnPropertySymbols(globalThis).find(s => s.toString().includes('undici.globalDispatcher'));
+      const sym = Object.getOwnPropertySymbols(globalThis).find(s => s.toString().includes('undici.globalDispatcher')) || Symbol.for('undici.globalDispatcher.1');
       const Agent = sym && globalThis[sym] && globalThis[sym].constructor;
       if (Agent) {
         globalThis[sym] = new Agent({

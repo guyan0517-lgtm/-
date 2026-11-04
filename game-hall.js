@@ -3606,60 +3606,102 @@ code, pre {
     return finalRes;
   }
 
+  function isCompleteTavernNonStreamPayload(rawStr) {
+    const stripped = String(rawStr || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
+    if (!stripped) return false;
+    if (
+      stripped.includes('data: [DONE]') ||
+      stripped.includes('data:[DONE]') ||
+      stripped.includes('"message_stop"')
+    ) {
+      return true;
+    }
+    if (stripped.startsWith('{') && stripped.endsWith('}')) {
+      try {
+        const obj = JSON.parse(stripped);
+        if (
+          obj &&
+          typeof obj === 'object' &&
+          (Array.isArray(obj.choices) ||
+            Array.isArray(obj.candidates) ||
+            Array.isArray(obj.content) ||
+            typeof obj.content === 'string' ||
+            obj.error)
+        ) {
+          return true;
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  async function readTavernNonStreamBodySafely(resObj, onChunkProgress) {
+    let accText = '';
+    let readErrCaught = null;
+    if (resObj && resObj.body && typeof resObj.body.getReader === 'function') {
+      const reader = resObj.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (typeof onChunkProgress === 'function') {
+            try { onChunkProgress(); } catch (_) {}
+          }
+          if (typeof window.ensureBackgroundKeepAlive === 'function') {
+            try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+          }
+          if (done) {
+            const tail = decoder.decode();
+            if (tail) accText += tail;
+            break;
+          }
+          if (value && value.byteLength > 0) {
+            accText += decoder.decode(value, { stream: true });
+            if (isCompleteTavernNonStreamPayload(accText)) {
+              const tail = decoder.decode();
+              if (tail) accText += tail;
+              try { await reader.cancel(); } catch (_) {}
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        try {
+          const tail = decoder.decode();
+          if (tail) accText += tail;
+        } catch (_) {}
+        readErrCaught = err;
+      }
+    } else if (resObj && typeof resObj.text === 'function') {
+      try {
+        accText = await resObj.text();
+        if (typeof onChunkProgress === 'function') {
+          try { onChunkProgress(); } catch (_) {}
+        }
+      } catch (err) {
+        readErrCaught = err;
+      }
+    }
+
+    const stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
+    if (readErrCaught && !stripped) {
+      throw readErrCaught;
+    }
+    return accText;
+  }
+
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
-    const isLocalLoopback = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)/i.test(String(url || ''));
-    const isStaticHost = window.location.hostname.includes('github.io') || window.location.protocol === 'file:' || window.location.hostname.endsWith('.pages.dev');
-
-    let directErr = null;
-    const attemptStart = performance.now();
+    if (typeof window.ensureBackgroundKeepAlive === 'function') {
+      try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+    }
     try {
       const res = await rawFetch(url, options);
       return res;
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
-      directErr = err;
+      throw err || new Error('Failed to fetch');
     }
-    const elapsedMs = performance.now() - attemptStart;
-    // Only use /api/proxy if browser preflight blocked an external non-local URL immediately (< 800ms) and auto-retry is not disabled
-    if (
-      elapsedMs < 800 &&
-      !isLocalLoopback &&
-      !isStaticHost &&
-      !options?._noAutoRetry &&
-      !(options?.signal && options.signal.aborted) &&
-      /^https?:\/\//i.test(url) &&
-      !url.startsWith(window.location.origin)
-    ) {
-      try {
-        let parsedBody = undefined;
-        if (options && options.body !== undefined) {
-          try {
-            parsedBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-          } catch (_) {
-            parsedBody = options.body;
-          }
-        }
-        const proxyRes = await rawFetch('/api/proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            method: (options && options.method) || 'POST',
-            headers: (options && options.headers) || {},
-            body: parsedBody
-          }),
-          signal: options?.signal
-        });
-        if (proxyRes && proxyRes.status !== 404 && proxyRes.status !== 405) {
-          return proxyRes;
-        }
-      } catch (fbErr) {
-        if (fbErr && fbErr.name === 'AbortError') throw fbErr;
-        if (!directErr) directErr = fbErr;
-      }
-    }
-    throw directErr || new Error('Failed to fetch');
   }
 
   function setupSillyTavernGlobalBridge() {
@@ -3849,9 +3891,7 @@ code, pre {
                   method: 'POST',
                   headers,
                   body: JSON.stringify(openAiPayload),
-                  signal: init?.signal,
-                  _noAutoRetry: true,
-                  _isNonStreamCompletion: !wantStream
+                  signal: init?.signal
                 });
               } catch (err) {
                 if (err && err.name === 'AbortError') throw err;
@@ -3861,8 +3901,8 @@ code, pre {
                 return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
               }
               if (!wantStream && upstreamRes.ok) {
-                const rawBodyText = await upstreamRes.text().catch(() => '');
-                const trimmedBody = rawBodyText.trim();
+                const rawBodyText = await readTavernNonStreamBodySafely(upstreamRes).catch(() => '');
+                const trimmedBody = rawBodyText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
                 if (trimmedBody.startsWith('data:')) {
                   let aggContent = '';
                   let aggReasoning = '';
@@ -10362,11 +10402,16 @@ code, pre {
     }
 
     let requestTimedOut = false;
-    const timeoutMs = 480000;
-    const timeoutTimer = setTimeout(() => {
-      requestTimedOut = true;
-      try { abortCtrl.abort(); } catch (_) {}
-    }, timeoutMs);
+    const timeoutMs = 600000;
+    let timeoutTimer = null;
+    const resetTavernTimeout = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      timeoutTimer = setTimeout(() => {
+        requestTimedOut = true;
+        try { abortCtrl.abort(); } catch (_) {}
+      }, timeoutMs);
+    };
+    resetTavernTimeout();
 
     try {
       const reqHeaders = {
@@ -10421,14 +10466,14 @@ code, pre {
       };
       let res = null;
       try {
+        resetTavernTimeout();
         res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
           method: 'POST',
           headers: reqHeaders,
           body: JSON.stringify(payload),
-          signal: abortCtrl.signal,
-          _noAutoRetry: true,
-          _isNonStreamCompletion: !useStreaming
+          signal: abortCtrl.signal
         });
+        resetTavernTimeout();
       } catch (netErr) {
         if (netErr && netErr.name === 'AbortError') {
           if (requestTimedOut) {
@@ -10483,15 +10528,15 @@ code, pre {
         return null;
       };
 
-      // Strictly Non-Streaming Mode: read complete response body reliably without premature reader.cancel()
+      // Strictly Non-Streaming Mode: read complete response body reliably via chunk accumulation
       if (!useStreaming) {
         let rawText = '';
         try {
-          rawText = await res.text();
+          rawText = await readTavernNonStreamBodySafely(res, resetTavernTimeout);
         } catch (readTxtErr) {
           if (readTxtErr && readTxtErr.name === 'AbortError') {
             if (requestTimedOut && !rawText.trim()) {
-              throw new Error('API读取响应超时，已等待超过8分钟无返回，请检查反代连接或切换流式模式');
+              throw new Error('API读取响应超时，已等待超过10分钟无返回，请检查反代连接或切换流式模式');
             }
             if (!rawText.trim()) {
               throw new Error('已手动停止生成');
@@ -10704,6 +10749,10 @@ code, pre {
       try {
         while (true) {
           const { value, done } = await reader.read();
+          resetTavernTimeout();
+          if (typeof window.ensureBackgroundKeepAlive === 'function') {
+            try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+          }
           if (done) {
             sseBuffer += decoder.decode();
             if (sseBuffer.trim()) {
