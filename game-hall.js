@@ -951,6 +951,11 @@ code, pre {
               tavernState.themes[insIdx].custom_css = INS_MINIMAL_THEME.custom_css;
               tavernState.themes[insIdx].builtin = true;
             }
+            tavernState.themes.forEach(t => {
+              if (t && t.id !== 'theme_gousu_default' && t.id !== 'theme_gousu_night' && t.custom_css === DEFAULT_GOUSU_THEME.custom_css) {
+                t.custom_css = '';
+              }
+            });
           }
 
           if (!Array.isArray(tavernState.presets) || tavernState.presets.length === 0) {
@@ -1044,6 +1049,7 @@ code, pre {
               description: '柏宝书，SillyTavern总结和记忆管理插件'
             });
           }
+          ensureCoreCompatibilityPluginsRegistered();
 
           if (!tavernState.chatsByCardId || typeof tavernState.chatsByCardId !== 'object') {
             tavernState.chatsByCardId = {};
@@ -1072,6 +1078,7 @@ code, pre {
 
           syncAllCardSessionsAndArchives();
         }
+        ensureCoreCompatibilityPluginsRegistered();
 
         hasLoadedTavernStoreOnce = true;
         ensureActiveCardChatInitialized();
@@ -4931,6 +4938,63 @@ code, pre {
     return /书摘|book-excerpt/i.test(n) || /book-excerpt/i.test(u) || /BookExcerpt|be-float-bar/i.test(c);
   }
 
+  function isJsSlashRunnerPlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    const id = String(plugin.id || '');
+    return id === 'plugin_js_slash_runner' ||
+      /酒馆助手|JS-Slash-Runner|TavernHelper/i.test(n) ||
+      /JS-Slash-Runner|TavernHelper/i.test(u);
+  }
+
+  function isStPromptTemplatePlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    const id = String(plugin.id || '');
+    return id === 'plugin_st_prompt_template' ||
+      /提示词模板|ST-Prompt-Template/i.test(n) ||
+      /ST-Prompt-Template/i.test(u);
+  }
+
+  function ensureCoreCompatibilityPluginsRegistered() {
+    if (!Array.isArray(tavernState.plugins)) {
+      tavernState.plugins = [];
+    }
+    if (!tavernState.extensionSettings || typeof tavernState.extensionSettings !== 'object') {
+      tavernState.extensionSettings = {};
+    }
+    if (!tavernState.extensionSettings._uninstalledJsSlashRunner && !tavernState.plugins.some(pl => isJsSlashRunnerPlugin(pl))) {
+      tavernState.plugins.unshift({
+        id: 'plugin_js_slash_runner',
+        name: '酒馆助手 JS-Slash-Runner',
+        enabled: true,
+        code: '/* Native Built-in JS-Slash-Runner Engine Active */ window.TavernHelper = window.TavernHelper || {};',
+        uiHtml: '',
+        repoBaseUrl: 'https://github.com/N0VI028/JS-Slash-Runner',
+        description: '酒馆助手脚本管理、角色内嵌面板、自定义按钮与变量工作台'
+      });
+    }
+    if (!tavernState.extensionSettings._uninstalledStPromptTemplate && !tavernState.plugins.some(pl => isStPromptTemplatePlugin(pl))) {
+      const insertIdx = tavernState.plugins.findIndex(pl => isJsSlashRunnerPlugin(pl));
+      const stptPlugin = {
+        id: 'plugin_st_prompt_template',
+        name: '提示词模板 ST-Prompt-Template',
+        enabled: true,
+        code: '/* Native Built-in ST-Prompt-Template Engine Active */',
+        uiHtml: '',
+        repoBaseUrl: 'https://github.com/zonde306/ST-Prompt-Template',
+        description: 'EJS动态提示词模板渲染、变量读写与实时模板测试面板'
+      };
+      if (insertIdx >= 0) {
+        tavernState.plugins.splice(insertIdx + 1, 0, stptPlugin);
+      } else {
+        tavernState.plugins.unshift(stptPlugin);
+      }
+    }
+  }
+
   function isTextSelectionPluginEnabled() {
     if (window.BookExcerpt || document.getElementById('be-style') || document.getElementById('be-menu-entry')) {
       return true;
@@ -7549,7 +7613,9 @@ code, pre {
         .replace(/^:root\b/i, '#tavern-stage-root')
         .replace(/\bhtml\s+body\b/gi, '#tavern-stage-root')
         .replace(/^html\b/i, '#tavern-stage-root')
+        .replace(/^body\s*>\s*#top-settings-holder\b/i, '#tavern-stage-root #top-settings-holder')
         .replace(/^body\b/i, '#tavern-stage-root')
+        .replace(/#tavern-stage-root\s*>\s*#top-settings-holder\b/g, '#tavern-stage-root #top-settings-holder')
         .replace(/#bg_custom\b/g, '#tavern-bg-layer')
         .replace(/#bg1\b/g, '#tavern-bg-layer');
       if (s.includes('#tavern-stage-root') || s.includes('#game-hall-screen')) {
@@ -8069,6 +8135,8 @@ code, pre {
     `);
 
     if (!isGousuStyle && theme) {
+      const rawThemeCss = String(theme.custom_css || '');
+      const hidesTopBar = /#top-bar\s*(?:,[^{]*)?\{[^}]*display\s*:\s*none/i.test(rawThemeCss);
       rules.push(`
         /* Containment and color adaptation for imported third-party SillyTavern themes */
         #tavern-stage-root {
@@ -8080,8 +8148,19 @@ code, pre {
           max-width: 100% !important;
           box-sizing: border-box !important;
         }
+        ${hidesTopBar ? `
+        #tavern-stage-root #top-bar {
+          display: block !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          min-height: 0 !important;
+          height: auto !important;
+        }
+        ` : ''}
         #tavern-stage-root #top-settings-holder .drawer-icon {
-          color: var(--SmartThemeBodyColor, inherit);
           flex-shrink: 1 !important;
           min-width: 0 !important;
         }
@@ -8209,20 +8288,48 @@ code, pre {
       #tavern-stage-root {
         ${varPairs.map(([k, v]) => `${k}: ${v};`).join('\n        ')}
       }
-      #tavern-stage-root #top-bar {
-        background: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.88));
-        border-bottom-color: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.65));
+      #tavern-stage-root #top-settings-holder {
+        background-color: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.92));
+        border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(160, 155, 148, 0.35));
+        color: var(--SmartThemeBodyColor, #373737);
+      }
+      #tavern-stage-root .drawer-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        line-height: 1;
+        color: var(--SmartThemeEmColor, var(--SmartThemeBodyColor, #555));
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: contain;
+      }
+      #tavern-stage-root .drawer-icon.openIcon,
+      #tavern-stage-root .drawer.active-drawer .drawer-icon {
+        color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor, #222));
+      }
+      #tavern-stage-root #options_button,
+      #tavern-stage-root #extensionsMenuButton,
+      #tavern-stage-root #send_but {
+        color: var(--SmartThemeEmColor, var(--SmartThemeBodyColor, #555));
+        font-size: 17px;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: contain;
       }
       #tavern-stage-root #send_form {
-        background: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.92));
-        border-color: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.85));
+        background-color: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.92));
+        border: 1px solid var(--SmartThemeBorderColor, rgba(160, 155, 148, 0.45));
+        border-radius: 20px;
       }
       #tavern-stage-root .mes {
-        background: var(--SmartThemeBotMesBlurTintColor, rgba(255, 255, 255, 0.88));
-        border-color: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.9));
+        background-color: var(--SmartThemeBotMesBlurTintColor, rgba(255, 255, 255, 0.88));
+        border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.9));
+        border-radius: 16px;
+        padding: 12px;
       }
       #tavern-stage-root .mes[is_user="true"] {
-        background: var(--SmartThemeUserMesBlurTintColor, rgba(245, 240, 242, 0.92));
+        background-color: var(--SmartThemeUserMesBlurTintColor, rgba(245, 240, 242, 0.92));
       }
     ` : '';
 
@@ -10072,7 +10179,7 @@ code, pre {
         margin-bottom: 4px;
         font-weight: 600;
       }
-      #tavern-stage-root *:not(.fa-solid):not(.fa-regular):not(.fa):not(.fas):not(.far) {
+      #tavern-stage-root *:not(.fa-solid):not(.fa-regular):not(.fa):not(.fas):not(.far):not(.fab):not(.fa-fw):not(.drawer-icon):not(#options_button):not(#extensionsMenuButton):not(#send_but):not(.mes_button):not(.swipe_left):not(.swipe_right) {
         font-family: inherit !important;
       }
       #tavern-bg-layer {
@@ -11068,6 +11175,31 @@ code, pre {
         font-size: 12px !important;
         border-radius: 10px !important;
       }
+      #tavern-stage-root .tavern-btn.tavern-prompt-icon-btn {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+        padding: 0 !important;
+        border-radius: 8px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-shrink: 0 !important;
+        overflow: visible !important;
+      }
+      #tavern-stage-root .tavern-btn.tavern-prompt-icon-btn svg {
+        width: 17px !important;
+        height: 17px !important;
+        min-width: 17px !important;
+        min-height: 17px !important;
+        display: block !important;
+        flex-shrink: 0 !important;
+        stroke: currentColor !important;
+        fill: none !important;
+        stroke-width: 2.3px !important;
+        pointer-events: none !important;
+      }
 
       /* Extension Accordion inside #rm_extensions_block */
       .inline-drawer {
@@ -11129,15 +11261,15 @@ code, pre {
   // 10. Render Main SillyTavern Stage & Chat Floors
   // ============================================================================
   const TOP_BAR_DRAWERS = [
-    { key: 'sliders', iconClass: 'fa-sliders', title: '生成参数与预设排序' },
-    { key: 'plug', iconClass: 'fa-plug', title: '接口连接与模型设置' },
-    { key: 'font', iconClass: 'fa-font', title: '文本格式化与指令模板' },
-    { key: 'atlas', iconClass: 'fa-book-atlas', title: '世界书全局与词条管理' },
-    { key: 'usercog', iconClass: 'fa-user-cog', title: '界面美化与用户设置' },
-    { key: 'panorama', iconClass: 'fa-panorama', title: '背景画廊与视觉氛围' },
-    { key: 'cubes', iconClass: 'fa-cubes', title: '扩展插件与正则脚本' },
-    { key: 'smile', iconClass: 'fa-face-smile', title: '用户人设与面具管理' },
-    { key: 'address', iconClass: 'fa-address-card', title: '角色档案与聊天分支' }
+    { key: 'sliders', drawerId: 'ai-config-button', iconId: 'leftNavDrawerIcon', iconClass: 'fa-sliders', extraIconClasses: 'fa-fw', title: '生成参数与预设排序' },
+    { key: 'plug', drawerId: 'sys-settings-button', iconId: 'API-status-top', iconClass: 'fa-plug', extraIconClasses: 'fa-fw fa-plug-circle-exclamation', title: '接口连接与模型设置' },
+    { key: 'font', drawerId: 'advanced-formatting-button', iconId: 'advancedFormattingIcon', iconClass: 'fa-font', extraIconClasses: 'fa-fw', title: '文本格式化与指令模板' },
+    { key: 'atlas', drawerId: 'WI-SP-button', iconId: 'WIDrawerIcon', iconClass: 'fa-book-atlas', extraIconClasses: 'fa-fw', title: '世界书全局与词条管理' },
+    { key: 'usercog', drawerId: 'user-settings-button', iconId: 'userSettingsIcon', iconClass: 'fa-user-cog', extraIconClasses: 'fa-fw fa-cog fa-gear', title: '界面美化与用户设置' },
+    { key: 'panorama', drawerId: 'logo_block', iconId: 'site_logo', iconClass: 'fa-panorama', extraIconClasses: 'fa-fw fa-image', title: '背景画廊与视觉氛围' },
+    { key: 'cubes', drawerId: 'extensions-settings-button', iconId: 'extensionsDrawerIcon', iconClass: 'fa-cubes', extraIconClasses: 'fa-fw', title: '扩展插件与正则脚本' },
+    { key: 'smile', drawerId: 'persona-management-button', iconId: 'personaDrawerIcon', iconClass: 'fa-face-smile', extraIconClasses: 'fa-fw fa-id-badge', title: '用户人设与面具管理' },
+    { key: 'address', drawerId: 'rightNavHolder', toggleId: 'unimportantYes', iconId: 'rightNavDrawerIcon', iconClass: 'fa-address-card', extraIconClasses: 'fa-fw fa-id-card', title: '角色档案与聊天分支' }
   ];
 
   let pendingTavernHeavyRenderTimer = null;
@@ -11213,9 +11345,9 @@ code, pre {
         <div id="top-bar">
           <div id="top-settings-holder">
             ${TOP_BAR_DRAWERS.map(d => `
-              <div class="drawer ${uiRuntime.openDrawerKey === d.key ? 'active-drawer' : ''}" data-drawer-key="${d.key}">
-                <div class="drawer-toggle" data-action="toggle-drawer" data-drawer="${d.key}" title="${d.title}">
-                  <div class="drawer-icon fa-solid ${d.iconClass} ${uiRuntime.openDrawerKey === d.key ? 'openIcon' : 'closedIcon'}"></div>
+              <div id="${d.drawerId}" class="drawer ${uiRuntime.openDrawerKey === d.key ? 'active-drawer' : ''}" data-drawer-key="${d.key}">
+                <div ${d.toggleId ? `id="${d.toggleId}"` : ''} class="drawer-toggle drawer-header" data-action="toggle-drawer" data-drawer="${d.key}" title="${d.title}">
+                  <div id="${d.iconId}" class="drawer-icon fa-solid ${d.iconClass} ${d.extraIconClasses || 'fa-fw'} interactable ${uiRuntime.openDrawerKey === d.key ? 'openIcon' : 'closedIcon'}"></div>
                 </div>
               </div>
             `).join('')}
@@ -11254,12 +11386,12 @@ code, pre {
             <div id="tavern-chat-attach-preview">${renderChatAttachPreviewHtml()}</div>
             <div id="nonQRFormItems">
               <div id="leftSendForm">
-                <div id="options_button" data-action="toggle-options-popup" title="对话操作菜单"></div>
-                <div id="extensionsMenuButton" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
+                <div id="options_button" class="fa-solid fa-bars interactable" data-action="toggle-options-popup" title="对话操作菜单"></div>
+                <div id="extensionsMenuButton" class="fa-solid fa-magic-wand-sparkles interactable" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
               </div>
               <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
               <div id="rightSendForm">
-                <div id="send_but" data-action="send-message" title="发送"></div>
+                <div id="send_but" class="fa-solid fa-paper-plane interactable" data-action="send-message" title="发送"></div>
               </div>
             </div>
           </form>
@@ -11481,9 +11613,402 @@ code, pre {
     `;
   }
 
+  function renderJsSlashRunnerNativeModal(p) {
+    const card = getActiveCard();
+    const cardScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
+    const globalHelperPlugins = (tavernState.plugins || []).filter(
+      x => x && !x.builtInType && !isJsSlashRunnerPlugin(x) && !isStPromptTemplatePlugin(x) && !isBaiBaiPlugin(x) && !isBurntChickenWingsPlugin(x) && !isBookExcerptPlugin(x)
+    );
+    const localVars = getChatVariablesStore() || {};
+    const globalVars = getGlobalVariablesStore() || {};
+    const localKeys = Object.keys(localVars);
+    const globalKeys = Object.keys(globalVars);
+    const editingTargetId = uiRuntime.editingJsrScriptId || '';
+    const editingScope = uiRuntime.editingJsrScriptScope || 'card';
+    let editingScriptObj = null;
+    if (editingTargetId) {
+      if (editingScope === 'card') {
+        editingScriptObj = cardScripts.find(s => s && s.id === editingTargetId) || null;
+      } else {
+        editingScriptObj = globalHelperPlugins.find(s => s && s.id === editingTargetId) || null;
+      }
+    }
+
+    const activeCustomButtons = [];
+    cardScripts.forEach(s => {
+      if (!s || s.enabled === false) return;
+      const bList = Array.isArray(s.buttons) ? s.buttons : [];
+      bList.forEach(b => {
+        const bName = typeof b === 'string' ? b : (b && b.name);
+        if (bName) activeCustomButtons.push({ name: bName, source: s.name || '角色脚本' });
+      });
+    });
+    globalHelperPlugins.forEach(g => {
+      if (!g || !g.enabled) return;
+      const bList = Array.isArray(g.buttons) ? g.buttons : [];
+      bList.forEach(b => {
+        const bName = typeof b === 'string' ? b : (b && b.name);
+        if (bName) activeCustomButtons.push({ name: bName, source: g.name || '全局脚本' });
+      });
+    });
+
+    const formatVarPreview = (val) => {
+      if (val === null || val === undefined) return 'null';
+      if (typeof val === 'object') {
+        try { return JSON.stringify(val); } catch (_) { return String(val); }
+      }
+      return String(val);
+    };
+
+    return `
+      <div class="tavern-modal-backdrop" id="tavern-jsr-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
+        <div class="drawer-content openDrawer" style="position:relative !important;inset:auto !important;flex:1;display:flex;flex-direction:column;padding:0 !important;overflow:hidden !important;border-radius:18px !important;background:#faf8f5 !important;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f3efe8;flex-shrink:0;">
+            <span style="font-weight:700;font-size:14px;color:#2c2c2e;display:inline-flex;align-items:center;gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              <span>酒馆助手 JS-Slash-Runner 控制面板</span>
+            </span>
+            <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭面板</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:12px;">
+            <div class="tavern-section-card">
+              <div class="tavern-section-label">
+                <span>运行引擎与快捷工具</span>
+                <label class="tavern-check-row" style="padding:0;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(p.id)}" ${p.enabled !== false ? 'checked' : ''} />
+                  <span style="font-size:12px;">已启用酒馆助手引擎</span>
+                </label>
+              </div>
+              <div class="tavern-btn-grid cols-3" style="margin-bottom:0;">
+                <button type="button" class="tavern-btn small primary" data-action="jsr-create-script" data-scope="card">新建角色脚本</button>
+                <button type="button" class="tavern-btn small" data-action="trigger-import-plugins">导入脚本文件</button>
+                <button type="button" class="tavern-btn small" data-action="jsr-rerun-all-card-scripts">重跑角色脚本</button>
+              </div>
+            </div>
+
+            ${activeCustomButtons.length > 0 ? `
+              <div class="tavern-section-card">
+                <div class="tavern-section-label">
+                  <span>脚本注册的自定义按钮 共${activeCustomButtons.length}个</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  ${activeCustomButtons.map(btn => `
+                    <button type="button" class="tavern-btn small primary" data-action="trigger-plugin-btn" data-btn-name="${escapeHtmlSimple(btn.name)}">${escapeHtmlSimple(stripUiEmojis(btn.name))}</button>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+
+            ${editingScriptObj ? `
+              <div class="tavern-section-card" style="background:#f5f7fc;border-color:#cbd3e8;">
+                <div class="tavern-section-label">
+                  <span>编辑脚本: ${escapeHtmlSimple(editingScriptObj.name || '未命名脚本')}</span>
+                  <button type="button" class="tavern-btn small" data-action="jsr-close-script-editor">收起编辑</button>
+                </div>
+                <div class="tavern-grid-2">
+                  <div class="tavern-field-group">
+                    <label>脚本名称</label>
+                    <input type="text" class="tavern-input" id="jsr-edit-script-name" value="${escapeHtmlSimple(editingScriptObj.name || '')}" />
+                  </div>
+                  <div class="tavern-field-group">
+                    <label>自定义按钮名 多个用逗号分隔</label>
+                    <input type="text" class="tavern-input" id="jsr-edit-script-btns" value="${escapeHtmlSimple((Array.isArray(editingScriptObj.buttons) ? editingScriptObj.buttons.map(b => typeof b === 'string' ? b : (b?.name || '')).filter(Boolean) : []).join(', '))}" placeholder="例如: 打开状态栏, 刷新地图" />
+                  </div>
+                </div>
+                <div class="tavern-field-group">
+                  <label>脚本说明</label>
+                  <input type="text" class="tavern-input" id="jsr-edit-script-info" value="${escapeHtmlSimple(editingScriptObj.info || editingScriptObj.description || '')}" placeholder="选填备注信息" />
+                </div>
+                <div class="tavern-field-group">
+                  <label>脚本代码 支持TavernHelper与jQuery及HTML面板</label>
+                  <textarea class="tavern-textarea" id="jsr-edit-script-code" rows="7" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(editingScriptObj.content || editingScriptObj.code || '')}</textarea>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                  <button type="button" class="tavern-btn small primary" data-action="jsr-save-script-editor" data-script-id="${escapeHtmlSimple(editingScriptObj.id)}" data-scope="${escapeHtmlSimple(editingScope)}">保存并立即运行</button>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="tavern-section-card">
+              <div class="tavern-section-label">
+                <span>当前角色卡脚本库: ${escapeHtmlSimple(card?.name || '默认角色')} 共${cardScripts.length}个</span>
+              </div>
+              ${cardScripts.length === 0 ? `
+                <div style="font-size:12px;color:#888;padding:4px 0;">当前角色卡暂无内嵌助手脚本，可点击上方新建角色脚本或导入带酒馆助手脚本的角色卡。</div>
+              ` : cardScripts.map(hs => `
+                <div class="tavern-list-row">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="jsr-toggle-card-script" data-script-id="${escapeHtmlSimple(hs.id)}" ${hs.enabled !== false ? 'checked' : ''} />
+                  <div class="tavern-list-row-main">
+                    <div>${escapeHtmlSimple(stripUiEmojis(hs.name || '角色内嵌脚本'))}</div>
+                    <div class="tavern-list-row-sub">${escapeHtmlSimple(hs.info || '角色专属酒馆助手脚本')}</div>
+                  </div>
+                  <div class="tavern-list-row-actions">
+                    <button type="button" class="tavern-btn small primary" data-action="open-helper-script" data-script-id="${escapeHtmlSimple(hs.id)}">画面</button>
+                    <button type="button" class="tavern-btn small" data-action="jsr-edit-script" data-script-id="${escapeHtmlSimple(hs.id)}" data-scope="card">编辑</button>
+                    <button type="button" class="tavern-btn small danger" data-action="jsr-del-script" data-script-id="${escapeHtmlSimple(hs.id)}" data-scope="card">删</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="tavern-section-card">
+              <div class="tavern-section-label">
+                <span>全局脚本库 共${globalHelperPlugins.length}个</span>
+                <button type="button" class="tavern-btn small" data-action="jsr-create-script" data-scope="global">新建全局脚本</button>
+              </div>
+              ${globalHelperPlugins.length === 0 ? `
+                <div style="font-size:12px;color:#888;padding:4px 0;">暂无全局脚本，可点击新建全局脚本或导入本地JS与JSON脚本文件。</div>
+              ` : globalHelperPlugins.map(gp => `
+                <div class="tavern-list-row">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(gp.id)}" ${gp.enabled ? 'checked' : ''} />
+                  <div class="tavern-list-row-main">
+                    <div>${escapeHtmlSimple(stripUiEmojis(gp.name || '全局脚本'))}</div>
+                    <div class="tavern-list-row-sub">${escapeHtmlSimple(gp.description || '全局酒馆助手脚本')}</div>
+                  </div>
+                  <div class="tavern-list-row-actions">
+                    <button type="button" class="tavern-btn small primary" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(gp.id)}">画面</button>
+                    <button type="button" class="tavern-btn small" data-action="jsr-edit-script" data-script-id="${escapeHtmlSimple(gp.id)}" data-scope="global">编辑</button>
+                    <button type="button" class="tavern-btn small danger" data-action="jsr-del-script" data-script-id="${escapeHtmlSimple(gp.id)}" data-scope="global">删</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="tavern-section-card">
+              <div class="tavern-section-label">
+                <span>TavernHelper 变量管理器</span>
+                <button type="button" class="tavern-btn small danger" data-action="jsr-clear-vars" data-scope="local">清空当前聊天变量</button>
+              </div>
+              <div class="tavern-grid-3" style="margin-bottom:8px;">
+                <div class="tavern-field-group" style="margin-bottom:0;">
+                  <label>变量作用域</label>
+                  <select class="tavern-select" id="jsr-var-scope-select">
+                    <option value="local">当前聊天变量 Local</option>
+                    <option value="global">全局变量 Global</option>
+                  </select>
+                </div>
+                <div class="tavern-field-group" style="margin-bottom:0;">
+                  <label>变量名 Key</label>
+                  <input type="text" class="tavern-input" id="jsr-var-key-input" placeholder="例如: 好感度 或 stat.hp" />
+                </div>
+                <div class="tavern-field-group" style="margin-bottom:0;">
+                  <label>变量值 Value</label>
+                  <input type="text" class="tavern-input" id="jsr-var-val-input" placeholder="数字、文本或JSON" />
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="jsr-save-var">写入或更新变量</button>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">当前聊天变量 共${localKeys.length}项</div>
+              <div style="max-height:150px;overflow-y:auto;margin-bottom:8px;">
+                ${localKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">当前对话暂无局部变量</div>` : localKeys.map(k => `
+                  <div class="tavern-list-row" style="padding:6px 8px;">
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(k)}</div>
+                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(localVars[k]))}</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="local" data-var-key="${escapeHtmlSimple(k)}">删</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">全局变量 共${globalKeys.length}项</div>
+              <div style="max-height:130px;overflow-y:auto;">
+                ${globalKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">暂无全局变量</div>` : globalKeys.map(k => `
+                  <div class="tavern-list-row" style="padding:6px 8px;">
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(k)}</div>
+                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(globalVars[k]))}</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="global" data-var-key="${escapeHtmlSimple(k)}">删</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="tavern-section-card" style="margin-bottom:0;">
+              <div class="tavern-section-label">
+                <span>斜杠指令与JS实时控制台</span>
+              </div>
+              <div class="tavern-field-group">
+                <label>输入斜杠指令 如 /setvar key=好感 80 或直接输入JS代码</label>
+                <textarea class="tavern-textarea" id="jsr-console-input" rows="3" style="font-family:monospace;font-size:12px;" placeholder="例如: /echo 当前角色是 {{char}} 或 TavernHelper.insertOrAssignVariables({ 好感度: 100 })">${escapeHtmlSimple(uiRuntime.jsrConsoleDraft || '')}</textarea>
+              </div>
+              <div class="tavern-btn-grid" style="margin-bottom:6px;">
+                <button type="button" class="tavern-btn small primary" data-action="jsr-run-slash">执行斜杠指令</button>
+                <button type="button" class="tavern-btn small" data-action="jsr-run-js">作为JS代码运行</button>
+              </div>
+              ${uiRuntime.jsrConsoleOutput ? `
+                <div style="padding:8px 10px;border-radius:10px;background:#f0f2f7;border:1px solid #d5dbe8;font-family:monospace;font-size:12px;color:#2c2c2e;white-space:pre-wrap;word-break:break-word;">${escapeHtmlSimple(uiRuntime.jsrConsoleOutput)}</div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderStPromptTemplateNativeModal(p) {
+    const localVars = getChatVariablesStore() || {};
+    const globalVars = getGlobalVariablesStore() || {};
+    const localKeys = Object.keys(localVars);
+    const globalKeys = Object.keys(globalVars);
+    const sampleTemplate = uiRuntime.stptTestDraft !== undefined
+      ? uiRuntime.stptTestDraft
+      : `<% const aff = Number(getvar('好感度', { defaults: 50 })); %>\n当前玩家: <%= user %> | 角色: <%= char %>\n当前好感度数值: <%= aff %>\n<% if (aff >= 80) { %>\n角色对玩家展现出极度信任与亲密的态度。\n<% } else { %>\n角色保持日常温和而礼貌的互动距离。\n<% } %>`;
+    let previewResult = uiRuntime.stptTestOutput;
+    if (previewResult === undefined) {
+      try {
+        previewResult = replaceTavernMacros(sampleTemplate, getActiveCard());
+      } catch (e) {
+        previewResult = '渲染出错: ' + (e.message || String(e));
+      }
+    }
+
+    const formatVarPreview = (val) => {
+      if (val === null || val === undefined) return 'null';
+      if (typeof val === 'object') {
+        try { return JSON.stringify(val); } catch (_) { return String(val); }
+      }
+      return String(val);
+    };
+
+    return `
+      <div class="tavern-modal-backdrop" id="tavern-stpt-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
+        <div class="drawer-content openDrawer" style="position:relative !important;inset:auto !important;flex:1;display:flex;flex-direction:column;padding:0 !important;overflow:hidden !important;border-radius:18px !important;background:#faf8f5 !important;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f3efe8;flex-shrink:0;">
+            <span style="font-weight:700;font-size:14px;color:#2c2c2e;display:inline-flex;align-items:center;gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+              <span>提示词模板 ST-Prompt-Template 面板</span>
+            </span>
+            <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭面板</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:12px;">
+            <div class="tavern-section-card">
+              <div class="tavern-section-label">
+                <span>EJS 模板引擎状态与作用范围</span>
+                <label class="tavern-check-row" style="padding:0;">
+                  <input type="checkbox" class="tavern-fixed-check" data-action="toggle-plugin-item" data-plugin-id="${escapeHtmlSimple(p.id)}" ${p.enabled !== false ? 'checked' : ''} />
+                  <span style="font-size:12px;">已启用模板解析引擎</span>
+                </label>
+              </div>
+              <div style="font-size:12px;color:#555;line-height:1.55;">
+                全面支持在预设提示词、世界书词条、角色卡设定与聊天记录中运行 EJS 模板标签，内置 getvar、setvar、addvar、incvar、decvar、getwi、variables、user、char、messages 与 Lodash 工具函数。
+              </div>
+            </div>
+
+            <div class="tavern-section-card">
+              <div class="tavern-section-label">
+                <span>实时模板语法测试台</span>
+                <button type="button" class="tavern-btn small primary" data-action="stpt-test-evaluate">立即测试渲染</button>
+              </div>
+              <div class="tavern-field-group">
+                <label>输入包含 EJS 标签或 getvar 宏的模板内容</label>
+                <textarea class="tavern-textarea" id="stpt-test-input" rows="5" style="font-family:monospace;font-size:12px;">${escapeHtmlSimple(sampleTemplate)}</textarea>
+              </div>
+              <div class="tavern-field-group" style="margin-bottom:0;">
+                <label>渲染结果预览</label>
+                <div id="stpt-test-output" style="padding:10px;border-radius:11px;background:#f2f4f9;border:1px solid #d5dce8;font-family:monospace;font-size:12px;color:#2c2c2e;white-space:pre-wrap;word-break:break-word;min-height:54px;">${escapeHtmlSimple(previewResult)}</div>
+              </div>
+            </div>
+
+            <div class="tavern-section-card" style="margin-bottom:0;">
+              <div class="tavern-section-label">
+                <span>模板变量实时读写器 getvar / setvar</span>
+              </div>
+              <div class="tavern-grid-3" style="margin-bottom:8px;">
+                <div class="tavern-field-group" style="margin-bottom:0;">
+                  <label>变量范围</label>
+                  <select class="tavern-select" id="stpt-var-scope-select">
+                    <option value="local">当前聊天变量 Local</option>
+                    <option value="global">全局变量 Global</option>
+                  </select>
+                </div>
+                <div class="tavern-field-group" style="margin-bottom:0;">
+                  <label>变量名 Key</label>
+                  <input type="text" class="tavern-input" id="stpt-var-key-input" placeholder="例如: 好感度" />
+                </div>
+                <div class="tavern-field-group" style="margin-bottom:0;">
+                  <label>变量值 Value</label>
+                  <input type="text" class="tavern-input" id="stpt-var-val-input" placeholder="例如: 85" />
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                <button type="button" class="tavern-btn small primary" data-action="stpt-save-var">保存模板变量</button>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">当前聊天变量 共${localKeys.length}项</div>
+              <div style="max-height:150px;overflow-y:auto;margin-bottom:8px;">
+                ${localKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">当前聊天暂无模板变量</div>` : localKeys.map(k => `
+                  <div class="tavern-list-row" style="padding:6px 8px;">
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(k)}</div>
+                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(localVars[k]))}</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="local" data-var-key="${escapeHtmlSimple(k)}">删</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              <div style="font-size:12px;font-weight:700;color:#48484a;margin-bottom:4px;">全局模板变量 共${globalKeys.length}项</div>
+              <div style="max-height:130px;overflow-y:auto;">
+                ${globalKeys.length === 0 ? `<div style="font-size:12px;color:#888;padding:2px 0;">暂无全局模板变量</div>` : globalKeys.map(k => `
+                  <div class="tavern-list-row" style="padding:6px 8px;">
+                    <div class="tavern-list-row-main">
+                      <div>${escapeHtmlSimple(k)}</div>
+                      <div class="tavern-list-row-sub" style="font-family:monospace;">${escapeHtmlSimple(formatVarPreview(globalVars[k]))}</div>
+                    </div>
+                    <div class="tavern-list-row-actions">
+                      <button type="button" class="tavern-btn small danger" data-action="jsr-del-var" data-scope="global" data-var-key="${escapeHtmlSimple(k)}">删</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function refreshActivePluginModalOnly() {
+    if (!uiRuntime.activePluginModalId) return;
+    const stageRoot = document.getElementById('tavern-stage-root');
+    if (!stageRoot) return;
+    const existingModal = stageRoot.querySelector(':scope > .tavern-modal-backdrop');
+    const nextHtml = renderPluginCustomModal();
+    if (!nextHtml) {
+      if (existingModal) existingModal.remove();
+      return;
+    }
+    const temp = document.createElement('div');
+    temp.innerHTML = nextHtml.trim();
+    const newModalEl = temp.firstElementChild;
+    if (!newModalEl) return;
+    if (existingModal) {
+      existingModal.replaceWith(newModalEl);
+    } else {
+      const formSheld = document.getElementById('form_sheld');
+      if (formSheld) {
+        stageRoot.insertBefore(newModalEl, formSheld);
+      } else {
+        stageRoot.appendChild(newModalEl);
+      }
+    }
+  }
+
   function renderPluginCustomModal() {
     const p = (tavernState.plugins || []).find(x => x.id === uiRuntime.activePluginModalId);
     if (!p) return '';
+    if (isJsSlashRunnerPlugin(p)) {
+      return renderJsSlashRunnerNativeModal(p);
+    }
+    if (isStPromptTemplatePlugin(p)) {
+      return renderStPromptTemplateNativeModal(p);
+    }
     if (!p.repoBaseUrl && String(p.name || '').includes('柏宝绘')) {
       p.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
     }
@@ -12380,7 +12905,6 @@ code, pre {
   function renderPromptManagerListHtml(presetObj) {
     const preset = presetObj || getActivePreset();
     const prompts = Array.isArray(preset?.prompts) ? preset.prompts : [];
-    const iconBtnStyle = 'width:26px;height:26px;min-width:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;flex-shrink:0;';
     return prompts.map((item, idx) => {
       const isEditingThis = uiRuntime.editingPromptId === item.identifier;
       const cleanTitle = stripUiEmojis(item.name || item.identifier) || item.identifier;
@@ -12394,20 +12918,20 @@ code, pre {
               </div>
               <div class="tavern-list-row-sub">角色: ${item.role || 'system'} | ${Number(item.injection_position) === 1 ? '深度:' + item.injection_depth : '顺序排列'}</div>
             </div>
-            <div class="tavern-list-row-actions" style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-              <button type="button" class="tavern-btn small" style="${iconBtnStyle}" title="上移" data-action="move-prompt-up" data-idx="${idx}">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+            <div class="tavern-list-row-actions" style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+              <button type="button" class="tavern-btn small tavern-prompt-icon-btn" title="上移" data-action="move-prompt-up" data-idx="${idx}">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
               </button>
-              <button type="button" class="tavern-btn small" style="${iconBtnStyle}" title="下移" data-action="move-prompt-down" data-idx="${idx}">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              <button type="button" class="tavern-btn small tavern-prompt-icon-btn" title="下移" data-action="move-prompt-down" data-idx="${idx}">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
-              <button type="button" class="tavern-btn small" style="${iconBtnStyle}" title="在下方新增条目" data-action="insert-prompt-below" data-idx="${idx}">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <button type="button" class="tavern-btn small tavern-prompt-icon-btn" title="在下方新增条目" data-action="insert-prompt-below" data-idx="${idx}">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               </button>
-              <button type="button" class="tavern-btn small ${isEditingThis ? 'primary' : ''}" style="${iconBtnStyle}" title="${isEditingThis ? '收起' : '编辑'}" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">
+              <button type="button" class="tavern-btn small tavern-prompt-icon-btn ${isEditingThis ? 'primary' : ''}" title="${isEditingThis ? '收起' : '编辑'}" data-action="edit-prompt-item" data-prompt-id="${item.identifier}">
                 ${isEditingThis
-                  ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
-                  : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`}
+                  ? `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+                  : `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`}
               </button>
             </div>
           </div>
@@ -15227,12 +15751,23 @@ code, pre {
             return;
           }
         }
+        if (isJsSlashRunnerPlugin(p) || isStPromptTemplatePlugin(p)) {
+          if (typeof window.pushMobileBackGuard === 'function') {
+            window.pushMobileBackGuard('tavern_plugin_modal');
+          }
+          uiRuntime.activePluginModalId = pid;
+          uiRuntime.activeHelperScriptId = null;
+          renderTavernShell();
+          return;
+        }
         // Universal fallback: if any third-party plugin injected a matching menu item into #extensionsMenu, click it directly
         if (p && p.name) {
           const extMenuEl = document.getElementById('extensionsMenu');
           if (extMenuEl) {
             const cleanPName = String(p.name).replace(/^ST-/i, '').trim().toLowerCase();
-            const customItems = Array.from(extMenuEl.children).filter(el => !el.hasAttribute('data-action'));
+            const customItems = Array.from(extMenuEl.children).filter(
+              el => !el.hasAttribute('data-action') && el.id !== 'tavern-wand-plugins-submenu' && el.tagName !== 'STYLE'
+            );
             const matchedItem = customItems.find(el => {
               const txt = String(el.textContent || '').trim().toLowerCase();
               return txt && (txt.includes(cleanPName) || cleanPName.includes(txt));
@@ -15249,6 +15784,246 @@ code, pre {
         uiRuntime.activePluginModalId = pid;
         uiRuntime.activeHelperScriptId = null;
         renderTavernShell();
+        return;
+      }
+
+      if (action === 'jsr-create-script') {
+        const scope = actionEl.getAttribute('data-scope') || 'card';
+        const newId = 'jsr_script_' + Date.now();
+        if (scope === 'card') {
+          const card = getActiveCard();
+          if (card) {
+            if (!Array.isArray(card.helperScripts)) card.helperScripts = [];
+            card.helperScripts.unshift({
+              id: newId,
+              name: '新建角色脚本 ' + (card.helperScripts.length + 1),
+              content: '// 在此编写角色专属酒馆助手脚本\nconsole.log("角色脚本已运行:", getCharData()?.name);',
+              info: '角色专属酒馆助手脚本',
+              enabled: true,
+              buttons: []
+            });
+          }
+        } else {
+          tavernState.plugins.push({
+            id: newId,
+            name: '新建全局助手脚本',
+            enabled: true,
+            code: '// 在此编写全局酒馆助手脚本\nconsole.log("全局脚本已运行");',
+            description: '全局酒馆助手脚本',
+            buttons: []
+          });
+        }
+        uiRuntime.editingJsrScriptId = newId;
+        uiRuntime.editingJsrScriptScope = scope;
+        await saveTavernStore();
+        refreshActivePluginModalOnly();
+        showTavernToast('已新建脚本，可在下方编辑代码并保存运行');
+        return;
+      }
+
+      if (action === 'jsr-edit-script') {
+        const sid = actionEl.getAttribute('data-script-id');
+        const scope = actionEl.getAttribute('data-scope') || 'card';
+        if (uiRuntime.editingJsrScriptId === sid) {
+          uiRuntime.editingJsrScriptId = null;
+        } else {
+          uiRuntime.editingJsrScriptId = sid;
+          uiRuntime.editingJsrScriptScope = scope;
+        }
+        refreshActivePluginModalOnly();
+        return;
+      }
+
+      if (action === 'jsr-close-script-editor') {
+        uiRuntime.editingJsrScriptId = null;
+        refreshActivePluginModalOnly();
+        return;
+      }
+
+      if (action === 'jsr-save-script-editor') {
+        const sid = actionEl.getAttribute('data-script-id');
+        const scope = actionEl.getAttribute('data-scope') || 'card';
+        const nameVal = document.getElementById('jsr-edit-script-name')?.value?.trim() || '未命名脚本';
+        const infoVal = document.getElementById('jsr-edit-script-info')?.value?.trim() || '';
+        const btnsRaw = document.getElementById('jsr-edit-script-btns')?.value || '';
+        const codeVal = document.getElementById('jsr-edit-script-code')?.value || '';
+        const parsedBtns = btnsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean).map(n => ({ name: n, visible: true }));
+        if (scope === 'card') {
+          const card = getActiveCard();
+          const target = (card && Array.isArray(card.helperScripts)) ? card.helperScripts.find(s => s && s.id === sid) : null;
+          if (target) {
+            target.name = nameVal;
+            target.info = infoVal;
+            target.content = codeVal;
+            target.buttons = parsedBtns;
+            target.enabled = true;
+            executeCardHelperScripts(card, true);
+          }
+        } else {
+          const target = (tavernState.plugins || []).find(s => s && s.id === sid);
+          if (target) {
+            target.name = nameVal;
+            target.description = infoVal;
+            target.code = codeVal;
+            target.buttons = parsedBtns;
+            target.enabled = true;
+            executeUserPluginScript(target, { forceRerun: true });
+          }
+        }
+        uiRuntime.editingJsrScriptId = null;
+        await saveTavernStore();
+        refreshActivePluginModalOnly();
+        showTavernToast('脚本已保存并立即运行');
+        return;
+      }
+
+      if (action === 'jsr-toggle-card-script') {
+        const sid = actionEl.getAttribute('data-script-id');
+        const card = getActiveCard();
+        const target = (card && Array.isArray(card.helperScripts)) ? card.helperScripts.find(s => s && s.id === sid) : null;
+        if (target) {
+          target.enabled = Boolean(actionEl.checked);
+          await saveTavernStore();
+          executeCardHelperScripts(card, true);
+          refreshActivePluginModalOnly();
+        }
+        return;
+      }
+
+      if (action === 'jsr-del-script') {
+        const sid = actionEl.getAttribute('data-script-id');
+        const scope = actionEl.getAttribute('data-scope') || 'card';
+        const confirmed = await callGenericPopupShim('确定要删除该脚本吗？', 2);
+        if (!confirmed) return;
+        if (scope === 'card') {
+          const card = getActiveCard();
+          if (card && Array.isArray(card.helperScripts)) {
+            card.helperScripts = card.helperScripts.filter(s => s && s.id !== sid);
+          }
+        } else {
+          tavernState.plugins = (tavernState.plugins || []).filter(s => s && s.id !== sid);
+        }
+        if (uiRuntime.editingJsrScriptId === sid) uiRuntime.editingJsrScriptId = null;
+        await saveTavernStore();
+        refreshActivePluginModalOnly();
+        showTavernToast('已删除脚本');
+        return;
+      }
+
+      if (action === 'jsr-rerun-all-card-scripts') {
+        const card = getActiveCard();
+        if (card) {
+          await ensureCardEmbeddedScriptsLoaded(card);
+          executeCardHelperScripts(card, true);
+        }
+        refreshActivePluginModalOnly();
+        showTavernToast('已重新加载并运行当前角色全部酒馆助手脚本');
+        return;
+      }
+
+      if (action === 'jsr-save-var' || action === 'stpt-save-var') {
+        const prefix = action === 'stpt-save-var' ? 'stpt' : 'jsr';
+        const scope = document.getElementById(prefix + '-var-scope-select')?.value || 'local';
+        const key = document.getElementById(prefix + '-var-key-input')?.value?.trim() || '';
+        const rawVal = document.getElementById(prefix + '-var-val-input')?.value ?? '';
+        if (!key) {
+          showTavernToast('请先填写变量名');
+          return;
+        }
+        let parsedVal = rawVal;
+        const trimmed = String(rawVal).trim();
+        if (trimmed === 'true') parsedVal = true;
+        else if (trimmed === 'false') parsedVal = false;
+        else if (trimmed === 'null') parsedVal = null;
+        else if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) parsedVal = Number(trimmed);
+        else if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try { parsedVal = JSON.parse(trimmed); } catch (_) {}
+        }
+        const store = scope === 'global' ? getGlobalVariablesStore() : getChatVariablesStore();
+        setDeepVarByPath(store, key, parsedVal);
+        await saveTavernStore();
+        refreshActivePluginModalOnly();
+        showTavernToast('已保存变量: ' + key);
+        return;
+      }
+
+      if (action === 'jsr-del-var') {
+        const scope = actionEl.getAttribute('data-scope') || 'local';
+        const key = actionEl.getAttribute('data-var-key') || '';
+        if (key) {
+          const store = scope === 'global' ? getGlobalVariablesStore() : getChatVariablesStore();
+          delete store[key];
+          deleteDeepVarByPath(store, key);
+          await saveTavernStore();
+          refreshActivePluginModalOnly();
+          showTavernToast('已删除变量: ' + key);
+        }
+        return;
+      }
+
+      if (action === 'jsr-clear-vars') {
+        const confirmed = await callGenericPopupShim('确定要清空当前聊天的所有局部变量吗？', 2);
+        if (!confirmed) return;
+        const store = getChatVariablesStore();
+        Object.keys(store).forEach(k => { delete store[k]; });
+        await saveTavernStore();
+        refreshActivePluginModalOnly();
+        showTavernToast('已清空当前聊天变量');
+        return;
+      }
+
+      if (action === 'jsr-run-slash') {
+        const cmd = document.getElementById('jsr-console-input')?.value?.trim() || '';
+        uiRuntime.jsrConsoleDraft = cmd;
+        if (!cmd) {
+          showTavernToast('请先输入斜杠指令');
+          return;
+        }
+        try {
+          const res = await executeTavernSlashCommand(cmd);
+          uiRuntime.jsrConsoleOutput = '执行完成' + (res !== undefined && res !== '' ? (': ' + String(res)) : '');
+          refreshActivePluginModalOnly();
+          showTavernToast('斜杠指令已执行');
+        } catch (err) {
+          uiRuntime.jsrConsoleOutput = '执行出错: ' + (err.message || String(err));
+          refreshActivePluginModalOnly();
+        }
+        return;
+      }
+
+      if (action === 'jsr-run-js') {
+        const code = document.getElementById('jsr-console-input')?.value || '';
+        uiRuntime.jsrConsoleDraft = code;
+        if (!code.trim()) {
+          showTavernToast('请先输入JS代码');
+          return;
+        }
+        try {
+          const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
+          const fn = new AsyncFn('TavernHelper', 'SillyTavern', 'getContext', '_', '$', 'jQuery', code);
+          const out = await fn(window.TavernHelper, window.SillyTavern, buildSillyTavernContextObject, window._, window.$, window.jQuery);
+          uiRuntime.jsrConsoleOutput = out !== undefined ? (typeof out === 'object' ? JSON.stringify(out, null, 2) : String(out)) : '代码已执行完毕';
+          await saveTavernStore();
+          refreshActivePluginModalOnly();
+          showTavernToast('JS代码已运行');
+        } catch (err) {
+          uiRuntime.jsrConsoleOutput = '运行报错: ' + (err.message || String(err));
+          refreshActivePluginModalOnly();
+        }
+        return;
+      }
+
+      if (action === 'stpt-test-evaluate') {
+        const rawTpl = document.getElementById('stpt-test-input')?.value || '';
+        uiRuntime.stptTestDraft = rawTpl;
+        try {
+          uiRuntime.stptTestOutput = replaceTavernMacros(rawTpl, getActiveCard());
+          refreshActivePluginModalOnly();
+          showTavernToast('模板测试渲染完成');
+        } catch (err) {
+          uiRuntime.stptTestOutput = '模板解析错误: ' + (err.message || String(err));
+          refreshActivePluginModalOnly();
+        }
         return;
       }
 
@@ -16967,6 +17742,12 @@ code, pre {
           document.getElementById('pa-menu-entry')?.remove();
           document.getElementById('pa-settings')?.remove();
         }
+        if (isJsSlashRunnerPlugin(targetP) && tavernState.extensionSettings) {
+          tavernState.extensionSettings._uninstalledJsSlashRunner = true;
+        }
+        if (isStPromptTemplatePlugin(targetP) && tavernState.extensionSettings) {
+          tavernState.extensionSettings._uninstalledStPromptTemplate = true;
+        }
         tavernState.plugins = (tavernState.plugins || []).filter(x => x.id !== pid);
         await saveTavernStore();
         refreshOpenDrawerOnly();
@@ -17773,41 +18554,47 @@ code, pre {
         const owner = ghRepoMatch[1];
         const repo = ghRepoMatch[2];
         if (/^JS-Slash-Runner$/i.test(repo) || /^TavernHelper$/i.test(repo)) {
+          if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledJsSlashRunner;
           const pluginName = '酒馆助手 JS-Slash-Runner';
-          const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || /JS-Slash-Runner/i.test(x.name || '') || /JS-Slash-Runner/i.test(x.repoBaseUrl || '')));
+          const existingIdx = (tavernState.plugins || []).findIndex(x => isJsSlashRunnerPlugin(x));
           const plugin = {
-            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_js_slash_runner_' + Date.now()),
+            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : 'plugin_js_slash_runner',
             name: pluginName,
             enabled: true,
             code: '/* Native Built-in JS-Slash-Runner Engine Active */ window.TavernHelper = window.TavernHelper || {};',
-            uiHtml: '<div style="font-size:12px;color:#555;line-height:1.6;">已启用内置原生酒馆助手 JS-Slash-Runner 完整运行环境，支持 TavernHelper 变量读写、聊天楼层读写、世界书与预设控制、事件监听与前端沙盒通信。</div>',
+            uiHtml: '',
             repoBaseUrl: `https://github.com/${owner}/${repo}`,
-            description: '酒馆助手 JS-Slash-Runner 原生兼容核心'
+            description: '酒馆助手脚本管理、角色内嵌面板、自定义按钮与变量工作台'
           };
           if (existingIdx >= 0) tavernState.plugins[existingIdx] = plugin;
-          else tavernState.plugins.push(plugin);
-          saveTavernStore();
-          refreshOpenDrawerOnly();
-          showTavernToast('已安装并激活: ' + pluginName);
+          else tavernState.plugins.unshift(plugin);
+          uiRuntime.openDrawerKey = null;
+          uiRuntime.activePluginModalId = plugin.id;
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('已安装并打开: ' + pluginName);
           return;
         }
         if (/^ST-Prompt-Template$/i.test(repo)) {
+          if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledStPromptTemplate;
           const pluginName = '提示词模板 ST-Prompt-Template';
-          const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || /ST-Prompt-Template/i.test(x.name || '') || /ST-Prompt-Template/i.test(x.repoBaseUrl || '')));
+          const existingIdx = (tavernState.plugins || []).findIndex(x => isStPromptTemplatePlugin(x));
           const plugin = {
-            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_st_prompt_template_' + Date.now()),
+            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : 'plugin_st_prompt_template',
             name: pluginName,
             enabled: true,
             code: '/* Native Built-in ST-Prompt-Template Engine Active */',
-            uiHtml: '<div style="font-size:12px;color:#555;line-height:1.6;">已启用内置原生 ST-Prompt-Template 模板引擎，支持在预设、世界书、角色设定与聊天消息中运行 EJS 脚本语法与 getvar/setvar/getwi/_ 等全部模板函数。</div>',
+            uiHtml: '',
             repoBaseUrl: `https://github.com/${owner}/${repo}`,
-            description: 'ST-Prompt-Template 提示词模板原生兼容引擎'
+            description: 'EJS动态提示词模板渲染、变量读写与实时模板测试面板'
           };
           if (existingIdx >= 0) tavernState.plugins[existingIdx] = plugin;
-          else tavernState.plugins.push(plugin);
-          saveTavernStore();
-          refreshOpenDrawerOnly();
-          showTavernToast('已安装并激活: ' + pluginName);
+          else tavernState.plugins.unshift(plugin);
+          uiRuntime.openDrawerKey = null;
+          uiRuntime.activePluginModalId = plugin.id;
+          await saveTavernStore();
+          renderTavernShell();
+          showTavernToast('已安装并打开: ' + pluginName);
           return;
         }
         let branch = 'main';
@@ -18087,12 +18874,28 @@ code, pre {
 
   async function handleBatchImportThemes(files) {
     let count = 0;
+    const baseCleanTheme = {
+      blur_strength: 10,
+      main_text_color: 'rgba(55, 55, 55, 1)',
+      italics_text_color: 'rgba(145, 132, 142, 1)',
+      underline_text_color: 'rgba(188, 231, 207, 1)',
+      quote_text_color: 'rgba(237, 132, 150, 1)',
+      blur_tint_color: 'rgba(246, 245, 242, 0.92)',
+      chat_tint_color: 'rgba(246, 246, 246, 1)',
+      user_mes_blur_tint_color: 'rgba(245, 245, 245, 0.92)',
+      bot_mes_blur_tint_color: 'rgba(255, 255, 255, 0.92)',
+      shadow_color: 'rgba(0, 0, 0, 0.08)',
+      shadow_width: 2,
+      border_color: 'rgba(210, 205, 200, 0.75)',
+      font_scale: 1,
+      custom_css: ''
+    };
     for (const file of files) {
       try {
         const text = await file.text();
         if (file.name.toLowerCase().endsWith('.css')) {
           const newTheme = {
-            ...JSON.parse(JSON.stringify(DEFAULT_GOUSU_THEME)),
+            ...baseCleanTheme,
             id: 'theme_' + Date.now() + '_' + count,
             name: file.name.replace(/\.css$/i, ''),
             custom_css: text
@@ -18103,10 +18906,11 @@ code, pre {
         } else {
           const raw = JSON.parse(text);
           const newTheme = {
-            ...JSON.parse(JSON.stringify(DEFAULT_GOUSU_THEME)),
+            ...baseCleanTheme,
             ...raw,
             id: 'theme_' + Date.now() + '_' + count,
-            name: raw.name || file.name.replace(/\.json$/i, '')
+            name: raw.name || file.name.replace(/\.json$/i, ''),
+            custom_css: typeof raw.custom_css === 'string' ? raw.custom_css : ''
           };
           tavernState.themes.unshift(newTheme);
           tavernState.activeThemeId = newTheme.id;
