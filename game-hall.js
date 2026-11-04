@@ -188,7 +188,7 @@ code, pre {
 
   function getDefaultPromptOrderItems() {
     return [
-      { identifier: 'main', name: '主系统提示词 Main Prompt', role: 'system', enabled: true, marker: false, injection_position: 0, injection_depth: 4, content: '请完全代入{{char}}与{{user}}进行沉浸式互动与剧情推进，严格遵守角色设定、世界观法则与输出格式要求，严禁代替{{user}}说话或做决定。' },
+      { identifier: 'main', name: '主系统提示词 Main Prompt', role: 'system', enabled: true, marker: false, injection_position: 0, injection_depth: 4, content: '请完全代入\x7b\x7bchar\x7d\x7d与\x7b\x7buser\x7d\x7d进行沉浸式互动与剧情推进，严格遵守角色设定、世界观法则与输出格式要求，严禁代替\x7b\x7buser\x7d\x7d说话或做决定。' },
       { identifier: 'worldInfoBefore', name: '前置世界书 World Info Before', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
       { identifier: 'personaDescription', name: '玩家人设 Persona Description', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
       { identifier: 'charDescription', name: '角色设定 Char Description', role: 'system', enabled: true, marker: true, injection_position: 0, injection_depth: 4, content: '' },
@@ -272,14 +272,14 @@ code, pre {
       autoTranslateIncoming: false,
       translateTargetLang: '简体中文',
       customStoppingStrings: [],
-      systemPrompt: '请完全代入{{char}}与{{user}}进行沉浸式互动与剧情推进，严格遵守角色设定、世界观法则与输出格式要求，严禁代替{{user}}说话或做决定。',
+      systemPrompt: '请完全代入\x7b\x7bchar\x7d\x7d与\x7b\x7buser\x7d\x7d进行沉浸式互动与剧情推进，严格遵守角色设定、世界观法则与输出格式要求，严禁代替\x7b\x7buser\x7d\x7d说话或做决定。',
       postHistoryPrompt: '',
-      impersonationPrompt: '[请完全代入{{user}}的第一人称视角，顺着当前剧情写出{{user}}接下来的一段行动或对话回复，不要替{{char}}说话。]',
+      impersonationPrompt: '[请完全代入\x7b\x7buser\x7d\x7d的第一人称视角，顺着当前剧情写出\x7b\x7buser\x7d\x7d接下来的一段行动或对话回复，不要替\x7b\x7bchar\x7d\x7d说话。]',
       continueNudgePrompt: '[请紧接着上一条消息的末尾继续往下续写剧情，保持文风连贯，不要重复已写过的内容。]',
       newChatPrompt: '[开始一段新的对话]',
       wiFormat: '{0}',
-      scenarioFormat: '{{scenario}}',
-      personalityFormat: '{{personality}}'
+      scenarioFormat: '\x7b\x7bscenario\x7d\x7d',
+      personalityFormat: '\x7b\x7bpersonality\x7d\x7d'
     },
     authorNote: {
       text: '',
@@ -1361,7 +1361,14 @@ code, pre {
     MESSAGE_DELETED: 'message_deleted',
     MESSAGE_UPDATED: 'message_updated',
     MESSAGE_EDITED: 'message_edited',
+    MESSAGE_SWIPE_DELETED: 'message_swipe_deleted',
     MORE_MESSAGES_LOADED: 'more_messages_loaded',
+    WORLDINFO_UPDATED: 'worldinfo_updated',
+    WORLDINFO_ENTRIES_LOADED: 'worldinfo_entries_loaded',
+    GENERATE_AFTER_DATA: 'generate_after_data',
+    CHAT_COMPLETION_SETTINGS_READY: 'chat_completion_settings_ready',
+    SETTINGS_LOADED: 'settings_loaded',
+    SETTINGS_UPDATED: 'settings_updated',
     APP_READY: 'app_ready'
   };
 
@@ -1390,6 +1397,28 @@ code, pre {
         }
       }
       tavernEventListeners[evt].push(cb);
+    },
+    makeFirst(evt, cb) {
+      if (!evt || typeof cb !== 'function') return;
+      if (!tavernEventListeners[evt]) tavernEventListeners[evt] = [];
+      tavernEventSource.off(evt, cb);
+      tavernEventListeners[evt].unshift(cb);
+    },
+    makeLast(evt, cb) {
+      if (!evt || typeof cb !== 'function') return;
+      tavernEventSource.off(evt, cb);
+      tavernEventSource.on(evt, cb);
+    },
+    once(evt, cb) {
+      if (!evt || typeof cb !== 'function') return;
+      const wrapper = async (...args) => {
+        tavernEventSource.off(evt, wrapper);
+        return await cb(...args);
+      };
+      tavernEventSource.on(evt, wrapper);
+    },
+    removeListener(evt, cb) {
+      tavernEventSource.off(evt, cb);
     },
     off(evt, cb) {
       if (!evt || !tavernEventListeners[evt]) return;
@@ -1915,6 +1944,40 @@ code, pre {
           sess.messages.splice(Math.max(1, sess.messages.length - delCount));
           sess.messages.forEach((m, i) => { m.mesid = i; });
           renderTavernChatFloors(false);
+        }
+      } else if (/^\/(?:swipes-go|swipe)\b/i.test(line)) {
+        const argStr = line.replace(/^\/(?:swipes-go|swipe)\b\s*/i, '').trim();
+        const sess = getActiveChatSession();
+        if (sess && Array.isArray(sess.messages) && sess.messages.length > 0) {
+          const targetIdx = sess.messages.length - 1;
+          const targetMsg = sess.messages[targetIdx];
+          if (targetMsg) {
+            if (!Array.isArray(targetMsg.swipes) || targetMsg.swipes.length === 0) {
+              targetMsg.swipes = [targetMsg.mes || ''];
+            }
+            const curSwipe = Number(targetMsg.swipe_id ?? 0);
+            let nextSwipe = curSwipe;
+            if (/^(?:next|right|\+)$/i.test(argStr)) {
+              nextSwipe = Math.min(targetMsg.swipes.length - 1, curSwipe + 1);
+            } else if (/^(?:prev|left|-)$/i.test(argStr)) {
+              nextSwipe = Math.max(0, curSwipe - 1);
+            } else {
+              const parsedIdx = Number(argStr);
+              if (!Number.isNaN(parsedIdx)) {
+                nextSwipe = Math.max(0, Math.min(targetMsg.swipes.length - 1, parsedIdx));
+              }
+            }
+            targetMsg.swipe_id = nextSwipe;
+            targetMsg.mes = targetMsg.swipes[nextSwipe] ?? targetMsg.mes;
+            await saveTavernStore();
+            appendOrUpdateSingleFloorDom(targetIdx, { scrollToBottom: false });
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetIdx);
+            await tavernEventSource.emit(
+              targetMsg.is_user ? TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED : TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED,
+              targetIdx
+            );
+            lastResult = String(nextSwipe);
+          }
         }
       } else if (/^\/(?:hide|unhide)\b/i.test(line)) {
         const isHide = /^\/hide\b/i.test(line);
@@ -2492,9 +2555,38 @@ code, pre {
     return jq;
   }
 
+  function translateStTemplateHtmlToZh(rawHtml) {
+    if (!rawHtml || typeof rawHtml !== 'string') return '';
+    return rawHtml.replace(
+      /<!--\s*([^>-][^-]*?)\s*-->\s*(<(?:span|div|label|option|h\d|b|p|button)\b[^>]*\bdata-i18n="[^"]+"[^>]*>)([^<]*)(<\/(?:span|div|label|option|h\d|b|p|button)>)/gi,
+      (_, zhComment, openTag, _oldText, closeTag) => openTag + zhComment.trim() + closeTag
+    );
+  }
+
   async function renderExtensionTemplateAsyncShim(extensionName, fileName) {
     const cleanFile = String(fileName || 'settings').replace(/\.html$/i, '') + '.html';
-    const extKey = String(extensionName || '').split('/').pop().toLowerCase();
+    const extStr = String(extensionName || '');
+    const extKey = extStr.split('/').pop().toLowerCase();
+    if (/st-prompt-template/i.test(extStr)) {
+      const stptPlugin = (tavernState.plugins || []).find(p => p && (/st-prompt-template|提示词模板/i.test(p.name || '') || /ST-Prompt-Template/i.test(p.repoBaseUrl || '')));
+      if (stptPlugin && stptPlugin.htmlTemplates && stptPlugin.htmlTemplates[cleanFile] && !isHostAppHtmlFallback(stptPlugin.htmlTemplates[cleanFile])) {
+        return translateStTemplateHtmlToZh(stptPlugin.htmlTemplates[cleanFile]);
+      }
+      try {
+        const r = await fetch('https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main/' + cleanFile);
+        if (r.ok) {
+          const txt = await r.text();
+          if (!isHostAppHtmlFallback(txt)) {
+            const zhTxt = translateStTemplateHtmlToZh(txt);
+            if (stptPlugin) {
+              if (!stptPlugin.htmlTemplates) stptPlugin.htmlTemplates = {};
+              stptPlugin.htmlTemplates[cleanFile] = zhTxt;
+            }
+            return zhTxt;
+          }
+        }
+      } catch (_) {}
+    }
     const sortedPlugins = [...(tavernState.plugins || [])].sort((a, b) => {
       const aMatch = a && a.name && extKey && a.name.toLowerCase().includes(extKey) ? 1 : 0;
       const bMatch = b && b.name && extKey && b.name.toLowerCase().includes(extKey) ? 1 : 0;
@@ -3609,7 +3701,15 @@ code, pre {
             ? reqUrl.replace(window.location.origin, '').split('?')[0].replace(/^\/+/, '')
             : '';
 
-          // 1a. SillyTavern /thumbnail?type=avatar|persona&file=... endpoint used by book-excerpt and other extensions
+          // 1a. SillyTavern /version endpoint used by JS-Slash-Runner & ST-Prompt-Template
+          if (isSameOriginOrRel && (cleanPath === 'version' || cleanPath === 'api/version')) {
+            return new Response(JSON.stringify({ pkgVersion: '1.13.5', release: '1.13.5' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+
+          // 1a-2. SillyTavern /thumbnail?type=avatar|persona&file=... endpoint used by book-excerpt and other extensions
           if (isSameOriginOrRel && cleanPath === 'thumbnail') {
             const resolvedThumbUrl = await resolvePluginThumbnailUrlAsync(reqUrl);
             if (resolvedThumbUrl) {
@@ -4032,16 +4132,126 @@ code, pre {
         }
       }
     };
-    window.SlashCommand = {
-      fromProps: (props) => Object.assign({}, props)
+    function SlashCommandCtor(props = {}) { Object.assign(this, props); }
+    SlashCommandCtor.fromProps = (props) => new SlashCommandCtor(props);
+    window.SlashCommand = SlashCommandCtor;
+
+    function SlashCommandArgumentCtor(props = {}) { Object.assign(this, props); }
+    SlashCommandArgumentCtor.fromProps = (props) => new SlashCommandArgumentCtor(props);
+    window.SlashCommandArgument = SlashCommandArgumentCtor;
+
+    function SlashCommandNamedArgumentCtor(props = {}) { Object.assign(this, props); }
+    SlashCommandNamedArgumentCtor.fromProps = (props) => new SlashCommandNamedArgumentCtor(props);
+    window.SlashCommandNamedArgument = SlashCommandNamedArgumentCtor;
+
+    function SlashCommandEnumValueCtor(value, description = null, type = 'enum', icon = '') {
+      if (value && typeof value === 'object') {
+        Object.assign(this, value);
+      } else {
+        this.value = value;
+        this.description = description;
+        this.type = type;
+        this.icon = icon;
+      }
+    }
+    SlashCommandEnumValueCtor.fromProps = (props) => new SlashCommandEnumValueCtor(props);
+    window.SlashCommandEnumValue = SlashCommandEnumValueCtor;
+    window.ARGUMENT_TYPE = {
+      STRING: 'string',
+      NUMBER: 'number',
+      BOOLEAN: 'boolean',
+      LIST: 'list',
+      DICTIONARY: 'dictionary',
+      VARIABLE_NAME: 'varname',
+      CLOSURE: 'closure',
+      SUBCOMMAND: 'subcommand'
     };
-    window.SlashCommandArgument = {
-      fromProps: (props) => Object.assign({}, props)
+    window.enumTypes = { enum: 'enum', name: 'name', command: 'command', variable: 'variable', qr: 'qr', macro: 'macro' };
+    window.enumIcons = new Proxy({ default: '' }, { get: (t, k) => (k in t ? t[k] : () => '') });
+    window.commonEnumProviders = new Proxy({}, { get: () => () => [] });
+    window.MacrosParser = {
+      registerMacro: () => {},
+      unregisterMacro: () => {},
+      populateMacros: (s) => replaceTavernMacros(String(s || ''), getActiveCard())
     };
-    window.SlashCommandNamedArgument = {
-      fromProps: (props) => Object.assign({}, props)
+    window.getCurrentLocale = () => 'zh-CN';
+    window.addLocaleData = () => {};
+    window.t = function (strings, ...values) {
+      if (Array.isArray(strings)) {
+        return strings.reduce((acc, str, i) => acc + str + (values[i] !== undefined ? values[i] : ''), '');
+      }
+      return String(strings ?? '');
     };
-    window.ARGUMENT_TYPE = { STRING: 'string', NUMBER: 'number', BOOLEAN: 'boolean', LIST: 'list' };
+    window.Stopwatch = class Stopwatch {
+      constructor() { this.startTime = performance.now(); }
+      start() { this.startTime = performance.now(); return this; }
+      stop() { return performance.now() - this.startTime; }
+      elapsed() { return performance.now() - this.startTime; }
+    };
+    window.getCharaFilename = (chid) => {
+      const c = (chid !== undefined && tavernState.cards && tavernState.cards[chid]) ? tavernState.cards[chid] : getActiveCard();
+      return c ? (c.id || c.name || 'default') : 'default';
+    };
+    window.copyText = async (txt) => {
+      try { if (navigator.clipboard) await navigator.clipboard.writeText(String(txt ?? '')); } catch (_) {}
+    };
+    window.parseRegexFromString = parseFindRegexString;
+    window.getRegexedString = (rawStr, placement) => applyTavernRegexPipeline(String(rawStr ?? ''), {
+      isUser: placement === 1,
+      isPrompt: false,
+      isWorldInfo: placement === 5
+    });
+    window.regex_placement = { MD_DISPLAY: 0, USER_INPUT: 1, AI_OUTPUT: 2, SLASH_COMMAND: 3, WORLD_INFO: 5, REASONING: 6 };
+    window.extension_prompt_roles = { SYSTEM: 0, USER: 1, ASSISTANT: 2 };
+    window.system_message_types = { NARRATE: 'narrate', EMPTY: 'empty', GENERIC: 'generic' };
+    window.world_info_logic = { AND_ANY: 0, NOT_ALL: 1, NOT_ANY: 2, AND_ALL: 3 };
+    window.world_info_position = { before: 0, after: 1, ANTop: 2, ANBottom: 3, atDepth: 4, EMTop: 5, EMBottom: 6 };
+    window.DEFAULT_DEPTH = 4;
+    window.DEFAULT_WEIGHT = 100;
+    window.METADATA_KEY = 'world_info';
+    window.main_api = 'openai';
+    window.online_status = 'connected';
+    window.Mode = { tree: 'tree', text: 'text', table: 'table' };
+    window.ValidationSeverity = { error: 'error', warning: 'warning', info: 'info' };
+    window.createJSONEditor = () => ({ destroy: () => {}, update: () => {}, set: () => {}, get: () => ({}) });
+    window.yaml = {
+      parse: (str) => parseSimpleYamlOrJsonInitVars(str) || {},
+      stringify: (obj) => { try { return JSON.stringify(obj, null, 2); } catch (_) { return ''; } },
+      load: (str) => parseSimpleYamlOrJsonInitVars(str) || {},
+      dump: (obj) => { try { return JSON.stringify(obj, null, 2); } catch (_) { return ''; } }
+    };
+    Object.defineProperty(window, 'characters', {
+      configurable: true,
+      get: () => tavernState.cards || []
+    });
+    Object.defineProperty(window, 'this_chid', {
+      configurable: true,
+      get: () => {
+        const idx = (tavernState.cards || []).findIndex(c => c && c.id === tavernState.activeCardId);
+        return idx >= 0 ? idx : 0;
+      }
+    });
+    Object.defineProperty(window, 'chat', {
+      configurable: true,
+      get: () => getActiveChatSession()?.messages || []
+    });
+    Object.defineProperty(window, 'chat_metadata', {
+      configurable: true,
+      get: () => {
+        const sess = getActiveChatSession();
+        if (!sess) return {};
+        if (!sess.metadata) sess.metadata = {};
+        return sess.metadata;
+      }
+    });
+    Object.defineProperty(window, 'name1', {
+      configurable: true,
+      get: () => getUserDisplayName()
+    });
+    Object.defineProperty(window, 'name2', {
+      configurable: true,
+      get: () => getActiveCard()?.name || '角色'
+    });
 
     // SillyTavern host module exports for scripts/openai.js, scripts/world-info.js, scripts/secrets.js, scripts/personas.js, scripts/user.js
     Object.defineProperty(window, 'oai_settings', {
@@ -4234,12 +4444,24 @@ code, pre {
       if (opts && opts.type === 'message') {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
-        const rawId = opts.message_id !== undefined ? Number(opts.message_id) : (msgs.length - 1);
-        const idx = rawId < 0 ? Math.max(0, msgs.length + rawId) : rawId;
+        const rawId = opts.message_id !== undefined && opts.message_id !== 'latest' ? Number(opts.message_id) : (msgs.length - 1);
+        const idx = (Number.isNaN(rawId) || rawId < 0) ? Math.max(0, msgs.length + (Number.isNaN(rawId) ? -1 : rawId)) : rawId;
         const targetMsg = msgs[idx];
         if (targetMsg) {
+          const swipeIdx = Math.max(0, Number(targetMsg.swipe_id || 0));
           if (!targetMsg.data || typeof targetMsg.data !== 'object') targetMsg.data = {};
           if (!targetMsg.data.variables || typeof targetMsg.data.variables !== 'object') targetMsg.data.variables = {};
+          if (!Array.isArray(targetMsg.variables)) targetMsg.variables = [];
+          if (!targetMsg.variables[swipeIdx] || typeof targetMsg.variables[swipeIdx] !== 'object') {
+            targetMsg.variables[swipeIdx] = targetMsg.data.variables;
+          }
+          if (Object.keys(targetMsg.data.variables).length === 0) {
+            const chatStore = getChatVariablesStore();
+            if (chatStore && Object.keys(chatStore).length > 0) {
+              Object.assign(targetMsg.data.variables, chatStore);
+              targetMsg.variables[swipeIdx] = targetMsg.data.variables;
+            }
+          }
           return targetMsg.data.variables;
         }
       }
@@ -4461,7 +4683,7 @@ code, pre {
         }
         if (typeof rangeOrId === 'string') {
           const trimmed = rangeOrId.trim();
-          if (trimmed === '{{lastMessageId}}' || trimmed === 'last' || trimmed === 'current') {
+          if (trimmed === '\x7b\x7blastMessageId\x7d\x7d' || trimmed === 'last' || trimmed === 'current') {
             const lastIdx = Math.max(0, msgs.length - 1);
             return msgs[lastIdx] ? [wrapMsg(msgs[lastIdx], lastIdx)] : [];
           }
@@ -4495,27 +4717,54 @@ code, pre {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
         const targetId = messageId !== undefined ? (messageId < 0 ? msgs.length + messageId : Number(messageId)) : Math.max(0, msgs.length - 1);
-        const newText = (textOrObj && typeof textOrObj === 'object') ? (textOrObj.message ?? textOrObj.mes ?? '') : String(textOrObj ?? '');
-        await window.TavernHelper.setChatMessages([{ message_id: targetId, message: newText }], opts);
+        if (textOrObj && typeof textOrObj === 'object') {
+          await window.TavernHelper.setChatMessages([Object.assign({ message_id: targetId }, textOrObj)], opts);
+        } else {
+          const newText = String(textOrObj ?? '');
+          const nextOpts = Object.assign({}, opts);
+          const payload = { message_id: targetId, message: newText };
+          if (nextOpts.swipe_id !== undefined) payload.swipe_id = nextOpts.swipe_id;
+          await window.TavernHelper.setChatMessages([payload], nextOpts);
+        }
       },
       setChatMessages: async (msgs, opts = {}) => {
         const sess = getActiveChatSession();
         if (!sess || !Array.isArray(msgs) || msgs.length === 0) return;
+        const swipedIndices = [];
+        const updatedIndices = [];
         const canUpdateByIndex = msgs.every(m => m && m.message_id !== undefined && Number.isInteger(Number(m.message_id)) && sess.messages[Number(m.message_id)]);
         if (canUpdateByIndex) {
           msgs.forEach(u => {
-            const target = sess.messages[Number(u.message_id)];
+            const idx = Number(u.message_id);
+            const target = sess.messages[idx];
             if (target) {
+              updatedIndices.push(idx);
+              if (!Array.isArray(target.swipes) || target.swipes.length === 0) {
+                target.swipes = [target.mes || ''];
+              }
+              if (Array.isArray(u.swipes) && u.swipes.length > 0) {
+                target.swipes = [...u.swipes];
+              }
+              if (u.swipe_id !== undefined && u.swipe_id !== 'current') {
+                const curSwipe = Number(target.swipe_id || 0);
+                let nextSwipe = curSwipe;
+                if (u.swipe_id === 'next') nextSwipe = Math.min(target.swipes.length - 1, curSwipe + 1);
+                else if (u.swipe_id === 'prev') nextSwipe = Math.max(0, curSwipe - 1);
+                else if (!Number.isNaN(Number(u.swipe_id))) {
+                  nextSwipe = Math.min(target.swipes.length - 1, Math.max(0, Number(u.swipe_id)));
+                }
+                target.swipe_id = nextSwipe;
+                if (target.swipes[nextSwipe] !== undefined) {
+                  target.mes = target.swipes[nextSwipe];
+                }
+                syncSwipeInfoToMessage(target, nextSwipe);
+                swipedIndices.push(idx);
+              }
               const nextMsgText = u.message !== undefined ? u.message : u.mes;
               if (nextMsgText !== undefined) {
                 target.mes = nextMsgText;
-                if (Array.isArray(target.swipes) && target.swipes.length > 0) {
-                  const sIdx = Math.min(target.swipes.length - 1, Math.max(0, Number(target.swipe_id || 0)));
-                  target.swipes[sIdx] = nextMsgText;
-                } else {
-                  target.swipes = [nextMsgText];
-                  target.swipe_id = 0;
-                }
+                const sIdx = Math.min(target.swipes.length - 1, Math.max(0, Number(target.swipe_id || 0)));
+                target.swipes[sIdx] = nextMsgText;
               }
               if (u.data && typeof u.data === 'object') {
                 target.data = Object.assign({}, target.data || {}, u.data);
@@ -4532,7 +4781,8 @@ code, pre {
             m.mes = txt;
             if (Array.isArray(m.swipes) && m.swipes.length > 0) {
               const sIdx = Math.min(m.swipes.length - 1, Math.max(0, Number(m.swipe_id || 0)));
-              m.swipes[sIdx] = txt;
+              if (txt) m.swipes[sIdx] = txt;
+              else if (m.swipes[sIdx] !== undefined) m.mes = m.swipes[sIdx];
             } else {
               m.swipes = [txt];
               m.swipe_id = 0;
@@ -4543,6 +4793,15 @@ code, pre {
         await saveTavernStore();
         if (!opts || opts.refresh !== 'none') {
           renderTavernChatFloors(false);
+          for (const sIdx of swipedIndices) {
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, sIdx);
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, sIdx);
+          }
+          if (swipedIndices.length === 0) {
+            for (const uIdx of updatedIndices) {
+              await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_UPDATED, uIdx);
+            }
+          }
         }
       },
       createChatMessages: async (newMsgs) => {
@@ -4977,6 +5236,29 @@ code, pre {
           await handleSendUserMessage();
         } else if (data.type === 'TAVERN_IFRAME_GENERATE') {
           await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
+        } else if (data.type === 'TAVERN_IFRAME_SWIPE') {
+          const sess = getActiveChatSession();
+          const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
+          const mIdx = data.mesid !== undefined ? Number(data.mesid) : Math.max(0, msgs.length - 1);
+          const msg = msgs[mIdx];
+          if (msg && Array.isArray(msg.swipes) && msg.swipes.length > 1) {
+            const cur = Number(msg.swipe_id || 0);
+            recordMessageToSwipeInfo(msg, cur);
+            if (data.dir === 'left') {
+              msg.swipe_id = cur > 0 ? cur - 1 : msg.swipes.length - 1;
+            } else if (data.dir === 'right') {
+              msg.swipe_id = cur < msg.swipes.length - 1 ? cur + 1 : 0;
+            } else if (typeof data.swipeId === 'number') {
+              msg.swipe_id = Math.min(msg.swipes.length - 1, Math.max(0, data.swipeId));
+            }
+            msg.mes = msg.swipes[msg.swipe_id];
+            syncSwipeInfoToMessage(msg, msg.swipe_id);
+            msg.token_count = estimateTokens(msg.mes);
+            await saveTavernStore();
+            appendOrUpdateSingleFloorDom(mIdx);
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, mIdx);
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, mIdx);
+          }
         } else if (data.type === 'TAVERN_IFRAME_TOUCH_GESTURE') {
           if (typeof window.pushMobileBackGuard === 'function') {
             window.pushMobileBackGuard('tavern_iframe');
@@ -5440,25 +5722,27 @@ code, pre {
   }
 
   function transpilePluginImports(codeStr, plugin = null) {
-    const safeMetaUrl = JSON.stringify(resolvePluginMetaUrl(plugin));
+    const metaUrlVal = resolvePluginMetaUrl(plugin);
+    window.__ST_META_URL__ = metaUrlVal;
+    window.__ST_META__ = { url: metaUrlVal, env: {} };
     return String(codeStr || '')
-      .replace(/\bimport\.meta\.url\b/g, safeMetaUrl)
-      .replace(/\bimport\.meta\b/g, `({ url: ${safeMetaUrl}, env: {} })`)
-      .replace(/\bimport\s*\(/g, '(async (u) => window.__ST_BRIDGE__)(')
-      .replace(/^\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s+['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
+      .replace(/\bimport\.meta\.url\b/g, 'window.__ST_META_URL__')
+      .replace(/\bimport\.meta\b/g, 'window.__ST_META__')
+      .replace(/\bimport\s*\((?!\s*\))/g, '(async (u) => window.__ST_BRIDGE__)(')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
         return `const ${defName} = window.__ST_BRIDGE__; const { ${mapped} } = window.__ST_BRIDGE__;`;
       })
-      .replace(/^\s*import\s+\*\s+as\s+([a-zA-Z0-9_$]+)\s+from\s+['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
-      .replace(/^\s*import\s+\{([\s\S]*?)\}\s*from\s+['"][^'"]+['"]\s*;?/gm, (_, inner) => {
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\*\s*as\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
         return `const { ${mapped} } = window.__ST_BRIDGE__;`;
       })
-      .replace(/^\s*import\s+([a-zA-Z0-9_$]+)\s+from\s+['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
-      .replace(/^\s*import\s+['"][^'"]+['"]\s*;?/gm, '')
-      .replace(/^\s*export\s+default\s+/gm, '')
-      .replace(/^\s*export\s+\{[^}]*\}\s*;?/gm, '')
-      .replace(/^\s*export\s+/gm, '')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*['"][^'"]+['"]\s*;?/gm, '')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+default\s+/gm, '')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s*\{[^}]*\}\s*;?/gm, '')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+(?=(?:async\s+)?function\b|const\b|let\b|var\b|class\b)/gm, '')
       // Prevent helper scripts (such as Gourmet handbook) from auto-pausing playing music when opening the panel or scanning floors without a new STATUS tag
       .replace(
         /if\s*\(\s*!target\s*\)\s*\{\s*if\s*\(\s*!audio\.paused\s*\)\s*audio\.pause\(\)\s*;\s*statusMusicUrl\s*=\s*['"]['"]\s*;\s*statusMusicMessageId\s*=\s*null\s*;\s*statusMusicInitialized\s*=\s*true\s*;\s*return\s*;\s*\}/g,
@@ -5570,6 +5854,55 @@ code, pre {
         try { document.getElementById('bbs-menu-item')?.remove(); } catch (_) {}
       }
     }
+    if (isJsSlashRunnerPlugin(plugin)) {
+      plugin.repoBaseUrl = 'https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main';
+      plugin.jsEntryPath = 'dist/index.js';
+      if ((!plugin.code || String(plugin.code).includes('Native Built-in') || plugin.code.length < 500) && !window._jssrBundleUpgradeInFlight) {
+        window._jssrBundleUpgradeInFlight = true;
+        Promise.all([
+          fetch('https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main/dist/index.js').then(r => (r.ok ? r.text() : '')),
+          fetch('https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main/dist/index.css').then(r => (r.ok ? r.text() : ''))
+        ]).then(async ([jsTxt, cssTxt]) => {
+          if (jsTxt && jsTxt.length > 1000) {
+            const cssInject = cssTxt
+              ? `try{if(!document.getElementById('jssr-official-css')){const s=document.createElement('style');s.id='jssr-official-css';s.textContent=${JSON.stringify(cssTxt)};document.head.appendChild(s);}}catch(_){}\n`
+              : '';
+            plugin.code = cssInject + jsTxt;
+            await saveTavernStore();
+            executeUserPluginScript(plugin, { forceRerun: true });
+          }
+        }).catch(() => {}).finally(() => { window._jssrBundleUpgradeInFlight = false; });
+        return;
+      }
+      if (document.getElementById('tavern_helper') && !execOpts.forceRerun) {
+        return;
+      }
+    }
+    if (isStPromptTemplatePlugin(plugin)) {
+      plugin.repoBaseUrl = 'https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main';
+      plugin.jsEntryPath = 'dist/index.js';
+      if ((!plugin.code || String(plugin.code).includes('Native Built-in') || plugin.code.length < 500) && !window._stptBundleUpgradeInFlight) {
+        window._stptBundleUpgradeInFlight = true;
+        Promise.all([
+          fetch('https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main/dist/index.js').then(r => (r.ok ? r.text() : '')),
+          fetch('https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main/settings.html').then(r => (r.ok ? r.text() : ''))
+        ]).then(async ([jsTxt, htmlTxt]) => {
+          if (jsTxt && jsTxt.length > 1000) {
+            plugin.code = jsTxt;
+            if (htmlTxt) {
+              if (!plugin.htmlTemplates) plugin.htmlTemplates = {};
+              plugin.htmlTemplates['settings.html'] = translateStTemplateHtmlToZh(htmlTxt);
+            }
+            await saveTavernStore();
+            executeUserPluginScript(plugin, { forceRerun: true });
+          }
+        }).catch(() => {}).finally(() => { window._stptBundleUpgradeInFlight = false; });
+        return;
+      }
+      if (document.getElementById('prompt_template_settings') && !execOpts.forceRerun) {
+        return;
+      }
+    }
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
 
@@ -5676,6 +6009,15 @@ code, pre {
           syncBaiBaiShadowDomCss();
           setTimeout(syncBaiBaiShadowDomCss, 120);
           setTimeout(syncBaiBaiShadowDomCss, 500);
+        }
+        if (isJsSlashRunnerPlugin(plugin) || isStPromptTemplatePlugin(plugin)) {
+          setTimeout(() => {
+            if (uiRuntime.activePluginModalId === plugin.id) {
+              refreshActivePluginModalOnly();
+            } else if (uiRuntime.openDrawerKey === 'cubes') {
+              refreshOpenDrawerOnly();
+            }
+          }, 120);
         }
       }).catch(err => {
         console.warn('Async plugin script warning:', plugin.name, err);
@@ -6537,8 +6879,8 @@ code, pre {
       new_chat_prompt: rawJson.new_chat_prompt || tavernState.formatting.newChatPrompt,
       continue_nudge_prompt: rawJson.continue_nudge_prompt || tavernState.formatting.continueNudgePrompt,
       wi_format: rawJson.wi_format || '{0}',
-      scenario_format: rawJson.scenario_format || '{{scenario}}',
-      personality_format: rawJson.personality_format || '{{personality}}',
+      scenario_format: rawJson.scenario_format || '\x7b\x7bscenario\x7d\x7d',
+      personality_format: rawJson.personality_format || '\x7b\x7bpersonality\x7d\x7d',
       extensions: (rawJson.extensions && typeof rawJson.extensions === 'object') ? JSON.parse(JSON.stringify(rawJson.extensions)) : {},
       regexScripts: presetRegexScripts,
       prompts: promptItems
@@ -6770,7 +7112,8 @@ code, pre {
       const books = (tavernState.worldBooks || []).filter(wb => {
         if (!wb || !Array.isArray(wb.entries)) return false;
         const boundIds = (card && Array.isArray(card.worldBookIds)) ? card.worldBookIds : [];
-        return wb.enabled !== false || boundIds.includes(wb.id) || (card && wb.name === card.name);
+        const singleBoundId = card && card.worldBookId ? String(card.worldBookId) : '';
+        return wb.enabled !== false || boundIds.includes(wb.id) || (singleBoundId && wb.id === singleBoundId) || (card && wb.name === card.name);
       });
       const preloadEntries = [];
       for (const wb of books) {
@@ -6814,6 +7157,58 @@ code, pre {
     } finally {
       uiRuntime._inStptPreload = false;
     }
+  }
+
+  function applyStptRenderWorldbookEntries(rawMessageText, options = {}) {
+    const stptCfg = getStPromptTemplateConfig();
+    if (stptCfg.enabled === false || stptCfg.render_enabled === false || stptCfg.render_loader_enabled === false) {
+      return rawMessageText;
+    }
+    const card = (options && options.card) || getActiveCard();
+    ensureCardStptPreloadAndInitialVars(card);
+    const invertEnabled = stptCfg.invert_enabled !== false;
+    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
+    const floorDepth = (options && options.depth !== undefined) ? Number(options.depth) : (isLastFloor ? 0 : 1);
+    const books = (tavernState.worldBooks || []).filter(wb => {
+      if (!wb || !Array.isArray(wb.entries)) return false;
+      const boundIds = (card && Array.isArray(card.worldBookIds)) ? card.worldBookIds : [];
+      const singleBoundId = card && card.worldBookId ? String(card.worldBookId) : '';
+      return wb.enabled !== false || boundIds.includes(wb.id) || (singleBoundId && wb.id === singleBoundId) || (card && wb.name === card.name);
+    });
+    const beforeEntries = [];
+    const afterEntries = [];
+    for (const wb of books) {
+      for (const ent of wb.entries) {
+        if (!ent) continue;
+        const comment = String(ent.comment || '').trim();
+        const content = String(ent.content || '');
+        const keys = Array.isArray(ent.keys) ? ent.keys.map(k => String(k || '').trim()) : [];
+        const isRenderBefore = /^\[RENDER:BEFORE\]/i.test(comment) || /^\s*@@render_before\b/m.test(content) || keys.some(k => /^\[RENDER:BEFORE\]$/i.test(k));
+        const isRenderAfter = /^\[RENDER:AFTER\]/i.test(comment) || /^\[RENDER\]/i.test(comment) || /^\s*@@render(?:_after)?\b/m.test(content) || keys.some(k => /^\[RENDER(?::AFTER)?\]$/i.test(k));
+        if (!isRenderBefore && !isRenderAfter) continue;
+        if (ent.disable && !invertEnabled) continue;
+        const onlyLastMatch = content.match(/^\s*@@only_last(?:\s+(\d+))?/m);
+        if (onlyLastMatch) {
+          const maxD = onlyLastMatch[1] !== undefined ? Number(onlyLastMatch[1]) : 0;
+          if (floorDepth > maxD) continue;
+        }
+        if (isRenderBefore) beforeEntries.push(ent);
+        else afterEntries.push(ent);
+      }
+    }
+    if (beforeEntries.length === 0 && afterEntries.length === 0) return rawMessageText;
+    beforeEntries.sort((a, b) => (Number(a.order) || 100) - (Number(b.order) || 100));
+    afterEntries.sort((a, b) => (Number(a.order) || 100) - (Number(b.order) || 100));
+    const evalEntry = (ent) => {
+      const cleaned = String(ent.content || '').replace(/^\s*@@[a-zA-Z0-9_-]+[^\r\n]*\r?\n?/gm, '');
+      return replaceTavernMacros(cleaned, card);
+    };
+    const prefixOut = beforeEntries.map(evalEntry).filter(s => s && s.trim()).join('\n');
+    const suffixOut = afterEntries.map(evalEntry).filter(s => s && s.trim()).join('\n');
+    let combined = rawMessageText;
+    if (prefixOut) combined = prefixOut + '\n' + combined;
+    if (suffixOut) combined = combined + '\n' + suffixOut;
+    return combined;
   }
 
   function evaluateStPromptTemplate(rawText, cardObj) {
@@ -7060,13 +7455,17 @@ code, pre {
     const slashMatch = trimmed.match(/^\/([\s\S]*)\/([gimsuy]*)$/);
     let compiled = null;
     try {
-      if (slashMatch) {
-        let flags = slashMatch[2] || 'g';
-        if (!flags.includes('g')) flags += 'g';
-        compiled = new RegExp(slashMatch[1], flags);
-      } else {
-        compiled = new RegExp(trimmed, 'g');
+      let body = slashMatch ? slashMatch[1] : trimmed;
+      let flags = slashMatch ? (slashMatch[2] || 'g') : 'g';
+      const inlineFlagMatch = body.match(/^\(\?([ims]+)\)/);
+      if (inlineFlagMatch) {
+        body = body.slice(inlineFlagMatch[0].length);
+        for (const ch of inlineFlagMatch[1]) {
+          if (!flags.includes(ch)) flags += ch;
+        }
       }
+      if (!flags.includes('g')) flags += 'g';
+      compiled = new RegExp(body, flags);
     } catch (err) {
       console.warn('Invalid regex pattern:', findRegexStr, err);
       compiled = null;
@@ -7138,7 +7537,8 @@ code, pre {
           : (script.placement.includes(3) || script.placement.includes(0));
         if (!matchSysPlacement) continue;
       } else if (Array.isArray(script.placement) && script.placement.length > 0) {
-        if (!script.placement.includes(targetPlacement)) continue;
+        const matchesTarget = script.placement.includes(targetPlacement) || (!isPrompt && script.placement.includes(0));
+        if (!matchesTarget) continue;
       }
 
       if (isPrompt && hasDepthContext) {
@@ -7185,7 +7585,7 @@ code, pre {
           };
 
           const substituted = rawRepTemplate.replace(/\{\{\$?match\}\}|\$&|\$<([^>]+)>|\$(\d{1,2})/g, (token, namedGroup, numStr) => {
-            if (token === '$&' || token === '{{match}}' || token === '{{$match}}') {
+            if (token === '$&' || token === '\x7b\x7bmatch\x7d\x7d' || token === '\x7b\x7b$match\x7d\x7d') {
               return applyTrim(fullMatchedStr);
             }
             if (namedGroup !== undefined) {
@@ -7241,13 +7641,14 @@ code, pre {
 
     if (!isFullModal) {
       cleaned = cleaned
-        .replace(/min-height\s*:\s*100(?:d?vh|%)/gi, 'min-height:auto')
-        .replace(/height\s*:\s*100(?:d?vh)/gi, 'height:auto');
+        .replace(/min-height\s*:\s*100d?vh/gi, 'min-height:auto')
+        .replace(/height\s*:\s*100d?vh/gi, 'height:auto');
     }
 
     const sandboxClampCss = `<style>
       *, *::before, *::after {
         box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent !important;
       }
       html, body {
         margin: 0;
@@ -7262,15 +7663,24 @@ code, pre {
         -webkit-user-select: none !important;
         user-select: none !important;
         -webkit-touch-callout: none !important;
+        -webkit-tap-highlight-color: transparent !important;
       }
       body *, * {
         -webkit-touch-callout: none !important;
+        -webkit-tap-highlight-color: transparent !important;
       }
-      button, img, svg {
+      button, img, svg, canvas, a, label, [onclick] {
         -webkit-user-select: none !important;
         user-select: none !important;
+        -webkit-user-drag: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+        outline: none !important;
       }
-      div, span, p, li, td, th, dd, dt, font, b, i, em, strong, small, u, s, del, ins, mark, sub, sup, label, blockquote, pre, code, h1, h2, h3, h4, h5, h6, section, article, details, summary, q, cite, abbr, a, ruby, rb, rt, time, input, textarea, [contenteditable="true"] {
+      img::selection, svg::selection, button::selection, a::selection, label::selection {
+        background: transparent !important;
+        color: inherit !important;
+      }
+      div, span, p, li, td, th, dd, dt, font, b, i, em, strong, small, u, s, del, ins, mark, sub, sup, blockquote, pre, code, h1, h2, h3, h4, h5, h6, section, article, details, summary, q, cite, abbr, ruby, rb, rt, time, input, textarea, [contenteditable="true"] {
         -webkit-user-select: text !important;
         user-select: text !important;
       }
@@ -7387,7 +7797,7 @@ code, pre {
       for (var i = 0; i < imgs.length; i++) {
         var im = imgs[i];
         var rawSrc = im.getAttribute('src') || '';
-        if (uUrl && (/User%20Avatars|User Avatars|user-avatar|{{user}}/i.test(rawSrc))) {
+        if (uUrl && (/User%20Avatars|User Avatars|user-avatar|\x7b\x7buser\x7d\x7d/i.test(rawSrc))) {
           im.src = uUrl;
         } else if (rawSrc.indexOf('vault://') === 0 && typeof window.parent.resolveVaultRefToUrl === 'function') {
           (function(imgEl, vRef) {
@@ -7443,6 +7853,10 @@ code, pre {
         if (!ev || String(ev).indexOf('click') !== -1 || String(ev).indexOf('submit') !== -1) {
           if (sel.indexOf('#send_but') !== -1 || sel.indexOf('#send_form') !== -1) {
             window.parent.postMessage({ type: 'TAVERN_IFRAME_CLICK_SEND', text: pendingInputText }, '*');
+          } else if (sel.indexOf('swipe_right') !== -1) {
+            window.parent.postMessage({ type: 'TAVERN_IFRAME_SWIPE', dir: 'right', mesid: window.getCurrentMessageId ? window.getCurrentMessageId() : 0 }, '*');
+          } else if (sel.indexOf('swipe_left') !== -1) {
+            window.parent.postMessage({ type: 'TAVERN_IFRAME_SWIPE', dir: 'left', mesid: window.getCurrentMessageId ? window.getCurrentMessageId() : 0 }, '*');
           }
         }
         return this;
@@ -7451,6 +7865,10 @@ code, pre {
         if (typeof fn === 'function') return this;
         if (sel.indexOf('#send_but') !== -1) {
           window.parent.postMessage({ type: 'TAVERN_IFRAME_CLICK_SEND', text: pendingInputText }, '*');
+        } else if (sel.indexOf('swipe_right') !== -1) {
+          window.parent.postMessage({ type: 'TAVERN_IFRAME_SWIPE', dir: 'right', mesid: window.getCurrentMessageId ? window.getCurrentMessageId() : 0 }, '*');
+        } else if (sel.indexOf('swipe_left') !== -1) {
+          window.parent.postMessage({ type: 'TAVERN_IFRAME_SWIPE', dir: 'left', mesid: window.getCurrentMessageId ? window.getCurrentMessageId() : 0 }, '*');
         }
         return this;
       },
@@ -7466,10 +7884,10 @@ code, pre {
     var wrapped = function(sel, ctx) {
       if (typeof sel === 'string') {
         var s = sel.trim();
-        if (s === '#send_textarea' || s === '#send_but' || s === '#send_form') {
+        if (s === '#send_textarea' || s === '#send_but' || s === '#send_form' || s.indexOf('swipe_right') !== -1 || s.indexOf('swipe_left') !== -1) {
           return makeHostSelectorProxy(s);
         }
-        if (s.indexOf('#options') !== -1 || s.indexOf('#extensions') !== -1) {
+        if (s.indexOf('#options') !== -1 || s.indexOf('#extensions') !== -1 || s.indexOf('#chat') !== -1 || s.indexOf('.mes') !== -1) {
           try {
             if (window.parent && window.parent.$) return window.parent.$(sel);
           } catch (e) {}
@@ -7682,6 +8100,7 @@ code, pre {
     }
     cleanedForDisplay = cleanedForDisplay.trim();
     if (!cleanedForDisplay) return '';
+    cleanedForDisplay = applyStptRenderWorldbookEntries(cleanedForDisplay, options);
     const afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
 
     // 1. JS-Slash-Runner / SillyTavern 1-to-1: Extract fenced HTML blocks (```html ... ``` or ``` ... ```) directly into isolated sandboxed iframes first so multiple cards never bridge across story text or leak <style> into host DOM
@@ -7689,12 +8108,17 @@ code, pre {
     const protectedBlocks = [];
     let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?([\s\S]*?)```/g, (full, inner) => {
       const trimmed = inner.trim();
-      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<script\b)/i.test(trimmed) || /<(?:<!DOCTYPE\s+html|html\b|head\b|body\b|style\b|script\b)/i.test(trimmed)) {
+      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<script\b)/i.test(trimmed) || /<(?:!DOCTYPE\s+html|html\b|head\b|body\b|style\b|script\b)/i.test(trimmed)) {
         const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
         protectedBlocks.push(buildSandboxIframeHtml(trimmed, { isLastFloor }));
         return '\n' + token + '\n';
       }
       if (/^(?:<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b)/i.test(trimmed)) {
+        if (/<script\b/i.test(trimmed)) {
+          const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+          protectedBlocks.push(buildSandboxIframeHtml(trimmed, { isLastFloor }));
+          return '\n' + token + '\n';
+        }
         return trimmed;
       }
       return full;
@@ -7705,12 +8129,25 @@ code, pre {
       .replace(/```(?:html|HTML)\s*(?=<)/g, '')
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
 
-    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html> or <html...>...</html>) into its own sandboxed iframe
+    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html>, <html...>...</html>, or <body...>...</body>) into its own sandboxed iframe
     working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html\b(?:(?!<html\b)[\s\S])*?<\/html>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
     });
+    working = working.replace(/<body\b[\s\S]*?<\/body>/gi, match => {
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
+      return '\n' + token + '\n';
+    });
+    // 2b. If an unfenced status bar / card block contains <script>...</script> (like Border Tavern / JS-Slash-Runner regex replacements without <html>), render the interactive block inside a sandboxed iframe so scripts execute 1:1 like SillyTavern
+    if (/<script\b[\s\S]*?<\/script>/i.test(working)) {
+      working = working.replace(/(?:<(?:style|div|section|main|header|article|details|table|form|svg)\b[\s\S]*?<\/script>\s*(?:<\/(?:div|section|main|header|article|details|table|form)>)*)|(?:<script\b[\s\S]*?<\/script>)/gi, match => {
+        const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+        protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
+        return '\n' + token + '\n';
+      });
+    }
 
     // Strip residual XML wrapper tags like <content>...</content> so story paragraphs inside them always display cleanly
     working = working.replace(/<\/?(?:content|正文)\b[^>]*>/gi, '');
@@ -7723,7 +8160,7 @@ code, pre {
     });
     working = working.replace(/<script[\s\S]*?<\/script>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(match);
+      protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return token;
     });
     working = working.replace(/```([a-zA-Z0-9_-]*)[ \t]*\r?\n([\s\S]*?)```/g, (full, lang, codeBody) => {
@@ -7800,17 +8237,31 @@ code, pre {
     // 7. Convert plain text paragraphs and Markdown block syntax while tracking multi-line HTML container depth
     const lines = working.split('\n');
     let htmlBlockDepth = 0;
-    const blockContainerRx = /<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|form|select|nav|main|aside|figure|figcaption|svg)\b[^>]*>/gi;
-    const htmlLines = lines.map(line => {
+    let prevNonEmptyWasHtml = false;
+    const nextNonEmptyStartsWithHtml = (startIdx) => {
+      for (let j = startIdx + 1; j < lines.length; j++) {
+        const t = lines[j].trim();
+        if (!t) continue;
+        return /^<\/?[a-zA-Z][a-zA-Z0-9-]*\b/i.test(t) || /^___TAVERN_PROTECTED_BLOCK_\d+___$/.test(t);
+      }
+      return false;
+    };
+    const blockContainerRx = /<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|form|select|label|nav|main|aside|figure|figcaption|svg)\b[^>]*>/gi;
+    const htmlLines = lines.map((line, lineIdx) => {
       const trimmed = line.trim();
       if (!trimmed) {
-        return htmlBlockDepth > 0 ? '' : '<div class="tavern-para-spacer"></div>';
+        if (htmlBlockDepth > 0 || (prevNonEmptyWasHtml && nextNonEmptyStartsWithHtml(lineIdx))) {
+          return '';
+        }
+        return '<div class="tavern-para-spacer"></div>';
       }
       if (/^___TAVERN_PROTECTED_BLOCK_\d+___$/.test(trimmed)) {
+        prevNonEmptyWasHtml = true;
         return trimmed;
       }
 
       const startsWithHtmlTag = /^<\/?[a-zA-Z][a-zA-Z0-9-]*\b/i.test(trimmed);
+      const endsWithHtmlTag = /<\/?[a-zA-Z][a-zA-Z0-9-]*\b[^>]*>$/i.test(trimmed);
       const wasInHtmlBlock = htmlBlockDepth > 0;
 
       let tagMatch;
@@ -7826,8 +8277,10 @@ code, pre {
       }
 
       if (startsWithHtmlTag || wasInHtmlBlock || htmlBlockDepth > 0) {
+        prevNonEmptyWasHtml = startsWithHtmlTag || endsWithHtmlTag || htmlBlockDepth > 0;
         return line;
       }
+      prevNonEmptyWasHtml = false;
 
       // Markdown horizontal rule
       if (/^(?:---+|___+|\*\*\*+)$/.test(trimmed)) {
@@ -9181,7 +9634,7 @@ code, pre {
         }
       } else if (id === 'charPersonality') {
         if (card && card.personality && card.personality.trim()) {
-          const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
+          const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '\x7b\x7bpersonality\x7d\x7d';
           finalMessages.push({
             role: 'system',
             content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, isCharacterDef: true, card }),
@@ -9190,7 +9643,7 @@ code, pre {
         }
       } else if (id === 'scenario') {
         if (card && card.scenario && card.scenario.trim()) {
-          const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
+          const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '\x7b\x7bscenario\x7d\x7d';
           finalMessages.push({
             role: 'system',
             content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, isCharacterDef: true, card }),
@@ -9234,7 +9687,7 @@ code, pre {
           });
         }
         if (!allPresetIds.has('charPersonality') && card && card.personality && card.personality.trim()) {
-          const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '{{personality}}';
+          const fmt = preset.personality_format || tavernState.formatting.personalityFormat || '\x7b\x7bpersonality\x7d\x7d';
           finalMessages.push({
             role: 'system',
             content: applyTavernRegexPipeline(fmt.replace(/\{\{personality\}\}/gi, card.personality), { isPrompt: true, isCharacterDef: true, card }),
@@ -9242,7 +9695,7 @@ code, pre {
           });
         }
         if (!allPresetIds.has('scenario') && card && card.scenario && card.scenario.trim()) {
-          const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '{{scenario}}';
+          const fmt = preset.scenario_format || tavernState.formatting.scenarioFormat || '\x7b\x7bscenario\x7d\x7d';
           finalMessages.push({
             role: 'system',
             content: applyTavernRegexPipeline(fmt.replace(/\{\{scenario\}\}/gi, card.scenario), { isPrompt: true, isCharacterDef: true, card }),
@@ -10382,6 +10835,12 @@ code, pre {
         -webkit-user-select: none !important;
         user-select: none !important;
         -webkit-touch-callout: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      #tavern-stage-root *,
+      #tavern-stage-root *::before,
+      #tavern-stage-root *::after {
+        -webkit-tap-highlight-color: transparent !important;
       }
       #tavern-stage-root input,
       #tavern-stage-root textarea,
@@ -10390,12 +10849,27 @@ code, pre {
         user-select: text !important;
       }
       #tavern-stage-root .mes_text,
-      #tavern-stage-root .mes_text :not(button):not(input):not(select):not(textarea),
+      #tavern-stage-root .mes_text :not(button):not(input):not(select):not(textarea):not(img):not(svg):not(canvas):not(a):not(label):not([onclick]),
       .be-quote,
       .be-quote * {
         -webkit-user-select: text !important;
         user-select: text !important;
         -webkit-touch-callout: none !important;
+      }
+      #tavern-stage-root img,
+      #tavern-stage-root svg,
+      #tavern-stage-root canvas,
+      #tavern-stage-root a,
+      #tavern-stage-root label,
+      #tavern-stage-root [onclick] {
+        -webkit-user-select: none !important;
+        user-select: none !important;
+        -webkit-user-drag: none !important;
+        outline: none !important;
+      }
+      #tavern-stage-root img::selection {
+        background: transparent !important;
+        color: transparent !important;
       }
       #tavern-stage-root .extraMesButtons.tavern-extra-hidden {
         display: none !important;
@@ -11545,6 +12019,74 @@ code, pre {
         console.error('ensureCardEmbeddedScriptsLoaded error:', err);
       }
     }
+    Promise.resolve().then(() => {
+      try {
+        const sess = getActiveChatSession();
+        const chatId = sess ? (sess.chatId || sess.id || 'chat_default') : 'chat_default';
+        tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_CHANGED, chatId);
+        const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+        if (msgs.length > 0) {
+          const lastIdx = msgs.length - 1;
+          if (!msgs[lastIdx].is_user) {
+            tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, lastIdx, 'normal');
+          } else {
+            tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, lastIdx);
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  function rescueLivePluginDomNodes() {
+    ensurePersistentExtensionContainers();
+    if (persistentExtSettingsEl) {
+      ['tavern_helper', 'prompt_template_settings'].forEach(liveId => {
+        const liveNode = document.getElementById(liveId);
+        if (liveNode && !persistentExtSettingsEl.contains(liveNode)) {
+          persistentExtSettingsEl.appendChild(liveNode);
+        }
+      });
+    }
+  }
+
+  function syncLivePluginDomMounts() {
+    ensurePersistentExtensionContainers();
+    const modalSlot = document.getElementById('tavern-live-plugin-modal-slot');
+    if (modalSlot) {
+      const targetId = modalSlot.getAttribute('data-live-mount') || '';
+      const liveNode = targetId ? document.getElementById(targetId) : null;
+      if (liveNode) {
+        if (!modalSlot.contains(liveNode)) {
+          modalSlot.innerHTML = '';
+          modalSlot.appendChild(liveNode);
+        }
+        const drawerContent = liveNode.querySelector('.inline-drawer-content');
+        if (drawerContent) {
+          drawerContent.style.display = 'block';
+        }
+        const drawerIcon = liveNode.querySelector('.inline-drawer-icon');
+        if (drawerIcon) {
+          drawerIcon.classList.remove('down');
+          drawerIcon.classList.add('up');
+        }
+      }
+    } else if (persistentExtSettingsEl) {
+      ['tavern_helper', 'prompt_template_settings'].forEach(liveId => {
+        const liveNode = document.getElementById(liveId);
+        if (liveNode && !persistentExtSettingsEl.contains(liveNode)) {
+          persistentExtSettingsEl.appendChild(liveNode);
+        }
+      });
+    }
+    const extSlot = document.getElementById('tavern-live-ext-settings-slot');
+    if (extSlot) {
+      if (persistentExtSettingsEl && !extSlot.contains(persistentExtSettingsEl)) {
+        extSlot.appendChild(persistentExtSettingsEl);
+      }
+      if (persistentExtSettings2El && !extSlot.contains(persistentExtSettings2El)) {
+        extSlot.appendChild(persistentExtSettings2El);
+      }
+    }
   }
 
   function renderTavernShell(options = {}) {
@@ -11561,6 +12103,7 @@ code, pre {
     const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
     const activeCardForShell = getActiveCard();
 
+    rescueLivePluginDomNodes();
     // Preserve existing #chat node so plugin MutationObservers (ST-BaiBai-Image / ST-BaiBai-Book / book-excerpt) never detach
     const prevChatEl = document.getElementById('chat');
     // Preserve all third-party plugin menu items mounted inside #extensionsMenu or #tavern-wand-plugins-submenu
@@ -11680,6 +12223,8 @@ code, pre {
         }
       });
     }
+
+    syncLivePluginDomMounts();
 
     try {
       applyActiveTavernTheme();
@@ -12235,10 +12780,12 @@ code, pre {
     if (!uiRuntime.activePluginModalId) return;
     const stageRoot = document.getElementById('tavern-stage-root');
     if (!stageRoot) return;
+    rescueLivePluginDomNodes();
     const existingModal = stageRoot.querySelector(':scope > .tavern-modal-backdrop');
     const nextHtml = renderPluginCustomModal();
     if (!nextHtml) {
       if (existingModal) existingModal.remove();
+      syncLivePluginDomMounts();
       return;
     }
     const temp = document.createElement('div');
@@ -12255,15 +12802,48 @@ code, pre {
         stageRoot.appendChild(newModalEl);
       }
     }
+    syncLivePluginDomMounts();
   }
 
   function renderPluginCustomModal() {
     const p = (tavernState.plugins || []).find(x => x.id === uiRuntime.activePluginModalId);
     if (!p) return '';
     if (isJsSlashRunnerPlugin(p)) {
+      if (!document.getElementById('tavern_helper')) {
+        try { executeUserPluginScript(p); } catch (_) {}
+      }
+      if (document.getElementById('tavern_helper')) {
+        return `
+          <div class="tavern-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
+            <div style="background:#fdfbf7;border-radius:16px;border:1px solid rgba(0,0,0,0.12);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.28);color:#2c2c2e;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f5f2eb;flex-shrink:0;">
+                <span style="font-weight:700;font-size:14px;color:#333;">酒馆助手 JS-Slash-Runner</span>
+                <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭</button>
+              </div>
+              <div id="tavern-live-plugin-modal-slot" data-live-mount="tavern_helper" style="flex:1;overflow-y:auto;padding:12px;"></div>
+            </div>
+          </div>
+        `;
+      }
       return renderJsSlashRunnerNativeModal(p);
     }
     if (isStPromptTemplatePlugin(p)) {
+      if (!document.getElementById('prompt_template_settings')) {
+        try { executeUserPluginScript(p); } catch (_) {}
+      }
+      if (document.getElementById('prompt_template_settings')) {
+        return `
+          <div class="tavern-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
+            <div style="background:#fdfbf7;border-radius:16px;border:1px solid rgba(0,0,0,0.12);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.28);color:#2c2c2e;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f5f2eb;flex-shrink:0;">
+                <span style="font-weight:700;font-size:14px;color:#333;">提示词模板 ST-Prompt-Template</span>
+                <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭</button>
+              </div>
+              <div id="tavern-live-plugin-modal-slot" data-live-mount="prompt_template_settings" style="flex:1;overflow-y:auto;padding:12px;"></div>
+            </div>
+          </div>
+        `;
+      }
       return renderStPromptTemplateNativeModal(p);
     }
     if (!p.repoBaseUrl && String(p.name || '').includes('柏宝绘')) {
@@ -15532,18 +16112,15 @@ code, pre {
     const prevDrawerAttr = prevDrawerEl ? prevDrawerEl.getAttribute('data-active-drawer') : null;
 
     if (!uiRuntime.openDrawerKey) {
-      ensurePersistentExtensionContainers();
+      rescueLivePluginDomNodes();
       host.classList.remove('active');
       host.innerHTML = '';
+      syncLivePluginDomMounts();
     } else {
-      ensurePersistentExtensionContainers();
+      rescueLivePluginDomNodes();
       host.classList.add('active');
       host.innerHTML = renderOpenDrawerHtml(uiRuntime.openDrawerKey);
-      const extSlot = document.getElementById('tavern-live-ext-settings-slot');
-      if (extSlot) {
-        if (persistentExtSettingsEl) extSlot.appendChild(persistentExtSettingsEl);
-        if (persistentExtSettings2El) extSlot.appendChild(persistentExtSettings2El);
-      }
+      syncLivePluginDomMounts();
       const nextDrawerEl = host.querySelector('.drawer-content.openDrawer');
       if (nextDrawerEl && prevDrawerAttr === uiRuntime.openDrawerKey) {
         nextDrawerEl.scrollTop = prevScrollTop;
@@ -16402,10 +16979,12 @@ code, pre {
 
       if (action === 'close-plugin-modal') {
         uiRuntime.activePluginModalId = null;
+        rescueLivePluginDomNodes();
         const modalEl = document.querySelector('#tavern-stage-root > .tavern-modal-backdrop');
         if (modalEl) {
           modalEl.querySelectorAll('audio, video').forEach(m => { try { m.pause(); } catch (_) {} });
           modalEl.remove();
+          syncLivePluginDomMounts();
         } else {
           renderTavernShell();
         }
@@ -18894,47 +19473,9 @@ code, pre {
         const repo = ghRepoMatch[2];
         if (/^JS-Slash-Runner$/i.test(repo) || /^TavernHelper$/i.test(repo)) {
           if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledJsSlashRunner;
-          const pluginName = '酒馆助手 JS-Slash-Runner';
-          const existingIdx = (tavernState.plugins || []).findIndex(x => isJsSlashRunnerPlugin(x));
-          const plugin = {
-            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : 'plugin_js_slash_runner',
-            name: pluginName,
-            enabled: true,
-            code: '/* Native Built-in JS-Slash-Runner Engine Active */ window.TavernHelper = window.TavernHelper || {};',
-            uiHtml: '',
-            repoBaseUrl: `https://github.com/${owner}/${repo}`,
-            description: '酒馆助手脚本管理、角色内嵌面板、自定义按钮与变量工作台'
-          };
-          if (existingIdx >= 0) tavernState.plugins[existingIdx] = plugin;
-          else tavernState.plugins.unshift(plugin);
-          uiRuntime.openDrawerKey = null;
-          uiRuntime.activePluginModalId = plugin.id;
-          await saveTavernStore();
-          renderTavernShell();
-          showTavernToast('已安装并打开: ' + pluginName);
-          return;
         }
         if (/^ST-Prompt-Template$/i.test(repo)) {
           if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledStPromptTemplate;
-          const pluginName = '提示词模板 ST-Prompt-Template';
-          const existingIdx = (tavernState.plugins || []).findIndex(x => isStPromptTemplatePlugin(x));
-          const plugin = {
-            id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : 'plugin_st_prompt_template',
-            name: pluginName,
-            enabled: true,
-            code: '/* Native Built-in ST-Prompt-Template Engine Active */',
-            uiHtml: '',
-            repoBaseUrl: `https://github.com/${owner}/${repo}`,
-            description: 'EJS动态提示词模板渲染、变量读写与实时模板测试面板'
-          };
-          if (existingIdx >= 0) tavernState.plugins[existingIdx] = plugin;
-          else tavernState.plugins.unshift(plugin);
-          uiRuntime.openDrawerKey = null;
-          uiRuntime.activePluginModalId = plugin.id;
-          await saveTavernStore();
-          renderTavernShell();
-          showTavernToast('已安装并打开: ' + pluginName);
-          return;
         }
         let branch = 'main';
         let manifest = null;
