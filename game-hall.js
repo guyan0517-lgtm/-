@@ -980,7 +980,11 @@ code, pre {
               if (p.frequency_penalty === undefined) p.frequency_penalty = p.freqPenalty ?? 0;
               if (p.presence_penalty === undefined) p.presence_penalty = p.presPenalty ?? 0;
               if (p.repetition_penalty === undefined) p.repetition_penalty = p.repPenalty ?? 1.0;
-              if (!Array.isArray(p.regexScripts)) p.regexScripts = [];
+              if (!Array.isArray(p.regexScripts)) {
+                p.regexScripts = [];
+              } else {
+                p.regexScripts = normalizeRegexList(p.regexScripts, 'preset');
+              }
               if (!Array.isArray(p.prompts) || p.prompts.length === 0) {
                 p.prompts = getDefaultPromptOrderItems();
               }
@@ -996,7 +1000,12 @@ code, pre {
           }
 
           if (!Array.isArray(tavernState.globalRegexScripts)) {
-            tavernState.globalRegexScripts = Array.isArray(loaded.regexScripts) ? loaded.regexScripts : [];
+            tavernState.globalRegexScripts = Array.isArray(loaded.regexScripts) ? normalizeRegexList(loaded.regexScripts, 'global') : [];
+          } else {
+            tavernState.globalRegexScripts = normalizeRegexList(tavernState.globalRegexScripts, 'global');
+          }
+          if (Array.isArray(tavernState.extensionSettings?.regex)) {
+            tavernState.extensionSettings.regex = normalizeRegexList(tavernState.extensionSettings.regex, 'global');
           }
 
           if (!Array.isArray(tavernState.plugins)) {
@@ -4402,8 +4411,7 @@ code, pre {
       setChatMessages: async (msgs, opts = {}) => {
         const sess = getActiveChatSession();
         if (!sess || !Array.isArray(msgs) || msgs.length === 0) return;
-        const canUpdateByIndex = msgs.every(m => m && m.message_id !== undefined && Number.isInteger(Number(m.message_id)) && sess.messages[Number(m.message_id)]) &&
-          (msgs.length < sess.messages.length || msgs.some(m => m.mes === undefined && m.message !== undefined));
+        const canUpdateByIndex = msgs.every(m => m && m.message_id !== undefined && Number.isInteger(Number(m.message_id)) && sess.messages[Number(m.message_id)]);
         if (canUpdateByIndex) {
           msgs.forEach(u => {
             const target = sess.messages[Number(u.message_id)];
@@ -5394,28 +5402,36 @@ code, pre {
     if (listArr.length === 0) return [];
     const normalized = listArr
       .filter(item => item && typeof item === 'object' && (item.findRegex || item.find_regex || item.regex || item.scriptName || item.script_name || item.name))
-      .map((item, idx) => ({
-        id: item.id || ('rx_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 6)),
-        scriptName: item.scriptName || item.script_name || item.name || ('正则脚本 ' + (idx + 1)),
-        findRegex: item.findRegex || item.find_regex || item.regex || '',
-        replaceString: item.replaceString !== undefined
-          ? String(item.replaceString)
-          : (item.replace_string !== undefined
-              ? String(item.replace_string)
-              : (item.replacement !== undefined ? String(item.replacement) : '')),
-        trimStrings: Array.isArray(item.trimStrings) ? item.trimStrings : (Array.isArray(item.trim_strings) ? item.trim_strings : []),
-        placement: Array.isArray(item.placement) && item.placement.length > 0 ? item.placement.map(Number) : [2],
-        disabled: Boolean(item.disabled),
-        markdownOnly: Boolean(item.promptOnly ?? item.prompt_only)
-          ? Boolean(item.markdownOnly ?? item.markdown_only ?? false)
-          : (item.markdownOnly !== undefined ? Boolean(item.markdownOnly) : (item.markdown_only !== undefined ? Boolean(item.markdown_only) : true)),
-        promptOnly: Boolean(item.promptOnly ?? item.prompt_only),
-        runOnEdit: item.runOnEdit !== undefined ? Boolean(item.runOnEdit) : (item.run_on_edit !== undefined ? Boolean(item.run_on_edit) : true),
-        substituteRegex: Number(item.substituteRegex ?? item.substitute_regex) || 0,
-        minDepth: item.minDepth ?? item.min_depth ?? null,
-        maxDepth: item.maxDepth ?? item.max_depth ?? null,
-        scope: scopeName
-      }));
+      .map((item, idx) => {
+        const sName = item.scriptName || item.script_name || item.name || ('正则脚本 ' + (idx + 1));
+        const rawPromptOnly = Boolean(item.promptOnly ?? item.prompt_only);
+        const isForcePromptOnlyByName = rawPromptOnly && /不发送|仅发送|仅提示词|清理提示词|prompt\s*only/i.test(String(sName));
+        const resolvedMarkdownOnly = isForcePromptOnlyByName
+          ? false
+          : (rawPromptOnly
+              ? Boolean(item.markdownOnly ?? item.markdown_only ?? false)
+              : (item.markdownOnly !== undefined ? Boolean(item.markdownOnly) : (item.markdown_only !== undefined ? Boolean(item.markdown_only) : true)));
+        return {
+          id: item.id || ('rx_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 6)),
+          scriptName: sName,
+          findRegex: item.findRegex || item.find_regex || item.regex || '',
+          replaceString: item.replaceString !== undefined
+            ? String(item.replaceString)
+            : (item.replace_string !== undefined
+                ? String(item.replace_string)
+                : (item.replacement !== undefined ? String(item.replacement) : '')),
+          trimStrings: Array.isArray(item.trimStrings) ? item.trimStrings : (Array.isArray(item.trim_strings) ? item.trim_strings : []),
+          placement: Array.isArray(item.placement) && item.placement.length > 0 ? item.placement.map(Number) : [2],
+          disabled: Boolean(item.disabled),
+          markdownOnly: resolvedMarkdownOnly,
+          promptOnly: rawPromptOnly,
+          runOnEdit: item.runOnEdit !== undefined ? Boolean(item.runOnEdit) : (item.run_on_edit !== undefined ? Boolean(item.run_on_edit) : true),
+          substituteRegex: Number(item.substituteRegex ?? item.substitute_regex) || 0,
+          minDepth: item.minDepth ?? item.min_depth ?? null,
+          maxDepth: item.maxDepth ?? item.max_depth ?? null,
+          scope: scopeName
+        };
+      });
     return normalized;
   }
 
@@ -6253,7 +6269,17 @@ code, pre {
     const presetScripts = (preset && Array.isArray(preset.regexScripts)) ? preset.regexScripts : [];
     const globalScripts = Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [];
     const extScripts = Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : [];
-    return [...globalScripts, ...presetScripts, ...cardScripts, ...extScripts].filter(s => s && !s.disabled && s.findRegex);
+    const combined = [...globalScripts, ...presetScripts, ...cardScripts, ...extScripts];
+    const seenKeys = new Set();
+    const deduped = [];
+    for (const s of combined) {
+      if (!s || !s.findRegex) continue;
+      const key = String(s.scriptName || '').trim() + '::' + String(s.findRegex || '').trim();
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      if (!s.disabled) deduped.push(s);
+    }
+    return deduped;
   }
 
   function applyTavernRegexPipeline(rawText, options = {}) {
@@ -6286,8 +6312,10 @@ code, pre {
 
     for (const script of scripts) {
       if (isEdit && script.runOnEdit === false) continue;
-      if (isPrompt && !script.promptOnly && script.markdownOnly) continue;
-      if (!isPrompt && script.promptOnly) continue;
+      const isPromptOnlyScript = Boolean(script.promptOnly) && (!script.markdownOnly || /不发送|仅发送|仅提示词|清理提示词|prompt\s*only/i.test(String(script.scriptName || '')));
+      const isMarkdownOnlyScript = Boolean(script.markdownOnly) && !script.promptOnly;
+      if (isPrompt && isMarkdownOnlyScript) continue;
+      if (!isPrompt && isPromptOnlyScript) continue;
 
       if (isSystemOrCharBlock) {
         if (!Array.isArray(script.placement) || script.placement.length === 0) continue;
@@ -6826,10 +6854,11 @@ code, pre {
   function renderTavernMessageHtml(rawText, options = {}) {
     if (!rawText) return '';
     let cleanedForDisplay = String(rawText)
-      .replace(/<bbs_start>[\s\S]*?<bbs_end>/gi, '')
-      .replace(/<bbs_items>[\s\S]*?<\/bbs_items>/gi, '')
-      .replace(/<bbs_vars>[\s\S]*?<\/bbs_vars>/gi, '')
-      .replace(/<\/?(?:bbs_start|bbs_end|bbs_items|bbs_vars)>/gi, '');
+      .replace(/<bbs_start\b[^>]*>[\s\S]*?<\/bbs_start>/gi, '')
+      .replace(/<bbs_end\b[^>]*>[\s\S]*?<\/bbs_end>/gi, '')
+      .replace(/<bbs_items\b[^>]*>[\s\S]*?<\/bbs_items>/gi, '')
+      .replace(/<bbs_vars\b[^>]*>[\s\S]*?<\/bbs_vars>/gi, '')
+      .replace(/<\/?(?:bbs_start|bbs_end|bbs_items|bbs_vars)\b[^>]*>/gi, '');
     if (!/<(?:think|thinking|thought|reasoning|cot|antThinking)\b/i.test(cleanedForDisplay)) {
       cleanedForDisplay = cleanedForDisplay.replace(/<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
     }
@@ -6893,27 +6922,33 @@ code, pre {
 
     // 5. Basic markdown bold/italic/inline-code outside HTML tags
     const tagHolders = [];
-    working = working.replace(/<[^>]+>/g, tag => {
+    const holdHtmlChunk = (htmlChunk) => {
       const t = '___TAVERN_TAG_HOLD_' + tagHolders.length + '___';
-      tagHolders.push(tag);
+      tagHolders.push(htmlChunk);
       return t;
+    };
+
+    // Extract inline code (`...`) FIRST so raw <tags> inside backticks are escaped and style="..." is never corrupted by quote wrapping
+    working = working.replace(/`([^`\n]+)`/g, (_, codeInner) => {
+      return holdHtmlChunk(`<code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.92em;">${escapeHtmlSimple(codeInner)}</code>`);
     });
+
+    working = working.replace(/<[^>]+>/g, tag => holdHtmlChunk(tag));
 
     working = working
       .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|data:image\/[^\s)]+|vault:\/\/[^\s)]+)\)/g, (_, altTxt, rawUrl) => {
         const safeSrc = resolveSafeAvatarUrl(rawUrl, false);
         const vaultAttr = String(rawUrl).startsWith('vault://') ? ` data-vault-ref="${escapeHtmlSimple(rawUrl)}"` : '';
-        return `<img src="${escapeHtmlSimple(safeSrc)}"${vaultAttr} alt="${escapeHtmlSimple(altTxt || '图片')}" style="max-width:100%;border-radius:10px;margin:4px 0;display:block;" />`;
+        return holdHtmlChunk(`<img src="${escapeHtmlSimple(safeSrc)}"${vaultAttr} alt="${escapeHtmlSimple(altTxt || '图片')}" style="max-width:100%;border-radius:10px;margin:4px 0;display:block;" />`);
       })
-      .replace(/`([^`\n]+)`/g, '<code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.92em;">$1</code>')
-      .replace(/~~([^~\n]+)~~/g, '<del style="opacity:0.78;">$1</del>')
-      .replace(/==([^=\n]+)==/g, '<mark style="background:rgba(255,215,100,0.38);color:inherit;padding:0 3px;border-radius:4px;">$1</mark>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-      .replace(/＊([^＊\n]+)＊/g, '<em>$1</em>')
-      .replace(/（([^）\n]+)）/g, '<em>（$1）</em>');
+      .replace(/~~([^~\n]+)~~/g, (_, inner) => holdHtmlChunk('<del style="opacity:0.78;">') + inner + holdHtmlChunk('</del>'))
+      .replace(/==([^=\n]+)==/g, (_, inner) => holdHtmlChunk('<mark style="background:rgba(255,215,100,0.38);color:inherit;padding:0 3px;border-radius:4px;">') + inner + holdHtmlChunk('</mark>'))
+      .replace(/\*\*([^*]+)\*\*/g, (_, inner) => holdHtmlChunk('<strong>') + inner + holdHtmlChunk('</strong>'))
+      .replace(/\*([^*\n]+)\*/g, (_, inner) => holdHtmlChunk('<em>') + inner + holdHtmlChunk('</em>'))
+      .replace(/＊([^＊\n]+)＊/g, (_, inner) => holdHtmlChunk('<em>') + inner + holdHtmlChunk('</em>'))
+      .replace(/（([^）\n]+)）/g, (_, inner) => holdHtmlChunk('<em>') + '（' + inner + '）' + holdHtmlChunk('</em>'));
 
-    // 6. Wrap dialogue quotes in <q> if enabled
+    // 6. Wrap dialogue quotes in <q> if enabled (safe because all HTML tags & attributes are held in tagHolders)
     if (!tavernState.formatting || tavernState.formatting.wrapQuotesInQ !== false) {
       working = working
         .replace(/“([^”\n]+)”/g, '<q>“$1”</q>')
@@ -16090,12 +16125,28 @@ code, pre {
         const card = getActiveCard();
         const preset = getActivePreset();
         const list = scope === 'card'
-          ? (card.regexScripts || [])
-          : (scope === 'preset' ? (preset.regexScripts || []) : (tavernState.globalRegexScripts || []));
-        const item = list.find(r => r.id === rxId);
+          ? (card && Array.isArray(card.regexScripts) ? card.regexScripts : [])
+          : (scope === 'preset' ? (preset && Array.isArray(preset.regexScripts) ? preset.regexScripts : []) : (tavernState.globalRegexScripts || []));
+        const item = list.find(r => r && r.id === rxId);
         if (item) {
-          item.disabled = !actionEl.checked;
+          const nextDisabled = !actionEl.checked;
+          item.disabled = nextDisabled;
+          const matchKey = String(item.scriptName || '').trim() + '::' + String(item.findRegex || '').trim();
+          const allLists = [
+            card && Array.isArray(card.regexScripts) ? card.regexScripts : [],
+            preset && Array.isArray(preset.regexScripts) ? preset.regexScripts : [],
+            Array.isArray(tavernState.globalRegexScripts) ? tavernState.globalRegexScripts : [],
+            Array.isArray(tavernState.extensionSettings?.regex) ? tavernState.extensionSettings.regex : []
+          ];
+          allLists.forEach(arr => {
+            arr.forEach(r => {
+              if (r && (r.id === rxId || (String(r.scriptName || '').trim() + '::' + String(r.findRegex || '').trim()) === matchKey)) {
+                r.disabled = nextDisabled;
+              }
+            });
+          });
           await saveTavernStore();
+          refreshOpenDrawerOnly();
           renderTavernChatFloors(false);
         }
         return;
