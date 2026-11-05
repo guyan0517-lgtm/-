@@ -9562,7 +9562,7 @@
         <div class="modal-header">
           <span id="regex-editor-modal-title">正则</span>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; max-height: 72vh; overflow-y: auto;">
           <div class="form-group" style="margin: 0;">
             <label style="font-size: 12px; margin-bottom: 4px; display: block;">名称</label>
             <div style="display: flex; gap: 6px; align-items: center; position: relative; z-index: 100;">
@@ -9606,13 +9606,38 @@
           </div>
 
           <div class="form-group" style="margin: 0;">
+            <label style="font-size: 12px; margin-bottom: 6px; display: block;">方式</label>
+            <div style="display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0; flex: 1;">
+                <input type="checkbox" id="regex-mode-display" checked style="width: 18px; height: 18px; flex-shrink: 0; margin: 0;" />
+                <span>仅显示</span>
+              </label>
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0; flex: 1;">
+                <input type="checkbox" id="regex-mode-prompt" style="width: 18px; height: 18px; flex-shrink: 0; margin: 0;" />
+                <span>发送AI</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="font-size: 12px; margin: 0;">窗口</label>
+              <select id="regex-target-mode-select" class="moe-input" style="width: 92px; flex-shrink: 0; padding: 0 4px; font-size: 12px; font-weight: 500; height: 28px; line-height: normal; text-align: center; text-align-last: center; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; cursor: pointer;">
+                <option value="global">全局</option>
+                <option value="custom">指定窗口</option>
+              </select>
+            </div>
+            <div id="regex-target-windows-box" style="display: none; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; padding: 8px 10px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);"></div>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
             <label style="font-size: 12px; margin-bottom: 6px; display: block;">范围</label>
             <div style="display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-radius: 8px; background: var(--secondary-bg); border: 1px solid var(--border-color);">
-              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0;">
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0; flex: 1;">
                 <input type="checkbox" id="regex-scope-chat" checked style="width: 18px; height: 18px; flex-shrink: 0; margin: 0;" />
                 <span>聊天</span>
               </label>
-              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0;">
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer; margin: 0; flex: 1;">
                 <input type="checkbox" id="regex-scope-bookshelf" checked style="width: 18px; height: 18px; flex-shrink: 0; margin: 0;" />
                 <span>书柜</span>
               </label>
@@ -45631,6 +45656,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } catch (e) {}
             }
 
+            if (typeof window.applyCustomRegexRules === "function" && typeof rawContentText === "string" && rawContentText) {
+              rawContentText = window.applyCustomRegexRules(rawContentText, "chat", {
+                mode: "display",
+                chat: chat,
+                msg: msg,
+              });
+            }
+
             // 剥离 Markdown 代码块包裹（如 ```html ... ```）
             if (/```(?:html)?[\s\S]*?```/i.test(rawContentText)) {
               const codeBlockMatch = rawContentText.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
@@ -45777,7 +45810,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           // 无论是用户消息还是AI消息，只要它包含了 .quote 对象，就执行这段逻辑
           if (msg.quote) {
             // a. 直接获取完整的、未经截断的引用内容
-            let fullQuotedContent = String(msg.quote.content || "")
+            let fullQuotedContent = String(msg.quote.content || "");
+            if (typeof window.applyCustomRegexRules === "function" && fullQuotedContent) {
+              fullQuotedContent = window.applyCustomRegexRules(fullQuotedContent, "chat", {
+                mode: "display",
+                chat: chat,
+                msg: msg,
+              });
+            }
+            fullQuotedContent = fullQuotedContent
               .replace(/\r\n/g, "\n")
               .replace(/\r/g, "\n")
               .replace(/\\n/g, "\n")
@@ -52343,8 +52384,13 @@ ${recentHistoryText}
               .filter((m) => !m.isKeeperForcedDraw && !m.isForcedDraw && !m.isSystemDraw)
               .slice(-chat.settings.maxMemory)
               .map(
-                (m) =>
-                  `${m.role === "user" ? "用户" : chat.name}: ${m.type === "naiimag" ? "[生图]" : m.content}`,
+                (m) => {
+                  const rawLineContent = m.type === "naiimag" ? "[生图]" : String(m.content || "");
+                  const promptLineContent = (m.type !== "naiimag" && typeof window.applyCustomRegexRules === "function" && rawLineContent)
+                    ? window.applyCustomRegexRules(rawLineContent, "chat", { mode: "prompt", chat: chat, msg: m })
+                    : rawLineContent;
+                  return `${m.role === "user" ? "用户" : chat.name}: ${promptLineContent}`;
+                },
               )
               .join("\n")}
 
@@ -52382,10 +52428,16 @@ ${recentHistoryText}
 
               if (isGemini) {
                 requestBody = {
-                  contents: messagesForOfflineMode.map((item) => ({
-                    role: item.role === "assistant" ? "model" : "user",
-                    parts: [{ text: item.type === "naiimag" ? "[生图]" : (item.content || "") }],
-                  })),
+                  contents: messagesForOfflineMode.map((item) => {
+                    const rawItemText = item.type === "naiimag" ? "[生图]" : String(item.content || "");
+                    const promptItemText = (item.type !== "naiimag" && typeof window.applyCustomRegexRules === "function" && rawItemText)
+                      ? window.applyCustomRegexRules(rawItemText, "chat", { mode: "prompt", chat: chat, msg: item })
+                      : rawItemText;
+                    return {
+                      role: item.role === "assistant" ? "model" : "user",
+                      parts: [{ text: promptItemText }],
+                    };
+                  }),
                   generationConfig: {
                     temperature: parseFloat(state.apiConfig.temperature) || 0.8,
                   },
@@ -52396,10 +52448,16 @@ ${recentHistoryText}
                   model: model,
                   messages: [
                     { role: "system", content: offlineSystemPrompt },
-                    ...messagesForOfflineMode.map((item) => ({
-                      role: item.role === "assistant" ? "assistant" : "user",
-                      content: item.type === "naiimag" ? "[生图]" : (item.content || ""),
-                    })),
+                    ...messagesForOfflineMode.map((item) => {
+                      const rawItemText = item.type === "naiimag" ? "[生图]" : String(item.content || "");
+                      const promptItemText = (item.type !== "naiimag" && typeof window.applyCustomRegexRules === "function" && rawItemText)
+                        ? window.applyCustomRegexRules(rawItemText, "chat", { mode: "prompt", chat: chat, msg: item })
+                        : rawItemText;
+                      return {
+                        role: item.role === "assistant" ? "assistant" : "user",
+                        content: promptItemText,
+                      };
+                    }),
                   ],
                   temperature: parseFloat(state.apiConfig.temperature) || 0.8,
                   stream: false,
@@ -52520,8 +52578,7 @@ ${recentHistoryText}
                   role: "assistant",
                   senderName: chat.name,
                   timestamp: messageTimestamp++,
-                  content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawOfflineText, "chat") : rawOfflineText,
-                  _regexApplied: true,
+                  content: rawOfflineText,
                 };
                 chat.history.push(aiMessage);
                 await incrementMessageCount(chatId);
@@ -54358,7 +54415,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               // 构建单人聊天的messagesPayload
               messagesPayload = historySlice
                 .map((msg) => {
-                  const effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
+                  let effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
+                  if (typeof effectiveContent === "string" && effectiveContent && typeof window.applyCustomRegexRules === "function") {
+                    effectiveContent = window.applyCustomRegexRules(effectiveContent, "chat", { mode: "prompt", chat: chat, msg: msg });
+                  }
                   const tsPrefix = isCognitionEnabled ? `(Timestamp: ${msg.timestamp}) ` : "";
 
                   if (msg.isHidden) {
@@ -89623,10 +89683,129 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           window.getStoredRegexRules = getStoredRegexRules;
           window.saveStoredRegexRules = saveStoredRegexRules;
 
-          window.applyCustomRegexRules = function (rawText, targetScope) {
+          function getAllRegexTargetWindowOptions() {
+            const options = [];
+            const chatsMap = (typeof state !== "undefined" && state && state.chats) ? state.chats : {};
+            const chatList = Object.values(chatsMap);
+            chatList.forEach((c) => {
+              if (!c || c.id === undefined || c.id === null) return;
+              const cid = String(c.id);
+              const isGrp = Boolean(c.isGroup);
+              const cName = String(isGrp ? (c.mainGroupName || c.name || "群聊") : (c.name || "单聊")).trim();
+              options.push({
+                key: cid,
+                name: cName,
+                typeLabel: isGrp ? "群聊" : "窗口",
+              });
+              const soloThreads = Array.isArray(c.settings?.soloLineConfig?.threads)
+                ? c.settings.soloLineConfig.threads
+                : (Array.isArray(c.soloThreads) ? c.soloThreads : []);
+              soloThreads.forEach((th) => {
+                if (!th || !th.id) return;
+                const thTitle = String(th.title || th.name || "小窗").trim();
+                options.push({
+                  key: `solo:${cid}:${String(th.id)}`,
+                  name: `${cName} · ${thTitle}`,
+                  typeLabel: "小窗",
+                });
+              });
+            });
+            return options;
+          }
+
+          function renderRegexTargetWindowsSelector(selectedIds = []) {
+            const box = document.getElementById("regex-target-windows-box");
+            const modeSelect = document.getElementById("regex-target-mode-select");
+            if (!box) return;
+            const isCustom = modeSelect && modeSelect.value === "custom";
+            box.style.display = isCustom ? "flex" : "none";
+            const selectedSet = new Set((Array.isArray(selectedIds) ? selectedIds : []).map(String));
+            const options = getAllRegexTargetWindowOptions();
+            box.innerHTML = "";
+
+            if (options.length === 0) {
+              box.innerHTML = `<div style="font-size: 11.5px; color: var(--text-secondary); padding: 4px 2px;">暂无可选聊天窗口</div>`;
+              return;
+            }
+
+            options.forEach((opt) => {
+              const row = document.createElement("label");
+              row.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 4px 4px; font-size: 12px; color: var(--text-primary); cursor: pointer; margin: 0; width: 100%; box-sizing: border-box;";
+              const chk = document.createElement("input");
+              chk.type = "checkbox";
+              chk.className = "regex-target-window-checkbox";
+              chk.value = opt.key;
+              chk.checked = selectedSet.has(opt.key);
+              chk.style.cssText = "width: 18px; height: 18px; flex-shrink: 0; margin: 0;";
+
+              const nameSpan = document.createElement("span");
+              nameSpan.style.cssText = "flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+              nameSpan.textContent = opt.name;
+
+              const tagSpan = document.createElement("span");
+              tagSpan.className = "regex-scope-badge";
+              tagSpan.style.cssText = "flex-shrink: 0; margin-left: auto;";
+              tagSpan.textContent = opt.typeLabel;
+
+              row.appendChild(chk);
+              row.appendChild(nameSpan);
+              row.appendChild(tagSpan);
+              box.appendChild(row);
+            });
+          }
+
+          function doesRegexRuleMatchWindow(r, chat, msg) {
+            const hasCustomTargets = r.targetMode === "custom" || (Array.isArray(r.targetChatIds) && r.targetChatIds.length > 0) || (r.chatId !== undefined && r.chatId !== null && String(r.chatId) !== "");
+            if (!hasCustomTargets) return true;
+            if (!chat || chat.id === undefined || chat.id === null) return false;
+
+            const targets = new Set((Array.isArray(r.targetChatIds) ? r.targetChatIds : []).map(String));
+            if (r.chatId !== undefined && r.chatId !== null && String(r.chatId) !== "") {
+              targets.add(String(r.chatId));
+            }
+            if (Array.isArray(chat.settings?.linkedRegexIds) && chat.settings.linkedRegexIds.includes(r.id)) {
+              targets.add(String(chat.id));
+            }
+            if (targets.size === 0) return false;
+
+            const chatIdStr = String(chat.id);
+            const activeSoloThreadId = (msg && msg.soloThreadId)
+              ? String(msg.soloThreadId)
+              : (chat.isGroup && chat.activeLineMode === "solo"
+                  ? String((typeof window.getActiveSoloThread === "function" && window.getActiveSoloThread(chat)?.id) || chat.settings?.soloLineConfig?.activeThreadId || "")
+                  : "");
+
+            if (activeSoloThreadId) {
+              if (targets.has(`solo:${chatIdStr}:${activeSoloThreadId}`) || targets.has(activeSoloThreadId)) {
+                return true;
+              }
+            }
+            if (targets.has(chatIdStr)) {
+              return true;
+            }
+            return false;
+          }
+
+          function refreshActiveChatRegexDisplay() {
+            try {
+              if (typeof state !== "undefined" && state && state.activeChatId && state.chats && state.chats[state.activeChatId]) {
+                const chatScreen = document.getElementById("chat-interface-screen");
+                if (chatScreen && chatScreen.classList.contains("active") && typeof renderChatInterface === "function") {
+                  renderChatInterface(state.activeChatId);
+                }
+              }
+            } catch (e) {}
+          }
+
+          window.applyCustomRegexRules = function (rawText, targetScope, options) {
             if (!rawText || typeof rawText !== "string") return rawText;
             const rules = getStoredRegexRules();
             if (!Array.isArray(rules) || rules.length === 0) return rawText;
+
+            const opts = options && typeof options === "object" ? options : {};
+            const execMode = opts.mode || "display";
+            const currentChat = opts.chat || ((typeof state !== "undefined" && state && state.activeChatId && state.chats) ? state.chats[state.activeChatId] : null);
+            const currentMsg = opts.msg || null;
 
             let resultText = rawText;
             for (let i = 0; i < rules.length; i++) {
@@ -89634,6 +89813,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (!r || r.enabled === false || !r.findRegex) continue;
               if (targetScope === "chat" && r.scopeChat === false) continue;
               if (targetScope === "bookshelf" && r.scopeBookshelf === false) continue;
+
+              if (targetScope === "chat") {
+                const isDisplayEnabled = r.applyDisplay !== false;
+                const isPromptEnabled = r.applyPrompt === true;
+                if (execMode === "prompt" && !isPromptEnabled) continue;
+                if (execMode === "display" && !isDisplayEnabled) continue;
+                if (!doesRegexRuleMatchWindow(r, currentChat, currentMsg)) continue;
+              }
 
               try {
                 let patternStr = String(r.findRegex);
@@ -89675,6 +89862,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               return;
             }
 
+            const allWinOpts = getAllRegexTargetWindowOptions();
+            const winNameMap = {};
+            allWinOpts.forEach((o) => {
+              winNameMap[o.key] = o.name;
+            });
+
             rules.forEach((rule) => {
               const card = document.createElement("div");
               card.className = "regex-rule-card";
@@ -89682,6 +89875,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (rule.scopeChat !== false) scopeLabels.push("聊天");
               if (rule.scopeBookshelf !== false) scopeLabels.push("书柜");
               const scopeText = scopeLabels.length > 0 ? scopeLabels.join("·") : "未指定";
+
+              const modeParts = [];
+              if (rule.applyDisplay !== false) modeParts.push("仅显示");
+              if (rule.applyPrompt === true) modeParts.push("发送AI");
+              const modeText = modeParts.length === 2 ? "显示·AI" : (modeParts[0] || "仅显示");
+
+              let targetText = "全局";
+              const ruleTargets = Array.isArray(rule.targetChatIds) ? rule.targetChatIds.map(String) : [];
+              if (rule.chatId !== undefined && rule.chatId !== null && String(rule.chatId) !== "" && !ruleTargets.includes(String(rule.chatId))) {
+                ruleTargets.push(String(rule.chatId));
+              }
+              if (rule.targetMode === "custom" || ruleTargets.length > 0) {
+                const matchedNames = ruleTargets.map((k) => winNameMap[k] || rule.characterName || "指定").filter(Boolean);
+                targetText = matchedNames.length > 0
+                  ? (matchedNames.length === 1 ? matchedNames[0] : `${matchedNames[0]}等${matchedNames.length}窗`)
+                  : "指定窗口";
+              }
+
               const replacePreview = rule.replaceString ? rule.replaceString : "空";
 
               card.innerHTML = `
@@ -89689,8 +89900,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                 </div>
                 <div class="regex-rule-info">
-                  <div class="regex-rule-title-row">
+                  <div class="regex-rule-title-row" style="flex-wrap: wrap; gap: 4px;">
                     <span class="regex-rule-name"></span>
+                    <span class="regex-scope-badge">${modeText}</span>
+                    <span class="regex-scope-badge">${targetText}</span>
                     <span class="regex-scope-badge">${scopeText}</span>
                   </div>
                   <div class="regex-rule-preview"></div>
@@ -89715,6 +89928,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (target) {
                   target.enabled = Boolean(toggleInput.checked);
                   await saveStoredRegexRules(all);
+                  refreshActiveChatRegexDisplay();
                 }
               });
 
@@ -89730,6 +89944,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const nextRules = getStoredRegexRules().filter((it) => it.id !== rule.id);
                   await saveStoredRegexRules(nextRules);
                   window.renderRegexRulesList();
+                  refreshActiveChatRegexDisplay();
                 }
               });
 
@@ -89791,6 +90006,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const nameInput = document.getElementById("regex-name-input");
             const findInput = document.getElementById("regex-find-input");
             const replaceInput = document.getElementById("regex-replace-input");
+            const modeDisplay = document.getElementById("regex-mode-display");
+            const modePrompt = document.getElementById("regex-mode-prompt");
+            const targetModeSelect = document.getElementById("regex-target-mode-select");
             const scopeChat = document.getElementById("regex-scope-chat");
             const scopeBookshelf = document.getElementById("regex-scope-bookshelf");
             const presetSelect = document.getElementById("regex-preset-select");
@@ -89807,6 +90025,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (nameInput) nameInput.value = found.name || "";
                 if (findInput) findInput.value = found.findRegex || "";
                 if (replaceInput) replaceInput.value = found.replaceString || "";
+                if (modeDisplay) modeDisplay.checked = found.applyDisplay !== false;
+                if (modePrompt) modePrompt.checked = found.applyPrompt === true;
+                const existingTargets = Array.isArray(found.targetChatIds) ? found.targetChatIds.map(String) : [];
+                if (found.chatId !== undefined && found.chatId !== null && String(found.chatId) !== "" && !existingTargets.includes(String(found.chatId))) {
+                  existingTargets.push(String(found.chatId));
+                }
+                const isCustomTarget = found.targetMode === "custom" || existingTargets.length > 0;
+                if (targetModeSelect) targetModeSelect.value = isCustomTarget ? "custom" : "global";
+                renderRegexTargetWindowsSelector(existingTargets);
                 if (scopeChat) scopeChat.checked = found.scopeChat !== false;
                 if (scopeBookshelf) scopeBookshelf.checked = found.scopeBookshelf !== false;
               }
@@ -89814,6 +90041,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (nameInput) nameInput.value = "";
               if (findInput) findInput.value = "";
               if (replaceInput) replaceInput.value = "";
+              if (modeDisplay) modeDisplay.checked = true;
+              if (modePrompt) modePrompt.checked = false;
+              if (targetModeSelect) targetModeSelect.value = "global";
+              renderRegexTargetWindowsSelector([]);
               if (scopeChat) scopeChat.checked = true;
               if (scopeBookshelf) scopeBookshelf.checked = true;
             }
@@ -89829,8 +90060,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const rxPresetSelect = document.getElementById("regex-preset-select");
           const rxFindPreset = document.getElementById("regex-find-preset-select");
           const rxReplacePreset = document.getElementById("regex-replace-preset-select");
+          const rxTargetModeSelect = document.getElementById("regex-target-mode-select");
 
           window.openRegexRuleEditor = openRegexRuleEditor;
+          if (rxTargetModeSelect) {
+            rxTargetModeSelect.addEventListener("change", () => {
+              const checkedBoxes = Array.from(document.querySelectorAll("#regex-target-windows-box .regex-target-window-checkbox:checked")).map((el) => el.value);
+              renderRegexTargetWindowsSelector(checkedBoxes);
+            });
+          }
           if (addRxBtn) {
             addRxBtn.addEventListener("click", () => openRegexRuleEditor(null));
           }
@@ -89884,11 +90122,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const nameVal = document.getElementById("regex-name-input")?.value.trim() || "正则规则";
               const findVal = document.getElementById("regex-find-input")?.value || "";
               const replaceVal = document.getElementById("regex-replace-input")?.value || "";
+              const applyDisplay = Boolean(document.getElementById("regex-mode-display")?.checked);
+              const applyPrompt = Boolean(document.getElementById("regex-mode-prompt")?.checked);
+              const targetMode = document.getElementById("regex-target-mode-select")?.value === "custom" ? "custom" : "global";
+              const selectedTargetIds = targetMode === "custom"
+                ? Array.from(document.querySelectorAll("#regex-target-windows-box .regex-target-window-checkbox:checked")).map((el) => String(el.value))
+                : [];
               const scopeChat = Boolean(document.getElementById("regex-scope-chat")?.checked);
               const scopeBookshelf = Boolean(document.getElementById("regex-scope-bookshelf")?.checked);
 
               if (!findVal.trim()) {
                 await showCustomAlert("提示", "请输入要查找的内容或正则表达式");
+                return;
+              }
+              if (!applyDisplay && !applyPrompt) {
+                await showCustomAlert("提示", "请至少勾选仅显示或发送AI中的一项");
+                return;
+              }
+              if (targetMode === "custom" && selectedTargetIds.length === 0) {
+                await showCustomAlert("提示", "请至少勾选一个要生效的窗口");
                 return;
               }
 
@@ -89899,6 +90151,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   target.name = nameVal;
                   target.findRegex = findVal;
                   target.replaceString = replaceVal;
+                  target.applyDisplay = applyDisplay;
+                  target.applyPrompt = applyPrompt;
+                  target.targetMode = targetMode;
+                  target.targetChatIds = selectedTargetIds;
+                  if (targetMode === "global") {
+                    delete target.chatId;
+                  }
                   target.scopeChat = scopeChat;
                   target.scopeBookshelf = scopeBookshelf;
                 }
@@ -89910,6 +90169,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   replaceString: replaceVal,
                   flags: "g",
                   enabled: true,
+                  applyDisplay: applyDisplay,
+                  applyPrompt: applyPrompt,
+                  targetMode: targetMode,
+                  targetChatIds: selectedTargetIds,
                   scopeChat: scopeChat,
                   scopeBookshelf: scopeBookshelf,
                 });
@@ -89918,6 +90181,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               await saveStoredRegexRules(rules);
               if (rxModal) rxModal.classList.remove("visible");
               window.renderRegexRulesList();
+              refreshActiveChatRegexDisplay();
             });
           }
 
@@ -89938,6 +90202,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const repStr = item.replaceString ?? item.replace ?? item.replacement ?? "";
                 const nameStr = item.scriptName || item.name || item.title || `${fileName.replace(/\.[^.]+$/, "")}_${idx + 1}`;
                 const enabledVal = item.disabled !== undefined ? !item.disabled : (item.enabled !== false);
+                const itemApplyDisplay = item.applyDisplay !== undefined
+                  ? Boolean(item.applyDisplay)
+                  : (item.promptOnly === true && !item.markdownOnly ? false : true);
+                const itemApplyPrompt = item.applyPrompt !== undefined
+                  ? Boolean(item.applyPrompt)
+                  : (item.markdownOnly === true && !item.promptOnly ? false : Boolean(item.promptOnly));
                 extracted.push({
                   id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + idx,
                   name: String(nameStr).trim(),
@@ -89945,6 +90215,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   replaceString: String(repStr),
                   flags: item.flags || "g",
                   enabled: Boolean(enabledVal),
+                  applyDisplay: itemApplyDisplay,
+                  applyPrompt: itemApplyPrompt,
+                  targetMode: item.targetMode === "custom" ? "custom" : "global",
+                  targetChatIds: Array.isArray(item.targetChatIds) ? item.targetChatIds.map(String) : [],
                   scopeChat: item.scopeChat !== false,
                   scopeBookshelf: item.scopeBookshelf !== false,
                 });
@@ -89968,6 +90242,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   replaceString: repMatch ? repMatch[1] : "",
                   flags: "g",
                   enabled: true,
+                  applyDisplay: true,
+                  applyPrompt: false,
+                  targetMode: "global",
+                  targetChatIds: [],
                   scopeChat: true,
                   scopeBookshelf: true,
                 });
@@ -89987,6 +90265,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     replaceString: sepMatch[2] || "",
                     flags: "g",
                     enabled: true,
+                    applyDisplay: true,
+                    applyPrompt: false,
+                    targetMode: "global",
+                    targetChatIds: [],
                     scopeChat: true,
                     scopeBookshelf: true,
                   });
@@ -90002,6 +90284,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 replaceString: raw.split(/\r?\n/)[1] || "",
                 flags: "g",
                 enabled: true,
+                applyDisplay: true,
+                applyPrompt: false,
+                targetMode: "global",
+                targetChatIds: [],
                 scopeChat: true,
                 scopeBookshelf: true,
               });
