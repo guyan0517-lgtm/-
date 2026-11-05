@@ -2415,7 +2415,15 @@ code, pre {
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', () => sel(jq));
         } else {
-          setTimeout(() => sel(jq), 0);
+          try {
+            sel(jq);
+          } catch (err) {
+            if (err instanceof ReferenceError) {
+              setTimeout(() => sel(jq), 0);
+            } else {
+              console.error('jQuery ready callback error:', err);
+            }
+          }
         }
         return [];
       }
@@ -2607,9 +2615,10 @@ code, pre {
                   }
                   el.innerHTML = parsedDoc.body ? parsedDoc.body.innerHTML : finalHtml;
                   if (parsedDoc.head) {
-                    Array.from(parsedDoc.head.querySelectorAll('script')).forEach(sNode => {
-                      el.appendChild(ownerDoc.importNode(sNode, true));
-                    });
+                    const headScripts = Array.from(parsedDoc.head.querySelectorAll('script'));
+                    for (let i = headScripts.length - 1; i >= 0; i--) {
+                      el.insertBefore(ownerDoc.importNode(headScripts[i], true), el.firstChild);
+                    }
                   }
                 } else {
                   el.innerHTML = finalHtml;
@@ -2641,6 +2650,10 @@ code, pre {
                   if (ownerDoc.readyState !== 'loading' && typeof ownerWin.onload === 'function' && !ownerWin._tavernLoadOnloadFired) {
                     ownerWin._tavernLoadOnloadFired = true;
                     ownerWin.onload(new Event('load'));
+                  }
+                  ownerWin.dispatchEvent(new Event('resize'));
+                  if (typeof ownerWin.syncFrameHeight === 'function') {
+                    ownerWin.syncFrameHeight();
                   }
                 } catch (_) {}
               }
@@ -4931,10 +4944,40 @@ code, pre {
     };
     window.toastr = toastrShim;
 
-    window.SillyTavern = {
-      getContext: buildSillyTavernContextObject
-    };
+    function createSillyTavernGlobalObject(getContextFn) {
+      const baseTarget = { getContext: getContextFn };
+      return new Proxy(baseTarget, {
+        get(target, prop) {
+          if (prop in target) return target[prop];
+          if (prop === 'then' || prop === 'catch' || prop === 'finally' || typeof prop === 'symbol') {
+            return undefined;
+          }
+          const ctx = getContextFn();
+          if (ctx && prop in ctx) {
+            const val = ctx[prop];
+            return typeof val === 'function' ? val.bind(ctx) : val;
+          }
+          if (prop in window) {
+            return window[prop];
+          }
+          return undefined;
+        },
+        set(target, prop, value) {
+          target[prop] = value;
+          try {
+            const ctx = getContextFn();
+            if (ctx && typeof ctx === 'object') {
+              ctx[prop] = value;
+            }
+          } catch (_) {}
+          return true;
+        }
+      });
+    }
+    window.createSillyTavernGlobalObject = createSillyTavernGlobalObject;
+    window.SillyTavern = createSillyTavernGlobalObject(buildSillyTavernContextObject);
     window.getContext = buildSillyTavernContextObject;
+    window.getCurrentChatId = () => buildSillyTavernContextObject().getCurrentChatId();
     window.eventSource = tavernEventSource;
     window.event_types = TAVERN_EVENT_TYPES;
     window.eventTypes = TAVERN_EVENT_TYPES;
@@ -5501,167 +5544,37 @@ code, pre {
       return mutated;
     };
 
-    const ensureMilkteaDefaultStatData = (statData) => {
+    const applyActiveMvuSchemaToStatData = (statData) => {
       if (!statData || typeof statData !== 'object') return;
-      const card = getActiveCard();
-      const isMilkteaCard = Boolean(
-        (card && /奶茶店/.test(String(card.name || ''))) ||
-        (window.__mvuDefaultStatData && window.__mvuDefaultStatData.奶茶店铺)
-      );
-      if (!isMilkteaCard) return;
-      const defaultMilkteaStat = {
-        玩家信息: {
-          姓名: getUserDisplayName() || '店长',
-          声望: 15,
-          名声: '街巷新店',
-          备注: '初来乍到的奶茶店店主'
-        },
-        日期时间: {
-          年: 2026,
-          月: 3,
-          日: 1,
-          星期: 7,
-          小时: 8,
-          分钟: 0,
-          天气: '晴朗微风'
-        },
-        奶茶店铺: {
-          店名: (getUserDisplayName() || '雀生') + '的奶茶店',
-          资金: 5000,
-          等级: 1,
-          每日租金: 100,
-          地段: '社区商业街',
-          装修风格: '原木温馨风',
-          热门标签: ['新店开业', '手捣鲜果', '真奶现泡'],
-          评价分数: 4.8,
-          仓库容量: 100,
-          原料库存: {
-            红茶基底: { 数量: 20, 保质期: 7, 品质: '优' },
-            茉莉绿茶: { 数量: 20, 保质期: 7, 品质: '优' },
-            鲜牛奶: { 数量: 20, 保质期: 5, 品质: '优' },
-            黑糖珍珠: { 数量: 15, 保质期: 5, 品质: '良' },
-            芝士奶盖: { 数量: 10, 保质期: 5, 品质: '优' },
-            新鲜柠檬: { 数量: 15, 保质期: 6, 品质: '优' }
-          },
-          设备列表: {
-            萃茶机: { 等级: 1, 状态: '正常', 维护费: 10 },
-            封口机: { 等级: 1, 状态: '正常', 维护费: 5 },
-            冷藏柜: { 等级: 1, 状态: '正常', 维护费: 15 }
-          },
-          当前菜单: {
-            招牌珍珠奶茶: { 售价: 14, 成本: 5, 热度: 82, 评价: '茶香奶滑，珍珠Q弹', 配方: ['红茶基底', '鲜牛奶', '黑糖珍珠'] },
-            茉莉芝士奶绿: { 售价: 16, 成本: 6, 热度: 76, 评价: '清新花香配咸甜奶盖', 配方: ['茉莉绿茶', '芝士奶盖'] },
-            手打暴打柠檬茶: { 售价: 13, 成本: 4, 热度: 79, 评价: '酸甜解腻，冰爽醒神', 配方: ['茉莉绿茶', '新鲜柠檬'] }
-          },
-          已解锁配方: {
-            招牌珍珠奶茶: { 研发度: 100, 评价: '经典不出错的镇店之宝', 配方: ['红茶基底', '鲜牛奶', '黑糖珍珠'] },
-            茉莉芝士奶绿: { 研发度: 100, 评价: '清雅茉莉融合浓郁芝士', 配方: ['茉莉绿茶', '芝士奶盖'] },
-            手打暴打柠檬茶: { 研发度: 100, 评价: '选用新鲜柠檬手锤出汁', 配方: ['茉莉绿茶', '新鲜柠檬'] }
-          },
-          员工列表: {}
-        },
-        手机应用: {
-          聊天消息: {
-            椎名茶芽: {
-              身份: '隔壁花店店主',
-              好感度: 30,
-              备注: '温柔热心的邻居少女',
-              消息记录: [
-                { 发送者: '椎名茶芽', 内容: '恭喜新店开业呀！今天路过闻到好香的茶味，等忙完这阵我也来买一杯尝尝~', 时间: '08:05' }
-              ]
-            },
-            林师傅: {
-              身份: '茶叶原料供应商',
-              好感度: 20,
-              备注: '靠谱的茶行老掌柜',
-              消息记录: [
-                { 发送者: '林师傅', 内容: '首批高山红茶和茉莉绿茶已经送到后门仓库了，有任何需要随时联系我。', 时间: '07:50' }
-              ]
+      const activeCard = getActiveCard();
+      if (!activeCard) return;
+      if (lastExecutedHelperCardId !== activeCard.id && Array.isArray(activeCard.helperScripts) && activeCard.helperScripts.length > 0) {
+        try {
+          executeCardHelperScripts(activeCard, true);
+        } catch (_) {}
+      }
+      if (
+        window.__mvuActiveSchema &&
+        typeof window.__mvuActiveSchema.safeParse === 'function' &&
+        (!window.__mvuActiveSchemaCardId || window.__mvuActiveSchemaCardId === activeCard.id)
+      ) {
+        try {
+          const parsed = window.__mvuActiveSchema.safeParse(statData);
+          if (parsed && parsed.success && parsed.data && typeof parsed.data === 'object') {
+            if (parsed.data.worldConfig && parsed.data.shopConfig) {
+              ['玩家信息', '日期时间', '奶茶店铺', '手机应用', '顾客档案', '研发记录', '每日账单'].forEach(legacyKey => {
+                if (!(window.__mvuActiveSchema._shape && legacyKey in window.__mvuActiveSchema._shape)) {
+                  delete statData[legacyKey];
+                  delete parsed.data[legacyKey];
+                }
+              });
             }
-          },
-          奶茶委托: {
-            当前委托: {
-              委托1: { 标题: '晨间提神下午茶', 委托人: '附近写字楼白领', 需求: '需要5杯清爽解腻的茶饮', 报酬: 120, 状态: '可接取', 截止时间: '今日 16:00' },
-              委托2: { 标题: '社团迎新聚会预订', 委托人: '美院学生会', 需求: '预订8杯招牌珍珠奶茶', 报酬: 180, 状态: '可接取', 截止时间: '明日 18:00' }
-            }
-          },
-          奶茶比赛: {
-            当前赛事: {
-              赛事名称: '春季街区新锐茶饮评选',
-              主题: '春日花果与茗茶的邂逅',
-              阶段: '报名筹备中',
-              奖金: 2000,
-              要求: '研发一款评分达到A级以上的特色茶饮即可参赛'
-            }
-          },
-          大众点评: {
-            店铺星级: 4.8,
-            精选评论: [
-              { 用户: '甜茶控小鹿', 评分: 5, 内容: '新开的宝藏小店！珍珠煮得很有嚼劲，奶味也很正，还会再来！', 时间: '今日 08:15', 回复: '' },
-              { 用户: '路过的上班族', 评分: 5, 内容: '柠檬茶香气很足，店里装修也很温馨舒服。', 时间: '今日 08:20', 回复: '' }
-            ]
-          },
-          超话论坛: {
-            今日热搜: ['#街角新开的宝藏奶茶店#', '#春天第一杯奶茶推荐#', '#手打柠檬茶灵魂配方#'],
-            帖子列表: [
-              {
-                标题: '发现商业街新开了一家超有氛围感的独立奶茶店！',
-                作者: '探店达人阿果',
-                内容: '今天早上路过商业街，看到一家刚挂上营业牌的奶茶店，原木风的吧台特别干净，茶香隔着半条街都能闻到，大家快去冲！',
-                点赞: 68,
-                评论: [
-                  { 用户: '奶茶脑袋', 内容: '哇看着好棒，中午就去打卡！' },
-                  { 用户: '早八人', 内容: '求问有热饮吗？想去买一杯暖暖胃' }
-                ]
-              }
-            ]
+            Object.entries(parsed.data).forEach(([k, v]) => {
+              statData[k] = v;
+            });
           }
-        },
-        顾客档案: {
-          椎名茶芽: {
-            姓名: '椎名茶芽',
-            身份: '隔壁花店店主',
-            外貌: '扎着亚麻色双麻花辫，围着沾有露水的花艺围裙，笑容明朗治愈',
-            喜好口味: '微甜、花香茶底、奶盖系列',
-            好感度: 30,
-            常点饮品: '茉莉芝士奶绿',
-            印象评价: '觉得你认真泡茶的样子非常可靠，经常送小花束装点吧台。'
-          },
-          苏晴: {
-            姓名: '苏晴',
-            身份: '自由插画师',
-            外貌: '戴着贝雷帽与圆框眼镜，随身带着速写本与平板',
-            喜好口味: '清爽果茶、少冰七分糖',
-            好感度: 15,
-            常点饮品: '手打暴打柠檬茶',
-            印象评价: '喜欢坐在靠窗的位置边喝茶边画画。'
-          }
-        },
-        研发记录: {
-          可用灵感: ['春日樱花季特调', '焙火乌龙鲜奶', '杨枝甘露冰沙'],
-          历史研发: [
-            { 名称: '招牌珍珠奶茶', 结果: '成功', 评级: 'A', 笔记: '红茶与鲜奶比例3:2口感最醇厚' }
-          ]
-        },
-        每日账单: {
-          今日收入: 165,
-          今日支出: 100,
-          历史账单: [
-            { 日期: '2026-03-01', 营业额: 165, 原料采购: 0, 租金维护: 100, 净利润: 65, 备注: '新店试营业首日' }
-          ]
-        }
-      };
-      Object.entries(defaultMilkteaStat).forEach(([k, v]) => {
-        if (statData[k] === undefined || (typeof statData[k] === 'object' && statData[k] !== null && Object.keys(statData[k]).length === 0)) {
-          statData[k] = deepCloneSafe(v);
-        } else if (typeof v === 'object' && v !== null && !Array.isArray(v) && typeof statData[k] === 'object' && statData[k] !== null) {
-          Object.entries(v).forEach(([subK, subV]) => {
-            if (statData[k][subK] === undefined || (typeof statData[k][subK] === 'object' && statData[k][subK] !== null && Object.keys(statData[k][subK]).length === 0)) {
-              statData[k][subK] = deepCloneSafe(subV);
-            }
-          });
-        }
-      });
+        } catch (_) {}
+      }
     };
 
     const resolveVarStoreByOpts = (opts) => {
@@ -5714,7 +5627,7 @@ code, pre {
           if (!targetMsg.data.variables.stat_data || typeof targetMsg.data.variables.stat_data !== 'object') {
             targetMsg.data.variables.stat_data = {};
           }
-          ensureMilkteaDefaultStatData(targetMsg.data.variables.stat_data);
+          applyActiveMvuSchemaToStatData(targetMsg.data.variables.stat_data);
           if (targetMsg.mes && /<(?:UpdateVariable|updatevariable)>/i.test(targetMsg.mes)) {
             applyMvuUpdateVariableBlock(targetMsg.mes, targetMsg.data.variables.stat_data);
           }
@@ -5734,7 +5647,7 @@ code, pre {
           }
         });
       }
-      ensureMilkteaDefaultStatData(chatStore.stat_data);
+      applyActiveMvuSchemaToStatData(chatStore.stat_data);
       return chatStore;
     };
     window.getVariables = (opts) => {
@@ -5814,7 +5727,10 @@ code, pre {
         passthrough() { return node; },
         strict() { return node; },
         strip() { return node; },
-        catchall() { return node; },
+        catchall(catchallSchema) {
+          node._catchall = catchallSchema;
+          return node;
+        },
         refine() { return node; },
         superRefine() { return node; },
         transform(fn) {
@@ -5837,7 +5753,11 @@ code, pre {
         or() { return node; },
         and() { return node; },
         readonly() { return node; },
-         array() { return makeZodChain([]); },
+        array() {
+          const arrChain = makeZodChain([]);
+          arrChain._itemSchema = node;
+          return arrChain;
+        },
         extend(extraShape = {}) {
           return makeZodChain(node._default, Object.assign({}, node._shape || {}, extraShape));
         },
@@ -5850,31 +5770,103 @@ code, pre {
         deepPartial() { return node; },
         required() { return node; },
         extractDefaults() {
-          if (node._default !== undefined) {
-            return deepCloneSafe(node._default);
-          }
           if (node._shape && typeof node._shape === 'object') {
-            const out = {};
+            const out = (node._default && typeof node._default === 'object' && !Array.isArray(node._default))
+              ? deepCloneSafe(node._default)
+              : {};
             Object.entries(node._shape).forEach(([k, child]) => {
               if (child && typeof child.extractDefaults === 'function') {
                 const cv = child.extractDefaults();
-                if (cv !== undefined) out[k] = cv;
+                if (cv !== undefined && out[k] === undefined) {
+                  out[k] = cv;
+                }
               }
             });
             return out;
           }
+          if (node._recordValueSchema && node._default && typeof node._default === 'object' && !Array.isArray(node._default)) {
+            const out = deepCloneSafe(node._default);
+            if (typeof node._recordValueSchema.safeParse === 'function') {
+              Object.keys(out).forEach(k => {
+                out[k] = node._recordValueSchema.safeParse(out[k]).data;
+              });
+            }
+            return out;
+          }
+          if (node._default !== undefined) {
+            return deepCloneSafe(node._default);
+          }
           return undefined;
         },
         safeParse(input) {
-          const defObj = node.extractDefaults();
-          let merged = input;
-          if (defObj && typeof defObj === 'object' && !Array.isArray(defObj)) {
-            merged = deepCloneSafe(defObj);
-            if (input && typeof input === 'object' && !Array.isArray(input)) {
-              deepMergeVariables(merged, input);
+          let merged;
+          if (node._shape && typeof node._shape === 'object') {
+            const hasObjInput = input !== undefined && input !== null && typeof input === 'object' && !Array.isArray(input);
+            merged = hasObjInput
+              ? deepCloneSafe(input)
+              : ((node._default && typeof node._default === 'object' && !Array.isArray(node._default))
+                  ? deepCloneSafe(node._default)
+                  : {});
+            if (node._default && typeof node._default === 'object' && !Array.isArray(node._default)) {
+              Object.entries(node._default).forEach(([dk, dv]) => {
+                if (merged[dk] === undefined) merged[dk] = deepCloneSafe(dv);
+              });
             }
-          } else if (input === undefined) {
-            merged = defObj;
+            Object.entries(node._shape).forEach(([k, child]) => {
+              if (child && typeof child.safeParse === 'function') {
+                const parsedChild = child.safeParse(merged[k]);
+                if (parsedChild && parsedChild.data !== undefined) {
+                  merged[k] = parsedChild.data;
+                }
+              } else if (child && typeof child.extractDefaults === 'function' && merged[k] === undefined) {
+                const cv = child.extractDefaults();
+                if (cv !== undefined) merged[k] = cv;
+              }
+            });
+            if (node._catchall && typeof node._catchall.safeParse === 'function') {
+              Object.keys(merged).forEach(k => {
+                if (!(k in node._shape)) {
+                  const parsedExtra = node._catchall.safeParse(merged[k]);
+                  if (parsedExtra && parsedExtra.data !== undefined) {
+                    merged[k] = parsedExtra.data;
+                  }
+                }
+              });
+            }
+          } else if (node._recordValueSchema) {
+            const hasNonEmptyObjInput = input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).length > 0;
+            merged = hasNonEmptyObjInput
+              ? deepCloneSafe(input)
+              : ((node._default && typeof node._default === 'object' && !Array.isArray(node._default))
+                  ? deepCloneSafe(node._default)
+                  : (input && typeof input === 'object' && !Array.isArray(input) ? deepCloneSafe(input) : {}));
+            if (typeof node._recordValueSchema.safeParse === 'function') {
+              Object.keys(merged).forEach(k => {
+                const parsedRec = node._recordValueSchema.safeParse(merged[k]);
+                if (parsedRec && parsedRec.data !== undefined) {
+                  merged[k] = parsedRec.data;
+                }
+              });
+            }
+          } else if (node._itemSchema) {
+            const rawArr = Array.isArray(input)
+              ? deepCloneSafe(input)
+              : (Array.isArray(node._default) ? deepCloneSafe(node._default) : []);
+            merged = typeof node._itemSchema.safeParse === 'function'
+              ? rawArr.map(it => node._itemSchema.safeParse(it).data)
+              : rawArr;
+          } else {
+            merged = (input !== undefined && input !== null)
+              ? deepCloneSafe(input)
+              : (node._default !== undefined ? deepCloneSafe(node._default) : input);
+            if (node._coerceType === 'number' && merged !== undefined) {
+              const num = Number(merged);
+              merged = Number.isNaN(num) ? (typeof node._default === 'number' ? node._default : 0) : num;
+            } else if (node._coerceType === 'string' && merged !== undefined && merged !== null) {
+              merged = String(merged);
+            } else if (node._coerceType === 'boolean' && merged !== undefined) {
+              merged = Boolean(merged);
+            }
           }
           if (typeof node._transform === 'function') {
             try { merged = node._transform(merged); } catch (_) {}
@@ -5896,7 +5888,11 @@ code, pre {
       boolean: () => makeZodChain(false),
       bigint: () => makeZodChain(0),
       date: () => makeZodChain(''),
-      array: (itemSchema) => makeZodChain([]),
+      array: (itemSchema) => {
+        const c = makeZodChain([]);
+        c._itemSchema = itemSchema;
+        return c;
+      },
       tuple: (items = []) => makeZodChain(Array.isArray(items) ? items.map(it => (it && typeof it.extractDefaults === 'function' ? it.extractDefaults() : undefined)) : []),
       enum: (vals = []) => makeZodChain(Array.isArray(vals) ? (vals[0] ?? '') : ''),
       nativeEnum: (enumObj = {}) => makeZodChain(Object.values(enumObj)[0] ?? ''),
@@ -5906,7 +5902,11 @@ code, pre {
       void: () => makeZodChain(undefined),
       null: () => makeZodChain(null),
       undefined: () => makeZodChain(undefined),
-      record: () => makeZodChain({}),
+      record: (keyOrValSchema, maybeValSchema) => {
+        const c = makeZodChain({});
+        c._recordValueSchema = maybeValSchema || keyOrValSchema;
+        return c;
+      },
       map: () => makeZodChain({}),
       set: () => makeZodChain([]),
       union: (options = []) => makeZodChain(options[0] && typeof options[0].extractDefaults === 'function' ? options[0].extractDefaults() : undefined),
@@ -5927,9 +5927,21 @@ code, pre {
       transformer: (schema) => schema || makeZodChain(undefined),
       prettifyError: (e) => String(e?.message || e || ''),
       coerce: {
-        string: () => makeZodChain(''),
-        number: () => makeZodChain(0),
-        boolean: () => makeZodChain(false),
+        string: () => {
+          const c = makeZodChain('');
+          c._coerceType = 'string';
+          return c;
+        },
+        number: () => {
+          const c = makeZodChain(0);
+          c._coerceType = 'number';
+          return c;
+        },
+        boolean: () => {
+          const c = makeZodChain(false);
+          c._coerceType = 'boolean';
+          return c;
+        },
         bigint: () => makeZodChain(0),
         date: () => makeZodChain('')
       }
@@ -5952,7 +5964,9 @@ code, pre {
     window.registerMvuSchema = (schemaObj) => {
       try {
         const resolved = typeof schemaObj === 'function' ? schemaObj() : schemaObj;
+        const activeCard = getActiveCard();
         window.__mvuActiveSchema = resolved;
+        window.__mvuActiveSchemaCardId = activeCard ? activeCard.id : null;
         if (resolved && typeof resolved.extractDefaults === 'function') {
           const defs = resolved.extractDefaults();
           if (defs && typeof defs === 'object') {
@@ -5961,12 +5975,15 @@ code, pre {
             if (!chatStore.stat_data || typeof chatStore.stat_data !== 'object') {
               chatStore.stat_data = {};
             }
-            Object.entries(defs).forEach(([k, v]) => {
-              if (chatStore.stat_data[k] === undefined) {
-                chatStore.stat_data[k] = deepCloneSafe(v);
-              }
-            });
-            ensureMilkteaDefaultStatData(chatStore.stat_data);
+            applyActiveMvuSchemaToStatData(chatStore.stat_data);
+            const sess = getActiveChatSession();
+            if (sess && Array.isArray(sess.messages)) {
+              sess.messages.forEach(msg => {
+                if (msg && msg.data && msg.data.variables && msg.data.variables.stat_data && typeof msg.data.variables.stat_data === 'object') {
+                  applyActiveMvuSchemaToStatData(msg.data.variables.stat_data);
+                }
+              });
+            }
           }
         }
       } catch (_) {}
@@ -5986,7 +6003,7 @@ code, pre {
         if (!store.stat_data || typeof store.stat_data !== 'object') {
           store.stat_data = window.__mvuDefaultStatData ? deepCloneSafe(window.__mvuDefaultStatData) : {};
         }
-        ensureMilkteaDefaultStatData(store.stat_data);
+        applyActiveMvuSchemaToStatData(store.stat_data);
         return store;
       },
       replaceMvuData: async (mvuData, opts = { type: 'message', message_id: 'latest' }) => {
@@ -6023,8 +6040,9 @@ code, pre {
       parseMessage: async (msgText, oldVars) => {
         const nextVars = deepCloneSafe(oldVars || { stat_data: {} });
         if (!nextVars.stat_data || typeof nextVars.stat_data !== 'object') nextVars.stat_data = {};
-        ensureMilkteaDefaultStatData(nextVars.stat_data);
+        applyActiveMvuSchemaToStatData(nextVars.stat_data);
         applyMvuUpdateVariableBlock(msgText, nextVars.stat_data);
+        applyActiveMvuSchemaToStatData(nextVars.stat_data);
         try {
           await tavernEventSource.emit(window.Mvu.events.VARIABLE_UPDATE_ENDED, nextVars, deepCloneSafe(oldVars || {}));
         } catch (_) {}
@@ -6032,7 +6050,7 @@ code, pre {
       },
       reloadInitVar: async () => {
         const store = window.Mvu.getMvuData({ type: 'message', message_id: 0 });
-        if (store && store.stat_data) ensureMilkteaDefaultStatData(store.stat_data);
+        if (store && store.stat_data) applyActiveMvuSchemaToStatData(store.stat_data);
         return true;
       },
       isDuringExtraAnalysis: () => false
@@ -7552,9 +7570,9 @@ code, pre {
       } catch (_) {}
     }
     return String(codeStr || '')
-      .replace(/\bimport\.meta\.url\b/g, JSON.stringify(metaUrlVal))
-      .replace(/\bimport\.meta\b/g, JSON.stringify({ url: metaUrlVal, env: {} }))
-      .replace(/(?<![.\w$])import\s*\((?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
+      .replace(/\bimport\.meta\.url\b/g, 'window.__ST_META_URL__')
+      .replace(/\bimport\.meta\b/g, 'window.__ST_META__')
+      .replace(/(?<![.\w$'"])import\s*\((?!\s*\))(?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
         return `const ${defName} = window.__ST_BRIDGE__; const { ${mapped} } = window.__ST_BRIDGE__;`;
@@ -7790,6 +7808,39 @@ code, pre {
         wrappedCb.toString = () => cb.toString();
         tavernEventSource.on(evt, wrappedCb);
       },
+      makeFirst(evt, cb) {
+        if (!evt || typeof cb !== 'function') return;
+        const wrappedCb = async (...args) => {
+          if (getActiveCard()?.id !== ownerCardId) return;
+          return await cb(...args);
+        };
+        wrappedCb._ownerCardId = ownerCardId;
+        wrappedCb.toString = () => cb.toString();
+        tavernEventSource.makeFirst(evt, wrappedCb);
+      },
+      makeLast(evt, cb) {
+        if (!evt || typeof cb !== 'function') return;
+        const wrappedCb = async (...args) => {
+          if (getActiveCard()?.id !== ownerCardId) return;
+          return await cb(...args);
+        };
+        wrappedCb._ownerCardId = ownerCardId;
+        wrappedCb.toString = () => cb.toString();
+        tavernEventSource.makeLast(evt, wrappedCb);
+      },
+      once(evt, cb) {
+        if (!evt || typeof cb !== 'function') return;
+        const wrappedCb = async (...args) => {
+          if (getActiveCard()?.id !== ownerCardId) return;
+          return await cb(...args);
+        };
+        wrappedCb._ownerCardId = ownerCardId;
+        wrappedCb.toString = () => cb.toString();
+        tavernEventSource.once(evt, wrappedCb);
+      },
+      removeListener(evt, cb) {
+        tavernEventSource.off(evt, cb);
+      },
       off(evt, cb) {
         tavernEventSource.off(evt, cb);
       },
@@ -7804,9 +7855,11 @@ code, pre {
       return ctx;
     } : buildSillyTavernContextObject;
 
-    const effectiveSillyTavern = ownerCardId ? {
-      getContext: effectiveGetContext
-    } : window.SillyTavern;
+    const effectiveSillyTavern = ownerCardId
+      ? (typeof window.createSillyTavernGlobalObject === 'function'
+          ? window.createSillyTavernGlobalObject(effectiveGetContext)
+          : { getContext: effectiveGetContext })
+      : window.SillyTavern;
 
     inFlightPluginExecutionSet.add(pluginRunKey);
     try {
@@ -8410,13 +8463,18 @@ code, pre {
       syncCardScopedFloatingWidgets();
       return;
     }
+    const usesFloatingBall = scripts.some(hs => /gourmet-fixed-ball-ui|adv-codex-toggle/.test(String(hs.content || hs.code || '')));
     const ballInDom = document.getElementById('gourmet-fixed-ball-ui') || document.getElementById('adv-codex-toggle');
-    if (!forceRun && lastExecutedHelperCardId === card.id && ballInDom) {
+    if (!forceRun && lastExecutedHelperCardId === card.id && (!usesFloatingBall || ballInDom)) {
       enhanceFloatingHelperWidgets();
       return;
     }
-    // Remove floating widgets from previously active cards when switching cards
-    document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+    if (lastExecutedHelperCardId !== card.id) {
+      window.__mvuActiveSchema = null;
+      window.__mvuDefaultStatData = null;
+      window.__mvuActiveSchemaCardId = null;
+      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+    }
     lastExecutedHelperCardId = card.id;
     scripts.forEach(hs => {
       executeUserPluginScript({
@@ -8425,7 +8483,7 @@ code, pre {
         enabled: true,
         code: hs.content || hs.code,
         buttons: hs.buttons || []
-      }, { ownerCardId: card.id });
+      }, { ownerCardId: card.id, forceRerun: forceRun });
     });
     setTimeout(() => {
       syncCardScopedFloatingWidgets();
@@ -10010,7 +10068,7 @@ code, pre {
       var scaleContainer = document.querySelector('.scale-container');
       var outerC = document.getElementById('outerContainer');
       var rootCard = document.getElementById('statusRoot') || outerC || document.querySelector('.gourmet-main-frame');
-      if (scaleContainer && document.getElementById('sim-scaler')) {
+      if (scaleContainer && (document.getElementById('sim-scaler') || document.querySelector('.outer-container'))) {
         var scRect = scaleContainer.getBoundingClientRect();
         if (scRect.width > 40) {
           contentH = Math.round(scRect.width * (1312 / 736)) + 12;
@@ -10053,6 +10111,10 @@ code, pre {
         frame.style.height = targetH + 'px';
         frame.style.minHeight = '0px';
         frame.style.maxHeight = 'none';
+        if (scaleContainer && document.querySelector('.outer-container')) {
+          scaleContainer.style.height = Math.max(200, targetH - 12) + 'px';
+          try { window.dispatchEvent(new Event('resize')); } catch (_) {}
+        }
       }
     } catch (e) {}
   }
@@ -14422,15 +14484,6 @@ code, pre {
   let pendingTavernHeavyRenderTimer = null;
 
   function runTavernFloorsAndPluginsNow() {
-    try {
-      renderTavernChatFloors(true);
-    } catch (err) {
-      console.error('renderTavernChatFloors error:', err);
-      showTavernErrorBanner('角色卡楼层渲染异常', err && err.message ? err.message : String(err));
-    }
-    try {
-      bindTavernStageEvents();
-    } catch (_) {}
     (tavernState.plugins || []).forEach(p => {
       if (p && p.enabled && !p.builtInType && (p.code || isBaiBaiPlugin(p))) {
         try {
@@ -14453,6 +14506,15 @@ code, pre {
         console.error('ensureCardEmbeddedScriptsLoaded error:', err);
       }
     }
+    try {
+      renderTavernChatFloors(true);
+    } catch (err) {
+      console.error('renderTavernChatFloors error:', err);
+      showTavernErrorBanner('角色卡楼层渲染异常', err && err.message ? err.message : String(err));
+    }
+    try {
+      bindTavernStageEvents();
+    } catch (_) {}
     Promise.resolve().then(() => {
       try {
         const sess = getActiveChatSession();

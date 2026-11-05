@@ -48,7 +48,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=15.4" defer></script>
+    <script src="game-hall.js?v=15.9" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -1299,6 +1299,18 @@
                   自动清洗正文英文标点与多余双换行（推荐开启）
                 </p>
               </div>
+              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
+                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">网关保活</span>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="gateway-keepalive-switch" checked />
+                    <span class="slider"></span>
+                  </label>
+                </label>
+                <p style="font-size: 12px; color: var(--text-secondary, #888); margin-top: 4px; line-height: 1.4;">
+                  非流式请求定时发送空白心跳防止网关超时断连
+                </p>
+              </div>
             </div>
           </div>
 
@@ -2516,7 +2528,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22288,15 +22300,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!force && evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
             return;
           }
-          const userExplicitAudioKeepAlive = Boolean(
-            window.state && window.state.globalSettings && window.state.globalSettings.alwaysKeepAlive
-          );
-          if (!userExplicitAudioKeepAlive) {
-            if (_bgTaskKeepAliveCount > 0) {
-              requestScreenWakeLockIfNeeded();
-            }
-            return;
-          }
           const audio = document.getElementById("strong-keep-alive-player") || document.getElementById("keep-alive-audio");
           if (audio) {
             audio._isKeepAliveAudio = true;
@@ -22654,7 +22657,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       method,
                       headers,
                       body: activeBodyObj !== undefined ? activeBodyObj : body,
-                      keepAliveHeartbeat: true,
+                      keepAliveHeartbeat: !(
+                        (window.state && window.state.apiConfig && window.state.apiConfig.gatewayKeepAliveEnabled === false) ||
+                        localStorage.getItem("api_gateway_keepalive_enabled") === "false"
+                      ),
                       taskId: currentTaskId,
                     }),
                     signal: controller.signal,
@@ -41368,6 +41374,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             cleanBotSwitch.checked = !!state.apiConfig.cleanBotTextEnabled;
             cleanBotSwitch.onchange = () => {
               state.apiConfig.cleanBotTextEnabled = cleanBotSwitch.checked;
+              if (typeof db !== "undefined" && db.apiConfig) {
+                db.apiConfig.put(state.apiConfig);
+              }
+            };
+          }
+
+          const gatewayKeepAliveSwitch = document.getElementById("gateway-keepalive-switch");
+          if (gatewayKeepAliveSwitch) {
+            gatewayKeepAliveSwitch.checked = state.apiConfig.gatewayKeepAliveEnabled !== false && localStorage.getItem("api_gateway_keepalive_enabled") !== "false";
+            gatewayKeepAliveSwitch.onchange = () => {
+              state.apiConfig.gatewayKeepAliveEnabled = gatewayKeepAliveSwitch.checked;
+              localStorage.setItem("api_gateway_keepalive_enabled", gatewayKeepAliveSwitch.checked ? "true" : "false");
               if (typeof db !== "undefined" && db.apiConfig) {
                 db.apiConfig.put(state.apiConfig);
               }
@@ -100245,6 +100263,9 @@ ${specificRules}`;
               localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
               const cleanBotSwitch = document.getElementById("clean-bot-text-switch");
               state.apiConfig.cleanBotTextEnabled = cleanBotSwitch ? cleanBotSwitch.checked : false;
+              const gatewayKeepAliveSwitch = document.getElementById("gateway-keepalive-switch");
+              state.apiConfig.gatewayKeepAliveEnabled = gatewayKeepAliveSwitch ? gatewayKeepAliveSwitch.checked : true;
+              localStorage.setItem("api_gateway_keepalive_enabled", state.apiConfig.gatewayKeepAliveEnabled ? "true" : "false");
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");

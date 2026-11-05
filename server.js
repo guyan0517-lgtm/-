@@ -1350,29 +1350,31 @@ app.post('/api/proxy', async (req, res) => {
       return res.status(400).json({ error: 'Missing target url' });
     }
 
-    // Non-streaming requests with keepAliveHeartbeat use native http/https + proxyTasks so 255s+ responses never get dropped or duplicated
-    if (keepAliveHeartbeat) {
-      heartbeatStarted = true;
+    // Non-streaming requests with taskId or keepAliveHeartbeat use native http/https + proxyTasks so 255s+ responses never get dropped or duplicated
+    if (keepAliveHeartbeat || taskId) {
       res.status(200);
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Type', keepAliveHeartbeat ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
       if (typeof res.flushHeaders === 'function') {
         res.flushHeaders();
       }
-      // Send 2KB whitespace chunk immediately and every 5s to force cloud proxy / mobile network buffer flush
-      const heartbeatChunk = ' '.repeat(2048) + '\n';
-      try {
-        res.write(heartbeatChunk);
-      } catch (_) {}
-      heartbeatTimer = setInterval(() => {
+      if (keepAliveHeartbeat) {
+        heartbeatStarted = true;
+        // Send 2KB whitespace chunk immediately and every 5s to force cloud proxy / mobile network buffer flush
+        const heartbeatChunk = ' '.repeat(2048) + '\n';
         try {
-          if (!res.writableEnded && !res.destroyed) {
-            res.write(heartbeatChunk);
-          }
+          res.write(heartbeatChunk);
         } catch (_) {}
-      }, 5000);
+        heartbeatTimer = setInterval(() => {
+          try {
+            if (!res.writableEnded && !res.destroyed) {
+              res.write(heartbeatChunk);
+            }
+          } catch (_) {}
+        }, 5000);
+      }
 
       let taskEntry = taskId ? proxyTasks.get(taskId) : null;
       if (!taskEntry) {
