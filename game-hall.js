@@ -1479,6 +1479,186 @@ code, pre {
   let persistentExtSettingsEl = null;
   let persistentExtSettings2El = null;
 
+  const ST_THEME_FIELDS = [
+    'blur_strength', 'main_text_color', 'italics_text_color', 'underline_text_color',
+    'quote_text_color', 'blur_tint_color', 'chat_tint_color', 'user_mes_blur_tint_color',
+    'bot_mes_blur_tint_color', 'shadow_color', 'shadow_width', 'border_color',
+    'font_scale', 'fast_ui_mode', 'waifuMode', 'avatar_style', 'chat_display',
+    'toastr_position', 'noShadows', 'chat_width', 'timer_enabled', 'timestamps_enabled',
+    'timestamp_model_icon', 'mesIDDisplay_enabled', 'hideChatAvatars_enabled',
+    'message_token_count_enabled', 'expand_message_actions', 'enableZenSliders',
+    'enableLabMode', 'hotswap_enabled', 'bogus_folders', 'zoomed_avatar_magnification',
+    'custom_css', 'reduced_motion', 'compact_input_area', 'show_swipe_num_all_messages',
+    'click_to_edit', 'media_display'
+  ];
+
+  const ST_THEME_CSS_VAR_MAP = {
+    main_text_color: '--SmartThemeBodyColor',
+    italics_text_color: '--SmartThemeEmColor',
+    underline_text_color: '--SmartThemeUnderlineColor',
+    quote_text_color: '--SmartThemeQuoteColor',
+    blur_tint_color: '--SmartThemeBlurTintColor',
+    chat_tint_color: '--SmartThemeChatTintColor',
+    user_mes_blur_tint_color: '--SmartThemeUserMesBlurTintColor',
+    bot_mes_blur_tint_color: '--SmartThemeBotMesBlurTintColor',
+    shadow_color: '--SmartThemeShadowColor',
+    border_color: '--SmartThemeBorderColor'
+  };
+
+  function normalizeCompleteStTheme(rawTheme, fallbackName = '默认主题') {
+    const src = (rawTheme && typeof rawTheme === 'object' && !Array.isArray(rawTheme)) ? rawTheme : {};
+    const out = {};
+    out.name = String(src.name || fallbackName || '默认主题').trim() || '默认主题';
+    ST_THEME_FIELDS.forEach(k => {
+      if (Object.prototype.hasOwnProperty.call(src, k) && src[k] !== undefined) {
+        out[k] = src[k];
+      } else {
+        out[k] = DEFAULT_GOUSU_THEME[k];
+      }
+    });
+    out.custom_css = String(out.custom_css == null ? '' : out.custom_css);
+    return out;
+  }
+
+  function getTavernSettingsInventoryThemes() {
+    if (!Array.isArray(tavernState.themes) || tavernState.themes.length === 0) {
+      return [normalizeCompleteStTheme(DEFAULT_GOUSU_THEME, '一键狗塑')];
+    }
+    const seen = new Set();
+    const result = [];
+    tavernState.themes.forEach((t, idx) => {
+      if (!t || typeof t !== 'object') return;
+      let baseName = String(t.name || ('主题_' + (idx + 1))).trim() || ('主题_' + (idx + 1));
+      if (/^__theme_mgr_deleted__/i.test(baseName)) return;
+      if (seen.has(baseName)) {
+        let suffix = 2;
+        while (seen.has(baseName + '_' + suffix)) suffix++;
+        baseName = baseName + '_' + suffix;
+        t.name = baseName;
+      }
+      seen.add(baseName);
+      const complete = normalizeCompleteStTheme(t, baseName);
+      ST_THEME_FIELDS.forEach(k => {
+        if (t[k] === undefined) t[k] = complete[k];
+      });
+      result.push(complete);
+    });
+    return result.length > 0 ? result : [normalizeCompleteStTheme(DEFAULT_GOUSU_THEME, '一键狗塑')];
+  }
+
+  function upsertThemeIntoTavernState(themeObj, makeActive = false) {
+    if (!themeObj || typeof themeObj !== 'object' || Array.isArray(themeObj)) return null;
+    const themeName = String(themeObj.name || '').trim();
+    if (!themeName || /^__theme_mgr_deleted__/i.test(themeName)) return null;
+    if (!Array.isArray(tavernState.themes)) tavernState.themes = [];
+    const complete = normalizeCompleteStTheme(themeObj, themeName);
+    let existing = tavernState.themes.find(t => t && String(t.name || '').trim() === themeName);
+    if (existing) {
+      Object.assign(existing, complete);
+    } else {
+      existing = Object.assign({
+        id: themeObj.id || ('theme_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))
+      }, complete);
+      tavernState.themes.push(existing);
+    }
+    if (makeActive) {
+      tavernState.activeThemeId = existing.id;
+    }
+    syncTavernPowerUserAndThemeDom();
+    return existing;
+  }
+
+  let isSyncingNativeThemeControls = false;
+
+  function syncTavernPowerUserAndThemeDom(explicitTheme = null) {
+    if (isSyncingNativeThemeControls) return;
+    isSyncingNativeThemeControls = true;
+    try {
+      const themesInventory = getTavernSettingsInventoryThemes();
+      let activeThemeObj = explicitTheme ||
+        (tavernState.themes || []).find(t => t && t.id === tavernState.activeThemeId) ||
+        (tavernState.themes || [])[0] ||
+        DEFAULT_GOUSU_THEME;
+      const completeActive = normalizeCompleteStTheme(activeThemeObj, activeThemeObj?.name || '一键狗塑');
+
+      if (!window.power_user || typeof window.power_user !== 'object') {
+        window.power_user = {};
+      }
+      window.power_user.theme = completeActive.name;
+      window.power_user.theme_fallback = completeActive.name;
+      ST_THEME_FIELDS.forEach(k => {
+        window.power_user[k] = completeActive[k];
+      });
+      window.power_user.experimental_macro_engine = false;
+      window.power_user.persona_description = getActivePersona()?.description || '';
+      const personasMap = {};
+      const personaDescMap = {};
+      (tavernState.personas || []).forEach(p => {
+        if (!p) return;
+        const key = p.id || p.name || 'default_persona';
+        personasMap[key] = p.name || '默认人设';
+        personaDescMap[key] = { description: p.description || '' };
+      });
+      window.power_user.personas = personasMap;
+      window.power_user.persona_descriptions = personaDescMap;
+
+      if (document.documentElement && document.documentElement.style) {
+        Object.keys(ST_THEME_CSS_VAR_MAP).forEach(fieldKey => {
+          const cssVarName = ST_THEME_CSS_VAR_MAP[fieldKey];
+          const val = completeActive[fieldKey];
+          if (val !== undefined && val !== null) {
+            document.documentElement.style.setProperty(cssVarName, String(val).trim());
+          }
+        });
+      }
+
+      const themeSelect = document.getElementById('themes');
+      if (themeSelect && themeSelect.tagName === 'SELECT') {
+        const optionNames = themesInventory.map(t => t.name);
+        if (!optionNames.includes(completeActive.name)) {
+          optionNames.push(completeActive.name);
+        }
+        const curOptions = Array.from(themeSelect.options).map(o => o.value);
+        const sameList = curOptions.length === optionNames.length && curOptions.every((v, i) => v === optionNames[i]);
+        if (!sameList) {
+          themeSelect.innerHTML = '';
+          optionNames.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            themeSelect.appendChild(opt);
+          });
+        }
+        themeSelect.value = completeActive.name;
+      }
+
+      const normalizedDomCss = String(completeActive.custom_css || '').replace(/\r\n?/g, '\n');
+      const customCssInput = document.getElementById('customCSS');
+      if (customCssInput && customCssInput.value !== normalizedDomCss) {
+        customCssInput.value = normalizedDomCss;
+      }
+      let customStyleEl = document.getElementById('custom-style');
+      if (!customStyleEl && document.head) {
+        customStyleEl = document.createElement('style');
+        customStyleEl.id = 'custom-style';
+        customStyleEl.setAttribute('type', 'text/css');
+        customStyleEl.setAttribute('media', 'not all');
+        document.head.appendChild(customStyleEl);
+      }
+      if (customStyleEl) {
+        if (customStyleEl.getAttribute('media') !== 'not all') {
+          customStyleEl.setAttribute('media', 'not all');
+        }
+        if (customStyleEl.textContent !== normalizedDomCss) {
+          customStyleEl.textContent = normalizedDomCss;
+        }
+      }
+    } catch (_) {
+    } finally {
+      isSyncingNativeThemeControls = false;
+    }
+  }
+
   function ensurePersistentExtensionContainers() {
     if (!persistentExtSettingsEl) {
       persistentExtSettingsEl = document.createElement('div');
@@ -1499,6 +1679,82 @@ code, pre {
     }
     if (!persistentExtSettingsEl.parentNode) holdingArea.appendChild(persistentExtSettingsEl);
     if (!persistentExtSettings2El.parentNode) holdingArea.appendChild(persistentExtSettings2El);
+
+    let themeSelectEl = document.getElementById('themes');
+    if (!themeSelectEl) {
+      themeSelectEl = document.createElement('select');
+      themeSelectEl.id = 'themes';
+      holdingArea.appendChild(themeSelectEl);
+    }
+    if (!themeSelectEl._stThemeChangeBound) {
+      themeSelectEl._stThemeChangeBound = true;
+      themeSelectEl.addEventListener('change', () => {
+        if (isSyncingNativeThemeControls) return;
+        const selectedName = String(themeSelectEl.value || (themeSelectEl.options[themeSelectEl.selectedIndex]?.textContent) || '').trim();
+        if (!selectedName) return;
+        let matched = (tavernState.themes || []).find(t => t && String(t.name || '').trim() === selectedName);
+        if (!matched && window._stHydratedThemes && window._stHydratedThemes[selectedName]) {
+          matched = upsertThemeIntoTavernState(window._stHydratedThemes[selectedName], true);
+        }
+        if (matched) {
+          tavernState.activeThemeId = matched.id;
+          syncTavernPowerUserAndThemeDom(matched);
+          applyActiveTavernTheme();
+          if (uiRuntime.openDrawerKey === 'usercog') refreshOpenDrawerOnly();
+          renderTavernChatFloors(false);
+          saveTavernStore();
+        }
+      });
+    }
+
+    let customCssEl = document.getElementById('customCSS');
+    if (!customCssEl) {
+      customCssEl = document.createElement('textarea');
+      customCssEl.id = 'customCSS';
+      holdingArea.appendChild(customCssEl);
+    }
+    if (!customCssEl._stCustomCssBound) {
+      customCssEl._stCustomCssBound = true;
+      const syncFromTextarea = () => {
+        if (isSyncingNativeThemeControls) return;
+        const nextCss = String(customCssEl.value || '');
+        const customStyle = document.getElementById('custom-style');
+        if (customStyle && customStyle.textContent !== nextCss) {
+          customStyle.textContent = nextCss;
+        }
+        if (window.power_user) window.power_user.custom_css = nextCss;
+        const activeTheme = (tavernState.themes || []).find(t => t && t.id === tavernState.activeThemeId) || (tavernState.themes || [])[0];
+        if (activeTheme && activeTheme.custom_css !== nextCss) {
+          activeTheme.custom_css = nextCss;
+          applyActiveTavernTheme();
+          saveTavernStore();
+        }
+      };
+      customCssEl.addEventListener('input', syncFromTextarea);
+      customCssEl.addEventListener('change', syncFromTextarea);
+    }
+
+    let customStyleEl = document.getElementById('custom-style');
+    if (!customStyleEl && document.head) {
+      customStyleEl = document.createElement('style');
+      customStyleEl.id = 'custom-style';
+      customStyleEl.setAttribute('type', 'text/css');
+      customStyleEl.setAttribute('media', 'not all');
+      document.head.appendChild(customStyleEl);
+    }
+
+    window.baibaokuHydrateTheme = function (themeObj) {
+      if (!themeObj || typeof themeObj !== 'object') return false;
+      const tName = String(themeObj.name || '').trim();
+      if (!tName) return false;
+      if (/^__theme_mgr_deleted__/i.test(tName)) return true;
+      if (!window._stHydratedThemes) window._stHydratedThemes = {};
+      window._stHydratedThemes[tName] = normalizeCompleteStTheme(themeObj, tName);
+      upsertThemeIntoTavernState(themeObj, false);
+      return true;
+    };
+
+    syncTavernPowerUserAndThemeDom();
   }
 
   function splitSlashCommandPipeline(cmdText) {
@@ -3123,14 +3379,13 @@ code, pre {
         }
       }
     } catch (_) {}
-    const personasMap = {};
-    const personaDescMap = {};
-    (tavernState.personas || []).forEach(p => {
-      if (!p) return;
-      const key = p.id || p.name || 'default_persona';
-      personasMap[key] = p.name || '默认人设';
-      personaDescMap[key] = { description: p.description || '' };
-    });
+    syncTavernPowerUserAndThemeDom();
+    if (sess) {
+      if (!sess.metadata || typeof sess.metadata !== 'object') sess.metadata = {};
+      if (!sess.metadata.integrity || typeof sess.metadata.integrity !== 'string') {
+        sess.metadata.integrity = 'chat_uuid_' + String(sess.chatId || 'default');
+      }
+    }
     const resolvedCreds = resolveTavernApiCredentials();
     return {
       chat: sess ? sess.messages : [],
@@ -3138,6 +3393,7 @@ code, pre {
       characters: tavernState.cards,
       characterId: card ? String(cardIdx >= 0 ? cardIdx : 0) : null,
       groupId: null,
+      groups: [],
       name1: getUserDisplayName(),
       name2: card ? card.name : '角色',
       mainApi: 'openai',
@@ -3147,7 +3403,8 @@ code, pre {
       getChatCompletionModel: () => resolvedCreds.model || 'gpt-4o-mini',
       getPresetManager: getTavernPresetManager,
       getCharacters: async () => tavernState.cards,
-      chatMetadata: sess ? (sess.metadata || (sess.metadata = {})) : {},
+      getThumbnailUrl: (type, file) => '/thumbnail?type=' + encodeURIComponent(type || 'avatar') + '&file=' + encodeURIComponent(file || ''),
+      chatMetadata: sess ? sess.metadata : { integrity: 'chat_uuid_default' },
       extensionSettings: tavernState.extensionSettings,
       variables: {
         local: getChatVariablesStore(),
@@ -3159,16 +3416,8 @@ code, pre {
       getWorldInfoNames: () => (tavernState.worldBooks || []).map(w => w.name),
       getWorldInfoPrompt: runTavernCheckWorldInfo,
       checkWorldInfo: runTavernCheckWorldInfo,
-      power_user: {
-        experimental_macro_engine: false,
-        persona_description: getActivePersona()?.description || '',
-        personas: personasMap,
-        persona_descriptions: personaDescMap
-      },
-      powerUserSettings: {
-        personas: personasMap,
-        persona_descriptions: personaDescMap
-      },
+      power_user: window.power_user,
+      powerUserSettings: window.power_user,
       SlashCommandParser: window.SlashCommandParser,
       SlashCommand: window.SlashCommand,
       SlashCommandArgument: window.SlashCommandArgument,
@@ -3258,7 +3507,7 @@ code, pre {
       saveMetadata: async () => saveTavernStore(),
       saveMetadataDebounced: () => saveTavernStore(),
       saveSettingsDebounced: () => saveTavernStore(),
-      getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
+      getRequestHeaders: (opts) => (opts && opts.omitContentType ? {} : { 'Content-Type': 'application/json' }),
       updateMessageBlock: async (mesId) => {
         if (typeof mesId === 'number' && mesId >= 0) {
           appendOrUpdateSingleFloorDom(mesId);
@@ -3723,18 +3972,43 @@ code, pre {
             ? reqUrl.replace(window.location.origin, '').split('?')[0].replace(/^\/+/, '')
             : '';
 
-          // 1a. SillyTavern /version endpoint used by JS-Slash-Runner & ST-Prompt-Template
+          // 1a. SillyTavern /version and /csrf-token endpoints
           if (isSameOriginOrRel && (cleanPath === 'version' || cleanPath === 'api/version')) {
             return new Response(JSON.stringify({ pkgVersion: '1.13.5', release: '1.13.5' }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
           }
+          if (isSameOriginOrRel && cleanPath === 'csrf-token') {
+            return new Response(JSON.stringify({ token: 'st-csrf-token' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
 
-          // 1a-2. SillyTavern /thumbnail?type=avatar|persona&file=... endpoint used by book-excerpt and other extensions
-          if (isSameOriginOrRel && cleanPath === 'thumbnail') {
-            const resolvedThumbUrl = await resolvePluginThumbnailUrlAsync(reqUrl);
+          // 1a-2. SillyTavern /thumbnail?type=avatar|persona|bg&file=... and /backgrounds/... endpoints
+          if (isSameOriginOrRel && (cleanPath === 'thumbnail' || cleanPath.startsWith('backgrounds/'))) {
+            const thumbTarget = cleanPath.startsWith('backgrounds/')
+              ? ('/thumbnail?type=bg&file=' + encodeURIComponent(decodeURIComponent(cleanPath.slice('backgrounds/'.length))))
+              : reqUrl;
+            const resolvedThumbUrl = await resolvePluginThumbnailUrlAsync(thumbTarget);
             if (resolvedThumbUrl) {
+              if (String(resolvedThumbUrl).startsWith('data:')) {
+                try {
+                  const commaIdx = resolvedThumbUrl.indexOf(',');
+                  const meta = resolvedThumbUrl.slice(5, commaIdx);
+                  const mime = meta.split(';')[0] || 'image/png';
+                  const isBase64 = meta.includes(';base64');
+                  const rawPart = resolvedThumbUrl.slice(commaIdx + 1);
+                  if (isBase64) {
+                    const binStr = atob(rawPart.replace(/\s+/g, ''));
+                    const bytes = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    return new Response(bytes, { status: 200, headers: { 'Content-Type': mime } });
+                  }
+                  return new Response(decodeURIComponent(rawPart), { status: 200, headers: { 'Content-Type': mime } });
+                } catch (_) {}
+              }
               const thumbRes = await rawFetch(resolvedThumbUrl);
               if (thumbRes.ok) return thumbRes;
             }
@@ -3785,7 +4059,7 @@ code, pre {
             }
           }
 
-          // 2. SillyTavern Backend API routes used by BaiBai, Burnt-chicken-wings, book-excerpt, and other ST extensions
+          // 2. SillyTavern Backend API routes used by BaiBai, Burnt-chicken-wings, book-excerpt, theme-mgr, and other ST extensions
           if (isSameOriginOrRel && cleanPath.startsWith('api/')) {
             // 2a. /api/backends/chat-completions/status (Pulling model list in BaiBai / Burnt-chicken-wings / ST plugins)
             if (cleanPath === 'api/backends/chat-completions/status') {
@@ -3947,6 +4221,189 @@ code, pre {
               return upstreamRes;
             }
 
+            // 2b-2. SillyTavern Settings & Themes API (/api/settings/get, /api/settings/save, /api/themes/save, /api/themes/delete)
+            if (cleanPath === 'api/settings/get') {
+              const allThemes = getTavernSettingsInventoryThemes();
+              const activeThemeObj = allThemes.find(t => t.id === tavernState.activeThemeId) || allThemes[0];
+              const settingsPayload = {
+                theme: activeThemeObj ? activeThemeObj.name : 'Gousu Default',
+                power_user: syncTavernPowerUserAndThemeDom(activeThemeObj),
+                extension_settings: tavernState.extensionSettings || {}
+              };
+              return new Response(JSON.stringify({
+                settings: JSON.stringify(settingsPayload),
+                themes: allThemes
+              }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/settings/save') {
+              await saveTavernStore();
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/themes/save') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const saved = upsertThemeIntoTavernState(bodyObj);
+              if (saved) {
+                const activeTheme = (tavernState.themes || []).find(t => t && t.id === tavernState.activeThemeId);
+                if (activeTheme && activeTheme.id === saved.id) {
+                  syncTavernPowerUserAndThemeDom(saved);
+                  applyActiveTavernTheme();
+                } else {
+                  syncTavernPowerUserAndThemeDom(activeTheme);
+                }
+                await saveTavernStore();
+                refreshOpenDrawerOnly();
+              }
+              return new Response(JSON.stringify(saved || { ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/themes/delete') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const delName = String(bodyObj.name || '').trim();
+              if (delName && Array.isArray(tavernState.themes) && tavernState.themes.length > 1) {
+                const prevActive = (tavernState.themes || []).find(t => t && t.id === tavernState.activeThemeId);
+                tavernState.themes = tavernState.themes.filter(t => t && String(t.name || '').trim() !== delName);
+                if (prevActive && String(prevActive.name || '').trim() === delName) {
+                  tavernState.activeThemeId = tavernState.themes[0]?.id || 'theme_gousu_default';
+                }
+                syncTavernPowerUserAndThemeDom();
+                applyActiveTavernTheme();
+                await saveTavernStore();
+                refreshOpenDrawerOnly();
+              }
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            // 2b-3. SillyTavern Backgrounds API (/api/backgrounds/all, /api/backgrounds/rename, /api/backgrounds/upload, /api/backgrounds/delete)
+            if (cleanPath === 'api/backgrounds/all') {
+              const gallery = Array.isArray(tavernState.background?.gallery) ? tavernState.background.gallery : [];
+              const bgFiles = gallery.map(g => {
+                if (!g) return '';
+                const rawName = String(g.name || g.id || 'bg').trim();
+                return /\.[a-z0-9]{2,5}$/i.test(rawName) ? rawName : (rawName + '.png');
+              }).filter(Boolean);
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              if (bodyObj && typeof bodyObj === 'object' && Object.keys(bodyObj).length > 0) {
+                return new Response(JSON.stringify({ images: bgFiles, files: bgFiles, backgrounds: bgFiles }), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+              return new Response(JSON.stringify(bgFiles), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/backgrounds/rename') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const oldName = String(bodyObj.old_bg || bodyObj.oldName || bodyObj.name || '').trim();
+              const newName = String(bodyObj.new_bg || bodyObj.newName || '').trim();
+              if (oldName && newName && Array.isArray(tavernState.background?.gallery)) {
+                const stripExt = s => String(s || '').replace(/\.[^.]+$/, '');
+                const item = tavernState.background.gallery.find(g => g && (g.name === oldName || stripExt(g.name) === stripExt(oldName)));
+                if (item) {
+                  item.name = newName;
+                  await saveTavernStore();
+                  refreshOpenDrawerOnly();
+                }
+              }
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/backgrounds/upload') {
+              let uploadedName = 'bg_' + Date.now() + '.png';
+              if (init && init.body instanceof FormData) {
+                const file = init.body.get('image') || init.body.get('avatar') || init.body.get('file');
+                if (file && typeof file === 'object') {
+                  uploadedName = String(file.name || uploadedName).trim();
+                  const vaultUrl = await offloadImageToVault(file, 'tavern_bg_' + Date.now() + '.png');
+                  if (vaultUrl) {
+                    if (!Array.isArray(tavernState.background.gallery)) tavernState.background.gallery = [];
+                    const existing = tavernState.background.gallery.find(g => g && g.name === uploadedName);
+                    if (existing) {
+                      existing.url = vaultUrl;
+                    } else {
+                      tavernState.background.gallery.unshift({
+                        id: 'bg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                        name: uploadedName,
+                        url: vaultUrl
+                      });
+                    }
+                    tavernState.background.url = vaultUrl;
+                    updateTavernBackgroundLayerOnly();
+                    await saveTavernStore();
+                    refreshOpenDrawerOnly();
+                  }
+                }
+              }
+              return new Response(uploadedName, { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+            }
+            if (cleanPath === 'api/backgrounds/delete') {
+              let bodyObj = {};
+              if (init && typeof init.body === 'string') {
+                try { bodyObj = JSON.parse(init.body); } catch (_) {}
+              }
+              const bgName = String(bodyObj.bg || bodyObj.name || '').trim();
+              if (bgName && Array.isArray(tavernState.background?.gallery)) {
+                const stripExt = s => String(s || '').replace(/\.[^.]+$/, '');
+                tavernState.background.gallery = tavernState.background.gallery.filter(
+                  g => g && g.name !== bgName && stripExt(g.name) !== stripExt(bgName)
+                );
+                await saveTavernStore();
+                refreshOpenDrawerOnly();
+              }
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
+            // 2b-4. SillyTavern Avatars & Character Avatar Edit API (/api/avatars/upload, /api/avatars/get, /api/characters/edit-avatar)
+            if (cleanPath === 'api/avatars/get') {
+              const list = (tavernState.personas || []).map(p => (p && (p.name || p.id || 'user')) + '.png');
+              return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/avatars/upload') {
+              let outName = 'user-default.png';
+              if (init && init.body instanceof FormData) {
+                const file = init.body.get('avatar') || init.body.get('image') || init.body.get('file');
+                const overwriteName = String(init.body.get('overwrite_name') || '').trim();
+                if (overwriteName) outName = overwriteName;
+                if (file && typeof file === 'object') {
+                  const vaultUrl = await offloadImageToVault(file, 'tavern_persona_' + Date.now() + '.png');
+                  const activeP = getActivePersona();
+                  if (vaultUrl && activeP) {
+                    activeP.avatar = vaultUrl;
+                    await saveTavernStore();
+                    refreshOpenDrawerOnly();
+                    renderTavernChatFloors(false);
+                  }
+                }
+              }
+              return new Response(JSON.stringify({ ok: true, path: outName, name: outName }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/characters/edit-avatar') {
+              if (init && init.body instanceof FormData) {
+                const file = init.body.get('avatar') || init.body.get('image') || init.body.get('file');
+                const targetUrl = String(init.body.get('avatar_url') || '').trim();
+                if (file && typeof file === 'object') {
+                  const vaultUrl = await offloadImageToVault(file, 'tavern_char_' + Date.now() + '.png');
+                  let card = (tavernState.cards || []).find(c => c && (c.avatar === targetUrl || (c.name + '.png') === targetUrl || c.id === targetUrl));
+                  if (!card) card = getActiveCard();
+                  if (vaultUrl && card) {
+                    card.avatar = vaultUrl;
+                    await saveTavernStore();
+                    refreshOpenDrawerOnly();
+                    renderTavernChatFloors(false);
+                  }
+                }
+              }
+              return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+
             // 2c. /api/presets/save, /api/presets/delete, /api/presets/delete-openai, /api/worldinfo/delete, /api/secrets/find, /api/characters/*
             if (cleanPath === 'api/presets/save') {
               let bodyObj = {};
@@ -4074,7 +4531,8 @@ code, pre {
                 { name: 'third-party/ST-BaiBai-Image', type: 'local' },
                 { name: 'third-party/ST-BaiBai-Book', type: 'local' },
                 { name: 'third-party/Burnt-chicken-wings', type: 'local' },
-                { name: 'third-party/book-excerpt', type: 'local' }
+                { name: 'third-party/book-excerpt', type: 'local' },
+                { name: 'third-party/theme-mgr', type: 'local' }
               ];
               (tavernState.plugins || []).forEach(p => {
                 if (p && p.name) {
@@ -4086,8 +4544,28 @@ code, pre {
               });
               return new Response(JSON.stringify(discovered), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
+            if (cleanPath === 'api/extensions/version') {
+              return new Response(JSON.stringify({
+                ok: true,
+                isUpToDate: true,
+                currentBranchName: 'main',
+                currentCommitHash: '4710000',
+                remoteUrl: 'https://github.com/wenshui012/theme-mgr.git'
+              }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath === 'api/extensions/update') {
+              return new Response(JSON.stringify({
+                ok: true,
+                isUpToDate: true,
+                shortCommitHash: '4710000',
+                fullCommitHash: '4710000'
+              }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
             if (cleanPath.startsWith('api/extensions/')) {
               return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (cleanPath.startsWith('api/plugins/theme-manager/')) {
+              return new Response(JSON.stringify({ error: 'Not installed on static host' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
             }
             if (cleanPath.startsWith('api/plugins/baibaoku/') || cleanPath.startsWith('api/plugins/cocktail-plus/')) {
               return new Response(JSON.stringify({ ok: true, version: '1.3.5', mode: 'browser' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -4139,7 +4617,11 @@ code, pre {
     window.POPUP_RESULT = { AFFIRMATIVE: 1, NEGATIVE: 0, CANCELLED: null };
     window.saveSettingsDebounced = () => saveTavernStore();
     window.saveMetadataDebounced = () => saveTavernStore();
-    window.getRequestHeaders = () => ({ 'Content-Type': 'application/json' });
+    window.getRequestHeaders = (opts) => (opts && opts.omitContentType ? {} : { 'Content-Type': 'application/json' });
+    window.getThumbnailUrl = (type, file) => resolvePluginThumbnailUrlSync('/thumbnail?type=' + encodeURIComponent(type || 'avatar') + '&file=' + encodeURIComponent(file || ''));
+    window.background_settings = window.background_settings || { name: '' };
+    window.getUserAvatar = () => getUserAvatarUrl();
+    window.getUserAvatars = async () => [(getActivePersona()?.name || 'user-default') + '.png'];
     window.generateQuietPrompt = async (quietPrompt) => {
       const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }], null, { isBackground: true });
       return res.content;
@@ -5201,10 +5683,7 @@ code, pre {
         find: (col, fn) => Array.isArray(col) ? col.find(fn) : Object.values(col || {}).find(fn)
       };
     }
-    window.power_user = {
-      get experimental_macro_engine() { return false; },
-      get persona_description() { return getActivePersona()?.description || ''; }
-    };
+    syncTavernPowerUserAndThemeDom();
     if (!window.SlashCommandParser) {
       window.SlashCommandParser = {
         commands: {},
@@ -5335,6 +5814,16 @@ code, pre {
       /ST-Prompt-Template/i.test(u);
   }
 
+  function isThemeMgrPlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const u = String(plugin.repoBaseUrl || '');
+    const c = String(plugin.code || plugin.content || '');
+    return /美化管理|theme-mgr|thetheme-mgr/i.test(n) ||
+      /theme-mgr|thetheme-mgr/i.test(u) ||
+      /tm-ext-entry|tm-fab-main|st_theme_mgr_v2/i.test(c);
+  }
+
   function ensureCoreCompatibilityPluginsRegistered() {
     if (!Array.isArray(tavernState.plugins)) {
       tavernState.plugins = [];
@@ -5393,9 +5882,24 @@ code, pre {
       if (type === 'persona') {
         return resolveSafeAvatarUrl(getUserAvatarUrl(), true);
       }
+      if (type === 'bg' || type === 'background') {
+        const gallery = Array.isArray(tavernState.background?.gallery) ? tavernState.background.gallery : [];
+        const cleanFile = decodeURIComponent(file).replace(/^backgrounds\//i, '').trim();
+        const stripExt = s => String(s || '').replace(/\.[^.]+$/, '');
+        const foundBg = gallery.find(g => g && (g.name === cleanFile || stripExt(g.name) === stripExt(cleanFile) || g.id === cleanFile));
+        if (foundBg && foundBg.url) {
+          return resolveSafeAvatarUrl(foundBg.url, false);
+        }
+        if (tavernState.background?.url) {
+          return resolveSafeAvatarUrl(tavernState.background.url, false);
+        }
+        return '';
+      }
       if (file) {
-        const matchedCard = (tavernState.cards || []).find(c => c && (c.avatar === file || c.name === file || c.id === file));
-        const rawTarget = matchedCard ? matchedCard.avatar : file;
+        const cleanFile = decodeURIComponent(file).trim();
+        const stripExt = s => String(s || '').replace(/\.[^.]+$/, '');
+        const matchedCard = (tavernState.cards || []).find(c => c && (c.avatar === cleanFile || c.name === cleanFile || stripExt(c.name) === stripExt(cleanFile) || c.id === cleanFile));
+        const rawTarget = matchedCard ? matchedCard.avatar : cleanFile;
         return resolveSafeAvatarUrl(rawTarget, false);
       }
       return resolveSafeAvatarUrl(getActiveCard()?.avatar || '', false);
@@ -5453,6 +5957,9 @@ code, pre {
     }
     if (isBookExcerptPlugin(plugin)) {
       return 'https://raw.githubusercontent.com/Mshiyuan/book-excerpt/main/scripts/extensions/third-party/book-excerpt/index.js';
+    }
+    if (isThemeMgrPlugin(plugin)) {
+      return 'https://raw.githubusercontent.com/wenshui012/theme-mgr/main/scripts/extensions/third-party/theme-mgr/index.js';
     }
     if (plugin && plugin.repoBaseUrl) {
       const entry = (plugin.jsEntryPath || 'index.js').replace(/^\/+/, '');
@@ -5893,6 +6400,7 @@ code, pre {
         if (innerId === 'bbi-menu-item' || kind === 'image' || /柏宝绘/.test(txt)) return 21;
         if (innerId === 'pa-menu-entry' || kind === 'bcw' || /预设工坊|Burnt/i.test(txt)) return 22;
         if (innerId === 'be-menu-entry' || kind === 'book-excerpt' || /书摘/.test(txt)) return 23;
+        if (innerId === 'tm-ext-entry' || kind === 'theme-mgr' || /美化管理/.test(txt)) return 24;
         if (!el.hasAttribute('data-action') || el.getAttribute('data-action') === 'open-plugin-modal') return 30;
         return 60;
       };
@@ -5956,7 +6464,7 @@ code, pre {
     return String(codeStr || '')
       .replace(/\bimport\.meta\.url\b/g, 'window.__ST_META_URL__')
       .replace(/\bimport\.meta\b/g, 'window.__ST_META__')
-      .replace(/\bimport\s*\((?!\s*\))/g, '(async (u) => window.__ST_BRIDGE__)(')
+      .replace(/(?<![.\w$])import\s*\((?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
         return `const ${defName} = window.__ST_BRIDGE__; const { ${mapped} } = window.__ST_BRIDGE__;`;
@@ -6028,6 +6536,32 @@ code, pre {
     if (isBookExcerptPlugin(plugin)) {
       plugin.uiHtml = '';
       if (window.BookExcerpt && document.getElementById('be-menu-entry') && !execOpts.forceRerun) {
+        return;
+      }
+    }
+    if (isThemeMgrPlugin(plugin)) {
+      plugin.uiHtml = '';
+      plugin.repoBaseUrl = 'https://raw.githubusercontent.com/wenshui012/theme-mgr/main';
+      plugin.jsEntryPath = 'index.js';
+      if ((!plugin.code || !String(plugin.code).includes('tm-ext-entry')) && !window._themeMgrUpgradeInFlight) {
+        window._themeMgrUpgradeInFlight = true;
+        fetch('https://raw.githubusercontent.com/wenshui012/theme-mgr/main/index.js')
+          .then(r => (r.ok ? r.text() : ''))
+          .then(async jsTxt => {
+            if (jsTxt && jsTxt.includes('tm-ext-entry')) {
+              plugin.code = jsTxt;
+              if (!plugin.name || /thetheme-mgr|^theme-mgr$/i.test(plugin.name)) {
+                plugin.name = '美化管理 v4.7.1';
+              }
+              await saveTavernStore();
+              executeUserPluginScript(plugin, { forceRerun: true });
+            }
+          })
+          .catch(() => {})
+          .finally(() => { window._themeMgrUpgradeInFlight = false; });
+        return;
+      }
+      if (document.getElementById('tm-ext-entry') && document.getElementById('tm-fab-main') && !execOpts.forceRerun) {
         return;
       }
     }
@@ -9253,6 +9787,7 @@ code, pre {
 
     let theme = tavernState.themes.find(t => t.id === tavernState.activeThemeId);
     if (!theme) theme = tavernState.themes[0] || DEFAULT_GOUSU_THEME;
+    syncTavernPowerUserAndThemeDom(theme);
 
     const uiCfg = tavernState.uiSettings || {};
     const isGousuStyle = Boolean(theme && (theme.id === 'theme_gousu_default' || theme.id === 'theme_gousu_night' || String(theme.custom_css || '').includes('1ear.png') || String(theme.custom_css || '').includes('--text4')));
@@ -11197,6 +11732,23 @@ code, pre {
         background-repeat: no-repeat;
         transition: opacity 0.25s ease;
       }
+      #tavern-bg-layer #bg1 {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+      }
+      body:not(:has(#game-hall-screen.active)) #tm-fab-main,
+      body:not(:has(#game-hall-screen.active)) .tm-overlay,
+      body:not(:has(#game-hall-screen.active)) .tm-sheet-overlay,
+      body:not(:has(#game-hall-screen.active)) .tm-lightbox,
+      body:not(:has(#game-hall-screen.active)) #pa-ball,
+      body:not(:has(#game-hall-screen.active)) #pa-root,
+      body:not(:has(#game-hall-screen.active)) #be-float-bar {
+        display: none !important;
+      }
       #tavern-char-sprite-layer {
         position: absolute;
         right: 10px;
@@ -12390,7 +12942,7 @@ code, pre {
     const resolvedBgUrl = bg.url ? resolveSafeAvatarUrl(bg.url, false) : '';
     const bgStyle = resolvedBgUrl
       ? `background-image: url('${resolvedBgUrl}'); background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`
-      : 'opacity: 0;';
+      : `background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`;
 
     const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
     const activeCardForShell = getActiveCard();
@@ -12414,7 +12966,7 @@ code, pre {
 
     shell.innerHTML = `
       <div id="tavern-stage-root">
-        <div id="tavern-bg-layer" style="${bgStyle}"></div>
+        <div id="tavern-bg-layer" style="${bgStyle}"><div id="bg1"></div></div>
 
         <!-- Native SillyTavern #top-bar with 9 Drawer Icons -->
         <div id="top-bar">
@@ -12517,6 +13069,7 @@ code, pre {
     }
 
     syncLivePluginDomMounts();
+    bindBg1StyleObserver();
 
     try {
       applyActiveTavernTheme();
@@ -12544,19 +13097,45 @@ code, pre {
     }
   }
 
+  function bindBg1StyleObserver() {
+    const bg1 = document.getElementById('bg1');
+    const bgLayer = document.getElementById('tavern-bg-layer');
+    if (!bg1 || !bgLayer || bg1._stBg1Observed) return;
+    bg1._stBg1Observed = true;
+    const obs = new MutationObserver(() => {
+      const rawBgImg = String(bg1.style.backgroundImage || '').trim();
+      if (!rawBgImg || rawBgImg === 'none') {
+        if (window.background_settings && !window.background_settings.name) {
+          bgLayer.style.backgroundImage = '';
+        }
+        return;
+      }
+      const m = rawBgImg.match(/backgrounds\/([^'")?#]+)/i);
+      if (m && m[1]) {
+        const bgFileName = decodeURIComponent(m[1]).trim();
+        if (window.background_settings) window.background_settings.name = bgFileName;
+        const resolved = resolvePluginThumbnailUrlSync('/thumbnail?type=bg&file=' + encodeURIComponent(bgFileName));
+        if (resolved) {
+          bgLayer.style.backgroundImage = `url('${resolved}')`;
+        }
+      }
+    });
+    obs.observe(bg1, { attributes: true, attributeFilter: ['style'] });
+  }
+
   function updateTavernBackgroundLayerOnly() {
     const bgLayer = document.getElementById('tavern-bg-layer');
     if (!bgLayer) return;
+    bindBg1StyleObserver();
     const bg = tavernState.background || {};
     const resolvedBgUrl = bg.url ? resolveSafeAvatarUrl(bg.url, false) : '';
+    bgLayer.style.backgroundSize = bg.fit || 'cover';
+    bgLayer.style.filter = `blur(${Number(bg.blur || 0)}px)`;
+    bgLayer.style.opacity = String(Number(bg.opacity ?? 1));
     if (resolvedBgUrl) {
       bgLayer.style.backgroundImage = `url('${resolvedBgUrl}')`;
-      bgLayer.style.backgroundSize = bg.fit || 'cover';
-      bgLayer.style.filter = `blur(${Number(bg.blur || 0)}px)`;
-      bgLayer.style.opacity = String(Number(bg.opacity ?? 1));
     } else {
       bgLayer.style.backgroundImage = '';
-      bgLayer.style.opacity = '0';
     }
   }
 
@@ -13267,6 +13846,7 @@ code, pre {
           #extensionsMenu:has(#bbs-menu-item) .tavern-popup-item[data-baibai-kind="book"] { display: none !important; }
           #extensionsMenu:has(#pa-menu-entry) .tavern-popup-item[data-plugin-kind="bcw"] { display: none !important; }
           #extensionsMenu:has(#be-menu-entry) .tavern-popup-item[data-plugin-kind="book-excerpt"] { display: none !important; }
+          #extensionsMenu:has(#tm-ext-entry) .tavern-popup-item[data-plugin-kind="theme-mgr"] { display: none !important; }
         </style>
         <div class="tavern-popup-item" data-action="toggle-wand-plugins-submenu" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <span style="display:inline-flex;align-items:center;gap:6px;">
@@ -13288,7 +13868,9 @@ code, pre {
                 ? 'data-baibai-kind="book"'
                 : (isBurntChickenWingsPlugin(up)
                   ? 'data-plugin-kind="bcw"'
-                  : (isBookExcerptPlugin(up) ? 'data-plugin-kind="book-excerpt"' : '')));
+                  : (isBookExcerptPlugin(up)
+                    ? 'data-plugin-kind="book-excerpt"'
+                    : (isThemeMgrPlugin(up) ? 'data-plugin-kind="theme-mgr"' : ''))));
             return `
             <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${kindAttr}>
               ${escapeHtmlSimple(stripUiEmojis(up.name))}
@@ -16904,6 +17486,13 @@ code, pre {
             return;
           }
         }
+        if (isThemeMgrPlugin(p)) {
+          const tmEntry = document.getElementById('tm-ext-entry') || document.getElementById('tm-fab-main');
+          if (tmEntry) {
+            tmEntry.click();
+            return;
+          }
+        }
         if (isJsSlashRunnerPlugin(p) || isStPromptTemplatePlugin(p)) {
           if (typeof window.pushMobileBackGuard === 'function') {
             window.pushMobileBackGuard('tavern_plugin_modal');
@@ -18966,6 +19555,11 @@ code, pre {
           document.getElementById('pa-menu-entry')?.remove();
           document.getElementById('pa-settings')?.remove();
         }
+        if (isThemeMgrPlugin(targetP)) {
+          document.getElementById('tm-ext-entry')?.remove();
+          document.getElementById('tm-fab-main')?.remove();
+          document.querySelectorAll('.tm-overlay, .tm-sheet-overlay, .tm-lightbox').forEach(el => el.remove());
+        }
         if (isJsSlashRunnerPlugin(targetP) && tavernState.extensionSettings) {
           tavernState.extensionSettings._uninstalledJsSlashRunner = true;
         }
@@ -19774,10 +20368,12 @@ code, pre {
     try {
       showTavernToast('正在从链接获取插件...');
       let cleanUrl = String(rawUrl || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '');
+      cleanUrl = cleanUrl.replace(/github\.com\/wenshui012\/thetheme-mgr/i, 'github.com/wenshui012/theme-mgr');
       const ghRepoMatch = cleanUrl.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
       if (ghRepoMatch) {
         const owner = ghRepoMatch[1];
-        const repo = ghRepoMatch[2];
+        let repo = ghRepoMatch[2];
+        if (/^thetheme-mgr$/i.test(repo)) repo = 'theme-mgr';
         if (/^JS-Slash-Runner$/i.test(repo) || /^TavernHelper$/i.test(repo)) {
           if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledJsSlashRunner;
         }
@@ -19786,13 +20382,21 @@ code, pre {
         }
         let branch = 'main';
         let manifest = null;
-        for (const tryBranch of ['main', 'master']) {
-          const mRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${tryBranch}/manifest.json`);
-          if (mRes.ok) {
-            branch = tryBranch;
-            manifest = await mRes.json();
-            break;
+        const repoCandidates = [repo];
+        if (/^the.+/i.test(repo) && !repoCandidates.includes(repo.replace(/^the/i, ''))) {
+          repoCandidates.push(repo.replace(/^the/i, ''));
+        }
+        for (const tryRepo of repoCandidates) {
+          for (const tryBranch of ['main', 'master']) {
+            const mRes = await fetch(`https://raw.githubusercontent.com/${owner}/${tryRepo}/${tryBranch}/manifest.json`);
+            if (mRes.ok) {
+              repo = tryRepo;
+              branch = tryBranch;
+              manifest = await mRes.json();
+              break;
+            }
           }
+          if (manifest) break;
         }
         const rawJsFile = (manifest && manifest.js) ? manifest.js : 'index.js';
         const rawCssFile = (manifest && manifest.css) ? manifest.css : 'style.css';
@@ -19802,10 +20406,41 @@ code, pre {
         let cssCode = '';
         const jsRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${jsFile}`);
         if (jsRes.ok) jsCode = await jsRes.text();
+        if (!jsCode) {
+          throw new Error('无法从该GitHub仓库获取插件脚本，请确认仓库地址是否正确: ' + owner + '/' + repo);
+        }
         const cssRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cssFile}`);
         if (cssRes.ok) cssCode = await cssRes.text();
 
         const repoBaseUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}`;
+        const entryDir = jsFile.includes('/') ? jsFile.slice(0, jsFile.lastIndexOf('/') + 1) : '';
+        // Resolve relative local module imports (e.g. import { x } from './utils.js') for multi-file ST extensions
+        const relImportRegex = /(?:^|(?<=[;\n\r\}]))\s*import\s+(?:[\s\S]*?\s+from\s+)?['"](\.[^'"]+\.js)['"]\s*;?/gm;
+        const relMatches = Array.from(jsCode.matchAll(relImportRegex));
+        if (relMatches.length > 0) {
+          const fetchedModules = [];
+          const seenRelPaths = new Set();
+          for (const rm of relMatches) {
+            const relPath = String(rm[1] || '').replace(/^\.\//, '');
+            const fullModPath = (entryDir + relPath).replace(/^\/+/, '');
+            if (!fullModPath || seenRelPaths.has(fullModPath)) continue;
+            seenRelPaths.add(fullModPath);
+            try {
+              const modRes = await fetch(`${repoBaseUrl}/${fullModPath}`);
+              if (modRes.ok) {
+                const modTxt = await modRes.text();
+                if (modTxt && !isHostAppHtmlFallback(modTxt)) {
+                  fetchedModules.push(`/* Submodule: ${fullModPath} */\n` + modTxt);
+                }
+              }
+            } catch (_) {}
+          }
+          if (fetchedModules.length > 0) {
+            jsCode = jsCode.replace(relImportRegex, '');
+            jsCode = fetchedModules.join('\n;\n') + '\n;\n' + jsCode;
+          }
+        }
+
         const htmlTemplates = {};
         for (const tryHtml of ['settings.html', 'index.html', 'template.html', 'window.html', 'popup.html']) {
           try {
@@ -19833,7 +20468,7 @@ code, pre {
         }
         const combinedHtml = Object.values(htmlTemplates).join('\n') || extractEmbeddedHtmlFromPluginCode(jsCode);
         const pluginName = (manifest && manifest.display_name) || repo;
-        const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || x.repoBaseUrl === repoBaseUrl));
+        const existingIdx = (tavernState.plugins || []).findIndex(x => x && (x.name === pluginName || x.repoBaseUrl === repoBaseUrl || (isThemeMgrPlugin(x) && repo === 'theme-mgr')));
         const plugin = {
           id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_' + Date.now()),
           name: pluginName,
@@ -19850,7 +20485,7 @@ code, pre {
         } else {
           tavernState.plugins.push(plugin);
         }
-        if (plugin.code) executeUserPluginScript(plugin);
+        if (plugin.code) executeUserPluginScript(plugin, { forceRerun: true });
         await saveTavernStore();
         refreshOpenDrawerOnly();
         showTavernToast('成功安装GitHub酒馆插件: ' + plugin.name);
@@ -20461,6 +21096,7 @@ code, pre {
       return markSubLayerClosed();
     }
     const bodyPluginSelectors = [
+      '.tm-lightbox', '.tm-sheet-overlay', '.tm-overlay',
       '.be-modal-overlay', '.be-overlay', '#be-notebook-modal', '#be-modal', '#be-card-modal', '.be-popup',
       '#st-memory-modal', '.st-memory-modal', '.memory-modal-overlay',
       '#bbs-app-host'
