@@ -2606,8 +2606,17 @@ code, pre {
                   const matched = tmp.querySelector(subSel);
                   el.innerHTML = matched ? matched.innerHTML : '';
                 } else if (/<!doctype\s+html|<html[\s>]/i.test(finalHtml)) {
+                  const patchedHtml = finalHtml
+                    .replace(
+                      'if (customersDB[key].name === speakerName) {',
+                      'if (key === targetId || customersDB[key].id === targetId || customersDB[key].name === speakerName || (speakerName && customersDB[key].name && String(speakerName).includes(customersDB[key].name))) {'
+                    )
+                    .replace(
+                      'if (descEl) descEl.innerText = targetDesc;',
+                      'if (descEl) descEl.innerText = targetDesc || (customersDB[targetId] && (customersDB[targetId].desc || customersDB[targetId].shortDesc)) || "";'
+                    );
                   const parser = new DOMParser();
-                  const parsedDoc = parser.parseFromString(finalHtml, 'text/html');
+                  const parsedDoc = parser.parseFromString(patchedHtml, 'text/html');
                   if (ownerDoc.head && parsedDoc.head) {
                     Array.from(parsedDoc.head.querySelectorAll('link[rel="stylesheet"], style')).forEach(node => {
                       ownerDoc.head.appendChild(ownerDoc.importNode(node, true));
@@ -3490,6 +3499,17 @@ code, pre {
       if (!tavernState.extensionSettings || typeof tavernState.extensionSettings !== 'object') {
         tavernState.extensionSettings = {};
       }
+      if (!Array.isArray(tavernState.extensionSettings.regex)) {
+        tavernState.extensionSettings.regex = [];
+      }
+      if (!Array.isArray(tavernState.extensionSettings.character_allowed_regex)) {
+        tavernState.extensionSettings.character_allowed_regex = [];
+      }
+      if (!tavernState.extensionSettings.variables || typeof tavernState.extensionSettings.variables !== 'object') {
+        tavernState.extensionSettings.variables = { global: getGlobalVariablesStore() };
+      } else if (!tavernState.extensionSettings.variables.global || typeof tavernState.extensionSettings.variables.global !== 'object') {
+        tavernState.extensionSettings.variables.global = getGlobalVariablesStore();
+      }
       const extNai = resolveExternalNovelAiConfig();
       for (const imgKey of ['baibai_image', 'st-baibai-image', 'ST-BaiBai-Image']) {
         const bbi = tavernState.extensionSettings[imgKey];
@@ -3601,6 +3621,7 @@ code, pre {
       getThumbnailUrl: (type, file) => '/thumbnail?type=' + encodeURIComponent(type || 'avatar') + '&file=' + encodeURIComponent(file || ''),
       chatMetadata: sess ? sess.metadata : { integrity: 'chat_uuid_default' },
       extensionSettings: tavernState.extensionSettings,
+      extension_settings: tavernState.extensionSettings,
       variables: {
         local: getChatVariablesStore(),
         global: getGlobalVariablesStore(),
@@ -9406,18 +9427,22 @@ code, pre {
     }
     const extRegexArr = tavernState.extensionSettings.regex;
     const plugins = Array.isArray(tavernState.plugins) ? tavernState.plugins : [];
-    const hasEnabledBbs = plugins.some(p => p && p.enabled && /ST-BaiBai-Book|博宝书/i.test(String(p.name || '') + ' ' + String(p.repoUrl || '')));
-    const hasEnabledBbi = plugins.some(p => p && p.enabled && /ST-BaiBai-Image|博宝绘/i.test(String(p.name || '') + ' ' + String(p.repoUrl || '')));
+    const hasEnabledBbs = plugins.some(p => p && p.enabled && (isBaiBaiBookPlugin(p) || /ST-BaiBai-Book|柏宝书|博宝书/i.test(String(p.name || '') + ' ' + String(p.repoUrl || ''))));
+    const hasEnabledBbi = plugins.some(p => p && p.enabled && (isBaiBaiImagePlugin(p) || /ST-BaiBai-Image|柏宝绘|博宝绘/i.test(String(p.name || '') + ' ' + String(p.repoUrl || ''))));
 
     if (hasEnabledBbs) {
+      const timeRxStr = '/<bbs_start\\b[^>\\r\\n]*>[^<\\r\\n]*<\\/bbs_start>|<bbs_end\\b[^>\\r\\n]*>[^<\\r\\n]*<\\/bbs_end>/gi';
+      const itemRxStr = '/(?:^|\\r?\\n)?[ \\t]*<bbs_items\\b[^>]*>[ \\t]*\\r?\\n?(?:[ \\t]*[-*•]?\\s*(?:获得|消耗|失去|新增|移除|变更)[\\s:：]+(?:(?!<\\/?bbs_items\\b)[^\\r\\n])*(?:\\r?\\n|(?=[ \\t]*<\\/bbs_items>))|[ \\t]*\\r?\\n)+[ \\t]*<\\/bbs_items>[ \\t]*(?=\\r?\\n|<|$)/gi';
+      const varRxStr = '/(?:^|\\r?\\n)?[ \\t]*<bbs_vars\\b[^>]*>[ \\t]*\\r?\\n?(?:[ \\t]*[-*•]?\\s*(?:设定|变更|新增|删除)[\\s:：]+(?:(?!<\\/?bbs_vars\\b)[^\\r\\n])*(?:\\r?\\n|(?=[ \\t]*<\\/bbs_vars>))|[ \\t]*\\r?\\n)+[ \\t]*<\\/bbs_vars>[ \\t]*(?=\\r?\\n|<|$)/gi';
       const bbsDefs = [
         {
           id: 'bbs-hide-time-tags',
-          scriptName: '博宝书·隐藏时间锚点标签',
-          findRegex: '/<bbs_start\\b[^>\\r\\n]*>[^<\\r\\n]*<\\/bbs_start>|<bbs_end\\b[^>\\r\\n]*>[^<\\r\\n]*<\\/bbs_end>/gi',
+          altId: 'bbs-time-tag-hide',
+          scriptName: '柏宝书·隐藏时间锚点标签',
+          findRegex: timeRxStr,
           replaceString: '',
           trimStrings: [],
-          placement: [2],
+          placement: [0, 1, 2],
           disabled: false,
           markdownOnly: true,
           promptOnly: false,
@@ -9428,11 +9453,12 @@ code, pre {
         },
         {
           id: 'bbs-hide-item-tags',
-          scriptName: '博宝书·隐藏物品标签',
-          findRegex: '/(^|\\r?\\n)[ \\t]*<bbs_items\\b[^>]*>[ \\t]*\\r?\\n(?:[ \\t]*(?:获得|消耗|失去)\\s+[^\\r\\n]*(?:\\r?\\n))+[ \\t]*<\\/bbs_items>[ \\t]*(?=\\r?\\n|$)/gi',
+          altId: 'bbs-items-tag-hide',
+          scriptName: '柏宝书·隐藏物品标签',
+          findRegex: itemRxStr,
           replaceString: '',
           trimStrings: [],
-          placement: [2],
+          placement: [0, 1, 2],
           disabled: false,
           markdownOnly: true,
           promptOnly: false,
@@ -9443,11 +9469,12 @@ code, pre {
         },
         {
           id: 'bbs-hide-var-tags',
-          scriptName: '博宝书·隐藏变量标签',
-          findRegex: '/(^|\\r?\\n)[ \\t]*<bbs_vars\\b[^>]*>[ \\t]*\\r?\\n(?:[ \\t]*(?:设定|变更|新增|删除)\\s+[^\\r\\n]*(?:\\r?\\n))+[ \\t]*<\\/bbs_vars>[ \\t]*(?=\\r?\\n|$)/gi',
+          altId: 'bbs-vars-tag-hide',
+          scriptName: '柏宝书·隐藏变量标签',
+          findRegex: varRxStr,
           replaceString: '',
           trimStrings: [],
-          placement: [2],
+          placement: [0, 1, 2],
           disabled: false,
           markdownOnly: true,
           promptOnly: false,
@@ -9458,7 +9485,15 @@ code, pre {
         }
       ];
       bbsDefs.forEach(def => {
-        if (!extRegexArr.some(x => x && x.id === def.id)) {
+        let matchedAny = false;
+        for (let i = 0; i < extRegexArr.length; i++) {
+          const cur = extRegexArr[i];
+          if (cur && (cur.id === def.id || cur.id === def.altId)) {
+            extRegexArr[i] = { ...cur, ...def, id: cur.id };
+            matchedAny = true;
+          }
+        }
+        if (!matchedAny) {
           extRegexArr.push(def);
         }
       });
@@ -10068,7 +10103,7 @@ code, pre {
       var scaleContainer = document.querySelector('.scale-container');
       var outerC = document.getElementById('outerContainer');
       var rootCard = document.getElementById('statusRoot') || outerC || document.querySelector('.gourmet-main-frame');
-      if (scaleContainer && (document.getElementById('sim-scaler') || document.querySelector('.outer-container'))) {
+      if (scaleContainer && document.getElementById('sim-scaler')) {
         var scRect = scaleContainer.getBoundingClientRect();
         if (scRect.width > 40) {
           contentH = Math.round(scRect.width * (1312 / 736)) + 12;
@@ -10111,10 +10146,6 @@ code, pre {
         frame.style.height = targetH + 'px';
         frame.style.minHeight = '0px';
         frame.style.maxHeight = 'none';
-        if (scaleContainer && document.querySelector('.outer-container')) {
-          scaleContainer.style.height = Math.max(200, targetH - 12) + 'px';
-          try { window.dispatchEvent(new Event('resize')); } catch (_) {}
-        }
       }
     } catch (e) {}
   }
@@ -10284,9 +10315,9 @@ code, pre {
     // Strip residual XML wrapper tags like <content>...</content> and single-line <bbs_start>/<bbs_end> if ST-BaiBai-Book plugin is disabled
     working = working
       .replace(/<bbs_start\b[^>\r\n]*>[^<\r\n]*<\/bbs_start>|<bbs_end\b[^>\r\n]*>[^<\r\n]*<\/bbs_end>/gi, '')
-      .replace(/(^|\r?\n)[ \t]*<bbs_items\b[^>]*>[ \t]*\r?\n(?:[ \t]*(?:获得|消耗|失去)\s+[^\r\n]*(?:\r?\n))+[ \t]*<\/bbs_items>[ \t]*(?=\r?\n|$)/gi, '')
-      .replace(/(^|\r?\n)[ \t]*<bbs_vars\b[^>]*>[ \t]*\r?\n(?:[ \t]*(?:设定|变更|新增|删除)\s+[^\r\n]*(?:\r?\n))+[ \t]*<\/bbs_vars>[ \t]*(?=\r?\n|$)/gi, '')
-      .replace(/<\/?(?:content|正文)\b[^>]*>/gi, '');
+      .replace(/(?:^|\r?\n)?[ \t]*<bbs_items\b[^>]*>[ \t]*\r?\n?(?:[ \t]*[-*•]?\s*(?:获得|消耗|失去|新增|移除|变更)[\s:：]+(?:(?!<\/?bbs_items\b)[^\r\n])*(?:\r?\n|(?=[ \t]*<\/bbs_items>))|[ \t]*\r?\n)+[ \t]*<\/bbs_items>[ \t]*(?=\r?\n|<|$)/gi, '')
+      .replace(/(?:^|\r?\n)?[ \t]*<bbs_vars\b[^>]*>[ \t]*\r?\n?(?:[ \t]*[-*•]?\s*(?:设定|变更|新增|删除)[\s:：]+(?:(?!<\/?bbs_vars\b)[^\r\n])*(?:\r?\n|(?=[ \t]*<\/bbs_vars>))|[ \t]*\r?\n)+[ \t]*<\/bbs_vars>[ \t]*(?=\r?\n|<|$)/gi, '')
+      .replace(/<\/?(?:content|正文|bbs_start|bbs_end|bbs_items|bbs_vars)\b[^>]*>/gi, '');
 
     // 3. Protect standalone <style>...</style> + <script>...</script> + <pre>...</pre> blocks
     working = working.replace(/<style[\s\S]*?<\/style>/gi, match => {
