@@ -9073,24 +9073,35 @@ code, pre {
         var children = b.children;
         if (children && children.length > 0) {
           var maxBottom = 0;
+          var hasVisibleChild = false;
           for (var i = 0; i < children.length; i++) {
             var ch = children[i];
             if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') continue;
+            var cs = window.getComputedStyle(ch);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
             var r = ch.getBoundingClientRect();
-            var bot = (r.bottom - bRect.top) + (parseFloat(window.getComputedStyle(ch).marginBottom) || 0);
+            if (r.height > 0 || r.width > 0) hasVisibleChild = true;
+            var bot = (r.bottom - bRect.top) + (parseFloat(cs.marginBottom) || 0);
             if (bot > maxBottom) maxBottom = bot;
+          }
+          if (!hasVisibleChild && maxBottom <= 12 && !(b.innerText || '').trim()) {
+            frame.style.height = '0px';
+            frame.style.minHeight = '0px';
+            frame.style.margin = '0px';
+            return;
           }
           contentH = Math.ceil(maxBottom) + 6;
         }
       }
-      if (contentH < 36) {
+      if (contentH < 24) {
         contentH = Math.max(b.scrollHeight || 0, b.offsetHeight || 0);
       }
       var maxAllowed = 25000;
-      var targetH = Math.min(maxAllowed, Math.max(56, contentH));
+      var targetH = Math.min(maxAllowed, Math.max(28, contentH));
       if (Math.abs(targetH - lastAppliedH) > 1) {
         lastAppliedH = targetH;
         frame.style.height = targetH + 'px';
+        frame.style.minHeight = '0px';
         frame.style.maxHeight = 'none';
       }
     } catch (e) {}
@@ -9178,7 +9189,7 @@ code, pre {
       return escapedSrcDoc;
     }
 
-    return `<iframe class="tavern-html-sandbox-frame" loading="lazy" scrolling="no" frameborder="0" style="width:100%;height:320px;min-height:56px;border:none;display:block;background:transparent;overflow:hidden;margin:6px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
+    return `<iframe class="tavern-html-sandbox-frame" loading="lazy" scrolling="no" frameborder="0" style="width:100%;height:120px;min-height:0px;border:none;display:block;background:transparent;overflow:hidden;margin:4px 0;border-radius:12px;" srcdoc="${escapedSrcDoc}"></iframe>`;
   }
 
   function renderTavernMessageHtml(rawText, options = {}) {
@@ -9199,6 +9210,18 @@ code, pre {
     const protectedBlocks = [];
     let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?((?:(?!```)[\s\S])*?)```/g, (full, inner) => {
       const trimmed = inner.trim();
+      const singleIframeMatch = trimmed.match(/^<iframe\b([^>]*?)srcdoc=(['"])([\s\S]*?)\2([^>]*?)>\s*<\/iframe>$/i);
+      if (singleIframeMatch) {
+        const unescapedSrcdoc = singleIframeMatch[3]
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
+        const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+        protectedBlocks.push(buildSandboxIframeHtml(unescapedSrcdoc, { isLastFloor }));
+        return '\n' + token + '\n';
+      }
       const isFullHtmlBlock = /^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<script\b)/i.test(trimmed) ||
         ['html>', '<head>', '<body'].some(tag => trimmed.toLowerCase().includes(tag));
       if (isFullHtmlBlock) {
@@ -9206,13 +9229,15 @@ code, pre {
         protectedBlocks.push(buildSandboxIframeHtml(trimmed, { isLastFloor }));
         return '\n' + token + '\n';
       }
-      if (/^(?:<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b)/i.test(trimmed)) {
+      if (/^(?:<div\b|<section\b|<main\b|<table\b|<form\b|<details\b|<svg\b|<iframe\b)/i.test(trimmed)) {
         if (/<script\b/i.test(trimmed)) {
           const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
           protectedBlocks.push(buildSandboxIframeHtml(trimmed, { isLastFloor }));
           return '\n' + token + '\n';
         }
-        return trimmed;
+        const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+        protectedBlocks.push(trimmed);
+        return '\n' + token + '\n';
       }
       return full;
     });
@@ -9222,7 +9247,18 @@ code, pre {
       .replace(/```(?:html|HTML)\s*(?=<)/g, '')
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
 
-    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html>, <html...>...</html>, or <body...>...</body>) into its own sandboxed iframe using non-bridging quantifiers
+    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html>, <html...>...</html>, or <body...>...</body>) or standalone <iframe srcdoc="..."> into its own sandboxed iframe using non-bridging quantifiers
+    working = working.replace(/<iframe\b[^>]*\bsrcdoc=(['"])([\s\S]*?)\1[^>]*>\s*<\/iframe>/gi, (full, quote, rawSrcdoc) => {
+      const unescapedSrcdoc = rawSrcdoc
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
+      protectedBlocks.push(buildSandboxIframeHtml(unescapedSrcdoc, { isLastFloor }));
+      return '\n' + token + '\n';
+    });
     working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html\b(?:(?!<html\b)[\s\S])*?<\/html>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
@@ -9335,14 +9371,17 @@ code, pre {
       return false;
     };
     const blockContainerRx = /<\/?(div|table|thead|tbody|tr|td|th|ul|ol|li|details|summary|section|article|header|footer|blockquote|form|select|label|nav|main|aside|figure|figcaption|svg)\b[^>]*>/gi;
+    let lastEmittedSpacer = true;
     const htmlLines = lines.map((line, lineIdx) => {
       const trimmed = line.trim();
       if (!trimmed) {
-        if (htmlBlockDepth > 0 || (prevNonEmptyWasHtml && nextNonEmptyStartsWithHtml(lineIdx))) {
+        if (htmlBlockDepth > 0 || prevNonEmptyWasHtml || nextNonEmptyStartsWithHtml(lineIdx) || lastEmittedSpacer) {
           return '';
         }
+        lastEmittedSpacer = true;
         return '<div class="tavern-para-spacer"></div>';
       }
+      lastEmittedSpacer = false;
       if (/^___TAVERN_PROTECTED_BLOCK_\d+___$/.test(trimmed)) {
         prevNonEmptyWasHtml = true;
         return trimmed;
@@ -9404,7 +9443,7 @@ code, pre {
       return '<p>' + line + '</p>';
     });
 
-    let finalHtml = htmlLines.join('\n');
+    let finalHtml = htmlLines.filter(l => l !== '').join('\n').replace(/^(?:<div class="tavern-para-spacer"><\/div>\s*)+|(?:<div class="tavern-para-spacer"><\/div>\s*)+$/g, '');
     if (shouldAdaptDarkInline) {
       finalHtml = finalHtml.replace(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/gi, (fullAttr, quote, inlineCss) => {
         return `style=${quote}${convertCssDeclBlockToSoftDark(inlineCss, '')}${quote}`;
@@ -9997,11 +10036,18 @@ code, pre {
       const hidesTopBar = /#top-bar\s*(?:,[^{]*)?\{[^}]*display\s*:\s*none/i.test(rawThemeCss);
       const isApplePhoneTheme = rawThemeCss.includes('--标签-文字色') || rawThemeCss.includes('9h10in.png') || rawThemeCss.includes('Hello Spring');
       rules.push(`
-        /* Containment and color adaptation for imported third-party SillyTavern themes */
+        /* Containment and 1:1 SillyTavern layout adaptation for imported third-party themes */
         #tavern-stage-root {
           color: var(--SmartThemeBodyColor, #373737);
           overflow: hidden !important;
           container-type: inline-size !important;
+          --sheldWidth: 100%;
+          --topBarBlockSize: 48px;
+          --bottomFormBlockSize: 56px;
+          --avatar-base-height: 50px;
+          --avatar-base-width: 50px;
+          --avatar-base-border-radius-round: 50%;
+          --mainFontSize: calc(14px * var(--fontScale, 1));
           --标签框-文字色: var(--标签-文字色, #8CA57C);
           --标签框-背景色: transparent;
           --标签框-边框色: transparent;
@@ -10016,7 +10062,7 @@ code, pre {
           white-space: nowrap !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
-          max-width: 9.5em !important;
+          max-width: 11em;
         }
         ${isApplePhoneTheme ? `
         #tavern-stage-root .mesIDDisplay,
@@ -10033,6 +10079,10 @@ code, pre {
         #tavern-stage-root .mes .mes_timer:not(:empty),
         #tavern-stage-root .mes .tokenCounterDisplay:not(:empty) {
           border-left: none !important;
+        }
+        #tavern-stage-root #chat {
+          padding-top: 12px !important;
+          margin-top: 0 !important;
         }
         ` : ''}
         #tavern-stage-root #top-bar,
@@ -10056,11 +10106,36 @@ code, pre {
           flex-shrink: 1 !important;
           min-width: 0 !important;
         }
-        #tavern-stage-root #sheld,
-        #tavern-stage-root #chat,
+        #tavern-stage-root #sheld {
+          position: relative !important;
+          left: 0 !important;
+          right: 0 !important;
+          transform: none !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+          box-sizing: border-box !important;
+        }
+        #tavern-stage-root #chat {
+          position: relative !important;
+          left: 0 !important;
+          right: 0 !important;
+          transform: none !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+          box-sizing: border-box !important;
+        }
         #tavern-stage-root #form_sheld,
         #tavern-stage-root #send_form {
+          left: 0 !important;
+          right: 0 !important;
+          transform: none !important;
           max-width: 100% !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
           box-sizing: border-box !important;
         }
         #tavern-stage-root #send_form #nonQRFormItems {
@@ -10092,11 +10167,15 @@ code, pre {
         }
         #tavern-stage-root .mes {
           position: relative !important;
+          left: auto !important;
+          right: auto !important;
+          transform: none !important;
           max-width: 100% !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
           box-sizing: border-box !important;
         }
         #tavern-stage-root .mes_block {
-          position: relative;
           max-width: 100% !important;
           box-sizing: border-box !important;
           overflow-wrap: break-word !important;
@@ -10266,6 +10345,14 @@ code, pre {
         color: var(--SmartThemeBodyColor, #2c2c2e);
       }
     ` : '';
+
+    stageRoot.classList.toggle('bubblechat', Number(theme.chat_display) === 1);
+    stageRoot.classList.toggle('documentstyle', Number(theme.chat_display) === 2);
+    stageRoot.classList.toggle('big-avatars', Number(theme.avatar_style) !== 0);
+    stageRoot.classList.toggle('no-blur', Boolean(theme.fast_ui_mode));
+    stageRoot.classList.toggle('noShadows', Boolean(theme.noShadows));
+    stageRoot.classList.toggle('waifuMode', Boolean(theme.waifuMode));
+    stageRoot.classList.toggle('expandMessageActions', Boolean(theme.expand_message_actions));
 
     if (uiCfg.enableThemeCustomCss === false) {
       styleEl.textContent = baseThemeVarsCss + '\n' + buildTavernThemeOverridePatch(null, uiCfg);
@@ -12307,15 +12394,32 @@ code, pre {
         z-index: 2850 !important;
       }
 
-      /* Chat container & exact SillyTavern .mes layout */
+      /* Chat container & exact SillyTavern #sheld / #chat / .mes layout */
+      #sheld {
+        position: relative;
+        z-index: 10;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        margin: 0 auto;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
       #chat {
         position: relative;
         z-index: 10;
         flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
         width: 100%;
+        min-height: 0;
         overflow-y: auto;
         overflow-x: hidden;
-        padding: 22px 0 84px 0;
+        padding: 16px 0 84px 0;
+        margin: 0 auto;
         box-sizing: border-box;
         scroll-behavior: auto;
       }
@@ -12328,64 +12432,73 @@ code, pre {
       }
       .mes {
         position: relative;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
         box-sizing: border-box;
         width: 100%;
+        padding: 10px;
         padding-bottom: 24px;
-        margin-bottom: 18px;
+        margin-bottom: 14px;
       }
       .mes .mesAvatarWrapper {
         position: relative;
         z-index: 5;
-        overflow: visible !important;
+        overflow: visible;
+        flex-shrink: 0;
       }
       .mes .avatar {
-        position: relative !important;
-        width: 68px;
-        height: 68px;
-        border-radius: 50% !important;
-        overflow: visible !important;
+        position: relative;
+        width: var(--avatar-base-width, 50px);
+        height: var(--avatar-base-height, 50px);
+        border-radius: var(--avatar-base-border-radius-round, 50%);
+        overflow: visible;
         flex-shrink: 0;
       }
       .mes .avatar img {
-        width: 100% !important;
-        height: 100% !important;
-        border-radius: 50% !important;
-        object-fit: cover !important;
-        display: block !important;
+        width: 100%;
+        height: 100%;
+        border-radius: var(--avatar-base-border-radius-round, 50%);
+        object-fit: cover;
+        display: block;
         background: #f0ece9;
       }
       .mes_block {
-        position: relative;
+        position: static;
+        flex: 1 1 auto;
+        min-width: 0;
         width: 100%;
         max-width: 100%;
+        padding-left: 10px;
         box-sizing: border-box;
         overflow-x: hidden;
       }
       .ch_name {
         position: static;
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
         width: 100%;
+        margin-bottom: 4px;
         box-sizing: border-box;
       }
       .mes_buttons,
       .mes_edit_buttons {
         position: relative;
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        gap: 5px !important;
-        margin-left: auto !important;
-        flex-shrink: 0 !important;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 5px;
+        margin-left: auto;
+        flex-shrink: 0;
       }
       .mes[is_user="true"] .mes_buttons,
       .mes[is_user="true"] .mes_edit_buttons {
-        margin-left: 0 !important;
-        margin-right: auto !important;
-        justify-content: flex-start !important;
+        margin-left: 0;
+        margin-right: auto;
+        justify-content: flex-start;
       }
       .mes[is_user="true"] .mes_buttons > .mes_edit {
         order: 1;
@@ -13397,42 +13510,45 @@ code, pre {
           ${uiRuntime.openDrawerKey ? renderOpenDrawerHtml(uiRuntime.openDrawerKey) : ''}
         </div>
 
-        <!-- Native SillyTavern #chat Message List -->
-        <div id="chat"></div>
+        <!-- Native SillyTavern #sheld Container wrapping #chat and #form_sheld -->
+        <div id="sheld">
+          <!-- Native SillyTavern #chat Message List -->
+          <div id="chat"></div>
 
-        <!-- Character Sprite Overlay Layer -->
-        <div id="tavern-char-sprite-layer" class="${tavernState.uiSettings?.enableCharSprites ? '' : 'sprite-hidden'}">
-          ${renderActiveCharacterSpriteInnerHtml(activeCardForShell)}
-        </div>
+          <!-- Character Sprite Overlay Layer -->
+          <div id="tavern-char-sprite-layer" class="${tavernState.uiSettings?.enableCharSprites ? '' : 'sprite-hidden'}">
+            ${renderActiveCharacterSpriteInnerHtml(activeCardForShell)}
+          </div>
 
-        <!-- Bottom Options & Extensions Popups (Always mounted in DOM so plugins can inject items) -->
-        <div id="tavern-popup-host">
-          ${renderBottomOptionsPopup()}
-          ${renderBottomExtensionsPopup()}
-        </div>
-        ${uiRuntime.activeHelperScriptId ? renderHelperScriptModal() : ''}
-        ${uiRuntime.activePluginModalId ? renderPluginCustomModal() : ''}
+          <!-- Bottom Options & Extensions Popups (Always mounted in DOM so plugins can inject items) -->
+          <div id="tavern-popup-host">
+            ${renderBottomOptionsPopup()}
+            ${renderBottomExtensionsPopup()}
+          </div>
+          ${uiRuntime.activeHelperScriptId ? renderHelperScriptModal() : ''}
+          ${uiRuntime.activePluginModalId ? renderPluginCustomModal() : ''}
 
-        <!-- Native SillyTavern #form_sheld Bottom Bar -->
-        <div id="form_sheld">
-          <form id="send_form" onsubmit="return false;">
-            <div id="qr--bar">
-              ${qrs.map(q => `
-                <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
-              `).join('')}
-            </div>
-            <div id="tavern-chat-attach-preview">${renderChatAttachPreviewHtml()}</div>
-            <div id="nonQRFormItems">
-              <div id="leftSendForm">
-                <div id="options_button" class="fa-solid fa-bars interactable" data-action="toggle-options-popup" title="对话操作菜单"></div>
-                <div id="extensionsMenuButton" class="fa-solid fa-magic-wand-sparkles interactable" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
+          <!-- Native SillyTavern #form_sheld Bottom Bar -->
+          <div id="form_sheld">
+            <form id="send_form" onsubmit="return false;">
+              <div id="qr--bar">
+                ${qrs.map(q => `
+                  <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
+                `).join('')}
               </div>
-              <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
-              <div id="rightSendForm">
-                <div id="send_but" class="fa-solid fa-paper-plane interactable" data-action="send-message" title="发送"></div>
+              <div id="tavern-chat-attach-preview">${renderChatAttachPreviewHtml()}</div>
+              <div id="nonQRFormItems">
+                <div id="leftSendForm">
+                  <div id="options_button" class="fa-solid fa-bars interactable" data-action="toggle-options-popup" title="对话操作菜单"></div>
+                  <div id="extensionsMenuButton" class="fa-solid fa-magic-wand-sparkles interactable" data-action="toggle-extensions-popup" title="扩展快捷菜单"></div>
+                </div>
+                <textarea id="send_textarea" rows="1" placeholder="输入消息或剧情行动..."></textarea>
+                <div id="rightSendForm">
+                  <div id="send_but" class="fa-solid fa-paper-plane interactable" data-action="send-message" title="发送"></div>
+                </div>
               </div>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
 
         <!-- Hidden Multi-File Inputs -->
