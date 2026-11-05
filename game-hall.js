@@ -10106,26 +10106,38 @@ code, pre {
           flex-shrink: 1 !important;
           min-width: 0 !important;
         }
-        #tavern-stage-root #sheld {
+        #game-hall-screen #tavern-stage-root {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+        }
+        #game-hall-screen #tavern-stage-root #sheld {
           position: relative !important;
           left: 0 !important;
           right: 0 !important;
           transform: none !important;
+          translate: none !important;
           width: 100% !important;
           max-width: 100% !important;
           margin-left: auto !important;
           margin-right: auto !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
           box-sizing: border-box !important;
         }
-        #tavern-stage-root #chat {
+        #game-hall-screen #tavern-stage-root #sheld #chat {
           position: relative !important;
           left: 0 !important;
           right: 0 !important;
           transform: none !important;
-          width: 100% !important;
-          max-width: 100% !important;
+          translate: none !important;
+          width: calc(100% - 20px) !important;
+          max-width: calc(100% - 20px) !important;
           margin-left: auto !important;
           margin-right: auto !important;
+          padding-left: 8px !important;
+          padding-right: 8px !important;
           box-sizing: border-box !important;
         }
         #tavern-stage-root #form_sheld,
@@ -10165,18 +10177,37 @@ code, pre {
           color: var(--SmartThemeBodyColor, inherit) !important;
           box-sizing: border-box !important;
         }
-        #tavern-stage-root .mes {
+        #game-hall-screen #tavern-stage-root #sheld #chat .mes,
+        #game-hall-screen #tavern-stage-root #sheld #chat .mes[is_user="false"],
+        #game-hall-screen #tavern-stage-root #sheld #chat .mes[is_user="true"] {
+          display: flex !important;
+          flex-direction: column !important;
           position: relative !important;
-          left: auto !important;
-          right: auto !important;
+          left: 0 !important;
+          right: 0 !important;
           transform: none !important;
+          translate: none !important;
+          width: 100% !important;
           max-width: 100% !important;
           margin-left: auto !important;
           margin-right: auto !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
           box-sizing: border-box !important;
         }
-        #tavern-stage-root .mes_block {
+        #game-hall-screen #tavern-stage-root #sheld #chat .mes .mes_block,
+        #game-hall-screen #tavern-stage-root #sheld #chat .mes[is_user="false"] .mes_block,
+        #game-hall-screen #tavern-stage-root #sheld #chat .mes[is_user="true"] .mes_block {
+          left: 0 !important;
+          right: 0 !important;
+          transform: none !important;
+          translate: none !important;
+          width: 100% !important;
           max-width: 100% !important;
+          min-width: 0 !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+          ${theme.id === 'theme_ins_minimal' ? '' : 'padding-left: 12px !important; padding-right: 12px !important;'}
           box-sizing: border-box !important;
           overflow-wrap: break-word !important;
         }
