@@ -2474,7 +2474,14 @@ code, pre {
         html(val) {
           if (val === undefined) return arr[0] ? arr[0].innerHTML : '';
           if (typeof val === 'string' && isHostAppHtmlFallback(val)) return api;
-          arr.forEach(el => { if (el) el.innerHTML = String(val); });
+          arr.forEach(el => {
+            if (!el) return;
+            if (el.classList && el.classList.contains('mes_text')) {
+              patchStreamingMesTextDom(el, String(val));
+            } else {
+              el.innerHTML = String(val);
+            }
+          });
           return api;
         },
         load(urlOrFn, dataOrCb, maybeCb) {
@@ -2772,6 +2779,39 @@ code, pre {
               el.dispatchEvent(new CustomEvent(evtName, { bubbles: true, cancelable: true }));
             } catch (_) {}
           });
+          return api;
+        },
+        toArray() {
+          return arr.slice();
+        },
+        siblings(sel) {
+          const out = [];
+          arr.forEach(el => {
+            if (!el || !el.parentElement) return;
+            Array.from(el.parentElement.children).forEach(ch => {
+              if (ch !== el && (!sel || (ch.matches && ch.matches(sel))) && !out.includes(ch)) {
+                out.push(ch);
+              }
+            });
+          });
+          return wrapElements(out);
+        },
+        insertAfter(target) {
+          const targets = resolveSelectorElements(target);
+          if (targets[0] && targets[0].parentNode) {
+            arr.forEach(el => {
+              if (el) targets[0].parentNode.insertBefore(el, targets[0].nextSibling);
+            });
+          }
+          return api;
+        },
+        filter(selOrFn) {
+          if (typeof selOrFn === 'function') {
+            return wrapElements(arr.filter((el, idx) => Boolean(selOrFn.call(el, idx, el))));
+          }
+          if (typeof selOrFn === 'string') {
+            return wrapElements(arr.filter(el => el && el.matches && el.matches(selOrFn)));
+          }
           return api;
         }
       };
@@ -4701,10 +4741,12 @@ code, pre {
       try { if (navigator.clipboard) await navigator.clipboard.writeText(String(txt ?? '')); } catch (_) {}
     };
     window.parseRegexFromString = parseFindRegexString;
-    window.getRegexedString = (rawStr, placement) => applyTavernRegexPipeline(String(rawStr ?? ''), {
+    window.getRegexedString = (rawStr, placement, options = {}) => applyTavernRegexPipeline(String(rawStr ?? ''), {
       isUser: placement === 1,
-      isPrompt: false,
-      isWorldInfo: placement === 5
+      isPrompt: Boolean(options && options.isPrompt),
+      isEdit: Boolean(options && options.isEdit),
+      isWorldInfo: placement === 5,
+      depth: options && typeof options.depth === 'number' ? options.depth : undefined
     });
     window.regex_placement = { MD_DISPLAY: 0, USER_INPUT: 1, AI_OUTPUT: 2, SLASH_COMMAND: 3, WORLD_INFO: 5, REASONING: 6 };
     window.extension_prompt_roles = { SYSTEM: 0, USER: 1, ASSISTANT: 2 };
@@ -5586,14 +5628,27 @@ code, pre {
     window.substituteMacros = window.TavernHelper.substituteMacros;
     window.formatAsTavernRegexedString = window.TavernHelper.formatAsTavernRegexedString;
     window.messageFormatting = (mes, ch_name, is_system, is_user, message_id) => {
+      const sess = getActiveChatSession();
+      const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
+      const hasMid = typeof message_id === 'number' && !Number.isNaN(message_id);
+      const calcDepth = hasMid && msgs.length > 0 ? Math.max(0, msgs.length - 1 - message_id) : undefined;
       return renderTavernMessageHtml(String(mes || ''), {
         isUser: Boolean(is_user),
-        mesId: typeof message_id === 'number' ? message_id : undefined,
-        isLastFloor: true
+        mesId: hasMid ? message_id : undefined,
+        floorIndex: hasMid ? message_id : undefined,
+        depth: calcDepth,
+        isLastFloor: hasMid && msgs.length > 0 ? (message_id === msgs.length - 1) : true
       });
     };
-    window.getRegexedString = (rawStr, placement) => {
-      return applyTavernRegexPipeline(String(rawStr || ''), { isPrompt: false, placement });
+    window.getRegexedString = (rawStr, placement, options = {}) => {
+      return applyTavernRegexPipeline(String(rawStr || ''), {
+        isUser: placement === 1,
+        isPrompt: Boolean(options && options.isPrompt),
+        isEdit: Boolean(options && options.isEdit),
+        isWorldInfo: placement === 5,
+        depth: options && typeof options.depth === 'number' ? options.depth : undefined,
+        placement
+      });
     };
     window.isCharacterTavernRegexesEnabled = window.TavernHelper.isCharacterTavernRegexesEnabled;
     window.getPresetNames = window.TavernHelper.getPresetNames;
@@ -7179,8 +7234,10 @@ code, pre {
 
     tavernState.activeCardId = newCard.id;
     syncWorldBooksAndPresetOnCardSwitch(newCard, { silent: true });
-    if ((tavernState.background?.syncWithCard || tavernState.background?.syncCardAvatarAsBg) && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
-      tavernState.background.url = newCard.backgroundUrl || newCard.avatar;
+    if (newCard.backgroundUrl && !String(newCard.backgroundUrl).startsWith('data:image/svg')) {
+      tavernState.background.url = newCard.backgroundUrl;
+    } else if (tavernState.background?.syncCardAvatarAsBg && newCard.avatar && !newCard.avatar.startsWith('data:image/svg')) {
+      tavernState.background.url = newCard.avatar;
     }
     const existingSess = tavernState.chatsByCardId[newCard.id];
     if (!existingSess || !Array.isArray(existingSess.messages) || existingSess.messages.length <= 1) {
@@ -8284,7 +8341,116 @@ code, pre {
     return compiled;
   }
 
+  function ensureBaiBaiExtensionRegexesRegistered() {
+    if (!tavernState.extensionSettings || typeof tavernState.extensionSettings !== 'object') {
+      tavernState.extensionSettings = {};
+    }
+    if (!Array.isArray(tavernState.extensionSettings.regex)) {
+      tavernState.extensionSettings.regex = [];
+    }
+    const extRegexArr = tavernState.extensionSettings.regex;
+    const plugins = Array.isArray(tavernState.plugins) ? tavernState.plugins : [];
+    const hasEnabledBbs = plugins.some(p => p && p.enabled && /ST-BaiBai-Book|博宝书/i.test(String(p.name || '') + ' ' + String(p.repoUrl || '')));
+    const hasEnabledBbi = plugins.some(p => p && p.enabled && /ST-BaiBai-Image|博宝绘/i.test(String(p.name || '') + ' ' + String(p.repoUrl || '')));
+
+    if (hasEnabledBbs) {
+      const bbsDefs = [
+        {
+          id: 'bbs-hide-time-tags',
+          scriptName: '博宝书·隐藏时间锚点标签',
+          findRegex: '/<bbs_start\\b[^>\\r\\n]*>[^<\\r\\n]*<\\/bbs_start>|<bbs_end\\b[^>\\r\\n]*>[^<\\r\\n]*<\\/bbs_end>/gi',
+          replaceString: '',
+          trimStrings: [],
+          placement: [2],
+          disabled: false,
+          markdownOnly: true,
+          promptOnly: false,
+          runOnEdit: true,
+          substituteRegex: 0,
+          minDepth: null,
+          maxDepth: null
+        },
+        {
+          id: 'bbs-hide-item-tags',
+          scriptName: '博宝书·隐藏物品标签',
+          findRegex: '/(^|\\r?\\n)[ \\t]*<bbs_items\\b[^>]*>[ \\t]*\\r?\\n(?:[ \\t]*(?:获得|消耗|失去)\\s+[^\\r\\n]*(?:\\r?\\n))+[ \\t]*<\\/bbs_items>[ \\t]*(?=\\r?\\n|$)/gi',
+          replaceString: '',
+          trimStrings: [],
+          placement: [2],
+          disabled: false,
+          markdownOnly: true,
+          promptOnly: false,
+          runOnEdit: true,
+          substituteRegex: 0,
+          minDepth: null,
+          maxDepth: null
+        },
+        {
+          id: 'bbs-hide-var-tags',
+          scriptName: '博宝书·隐藏变量标签',
+          findRegex: '/(^|\\r?\\n)[ \\t]*<bbs_vars\\b[^>]*>[ \\t]*\\r?\\n(?:[ \\t]*(?:设定|变更|新增|删除)\\s+[^\\r\\n]*(?:\\r?\\n))+[ \\t]*<\\/bbs_vars>[ \\t]*(?=\\r?\\n|$)/gi',
+          replaceString: '',
+          trimStrings: [],
+          placement: [2],
+          disabled: false,
+          markdownOnly: true,
+          promptOnly: false,
+          runOnEdit: true,
+          substituteRegex: 0,
+          minDepth: null,
+          maxDepth: null
+        }
+      ];
+      bbsDefs.forEach(def => {
+        if (!extRegexArr.some(x => x && x.id === def.id)) {
+          extRegexArr.push(def);
+        }
+      });
+    }
+
+    if (hasEnabledBbi) {
+      const bbiDefs = [
+        {
+          id: 'bbi-render-image-tags',
+          scriptName: '博宝绘·渲染生图标记',
+          findRegex: '/<bbi_image\\b[^>]*>[\\s\\S]*?<\\/bbi_image>/gi',
+          replaceString: '<div data-bbi-slot=""></div>',
+          trimStrings: [],
+          placement: [2],
+          disabled: false,
+          markdownOnly: true,
+          promptOnly: false,
+          runOnEdit: true,
+          substituteRegex: 0,
+          minDepth: null,
+          maxDepth: null
+        },
+        {
+          id: 'bbi-strip-image-tags-prompt',
+          scriptName: '博宝绘·提示词剥离生图标记',
+          findRegex: '/<bbi_image\\b[^>]*>[\\s\\S]*?<\\/bbi_image>/gi',
+          replaceString: '',
+          trimStrings: [],
+          placement: [2],
+          disabled: false,
+          markdownOnly: false,
+          promptOnly: true,
+          runOnEdit: true,
+          substituteRegex: 0,
+          minDepth: null,
+          maxDepth: null
+        }
+      ];
+      bbiDefs.forEach(def => {
+        if (!extRegexArr.some(x => x && x.id === def.id)) {
+          extRegexArr.push(def);
+        }
+      });
+    }
+  }
+
   function getActiveRegexScriptsForCard(cardObj) {
+    ensureBaiBaiExtensionRegexesRegistered();
     const card = cardObj || getActiveCard();
     const preset = getActivePreset();
     const cardScripts = (card && Array.isArray(card.regexScripts)) ? card.regexScripts : [];
@@ -8333,8 +8499,10 @@ code, pre {
     const numericDepth = hasDepthContext ? Number(depth) : 0;
 
     for (const script of scripts) {
-      if (isEdit && script.runOnEdit === false) continue;
-      const isPromptOnlyScript = Boolean(script.promptOnly) && (!script.markdownOnly || /不发送|仅发送|仅提示词|清理提示词|prompt\s*only/i.test(String(script.scriptName || '')));
+      if (isEdit && !script.runOnEdit) continue;
+      // SillyTavern engine.js exact check:
+      // (script.markdownOnly && !isMarkdown) || (script.promptOnly && !isPrompt) || (!script.markdownOnly && !script.promptOnly && (isMarkdown || isPrompt))
+      const isPromptOnlyScript = Boolean(script.promptOnly) && !script.markdownOnly;
       const isMarkdownOnlyScript = Boolean(script.markdownOnly) && !script.promptOnly;
       if (isPrompt && isMarkdownOnlyScript) continue;
       if (!isPrompt && isPromptOnlyScript) continue;
@@ -8350,13 +8518,14 @@ code, pre {
         if (!matchesTarget) continue;
       }
 
-      if (isPrompt && hasDepthContext) {
+      // SillyTavern engine.js exact depth check: applies to BOTH display and prompt whenever depth is a number
+      if (hasDepthContext) {
         const minD = (script.minDepth !== null && script.minDepth !== undefined && script.minDepth !== '') ? Number(script.minDepth) : null;
         const maxD = (script.maxDepth !== null && script.maxDepth !== undefined && script.maxDepth !== '') ? Number(script.maxDepth) : null;
-        if (minD !== null && !Number.isNaN(minD) && minD > 0 && numericDepth < minD) {
+        if (minD !== null && !Number.isNaN(minD) && minD >= -1 && numericDepth < minD) {
           continue;
         }
-        if (maxD !== null && !Number.isNaN(maxD) && maxD > 0 && numericDepth > maxD) {
+        if (maxD !== null && !Number.isNaN(maxD) && maxD >= 0 && numericDepth > maxD) {
           continue;
         }
       }
@@ -8406,12 +8575,18 @@ code, pre {
             }
             if (numStr !== undefined) {
               const gNum = Number(numStr);
+              if (gNum === 0) {
+                return applyTrim(fullMatchedStr);
+              }
               if (gNum >= 1 && gNum < groupEndIdx) {
                 const gVal = matchArgs[gNum];
                 return applyTrim(gVal !== undefined ? String(gVal) : '');
               }
               if (numStr.length === 2) {
                 const singleDigit = Number(numStr[0]);
+                if (singleDigit === 0) {
+                  return applyTrim(fullMatchedStr) + numStr[1];
+                }
                 if (singleDigit >= 1 && singleDigit < groupEndIdx) {
                   const gVal = matchArgs[singleDigit];
                   return applyTrim(gVal !== undefined ? String(gVal) : '') + numStr[1];
@@ -8424,9 +8599,6 @@ code, pre {
           return replaceTavernMacros(substituted, card);
         });
 
-        if (!isPrompt && prevOutput.trim() && !nextOutput.trim()) {
-          continue;
-        }
         output = nextOutput;
       } catch (err) {
         console.warn('Regex execution warning:', script.scriptName, err);
@@ -8908,13 +9080,7 @@ code, pre {
     if (!rawText) return '';
     const activeThemeForMsg = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
     const shouldAdaptDarkInline = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeThemeForMsg));
-    let cleanedForDisplay = String(rawText)
-      .replace(/<bbs_start\b[^>]*>[\s\S]*?(?:<\/?bbs_end\b[^>]*>|$)/gi, '')
-      .replace(/<bbs_start\b[^>]*>[\s\S]*?<\/bbs_start>/gi, '')
-      .replace(/<bbs_end\b[^>]*>[\s\S]*?<\/bbs_end>/gi, '')
-      .replace(/<bbs_items\b[^>]*>[\s\S]*?<\/bbs_items>/gi, '')
-      .replace(/<bbs_vars\b[^>]*>[\s\S]*?<\/bbs_vars>/gi, '')
-      .replace(/<\/?(?:bbs_start|bbs_end|bbs_items|bbs_vars)\b[^>]*>/gi, '');
+    let cleanedForDisplay = String(rawText);
     if (!/<(?:think|thinking|thought|reasoning|cot|antThinking)\b/i.test(cleanedForDisplay)) {
       cleanedForDisplay = cleanedForDisplay.replace(/<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
     }
@@ -8923,12 +9089,14 @@ code, pre {
     cleanedForDisplay = applyStptRenderWorldbookEntries(cleanedForDisplay, options);
     const afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
 
-    // 1. JS-Slash-Runner / SillyTavern 1-to-1: Extract fenced HTML blocks (```html ... ``` or ``` ... ```) directly into isolated sandboxed iframes first so multiple cards never bridge across story text or leak <style> into host DOM
+    // 1. JS-Slash-Runner / SillyTavern 1-to-1: Extract fenced HTML blocks (```html ... ``` or ``` ... ```) into isolated sandboxed iframes using non-bridging (?:(?!```)[\s\S])*? so unclosed fences never swallow story text
     const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
     const protectedBlocks = [];
-    let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?([\s\S]*?)```/g, (full, inner) => {
+    let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?((?:(?!```)[\s\S])*?)```/g, (full, inner) => {
       const trimmed = inner.trim();
-      if (/^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<script\b)/i.test(trimmed) || /<(?:!DOCTYPE\s+html|html\b|head\b|body\b|style\b|script\b)/i.test(trimmed)) {
+      const isFullHtmlBlock = /^(?:<!DOCTYPE\s+html|<html\b|<head\b|<body\b|<style\b|<script\b)/i.test(trimmed) ||
+        ['html>', '<head>', '<body'].some(tag => trimmed.toLowerCase().includes(tag));
+      if (isFullHtmlBlock) {
         const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
         protectedBlocks.push(buildSandboxIframeHtml(trimmed, { isLastFloor }));
         return '\n' + token + '\n';
@@ -8949,19 +9117,23 @@ code, pre {
       .replace(/```(?:html|HTML)\s*(?=<)/g, '')
       .replace(/^[ \t]*```(?:html|HTML)?[ \t]*$/gm, '');
 
-    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html>, <html...>...</html>, or <body...>...</body>) into its own sandboxed iframe
+    // 2. Extract any unfenced self-contained HTML document (<!DOCTYPE html>...</html>, <html...>...</html>, or <body...>...</body>) into its own sandboxed iframe using non-bridging quantifiers
     working = working.replace(/(?:<!DOCTYPE\s+html[^>]*>\s*)?<html\b(?:(?!<html\b)[\s\S])*?<\/html>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
     });
-    working = working.replace(/<body\b[\s\S]*?<\/body>/gi, match => {
+    working = working.replace(/<body\b(?:(?!<body\b)[\s\S])*?<\/body>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
     });
-    // Strip residual XML wrapper tags like <content>...</content> so story paragraphs inside them always display cleanly
-    working = working.replace(/<\/?(?:content|正文)\b[^>]*>/gi, '');
+    // Strip residual XML wrapper tags like <content>...</content> and single-line <bbs_start>/<bbs_end> if ST-BaiBai-Book plugin is disabled
+    working = working
+      .replace(/<bbs_start\b[^>\r\n]*>[^<\r\n]*<\/bbs_start>|<bbs_end\b[^>\r\n]*>[^<\r\n]*<\/bbs_end>/gi, '')
+      .replace(/(^|\r?\n)[ \t]*<bbs_items\b[^>]*>[ \t]*\r?\n(?:[ \t]*(?:获得|消耗|失去)\s+[^\r\n]*(?:\r?\n))+[ \t]*<\/bbs_items>[ \t]*(?=\r?\n|$)/gi, '')
+      .replace(/(^|\r?\n)[ \t]*<bbs_vars\b[^>]*>[ \t]*\r?\n(?:[ \t]*(?:设定|变更|新增|删除)\s+[^\r\n]*(?:\r?\n))+[ \t]*<\/bbs_vars>[ \t]*(?=\r?\n|$)/gi, '')
+      .replace(/<\/?(?:content|正文)\b[^>]*>/gi, '');
 
     // 3. Protect standalone <style>...</style> + <script>...</script> + <pre>...</pre> blocks
     working = working.replace(/<style[\s\S]*?<\/style>/gi, match => {
@@ -9612,14 +9784,12 @@ code, pre {
     // Universal compatibility guards for all SillyTavern themes
     rules.push(`
       #tavern-stage-root .mes .ch_name {
-        position: relative !important;
-        z-index: 42 !important;
+        z-index: 42;
         pointer-events: auto !important;
       }
       #tavern-stage-root .mes .mes_buttons,
       #tavern-stage-root .mes .mes_edit_buttons {
-        position: relative !important;
-        z-index: 45 !important;
+        z-index: 45;
         pointer-events: auto !important;
       }
       #tavern-stage-root .mes .extraMesButtonsHint,
@@ -9699,6 +9869,14 @@ code, pre {
       }
     `);
 
+    if (isGousuStyle) {
+      rules.push(`
+        #tavern-stage-root .mes .ch_name .timestamp {
+          display: none !important;
+        }
+      `);
+    }
+
     if (!isGousuStyle && theme) {
       const rawThemeCss = String(theme.custom_css || '');
       const hidesTopBar = /#top-bar\s*(?:,[^{]*)?\{[^}]*display\s*:\s*none/i.test(rawThemeCss);
@@ -9773,16 +9951,19 @@ code, pre {
           max-width: 100% !important;
           box-sizing: border-box !important;
           overflow-wrap: break-word !important;
-          overflow-x: hidden !important;
         }
         #tavern-stage-root .mes_text {
           max-width: 100% !important;
           box-sizing: border-box !important;
-          overflow-x: hidden !important;
         }
         #tavern-stage-root .mes_text > * {
           max-width: 100% !important;
           box-sizing: border-box !important;
+        }
+        @supports (left: anchor(right)) {
+          #tavern-stage-root .mes .mes_timer:empty + .tokenCounterDisplay {
+            left: anchor(--id-tag right) !important;
+          }
         }
       `);
     }
@@ -9797,7 +9978,7 @@ code, pre {
     }
     if (uiCfg.enableQuoteBox === false) {
       rules.push(`#tavern-stage-root .mes_text q { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }`);
-    } else {
+    } else if (isGousuStyle || uiCfg.enableQuoteBox === true) {
       rules.push(`#tavern-stage-root .mes_text q { display: inline; -webkit-box-decoration-break: clone; box-decoration-break: clone; border: 1px solid var(--SmartThemeQuoteColor, #ed8496) !important; border-radius: 8px !important; padding: 1px 4px !important; }`);
     }
     if (uiCfg.enableItalicColor === false) {
@@ -9806,6 +9987,20 @@ code, pre {
       rules.push(`#tavern-stage-root .mes_text em, #tavern-stage-root .mes_text i { color: var(--SmartThemeEmColor, #91848e) !important; font-style: italic; }`);
     }
     return rules.join('\n');
+  }
+
+  function extractThemeBuiltInBgUrl(themeObj) {
+    if (!themeObj) return '';
+    if (themeObj.background_image && String(themeObj.background_image).trim()) {
+      return String(themeObj.background_image).trim();
+    }
+    const rawCss = String(themeObj.custom_css || '');
+    if (!rawCss) return '';
+    const bgMatch = rawCss.match(/(?:#bg1|#bg_custom|#tavern-bg-layer|body)\s*\{[^}]*background(?:-image)?\s*:[^;]*url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i);
+    if (bgMatch && bgMatch[1]) return bgMatch[1].trim();
+    const varMatch = rawCss.match(/--(?:bg|background|theme-bg|wallpaper)[a-zA-Z0-9_-]*\s*:\s*url\(\s*['"]?([^'")\s]+)['"]?\s*\)/i);
+    if (varMatch && varMatch[1]) return varMatch[1].trim();
+    return '';
   }
 
   function applyActiveTavernTheme() {
@@ -9866,9 +10061,11 @@ code, pre {
       #tavern-stage-root {
         ${varPairs.map(([k, v]) => `${k}: ${v};`).join('\n        ')}
       }
-      #tavern-stage-root #top-settings-holder {
+      #tavern-stage-root #top-bar {
         background-color: var(--SmartThemeBlurTintColor, rgba(246, 245, 242, 0.92));
         border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(160, 155, 148, 0.35));
+      }
+      #tavern-stage-root #top-settings-holder {
         color: var(--SmartThemeBodyColor, #373737);
       }
       #tavern-stage-root .drawer-icon {
@@ -11760,7 +11957,7 @@ code, pre {
         font-weight: 600;
       }
       #tavern-stage-root *:not(.fa-solid):not(.fa-regular):not(.fa):not(.fas):not(.far):not(.fab):not(.fa-fw):not(.drawer-icon):not(#options_button):not(#extensionsMenuButton):not(#send_but):not(.mes_button):not(.swipe_left):not(.swipe_right) {
-        font-family: inherit !important;
+        font-family: inherit;
       }
       #tavern-bg-layer {
         position: absolute;
@@ -11969,7 +12166,7 @@ code, pre {
         width: 100%;
         overflow-y: auto;
         overflow-x: hidden;
-        padding: 22px var(--tavernPageMargin, 10px) 84px var(--tavernPageMargin, 10px) !important;
+        padding: 22px 0 84px 0;
         box-sizing: border-box;
         scroll-behavior: auto;
       }
@@ -12026,7 +12223,7 @@ code, pre {
       }
       .mes_buttons,
       .mes_edit_buttons {
-        position: relative !important;
+        position: relative;
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
@@ -12212,13 +12409,13 @@ code, pre {
         margin: 0 !important;
       }
 
-      /* Prevent double quotation marks inside <q> */
+      /* Prevent double quotation marks inside <q> while allowing theme pseudo-elements when needed */
       #tavern-stage-root q::before,
       #tavern-stage-root q::after {
-        content: none !important;
+        content: none;
       }
       #tavern-stage-root q {
-        quotes: none !important;
+        quotes: none;
         color: var(--SmartThemeQuoteColor, #ffa8bb);
       }
 
@@ -12995,7 +13192,10 @@ code, pre {
     injectTavernShellCss();
 
     const bg = tavernState.background || {};
-    const resolvedBgUrl = bg.url ? resolveSafeAvatarUrl(bg.url, false) : '';
+    const activeThemeForBg = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+    const themeBuiltInBg = extractThemeBuiltInBgUrl(activeThemeForBg);
+    const effectiveRawBgUrl = (bg.useThemeBg && themeBuiltInBg) ? themeBuiltInBg : (bg.url || themeBuiltInBg || '');
+    const resolvedBgUrl = effectiveRawBgUrl ? resolveSafeAvatarUrl(effectiveRawBgUrl, false) : '';
     const bgStyle = resolvedBgUrl
       ? `background-image: url('${resolvedBgUrl}'); background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`
       : `background-size: ${bg.fit || 'cover'}; filter: blur(${Number(bg.blur || 0)}px); opacity: ${Number(bg.opacity ?? 1)};`;
@@ -13189,7 +13389,10 @@ code, pre {
     if (!bgLayer) return;
     bindBg1StyleObserver();
     const bg = tavernState.background || {};
-    const resolvedBgUrl = bg.url ? resolveSafeAvatarUrl(bg.url, false) : '';
+    const activeThemeForBg = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+    const themeBuiltInBg = extractThemeBuiltInBgUrl(activeThemeForBg);
+    const effectiveRawBgUrl = (bg.useThemeBg && themeBuiltInBg) ? themeBuiltInBg : (bg.url || themeBuiltInBg || '');
+    const resolvedBgUrl = effectiveRawBgUrl ? resolveSafeAvatarUrl(effectiveRawBgUrl, false) : '';
     bgLayer.style.backgroundSize = bg.fit || 'cover';
     bgLayer.style.filter = `blur(${Number(bg.blur || 0)}px)`;
     bgLayer.style.opacity = String(Number(bg.opacity ?? 1));
@@ -14072,6 +14275,16 @@ code, pre {
     const reasoningTitleText = isLiveReasoningOnly ? '思考过程中...' : '思考过程';
     const hasTranslation = Boolean(m.translation && String(m.translation).trim());
 
+    const rawSendDate = (swipeMeta && swipeMeta.send_date !== undefined) ? swipeMeta.send_date : m.send_date;
+    const formattedSendDate = (() => {
+      if (!rawSendDate) return '';
+      if (typeof rawSendDate === 'string' && /年|月|日|-|\//.test(rawSendDate)) return rawSendDate;
+      const d = new Date(Number(rawSendDate) || Date.now());
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    })();
+
     return `
       <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
         <div class="mesAvatarWrapper">
@@ -14087,6 +14300,7 @@ code, pre {
           <div class="ch_name flex-container justifySpaceBetween">
             <div class="flex-container alignItemsBaseline">
               <span class="name_text">${escapeHtmlSimple(displayName)}</span>
+              <span class="flex-container timestamp">${escapeHtmlSimple(formattedSendDate)}</span>
             </div>
             ${isEditingThis ? `
               <div class="flex-container mes_buttons mes_edit_buttons">
@@ -14135,7 +14349,7 @@ code, pre {
                   </button>
                 </div>
                 <div class="mes_button mes_stop fa-solid fa-stop" data-action="stop-generation" title="暂停生成" style="display:${uiRuntime.isGenerating && isLast ? 'inline-flex' : 'none'} !important;"></div>
-                <div class="extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="展开更多操作"></div>
+                <div class="mes_button extraMesButtonsHint fa-solid fa-ellipsis" data-action="floor-extra-toggle" data-mesid="${idx}" title="展开更多操作"></div>
                 <div class="mes_button mes_edit fa-solid fa-pencil" data-action="floor-edit" data-mesid="${idx}" title="编辑本层"></div>
               </div>
             `}
@@ -14183,10 +14397,9 @@ code, pre {
               <div class="mes_translation_text">${escapeHtmlSimple(m.translation).replace(/\n/g, '<br/>')}</div>
             </div>
           ` : ''}
-
-          ${!isUser && (isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
         </div>
 
+        ${!isUser && (isLast || swipes.length > 1) && uiCfg.showSwipeCounter !== false ? `<div class="swipes-counter">${swipeIdx + 1}/${swipes.length}</div>` : '<div class="swipes-counter"></div>'}
         ${!isUser && (isLast || swipes.length > 1) ? `
           <div class="swipe_left fa-solid fa-chevron-left" data-action="floor-swipe-left" data-mesid="${idx}" title="上一分支"></div>
           <div class="swipe_right fa-solid fa-chevron-right" data-action="floor-swipe-right" data-mesid="${idx}" title="下一分支或重生成"></div>
@@ -14241,9 +14454,13 @@ code, pre {
       const oldTextEl = existingNode.querySelector('.mes_text');
       const newTextEl = newFloorNode.querySelector('.mes_text');
       const preservedBbsHosts = Array.from(existingNode.querySelectorAll('.bbs-fp-host'));
+      const preservedBbsFpAttr = existingNode.getAttribute('data-bbs-fp');
       if (!isEditingTransition && oldTextEl && newTextEl) {
         // Update in-place so already-mounted iframes, images, and plugin cards inside .mes never detach or flash
         existingNode.className = newFloorNode.className;
+        if (preservedBbsFpAttr !== null) {
+          existingNode.setAttribute('data-bbs-fp', preservedBbsFpAttr);
+        }
         const oldAvatarWrapper = existingNode.querySelector('.mesAvatarWrapper');
         const newAvatarWrapper = newFloorNode.querySelector('.mesAvatarWrapper');
         if (oldAvatarWrapper && newAvatarWrapper && oldAvatarWrapper.innerHTML !== newAvatarWrapper.innerHTML) {
@@ -14282,6 +14499,9 @@ code, pre {
         }
         executeInlineMessageScripts(existingNode);
       } else {
+        if (preservedBbsFpAttr !== null) {
+          newFloorNode.setAttribute('data-bbs-fp', preservedBbsFpAttr);
+        }
         existingNode.replaceWith(newFloorNode);
         if (preservedBbsHosts.length > 0) {
           const targetMesBlock = newFloorNode.querySelector('.mes_block') || newFloorNode;
@@ -15454,17 +15674,20 @@ code, pre {
     const seenUrls = new Set(customGallery.map(g => g && g.url).filter(Boolean));
     cards.forEach(c => {
       if (!c) return;
-      const cBg = c.backgroundUrl || c.avatar || '';
+      const cBg = c.backgroundUrl || '';
       if (!cBg || cBg === DEFAULT_AVATAR_SVG || String(cBg).startsWith('data:image/svg')) return;
       if (seenUrls.has(cBg)) return;
       seenUrls.add(cBg);
       cardBgItems.push({
         id: 'cardbg_' + c.id,
+        cardId: c.id,
         name: c.name || '角色背景',
         url: cBg,
         isCardBg: true
       });
     });
+    const activeThemeForPanorama = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+    const themeBuiltInBg = extractThemeBuiltInBgUrl(activeThemeForPanorama);
     const allGalleryItems = [
       ...customGallery.map(g => ({ ...g, isCardBg: false })),
       ...cardBgItems
@@ -15549,6 +15772,10 @@ code, pre {
           <input type="checkbox" data-bg-bool="syncCardAvatarAsBg" ${bg.syncCardAvatarAsBg ? 'checked' : ''} />
           <span>切换或导入角色卡时自动将该角色立绘设为聊天背景</span>
         </label>
+        <label class="tavern-check-row" style="margin-bottom:8px;">
+          <input type="checkbox" data-bg-bool="useThemeBg" ${bg.useThemeBg ? 'checked' : ''} />
+          <span>跟随美化背景${themeBuiltInBg ? ' 当前美化含自带背景' : ' 开启后优先使用美化自带背景'}</span>
+        </label>
         <div class="tavern-field-group">
           <label>或直接输入背景图片URL直链</label>
           <div style="display:flex;gap:6px;">
@@ -15625,15 +15852,15 @@ code, pre {
 
       <div class="tavern-section-card">
         <div class="tavern-section-label">
-          <span>背景图库 含上传背景与角色自带立绘 共${allGalleryItems.length}张</span>
+          <span>背景图库 含上传背景与角色自带背景 共${allGalleryItems.length}张</span>
         </div>
         ${allGalleryItems.length === 0 ? `
-          <div style="font-size:12px;color:#777;padding:8px 0;">暂无背景图，点击上方多选上传背景或导入角色卡后会自动收录在此处，点击任意缩略图即可随时来回切换。</div>
+          <div style="font-size:12px;color:#777;padding:8px 0;">暂无背景图，点击上方多选上传背景或导入带背景的角色卡后会自动收录在此处，点击任意缩略图即可随时来回切换。</div>
         ` : `
           <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:240px;overflow-y:auto;padding:2px;">
             ${allGalleryItems.map(item => {
               const resolvedThumb = resolveSafeAvatarUrl(item.url, false);
-              const isCurrent = bg.url && (bg.url === item.url || resolveSafeAvatarUrl(bg.url, false) === resolvedThumb);
+              const isCurrent = !bg.useThemeBg && bg.url && (bg.url === item.url || resolveSafeAvatarUrl(bg.url, false) === resolvedThumb);
               return `
                 <div style="position:relative;border-radius:10px;overflow:hidden;border:2px solid ${isCurrent ? '#48484a' : 'rgba(200,200,210,0.7)'};background:#f2f2f5;display:flex;flex-direction:column;">
                   <div data-action="select-bg-gallery-item" data-bg-url="${escapeHtmlSimple(item.url)}" style="cursor:pointer;position:relative;width:100%;height:78px;overflow:hidden;background:#e5e5ea;">
@@ -15641,11 +15868,7 @@ code, pre {
                   </div>
                   <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;gap:4px;background:rgba(255,255,255,0.94);">
                     <span data-action="select-bg-gallery-item" data-bg-url="${escapeHtmlSimple(item.url)}" style="font-size:11px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer;">${escapeHtmlSimple(stripUiEmojis(item.name || '背景图'))}</span>
-                    ${!item.isCardBg ? `
-                      <button type="button" class="tavern-btn small danger" data-action="delete-bg-gallery-item" data-bg-id="${escapeHtmlSimple(item.id)}" style="min-height:20px !important;padding:1px 5px !important;font-size:10px !important;flex-shrink:0;">删</button>
-                    ` : `
-                      <span style="font-size:10px;color:#888;flex-shrink:0;">角色</span>
-                    `}
+                    <button type="button" class="tavern-btn small danger" data-action="delete-bg-gallery-item" data-bg-id="${escapeHtmlSimple(item.id)}" ${item.isCardBg && item.cardId ? `data-card-id="${escapeHtmlSimple(item.cardId)}"` : ''} style="min-height:20px !important;padding:1px 5px !important;font-size:10px !important;flex-shrink:0;">删</button>
                   </div>
                 </div>
               `;
@@ -16370,7 +16593,7 @@ code, pre {
     }
 
     // 2. Check unclosed card status/interactive blocks (e.g. <gourmet_journal>, <chef_newspaper>, <magical_menu>, <Achievement>, <status_block>, <bbs_start>)
-    const blockTags = ['gourmet_journal', 'chef_newspaper', 'magical_menu', 'Achievement', 'status_block', 'status_bar', 'rpg_status', 'bbs_start', 'bbs_items', 'bbs_vars'];
+    const blockTags = ['gourmet_journal', 'chef_newspaper', 'magical_menu', 'Achievement', 'status_block', 'status_bar', 'rpg_status', 'bbs_start', 'bbs_end', 'bbs_items', 'bbs_vars', 'bbi_image'];
     for (const tag of blockTags) {
       const openRx = new RegExp('<' + tag + '\\b[^>]*>', 'gi');
       let match;
@@ -16379,9 +16602,7 @@ code, pre {
         lastOpenIdx = match.index;
       }
       if (lastOpenIdx !== -1) {
-        const closeRx = tag === 'bbs_start'
-          ? /<(?:\/bbs_start|\/?bbs_end)\b[^>]*>/i
-          : new RegExp('<\\/' + tag + '\\s*>', 'i');
+        const closeRx = new RegExp('<\\/' + tag + '\\s*>', 'i');
         if (!closeRx.test(text.slice(lastOpenIdx))) {
           updateCut(lastOpenIdx);
         }
@@ -16427,6 +16648,12 @@ code, pre {
 
   function isSameMediaOrFrameNode(oldNode, newNode) {
     if (!oldNode || !newNode || oldNode.nodeType !== 1 || newNode.nodeType !== 1) return false;
+    if (oldNode.hasAttribute && newNode.hasAttribute && oldNode.hasAttribute('data-bbi-slot') && newNode.hasAttribute('data-bbi-slot')) {
+      return true;
+    }
+    if (oldNode.shadowRoot && newNode.hasAttribute && newNode.hasAttribute('data-bbi-slot')) {
+      return true;
+    }
     if (oldNode.tagName !== newNode.tagName) return false;
     if (oldNode.tagName === 'IFRAME') {
       return (oldNode.getAttribute('srcdoc') || '') === (newNode.getAttribute('srcdoc') || '') &&
@@ -16434,6 +16661,11 @@ code, pre {
     }
     if (oldNode.tagName === 'IMG') {
       return (oldNode.getAttribute('src') || '') === (newNode.getAttribute('src') || '');
+    }
+    const oldBbiSlots = oldNode.querySelectorAll ? oldNode.querySelectorAll('[data-bbi-slot]') : [];
+    const newBbiSlots = newNode.querySelectorAll ? newNode.querySelectorAll('[data-bbi-slot]') : [];
+    if (oldBbiSlots.length > 0 && oldBbiSlots.length === newBbiSlots.length) {
+      return true;
     }
     const oldFrames = oldNode.querySelectorAll('iframe, img');
     const newFrames = newNode.querySelectorAll('iframe, img');
@@ -16474,14 +16706,14 @@ code, pre {
         continue;
       }
       if (oldChild.nodeType === 1 && newChild.nodeType === 1) {
-        // Never touch or reload an existing iframe or image with identical source!
+        // Never touch or reload an existing iframe, image, or ST-BaiBai-Image slot with ShadowRoot!
         if (isSameMediaOrFrameNode(oldChild, newChild)) {
           continue;
         }
         if (oldChild.outerHTML === newChild.outerHTML) {
           continue;
         }
-        const hasMediaInside = oldChild.querySelector('iframe, img') || newChild.querySelector('iframe, img') || oldChild.tagName === 'IFRAME' || newChild.tagName === 'IFRAME' || oldChild.tagName === 'IMG' || newChild.tagName === 'IMG';
+        const hasMediaInside = oldChild.querySelector('iframe, img, [data-bbi-slot]') || newChild.querySelector('iframe, img, [data-bbi-slot]') || oldChild.tagName === 'IFRAME' || newChild.tagName === 'IFRAME' || oldChild.tagName === 'IMG' || newChild.tagName === 'IMG' || oldChild.hasAttribute('data-bbi-slot') || newChild.hasAttribute('data-bbi-slot');
         if (!hasMediaInside && oldChild.tagName === newChild.tagName && oldChild.className === newChild.className) {
           oldChild.innerHTML = newChild.innerHTML;
           continue;
@@ -19274,6 +19506,7 @@ code, pre {
       if (action === 'select-bg-gallery-item') {
         const rawUrl = actionEl.getAttribute('data-bg-url') || '';
         if (rawUrl) {
+          tavernState.background.useThemeBg = false;
           tavernState.background.url = rawUrl;
           await saveTavernStore();
           updateTavernBackgroundLayerOnly();
@@ -19300,6 +19533,22 @@ code, pre {
       }
       if (action === 'delete-bg-gallery-item') {
         const bgId = actionEl.getAttribute('data-bg-id') || '';
+        const cardId = actionEl.getAttribute('data-card-id') || (bgId.startsWith('cardbg_') ? bgId.slice(7) : '');
+        if (cardId) {
+          const targetCard = (tavernState.cards || []).find(c => c && c.id === cardId);
+          if (targetCard) {
+            const removedUrl = targetCard.backgroundUrl || '';
+            targetCard.backgroundUrl = '';
+            if (removedUrl && tavernState.background.url === removedUrl) {
+              tavernState.background.url = tavernState.background.gallery?.[0]?.url || '';
+            }
+            await saveTavernStore();
+            updateTavernBackgroundLayerOnly();
+            refreshOpenDrawerOnly();
+            showTavernToast('已删除该角色卡背景');
+          }
+          return;
+        }
         if (bgId && Array.isArray(tavernState.background.gallery)) {
           const targetItem = tavernState.background.gallery.find(g => g && g.id === bgId);
           tavernState.background.gallery = tavernState.background.gallery.filter(g => g && g.id !== bgId);
@@ -20056,6 +20305,7 @@ code, pre {
         tavernState.activeThemeId = target.value;
         await saveTavernStore();
         applyActiveTavernTheme();
+        updateTavernBackgroundLayerOnly();
         refreshOpenDrawerOnly();
         renderTavernChatFloors(false);
         return;
