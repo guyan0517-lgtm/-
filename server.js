@@ -1197,7 +1197,6 @@ app.post('/api/proxy', async (req, res) => {
       res.write('\n');
       heartbeatTimer = setInterval(() => {
         try {
-          resetProxyTimeout();
           if (!res.writableEnded) {
             res.write('\n');
           }

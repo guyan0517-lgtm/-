@@ -1868,6 +1868,91 @@ code, pre {
     return target;
   }
 
+  function parseAndApplyMvuUpdateVariableText(rawText, statDataObj) {
+    if (!rawText || typeof rawText !== 'string' || !statDataObj || typeof statDataObj !== 'object') return false;
+    const blockMatch = rawText.match(/<(?:UpdateVariable|Update|update_variable)>([\s\S]*?)<\/(?:UpdateVariable|Update|update_variable)>/i);
+    const body = blockMatch ? blockMatch[1] : rawText;
+    let changed = false;
+
+    const lodashMutator = {
+      set: (path, val) => {
+        setDeepVarByPath(statDataObj, String(path || ''), val);
+        changed = true;
+      },
+      assign: (path, keyOrObj, maybeVal) => {
+        const cur = getDeepVarByPath(statDataObj, String(path || ''));
+        if (Array.isArray(cur)) {
+          cur.push(maybeVal !== undefined ? maybeVal : keyOrObj);
+          changed = true;
+        } else if (cur && typeof cur === 'object') {
+          if (maybeVal !== undefined) cur[keyOrObj] = maybeVal;
+          else if (keyOrObj && typeof keyOrObj === 'object') Object.assign(cur, keyOrObj);
+          changed = true;
+        } else {
+          const next = maybeVal !== undefined ? { [keyOrObj]: maybeVal } : (keyOrObj && typeof keyOrObj === 'object' ? Object.assign({}, keyOrObj) : {});
+          setDeepVarByPath(statDataObj, String(path || ''), next);
+          changed = true;
+        }
+      },
+      merge: (path, objVal) => {
+        const cur = getDeepVarByPath(statDataObj, String(path || ''));
+        if (cur && typeof cur === 'object' && objVal && typeof objVal === 'object') {
+          deepMergeVariables(cur, objVal);
+          changed = true;
+        } else if (objVal && typeof objVal === 'object') {
+          setDeepVarByPath(statDataObj, String(path || ''), JSON.parse(JSON.stringify(objVal)));
+          changed = true;
+        }
+      },
+      unset: (path) => {
+        deleteDeepVarByPath(statDataObj, String(path || ''));
+        changed = true;
+      },
+      remove: (path) => {
+        deleteDeepVarByPath(statDataObj, String(path || ''));
+        changed = true;
+      },
+      add: (path, delta) => {
+        const cur = Number(getDeepVarByPath(statDataObj, String(path || '')) || 0);
+        setDeepVarByPath(statDataObj, String(path || ''), cur + (Number(delta) || 0));
+        changed = true;
+      }
+    };
+
+    const callRx = /_\.(set|assign|merge|unset|remove|add)\s*\(([\s\S]*?)\)\s*;?/g;
+    let m;
+    while ((m = callRx.exec(body)) !== null) {
+      const fnName = m[1];
+      const argsRaw = m[2];
+      try {
+        const parsedArgs = new Function(`return [${argsRaw}];`)();
+        if (Array.isArray(parsedArgs) && typeof lodashMutator[fnName] === 'function') {
+          lodashMutator[fnName](...parsedArgs);
+        }
+      } catch (_) {}
+    }
+
+    if (!changed && blockMatch) {
+      const cleanJsonCandidate = body
+        .replace(/<Analysis>[\s\S]*?<\/Analysis>/gi, '')
+        .replace(/```(?:json|js|javascript)?/gi, '')
+        .trim();
+      const firstBrace = cleanJsonCandidate.indexOf('{');
+      const lastBrace = cleanJsonCandidate.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          const parsedObj = JSON.parse(cleanJsonCandidate.slice(firstBrace, lastBrace + 1));
+          if (parsedObj && typeof parsedObj === 'object') {
+            deepMergeVariables(statDataObj, parsedObj);
+            changed = true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    return changed;
+  }
+
   async function executeTavernSlashCommand(cmdText, execOptions = {}) {
     if (!cmdText || typeof cmdText !== 'string') return '';
     const trimmedInput = cmdText.trim();
@@ -2468,7 +2553,11 @@ code, pre {
           return api;
         },
         remove() {
-          arr.forEach(el => { if (el && el.remove) el.remove(); });
+          arr.forEach(el => {
+            if (!el || !el.remove) return;
+            if (el.classList && el.classList.contains('mes') && el.parentElement && el.parentElement.id === 'chat') return;
+            el.remove();
+          });
           return api;
         },
         html(val) {
@@ -2493,32 +2582,68 @@ code, pre {
             const parts = urlOrFn.trim().split(/\s+/);
             const fetchUrl = parts[0];
             const subSel = parts.slice(1).join(' ');
-            fetch(fetchUrl).then(r => r.ok ? r.text() : '').then(rawHtml => {
+            fetch(fetchUrl).then(r => r.ok ? r.text() : '').then(async rawHtml => {
               if (!rawHtml || isHostAppHtmlFallback(rawHtml)) return;
               const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
               const shouldDark = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
               const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawHtml) : rawHtml;
-              arr.forEach(el => {
-                if (!el) return;
+              for (const el of arr) {
+                if (!el) continue;
                 const ownerDoc = el.ownerDocument || document;
+                const ownerWin = ownerDoc.defaultView || window;
+                if (!ownerWin.tailwind) ownerWin.tailwind = {};
                 if (subSel) {
                   const tmp = ownerDoc.createElement('div');
                   tmp.innerHTML = finalHtml;
                   const matched = tmp.querySelector(subSel);
                   el.innerHTML = matched ? matched.innerHTML : '';
+                } else if (/<!doctype\s+html|<html[\s>]/i.test(finalHtml)) {
+                  const parser = new DOMParser();
+                  const parsedDoc = parser.parseFromString(finalHtml, 'text/html');
+                  if (ownerDoc.head && parsedDoc.head) {
+                    Array.from(parsedDoc.head.querySelectorAll('link[rel="stylesheet"], style')).forEach(node => {
+                      ownerDoc.head.appendChild(ownerDoc.importNode(node, true));
+                    });
+                  }
+                  el.innerHTML = parsedDoc.body ? parsedDoc.body.innerHTML : finalHtml;
+                  if (parsedDoc.head) {
+                    Array.from(parsedDoc.head.querySelectorAll('script')).forEach(sNode => {
+                      el.appendChild(ownerDoc.importNode(sNode, true));
+                    });
+                  }
                 } else {
                   el.innerHTML = finalHtml;
                 }
                 const scripts = Array.from(el.querySelectorAll('script'));
-                scripts.forEach(oldScript => {
-                  const newScript = ownerDoc.createElement('script');
-                  Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-                  newScript.textContent = oldScript.textContent;
-                  if (oldScript.parentNode) {
-                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                for (const oldScript of scripts) {
+                  await new Promise(resolveScript => {
+                    const newScript = ownerDoc.createElement('script');
+                    Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                    if (oldScript.src) {
+                      const timer = setTimeout(resolveScript, 4000);
+                      newScript.onload = () => { clearTimeout(timer); resolveScript(); };
+                      newScript.onerror = () => { clearTimeout(timer); resolveScript(); };
+                      if (oldScript.parentNode) {
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                      } else {
+                        resolveScript();
+                      }
+                    } else {
+                      newScript.textContent = oldScript.textContent;
+                      if (oldScript.parentNode) {
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                      }
+                      resolveScript();
+                    }
+                  });
+                }
+                try {
+                  if (ownerDoc.readyState !== 'loading' && typeof ownerWin.onload === 'function' && !ownerWin._tavernLoadOnloadFired) {
+                    ownerWin._tavernLoadOnloadFired = true;
+                    ownerWin.onload(new Event('load'));
                   }
-                });
-              });
+                } catch (_) {}
+              }
               if (cb) cb(finalHtml, 'success');
             }).catch(() => {
               if (cb) cb('', 'error');
@@ -2813,6 +2938,15 @@ code, pre {
             return wrapElements(arr.filter(el => el && el.matches && el.matches(selOrFn)));
           }
           return api;
+        },
+        not(selOrFn) {
+          if (typeof selOrFn === 'function') {
+            return wrapElements(arr.filter((el, idx) => !selOrFn.call(el, idx, el)));
+          }
+          if (typeof selOrFn === 'string') {
+            return wrapElements(arr.filter(el => !(el && el.matches && el.matches(selOrFn))));
+          }
+          return api;
         }
       };
       arr.forEach((el, i) => { api[i] = el; });
@@ -3057,20 +3191,28 @@ code, pre {
     if (Array.isArray(preset.regexScripts) && !Array.isArray(preset.extensions.regex_scripts)) {
       preset.extensions.regex_scripts = preset.regexScripts;
     }
-    const orderArr = preset.prompts.map(p => ({
-      identifier: p.identifier,
-      enabled: p.enabled !== false
-    }));
     if (!Array.isArray(preset.prompt_order) || preset.prompt_order.length === 0) {
+      const orderArr = preset.prompts.map(p => ({
+        identifier: p.identifier,
+        enabled: p.enabled !== false
+      }));
       preset.prompt_order = [{ character_id: 100001, order: orderArr }];
     } else {
       let targetEntry = preset.prompt_order.find(o => o && Number(o.character_id) === 100001) ||
         preset.prompt_order.find(o => o && Number(o.character_id) === 100000) ||
         preset.prompt_order[preset.prompt_order.length - 1];
-      if (!targetEntry || typeof targetEntry !== 'object') {
+      if (!targetEntry || typeof targetEntry !== 'object' || !Array.isArray(targetEntry.order)) {
+        const orderArr = preset.prompts.map(p => ({
+          identifier: p.identifier,
+          enabled: p.enabled !== false
+        }));
         targetEntry = { character_id: 100001, order: orderArr };
         preset.prompt_order.push(targetEntry);
       } else {
+        const orderArr = preset.prompts.map(p => ({
+          identifier: p.identifier,
+          enabled: p.enabled !== false
+        }));
         targetEntry.order = orderArr;
       }
     }
@@ -4030,7 +4172,7 @@ code, pre {
   async function executeTavernRawFetchWithProxyFallback(url, options = {}) {
     const rawFetch = getTavernRawFetch();
     if (typeof window.ensureBackgroundKeepAlive === 'function') {
-      try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+      try { window.ensureBackgroundKeepAlive(null, true); } catch (_) {}
     }
     const method = String(options.method || 'GET').toUpperCase();
     let isStreamReq = false;
@@ -4049,7 +4191,7 @@ code, pre {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (typeof window.ensureBackgroundKeepAlive === 'function') {
-            try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+            try { window.ensureBackgroundKeepAlive(null, true); } catch (_) {}
           }
           return await rawFetch(url, options);
         } catch (err) {
@@ -4063,7 +4205,6 @@ code, pre {
       throw lastErr || new Error('Failed to fetch');
     };
 
-    // 对酒馆非流式 POST 请求优先启用后端 /api/proxy 的 3 秒空白换行符心跳保活通道
     if (method === 'POST' && !isStreamReq) {
       try {
         const proxyRes = await rawFetch('/api/proxy', {
@@ -4085,6 +4226,29 @@ code, pre {
         }
       } catch (proxyErr) {
         if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
+      }
+      return await doDirectFetchWithRetry();
+    }
+
+    if (method === 'POST' && isStreamReq) {
+      try {
+        return await doDirectFetchWithRetry();
+      } catch (directStreamErr) {
+        if (directStreamErr && directStreamErr.name === 'AbortError') throw directStreamErr;
+        const proxyStreamRes = await rawFetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            method: 'POST',
+            headers: options.headers || {},
+            body: parsedBody !== undefined ? parsedBody : options.body,
+            keepAliveHeartbeat: false
+          }),
+          signal: options.signal
+        });
+        if (proxyStreamRes) return proxyStreamRes;
+        throw directStreamErr;
       }
     }
 
@@ -4269,9 +4433,12 @@ code, pre {
               const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0)
                 ? bodyObj.max_tokens
                 : 4096;
+              const normalizedBackendMsgs = typeof postProcessTavernWireMessages === 'function'
+                ? postProcessTavernWireMessages(Array.isArray(bodyObj.messages) ? bodyObj.messages : [], { strict: true, placeholders: true })
+                : (Array.isArray(bodyObj.messages) ? bodyObj.messages : []);
               const openAiPayload = {
                 model: bodyObj.model || fallbackCreds.model || 'gpt-4o-mini',
-                messages: Array.isArray(bodyObj.messages) ? bodyObj.messages : [],
+                messages: normalizedBackendMsgs,
                 temperature: typeof bodyObj.temperature === 'number' ? bodyObj.temperature : 1,
                 max_tokens: reqMaxTokens,
                 stream: wantStream
@@ -4296,67 +4463,98 @@ code, pre {
                 ...(wantStream ? { 'Accept': 'text/event-stream' } : { 'Accept': 'application/json' })
               };
               const ep = endpoints[0];
+              const releaseSubKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === 'function'
+                ? window.acquireBackgroundTaskKeepAlive()
+                : null;
+              if (typeof window.ensureBackgroundKeepAlive === 'function') {
+                window.ensureBackgroundKeepAlive(null, true);
+              }
+              const subPulseTimer = setInterval(() => {
+                if (typeof window.ensureBackgroundKeepAlive === 'function') {
+                  window.ensureBackgroundKeepAlive();
+                }
+              }, 2000);
               let upstreamRes = null;
               let lastErr = null;
               try {
-                upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
-                  method: 'POST',
-                  headers,
-                  body: JSON.stringify(openAiPayload),
-                  signal: init?.signal
-                });
+                if (!wantStream && typeof window.requestLlmapiWithFallback === 'function') {
+                  upstreamRes = await window.requestLlmapiWithFallback(ep, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(openAiPayload),
+                    signal: init?.signal,
+                    _preserveCallerStream: true,
+                    _preserveCallerMaxTokens: true
+                  });
+                } else {
+                  upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(openAiPayload),
+                    signal: init?.signal
+                  });
+                }
               } catch (err) {
-                if (err && err.name === 'AbortError') throw err;
+                if (err && err.name === 'AbortError') {
+                  clearInterval(subPulseTimer);
+                  if (typeof releaseSubKeepAlive === 'function') releaseSubKeepAlive();
+                  throw err;
+                }
                 lastErr = err;
               }
-              if (!upstreamRes) {
-                return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
-              }
-              if (!wantStream && upstreamRes.ok) {
-                const rawBodyText = await readTavernNonStreamBodySafely(upstreamRes).catch(() => '');
-                const trimmedBody = rawBodyText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
-                if (trimmedBody.startsWith('data:')) {
-                  let aggContent = '';
-                  let aggReasoning = '';
-                  const lines = trimmedBody.split(/\r?\n/);
-                  for (const rawLine of lines) {
-                    const line = rawLine.trim();
-                    if (!line.startsWith('data:')) continue;
-                    const dataStr = line.slice(5).trim();
-                    if (!dataStr || dataStr === '[DONE]') continue;
-                    try {
-                      const chunk = JSON.parse(dataStr);
-                      const choice = chunk.choices && chunk.choices[0];
-                      const delta = choice ? (choice.delta || choice.message || {}) : {};
-                      if (typeof delta.content === 'string') aggContent += delta.content;
-                      if (typeof delta.reasoning_content === 'string') aggReasoning += delta.reasoning_content;
-                      else if (typeof delta.reasoning === 'string') aggReasoning += delta.reasoning;
-                    } catch (_) {}
+              try {
+                if (!upstreamRes) {
+                  return new Response(JSON.stringify({ error: { message: lastErr?.message || '网络连接失败' } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+                }
+                if (!wantStream && upstreamRes.ok) {
+                  const rawBodyText = await readTavernNonStreamBodySafely(upstreamRes).catch(() => '');
+                  const trimmedBody = rawBodyText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
+                  if (trimmedBody.startsWith('data:')) {
+                    let aggContent = '';
+                    let aggReasoning = '';
+                    const lines = trimmedBody.split(/\r?\n/);
+                    for (const rawLine of lines) {
+                      const line = rawLine.trim();
+                      if (!line.startsWith('data:')) continue;
+                      const dataStr = line.slice(5).trim();
+                      if (!dataStr || dataStr === '[DONE]') continue;
+                      try {
+                        const chunk = JSON.parse(dataStr);
+                        const choice = chunk.choices && chunk.choices[0];
+                        const delta = choice ? (choice.delta || choice.message || {}) : {};
+                        if (typeof delta.content === 'string') aggContent += delta.content;
+                        if (typeof delta.reasoning_content === 'string') aggReasoning += delta.reasoning_content;
+                        else if (typeof delta.reasoning === 'string') aggReasoning += delta.reasoning;
+                      } catch (_) {}
+                    }
+                    const synthJson = {
+                      choices: [
+                        {
+                          index: 0,
+                          message: {
+                            role: 'assistant',
+                            content: aggContent,
+                            ...(aggReasoning ? { reasoning_content: aggReasoning } : {})
+                          },
+                          finish_reason: 'stop'
+                        }
+                      ]
+                    };
+                    return new Response(JSON.stringify(synthJson), {
+                      status: 200,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
                   }
-                  const synthJson = {
-                    choices: [
-                      {
-                        index: 0,
-                        message: {
-                          role: 'assistant',
-                          content: aggContent,
-                          ...(aggReasoning ? { reasoning_content: aggReasoning } : {})
-                        },
-                        finish_reason: 'stop'
-                      }
-                    ]
-                  };
-                  return new Response(JSON.stringify(synthJson), {
-                    status: 200,
+                  return new Response(rawBodyText, {
+                    status: upstreamRes.status,
                     headers: { 'Content-Type': 'application/json' }
                   });
                 }
-                return new Response(rawBodyText, {
-                  status: upstreamRes.status,
-                  headers: { 'Content-Type': 'application/json' }
-                });
+                return upstreamRes;
+              } finally {
+                clearInterval(subPulseTimer);
+                if (typeof releaseSubKeepAlive === 'function') releaseSubKeepAlive();
               }
-              return upstreamRes;
             }
 
             // 2b-2. SillyTavern Settings & Themes API (/api/settings/get, /api/settings/save, /api/themes/save, /api/themes/delete)
@@ -5081,12 +5279,397 @@ code, pre {
     };
     window.Generate = () => triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
 
+    const deepCloneSafe = (obj) => {
+      try {
+        return JSON.parse(JSON.stringify(obj ?? {}));
+      } catch (_) {
+        return Object.assign({}, obj || {});
+      }
+    };
+
+    const normalizeMvuPath = (rawPath) => {
+      return String(rawPath || '')
+        .trim()
+        .replace(/^stat_data\./, '')
+        .replace(/\[['"]?([^'"\]]+)['"]?\]/g, '.$1')
+        .replace(/^\.+|\.+$/g, '');
+    };
+
+    const lodashShim = {
+      cloneDeep: (v) => deepCloneSafe(v),
+      get: (obj, path, defVal) => {
+        const val = getDeepVarByPath(obj, normalizeMvuPath(path));
+        return val === undefined ? defVal : val;
+      },
+      set: (obj, path, val) => {
+        if (obj && typeof obj === 'object') {
+          setDeepVarByPath(obj, normalizeMvuPath(path), val);
+        }
+        return obj;
+      },
+      unset: (obj, path) => {
+        if (obj && typeof obj === 'object') {
+          deleteDeepVarByPath(obj, normalizeMvuPath(path));
+          return true;
+        }
+        return false;
+      },
+      has: (obj, path) => getDeepVarByPath(obj, normalizeMvuPath(path)) !== undefined,
+      merge: (target, ...sources) => {
+        if (!target || typeof target !== 'object') return target;
+        sources.forEach(src => {
+          if (src && typeof src === 'object') deepMergeVariables(target, src);
+        });
+        return target;
+      },
+      assign: (target, ...sources) => Object.assign(target || {}, ...sources),
+      isPlainObject: (v) => Boolean(v && typeof v === 'object' && !Array.isArray(v)),
+      isEmpty: (v) => {
+        if (v == null) return true;
+        if (Array.isArray(v) || typeof v === 'string') return v.length === 0;
+        if (typeof v === 'object') return Object.keys(v).length === 0;
+        return false;
+      },
+      isEqual: (a, b) => {
+        try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return a === b; }
+      },
+      isNil: (v) => v === null || v === undefined,
+      isNumber: (v) => typeof v === 'number' && !Number.isNaN(v),
+      isString: (v) => typeof v === 'string',
+      isBoolean: (v) => typeof v === 'boolean',
+      isArray: (v) => Array.isArray(v),
+      isObject: (v) => Boolean(v && typeof v === 'object'),
+      clamp: (n, lower, upper) => Math.min(upper, Math.max(lower, Number(n) || 0)),
+       sum: (arr) => Array.isArray(arr) ? arr.reduce((a, b) => a + (Number(b) || 0), 0) : 0,
+      uniq: (arr) => Array.isArray(arr) ? Array.from(new Set(arr)) : [],
+      omit: (obj, keys = []) => {
+        const out = Object.assign({}, obj || {});
+        (Array.isArray(keys) ? keys : [keys]).forEach(k => delete out[k]);
+        return out;
+      },
+      pick: (obj, keys = []) => {
+        const out = {};
+        if (!obj || typeof obj !== 'object') return out;
+        (Array.isArray(keys) ? keys : [keys]).forEach(k => {
+          if (k in obj) out[k] = obj[k];
+        });
+        return out;
+      }
+    };
+    if (!window._) {
+      window._ = lodashShim;
+    } else {
+      Object.keys(lodashShim).forEach(k => {
+        if (typeof window._[k] !== 'function') window._[k] = lodashShim[k];
+      });
+    }
+
+    const applyMvuUpdateVariableBlock = (rawText, statDataTarget) => {
+      if (!rawText || !statDataTarget || typeof statDataTarget !== 'object') return false;
+      const blocks = [];
+      const rx = /<(?:UpdateVariable|updatevariable)>([\s\S]*?)<\/(?:UpdateVariable|updatevariable)>/gi;
+      let m;
+      while ((m = rx.exec(String(rawText))) !== null) {
+        if (m[1] && m[1].trim()) blocks.push(m[1]);
+      }
+      if (blocks.length === 0) return false;
+      let mutated = false;
+      const splitTopLevelArgs = (argStr) => {
+        const res = [];
+        let cur = '';
+        let depthParen = 0;
+        let depthBracket = 0;
+        let depthBrace = 0;
+        let quoteChar = '';
+        let escaped = false;
+        for (let i = 0; i < argStr.length; i++) {
+          const ch = argStr[i];
+          if (escaped) {
+            cur += ch;
+            escaped = false;
+            continue;
+          }
+          if (ch === '\\') {
+            cur += ch;
+            escaped = true;
+            continue;
+          }
+          if (quoteChar) {
+            cur += ch;
+            if (ch === quoteChar) quoteChar = '';
+            continue;
+          }
+          if (ch === '"' || ch === "'" || ch === '`') {
+            quoteChar = ch;
+            cur += ch;
+            continue;
+          }
+          if (ch === '(') depthParen++;
+          else if (ch === ')') depthParen = Math.max(0, depthParen - 1);
+          else if (ch === '[') depthBracket++;
+          else if (ch === ']') depthBracket = Math.max(0, depthBracket - 1);
+          else if (ch === '{') depthBrace++;
+          else if (ch === '}') depthBrace = Math.max(0, depthBrace - 1);
+          if (ch === ',' && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
+            res.push(cur.trim());
+            cur = '';
+          } else {
+            cur += ch;
+          }
+        }
+        if (cur.trim()) res.push(cur.trim());
+        return res;
+      };
+      const parseArgVal = (rawVal) => {
+        const s = String(rawVal ?? '').trim();
+        if (!s) return undefined;
+        try { return JSON.parse(s); } catch (_) {}
+        if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('`') && s.endsWith('`'))) {
+          return s.slice(1, -1);
+        }
+        if (s === 'true') return true;
+        if (s === 'false') return false;
+        if (s === 'null') return null;
+        if (/^-?\d+(?:\.\d+)?$/.test(s)) return Number(s);
+        return s;
+      };
+      for (const block of blocks) {
+        const callRx = /_\.(set|assign|insert|merge|add|remove|unset|delete)\s*\(([\s\S]*?)\)\s*;?/g;
+        let cm;
+        while ((cm = callRx.exec(block)) !== null) {
+          const op = cm[1];
+          const args = splitTopLevelArgs(cm[2] || '');
+          if (args.length === 0) continue;
+          const path = normalizeMvuPath(parseArgVal(args[0]));
+          if (!path) continue;
+          if (op === 'set') {
+            const val = args.length >= 3 ? parseArgVal(args[2]) : parseArgVal(args[1]);
+            setDeepVarByPath(statDataTarget, path, val);
+            mutated = true;
+          } else if (op === 'add') {
+            const delta = Number(args.length >= 3 ? parseArgVal(args[2]) : parseArgVal(args[1])) || 0;
+            const cur = Number(getDeepVarByPath(statDataTarget, path)) || 0;
+            setDeepVarByPath(statDataTarget, path, cur + delta);
+            mutated = true;
+          } else if (op === 'assign' || op === 'insert' || op === 'merge') {
+            const curTarget = getDeepVarByPath(statDataTarget, path);
+            if (Array.isArray(curTarget)) {
+              const itemVal = args.length >= 3 ? parseArgVal(args[2]) : parseArgVal(args[1]);
+              curTarget.push(itemVal);
+              mutated = true;
+            } else {
+              const baseObj = (curTarget && typeof curTarget === 'object') ? curTarget : {};
+              if (args.length >= 3) {
+                const subKey = String(parseArgVal(args[1]) ?? '').trim();
+                const subVal = parseArgVal(args[2]);
+                if (subKey) {
+                  baseObj[subKey] = subVal;
+                  setDeepVarByPath(statDataTarget, path, baseObj);
+                  mutated = true;
+                }
+              } else if (args.length === 2) {
+                const patchVal = parseArgVal(args[1]);
+                if (patchVal && typeof patchVal === 'object') {
+                  deepMergeVariables(baseObj, patchVal);
+                  setDeepVarByPath(statDataTarget, path, baseObj);
+                  mutated = true;
+                }
+              }
+            }
+          } else if (op === 'remove' || op === 'unset' || op === 'delete') {
+            if (args.length >= 2) {
+              const curTarget = getDeepVarByPath(statDataTarget, path);
+              const targetKey = parseArgVal(args[1]);
+              if (Array.isArray(curTarget)) {
+                const idx = typeof targetKey === 'number' ? targetKey : curTarget.indexOf(targetKey);
+                if (idx >= 0) curTarget.splice(idx, 1);
+                mutated = true;
+              } else if (curTarget && typeof curTarget === 'object' && targetKey !== undefined) {
+                delete curTarget[String(targetKey)];
+                mutated = true;
+              } else {
+                deleteDeepVarByPath(statDataTarget, path);
+                mutated = true;
+              }
+            } else {
+              deleteDeepVarByPath(statDataTarget, path);
+              mutated = true;
+            }
+          }
+        }
+      }
+      return mutated;
+    };
+
+    const ensureMilkteaDefaultStatData = (statData) => {
+      if (!statData || typeof statData !== 'object') return;
+      const card = getActiveCard();
+      const isMilkteaCard = Boolean(
+        (card && /奶茶店/.test(String(card.name || ''))) ||
+        (window.__mvuDefaultStatData && window.__mvuDefaultStatData.奶茶店铺)
+      );
+      if (!isMilkteaCard) return;
+      const defaultMilkteaStat = {
+        玩家信息: {
+          姓名: getUserDisplayName() || '店长',
+          声望: 15,
+          名声: '街巷新店',
+          备注: '初来乍到的奶茶店店主'
+        },
+        日期时间: {
+          年: 2026,
+          月: 3,
+          日: 1,
+          星期: 7,
+          小时: 8,
+          分钟: 0,
+          天气: '晴朗微风'
+        },
+        奶茶店铺: {
+          店名: (getUserDisplayName() || '雀生') + '的奶茶店',
+          资金: 5000,
+          等级: 1,
+          每日租金: 100,
+          地段: '社区商业街',
+          装修风格: '原木温馨风',
+          热门标签: ['新店开业', '手捣鲜果', '真奶现泡'],
+          评价分数: 4.8,
+          仓库容量: 100,
+          原料库存: {
+            红茶基底: { 数量: 20, 保质期: 7, 品质: '优' },
+            茉莉绿茶: { 数量: 20, 保质期: 7, 品质: '优' },
+            鲜牛奶: { 数量: 20, 保质期: 5, 品质: '优' },
+            黑糖珍珠: { 数量: 15, 保质期: 5, 品质: '良' },
+            芝士奶盖: { 数量: 10, 保质期: 5, 品质: '优' },
+            新鲜柠檬: { 数量: 15, 保质期: 6, 品质: '优' }
+          },
+          设备列表: {
+            萃茶机: { 等级: 1, 状态: '正常', 维护费: 10 },
+            封口机: { 等级: 1, 状态: '正常', 维护费: 5 },
+            冷藏柜: { 等级: 1, 状态: '正常', 维护费: 15 }
+          },
+          当前菜单: {
+            招牌珍珠奶茶: { 售价: 14, 成本: 5, 热度: 82, 评价: '茶香奶滑，珍珠Q弹', 配方: ['红茶基底', '鲜牛奶', '黑糖珍珠'] },
+            茉莉芝士奶绿: { 售价: 16, 成本: 6, 热度: 76, 评价: '清新花香配咸甜奶盖', 配方: ['茉莉绿茶', '芝士奶盖'] },
+            手打暴打柠檬茶: { 售价: 13, 成本: 4, 热度: 79, 评价: '酸甜解腻，冰爽醒神', 配方: ['茉莉绿茶', '新鲜柠檬'] }
+          },
+          已解锁配方: {
+            招牌珍珠奶茶: { 研发度: 100, 评价: '经典不出错的镇店之宝', 配方: ['红茶基底', '鲜牛奶', '黑糖珍珠'] },
+            茉莉芝士奶绿: { 研发度: 100, 评价: '清雅茉莉融合浓郁芝士', 配方: ['茉莉绿茶', '芝士奶盖'] },
+            手打暴打柠檬茶: { 研发度: 100, 评价: '选用新鲜柠檬手锤出汁', 配方: ['茉莉绿茶', '新鲜柠檬'] }
+          },
+          员工列表: {}
+        },
+        手机应用: {
+          聊天消息: {
+            椎名茶芽: {
+              身份: '隔壁花店店主',
+              好感度: 30,
+              备注: '温柔热心的邻居少女',
+              消息记录: [
+                { 发送者: '椎名茶芽', 内容: '恭喜新店开业呀！今天路过闻到好香的茶味，等忙完这阵我也来买一杯尝尝~', 时间: '08:05' }
+              ]
+            },
+            林师傅: {
+              身份: '茶叶原料供应商',
+              好感度: 20,
+              备注: '靠谱的茶行老掌柜',
+              消息记录: [
+                { 发送者: '林师傅', 内容: '首批高山红茶和茉莉绿茶已经送到后门仓库了，有任何需要随时联系我。', 时间: '07:50' }
+              ]
+            }
+          },
+          奶茶委托: {
+            当前委托: {
+              委托1: { 标题: '晨间提神下午茶', 委托人: '附近写字楼白领', 需求: '需要5杯清爽解腻的茶饮', 报酬: 120, 状态: '可接取', 截止时间: '今日 16:00' },
+              委托2: { 标题: '社团迎新聚会预订', 委托人: '美院学生会', 需求: '预订8杯招牌珍珠奶茶', 报酬: 180, 状态: '可接取', 截止时间: '明日 18:00' }
+            }
+          },
+          奶茶比赛: {
+            当前赛事: {
+              赛事名称: '春季街区新锐茶饮评选',
+              主题: '春日花果与茗茶的邂逅',
+              阶段: '报名筹备中',
+              奖金: 2000,
+              要求: '研发一款评分达到A级以上的特色茶饮即可参赛'
+            }
+          },
+          大众点评: {
+            店铺星级: 4.8,
+            精选评论: [
+              { 用户: '甜茶控小鹿', 评分: 5, 内容: '新开的宝藏小店！珍珠煮得很有嚼劲，奶味也很正，还会再来！', 时间: '今日 08:15', 回复: '' },
+              { 用户: '路过的上班族', 评分: 5, 内容: '柠檬茶香气很足，店里装修也很温馨舒服。', 时间: '今日 08:20', 回复: '' }
+            ]
+          },
+          超话论坛: {
+            今日热搜: ['#街角新开的宝藏奶茶店#', '#春天第一杯奶茶推荐#', '#手打柠檬茶灵魂配方#'],
+            帖子列表: [
+              {
+                标题: '发现商业街新开了一家超有氛围感的独立奶茶店！',
+                作者: '探店达人阿果',
+                内容: '今天早上路过商业街，看到一家刚挂上营业牌的奶茶店，原木风的吧台特别干净，茶香隔着半条街都能闻到，大家快去冲！',
+                点赞: 68,
+                评论: [
+                  { 用户: '奶茶脑袋', 内容: '哇看着好棒，中午就去打卡！' },
+                  { 用户: '早八人', 内容: '求问有热饮吗？想去买一杯暖暖胃' }
+                ]
+              }
+            ]
+          }
+        },
+        顾客档案: {
+          椎名茶芽: {
+            姓名: '椎名茶芽',
+            身份: '隔壁花店店主',
+            外貌: '扎着亚麻色双麻花辫，围着沾有露水的花艺围裙，笑容明朗治愈',
+            喜好口味: '微甜、花香茶底、奶盖系列',
+            好感度: 30,
+            常点饮品: '茉莉芝士奶绿',
+            印象评价: '觉得你认真泡茶的样子非常可靠，经常送小花束装点吧台。'
+          },
+          苏晴: {
+            姓名: '苏晴',
+            身份: '自由插画师',
+            外貌: '戴着贝雷帽与圆框眼镜，随身带着速写本与平板',
+            喜好口味: '清爽果茶、少冰七分糖',
+            好感度: 15,
+            常点饮品: '手打暴打柠檬茶',
+            印象评价: '喜欢坐在靠窗的位置边喝茶边画画。'
+          }
+        },
+        研发记录: {
+          可用灵感: ['春日樱花季特调', '焙火乌龙鲜奶', '杨枝甘露冰沙'],
+          历史研发: [
+            { 名称: '招牌珍珠奶茶', 结果: '成功', 评级: 'A', 笔记: '红茶与鲜奶比例3:2口感最醇厚' }
+          ]
+        },
+        每日账单: {
+          今日收入: 165,
+          今日支出: 100,
+          历史账单: [
+            { 日期: '2026-03-01', 营业额: 165, 原料采购: 0, 租金维护: 100, 净利润: 65, 备注: '新店试营业首日' }
+          ]
+        }
+      };
+      Object.entries(defaultMilkteaStat).forEach(([k, v]) => {
+        if (statData[k] === undefined || (typeof statData[k] === 'object' && statData[k] !== null && Object.keys(statData[k]).length === 0)) {
+          statData[k] = deepCloneSafe(v);
+        } else if (typeof v === 'object' && v !== null && !Array.isArray(v) && typeof statData[k] === 'object' && statData[k] !== null) {
+          Object.entries(v).forEach(([subK, subV]) => {
+            if (statData[k][subK] === undefined || (typeof statData[k][subK] === 'object' && statData[k][subK] !== null && Object.keys(statData[k][subK]).length === 0)) {
+              statData[k][subK] = deepCloneSafe(subV);
+            }
+          });
+        }
+      });
+    };
+
     const resolveVarStoreByOpts = (opts) => {
       if (opts && opts.type === 'global') return getGlobalVariablesStore();
       if (opts && opts.type === 'message') {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
-        const rawId = opts.message_id !== undefined && opts.message_id !== 'latest' ? Number(opts.message_id) : (msgs.length - 1);
+        const rawId = opts.message_id !== undefined && opts.message_id !== null && opts.message_id !== 'latest' ? Number(opts.message_id) : (msgs.length - 1);
         const idx = (Number.isNaN(rawId) || rawId < 0) ? Math.max(0, msgs.length + (Number.isNaN(rawId) ? -1 : rawId)) : rawId;
         const targetMsg = msgs[idx];
         if (targetMsg) {
@@ -5097,17 +5680,62 @@ code, pre {
           if (!targetMsg.variables[swipeIdx] || typeof targetMsg.variables[swipeIdx] !== 'object') {
             targetMsg.variables[swipeIdx] = targetMsg.data.variables;
           }
-          if (Object.keys(targetMsg.data.variables).length === 0) {
-            const chatStore = getChatVariablesStore();
-            if (chatStore && Object.keys(chatStore).length > 0) {
-              Object.assign(targetMsg.data.variables, chatStore);
-              targetMsg.variables[swipeIdx] = targetMsg.data.variables;
+          const hasStatData = targetMsg.data.variables.stat_data && typeof targetMsg.data.variables.stat_data === 'object' && Object.keys(targetMsg.data.variables.stat_data).length > 0;
+          if (Object.keys(targetMsg.data.variables).length === 0 || !hasStatData) {
+            let inherited = null;
+            for (let p = idx - 1; p >= 0; p--) {
+              const prevVars = msgs[p] && msgs[p].data && msgs[p].data.variables;
+              if (prevVars && typeof prevVars === 'object' && Object.keys(prevVars).length > 0) {
+                inherited = deepCloneSafe(prevVars);
+                break;
+              }
+            }
+            if (!inherited) {
+              const chatStore = getChatVariablesStore();
+              if (chatStore && Object.keys(chatStore).length > 0) {
+                inherited = deepCloneSafe(chatStore);
+              }
+            }
+            if (inherited) {
+              deepMergeVariables(targetMsg.data.variables, inherited);
+            }
+            if (window.__mvuDefaultStatData && typeof window.__mvuDefaultStatData === 'object') {
+              if (!targetMsg.data.variables.stat_data || typeof targetMsg.data.variables.stat_data !== 'object') {
+                targetMsg.data.variables.stat_data = {};
+              }
+              const defaultsClone = deepCloneSafe(window.__mvuDefaultStatData);
+              Object.keys(defaultsClone).forEach(k => {
+                if (targetMsg.data.variables.stat_data[k] === undefined) {
+                  targetMsg.data.variables.stat_data[k] = defaultsClone[k];
+                }
+              });
             }
           }
+          if (!targetMsg.data.variables.stat_data || typeof targetMsg.data.variables.stat_data !== 'object') {
+            targetMsg.data.variables.stat_data = {};
+          }
+          ensureMilkteaDefaultStatData(targetMsg.data.variables.stat_data);
+          if (targetMsg.mes && /<(?:UpdateVariable|updatevariable)>/i.test(targetMsg.mes)) {
+            applyMvuUpdateVariableBlock(targetMsg.mes, targetMsg.data.variables.stat_data);
+          }
+          targetMsg.variables[swipeIdx] = targetMsg.data.variables;
           return targetMsg.data.variables;
         }
       }
-      return getChatVariablesStore();
+      const chatStore = getChatVariablesStore();
+      if (!chatStore.stat_data || typeof chatStore.stat_data !== 'object') {
+        chatStore.stat_data = {};
+      }
+      if (window.__mvuDefaultStatData && typeof window.__mvuDefaultStatData === 'object') {
+        const defaultsClone = deepCloneSafe(window.__mvuDefaultStatData);
+        Object.keys(defaultsClone).forEach(k => {
+          if (chatStore.stat_data[k] === undefined) {
+            chatStore.stat_data[k] = defaultsClone[k];
+          }
+        });
+      }
+      ensureMilkteaDefaultStatData(chatStore.stat_data);
+      return chatStore;
     };
     window.getVariables = (opts) => {
       return resolveVarStoreByOpts(opts);
@@ -5116,6 +5744,10 @@ code, pre {
       const target = resolveVarStoreByOpts(opts);
       if (varsObj && typeof varsObj === 'object') {
         deepMergeVariables(target, varsObj);
+        if (opts && opts.type === 'message') {
+          const chatStore = getChatVariablesStore();
+          deepMergeVariables(chatStore, varsObj);
+        }
         await saveTavernStore();
       }
       return target;
@@ -5128,6 +5760,13 @@ code, pre {
         const target = resolveVarStoreByOpts(opts);
         Object.keys(target).forEach(k => delete target[k]);
         Object.assign(target, varsObj || {});
+        const chatStore = getChatVariablesStore();
+        if (varsObj && typeof varsObj === 'object') {
+          deepMergeVariables(chatStore, varsObj);
+          if (varsObj.stat_data && typeof varsObj.stat_data === 'object') {
+            chatStore.stat_data = deepCloneSafe(varsObj.stat_data);
+          }
+        }
       } else if (sess) {
         if (!sess.metadata) sess.metadata = {};
         sess.metadata.variables = Object.assign({}, varsObj || {});
@@ -5150,6 +5789,264 @@ code, pre {
         deleteDeepVarByPath(target, key);
         await saveTavernStore();
       }
+    };
+
+    const makeZodChain = (defaultVal = undefined, shapeObj = null) => {
+      const node = {
+        _default: defaultVal,
+        _shape: shapeObj,
+        shape: shapeObj || {},
+        default(v) {
+          node._default = typeof v === 'function' ? v() : v;
+          return node;
+        },
+        prefault(v) {
+          node._default = typeof v === 'function' ? v() : v;
+          return node;
+        },
+        catch(v) {
+          node._default = typeof v === 'function' ? v() : v;
+          return node;
+        },
+        optional() { return node; },
+        nullable() { return node; },
+        nullish() { return node; },
+        passthrough() { return node; },
+        strict() { return node; },
+        strip() { return node; },
+        catchall() { return node; },
+        refine() { return node; },
+        superRefine() { return node; },
+        transform(fn) {
+          node._transform = fn;
+          return node;
+        },
+        pipe(nextSchema) { return nextSchema || node; },
+        describe() { return node; },
+        meta() { return node; },
+        min() { return node; },
+        max() { return node; },
+        length() { return node; },
+        int() { return node; },
+        positive() { return node; },
+        nonnegative() { return node; },
+        gt() { return node; },
+        gte() { return node; },
+        lt() { return node; },
+        lte() { return node; },
+        or() { return node; },
+        and() { return node; },
+        readonly() { return node; },
+         array() { return makeZodChain([]); },
+        extend(extraShape = {}) {
+          return makeZodChain(node._default, Object.assign({}, node._shape || {}, extraShape));
+        },
+        merge(otherNode) {
+          return makeZodChain(node._default, Object.assign({}, node._shape || {}, (otherNode && otherNode._shape) || {}));
+        },
+        pick() { return node; },
+        omit() { return node; },
+        partial() { return node; },
+        deepPartial() { return node; },
+        required() { return node; },
+        extractDefaults() {
+          if (node._default !== undefined) {
+            return deepCloneSafe(node._default);
+          }
+          if (node._shape && typeof node._shape === 'object') {
+            const out = {};
+            Object.entries(node._shape).forEach(([k, child]) => {
+              if (child && typeof child.extractDefaults === 'function') {
+                const cv = child.extractDefaults();
+                if (cv !== undefined) out[k] = cv;
+              }
+            });
+            return out;
+          }
+          return undefined;
+        },
+        safeParse(input) {
+          const defObj = node.extractDefaults();
+          let merged = input;
+          if (defObj && typeof defObj === 'object' && !Array.isArray(defObj)) {
+            merged = deepCloneSafe(defObj);
+            if (input && typeof input === 'object' && !Array.isArray(input)) {
+              deepMergeVariables(merged, input);
+            }
+          } else if (input === undefined) {
+            merged = defObj;
+          }
+          if (typeof node._transform === 'function') {
+            try { merged = node._transform(merged); } catch (_) {}
+          }
+          return { success: true, data: merged };
+        },
+        parse(input) {
+          return node.safeParse(input).data;
+        }
+      };
+      return node;
+    };
+    const zodShim = {
+      object: (shape = {}) => makeZodChain(undefined, shape),
+      looseObject: (shape = {}) => makeZodChain(undefined, shape),
+      strictObject: (shape = {}) => makeZodChain(undefined, shape),
+      string: () => makeZodChain(''),
+      number: () => makeZodChain(0),
+      boolean: () => makeZodChain(false),
+      bigint: () => makeZodChain(0),
+      date: () => makeZodChain(''),
+      array: (itemSchema) => makeZodChain([]),
+      tuple: (items = []) => makeZodChain(Array.isArray(items) ? items.map(it => (it && typeof it.extractDefaults === 'function' ? it.extractDefaults() : undefined)) : []),
+      enum: (vals = []) => makeZodChain(Array.isArray(vals) ? (vals[0] ?? '') : ''),
+      nativeEnum: (enumObj = {}) => makeZodChain(Object.values(enumObj)[0] ?? ''),
+      any: () => makeZodChain(undefined),
+      unknown: () => makeZodChain(undefined),
+      never: () => makeZodChain(undefined),
+      void: () => makeZodChain(undefined),
+      null: () => makeZodChain(null),
+      undefined: () => makeZodChain(undefined),
+      record: () => makeZodChain({}),
+      map: () => makeZodChain({}),
+      set: () => makeZodChain([]),
+      union: (options = []) => makeZodChain(options[0] && typeof options[0].extractDefaults === 'function' ? options[0].extractDefaults() : undefined),
+      discriminatedUnion: (disc, options = []) => makeZodChain(options[0] && typeof options[0].extractDefaults === 'function' ? options[0].extractDefaults() : {}),
+      intersection: (a, b) => makeZodChain(a && typeof a.extractDefaults === 'function' ? a.extractDefaults() : {}),
+      literal: (v) => makeZodChain(v),
+      lazy: (fn) => {
+        try {
+          const inner = typeof fn === 'function' ? fn() : null;
+          return inner || makeZodChain({});
+        } catch (_) {
+          return makeZodChain({});
+        }
+      },
+      custom: () => makeZodChain(undefined),
+      preprocess: (fn, schema) => schema || makeZodChain(undefined),
+      effect: (schema) => schema || makeZodChain(undefined),
+      transformer: (schema) => schema || makeZodChain(undefined),
+      prettifyError: (e) => String(e?.message || e || ''),
+      coerce: {
+        string: () => makeZodChain(''),
+        number: () => makeZodChain(0),
+        boolean: () => makeZodChain(false),
+        bigint: () => makeZodChain(0),
+        date: () => makeZodChain('')
+      }
+    };
+    zodShim.z = zodShim;
+    if (!window.z) window.z = zodShim;
+
+    window.registerVariableSchema = (schemaObj) => {
+      try {
+        if (schemaObj && typeof schemaObj.extractDefaults === 'function') {
+          const defs = schemaObj.extractDefaults();
+          if (defs && defs.stat_data) {
+            window.__mvuDefaultStatData = defs.stat_data;
+          } else if (defs && typeof defs === 'object') {
+            window.__mvuDefaultStatData = defs;
+          }
+        }
+      } catch (_) {}
+    };
+    window.registerMvuSchema = (schemaObj) => {
+      try {
+        const resolved = typeof schemaObj === 'function' ? schemaObj() : schemaObj;
+        window.__mvuActiveSchema = resolved;
+        if (resolved && typeof resolved.extractDefaults === 'function') {
+          const defs = resolved.extractDefaults();
+          if (defs && typeof defs === 'object') {
+            window.__mvuDefaultStatData = defs;
+            const chatStore = getChatVariablesStore();
+            if (!chatStore.stat_data || typeof chatStore.stat_data !== 'object') {
+              chatStore.stat_data = {};
+            }
+            Object.entries(defs).forEach(([k, v]) => {
+              if (chatStore.stat_data[k] === undefined) {
+                chatStore.stat_data[k] = deepCloneSafe(v);
+              }
+            });
+            ensureMilkteaDefaultStatData(chatStore.stat_data);
+          }
+        }
+      } catch (_) {}
+    };
+
+    window.Mvu = {
+      events: {
+        VARIABLE_INITIALIZED: 'mag_variable_initialized',
+        COMMAND_PARSED: 'mag_command_parsed_for_zod',
+        BEFORE_MESSAGE_UPDATE: 'mag_before_message_update',
+        SINGLE_VARIABLE_UPDATED: 'mag_single_variable_updated',
+        VARIABLE_UPDATE_ENDED: 'mag_variable_update_ended',
+        VARIABLE_UPDATE_STARTED: 'mag_variable_update_started'
+      },
+      getMvuData: (opts = { type: 'message', message_id: 'latest' }) => {
+        const store = window.getVariables(opts);
+        if (!store.stat_data || typeof store.stat_data !== 'object') {
+          store.stat_data = window.__mvuDefaultStatData ? deepCloneSafe(window.__mvuDefaultStatData) : {};
+        }
+        ensureMilkteaDefaultStatData(store.stat_data);
+        return store;
+      },
+      replaceMvuData: async (mvuData, opts = { type: 'message', message_id: 'latest' }) => {
+        return await window.replaceVariables(mvuData, opts);
+      },
+      getCurrentMvuData: () => {
+        return window.Mvu.getMvuData({ type: 'message', message_id: window.TavernHelper ? window.TavernHelper.getCurrentMessageId() : 'latest' });
+      },
+      replaceCurrentMvuData: async (mvuData) => {
+        return await window.Mvu.replaceMvuData(mvuData, { type: 'message', message_id: window.TavernHelper ? window.TavernHelper.getCurrentMessageId() : 'latest' });
+      },
+      setMvuVariable: async (mvuData, path, val, { reason = '', is_recursive = false } = {}) => {
+        if (mvuData && typeof mvuData === 'object') {
+          if (!mvuData.stat_data || typeof mvuData.stat_data !== 'object') mvuData.stat_data = {};
+          const cleanPath = normalizeMvuPath(path);
+          const oldVal = getDeepVarByPath(mvuData.stat_data, cleanPath);
+          setDeepVarByPath(mvuData.stat_data, cleanPath, val);
+          try {
+            await tavernEventSource.emit(window.Mvu.events.SINGLE_VARIABLE_UPDATED, mvuData.stat_data, cleanPath, oldVal, val);
+          } catch (_) {}
+          await saveTavernStore();
+        }
+        return true;
+      },
+      getMvuVariable: (mvuData, path, { category = 'stat', default_value = undefined } = {}) => {
+        const target = category === 'display' ? mvuData?.display_data : (category === 'delta' ? mvuData?.delta_data : mvuData?.stat_data);
+        const val = getDeepVarByPath(target || {}, normalizeMvuPath(path));
+        if (val === undefined) return default_value;
+        return (Array.isArray(val) && val.length === 2 && typeof val[1] === 'string') ? val[0] : val;
+      },
+      getRecordFromMvuData: (mvuData, category = 'stat') => {
+        return category === 'display' ? mvuData?.display_data : (category === 'delta' ? mvuData?.delta_data : mvuData?.stat_data);
+      },
+      parseMessage: async (msgText, oldVars) => {
+        const nextVars = deepCloneSafe(oldVars || { stat_data: {} });
+        if (!nextVars.stat_data || typeof nextVars.stat_data !== 'object') nextVars.stat_data = {};
+        ensureMilkteaDefaultStatData(nextVars.stat_data);
+        applyMvuUpdateVariableBlock(msgText, nextVars.stat_data);
+        try {
+          await tavernEventSource.emit(window.Mvu.events.VARIABLE_UPDATE_ENDED, nextVars, deepCloneSafe(oldVars || {}));
+        } catch (_) {}
+        return nextVars;
+      },
+      reloadInitVar: async () => {
+        const store = window.Mvu.getMvuData({ type: 'message', message_id: 0 });
+        if (store && store.stat_data) ensureMilkteaDefaultStatData(store.stat_data);
+        return true;
+      },
+      isDuringExtraAnalysis: () => false
+    };
+
+    window.waitGlobalInitialized = async (globalName) => {
+      const name = String(globalName || '').trim();
+      if (!name) return undefined;
+      if (window[name] !== undefined) return window[name];
+      for (let i = 0; i < 40; i++) {
+        await new Promise(r => setTimeout(r, 50));
+        if (window[name] !== undefined) return window[name];
+      }
+      return window[name];
     };
 
     window.getButtonEvent = (btnName) => String(btnName || '');
@@ -5413,6 +6310,14 @@ code, pre {
                 target.mes = nextMsgText;
                 const sIdx = Math.min(target.swipes.length - 1, Math.max(0, Number(target.swipe_id || 0)));
                 target.swipes[sIdx] = nextMsgText;
+                if (/<(?:UpdateVariable|updatevariable)>/i.test(nextMsgText)) {
+                  const floorVars = resolveVarStoreByOpts({ type: 'message', message_id: idx });
+                  if (floorVars && floorVars.stat_data) {
+                    applyMvuUpdateVariableBlock(nextMsgText, floorVars.stat_data);
+                    const chatStore = getChatVariablesStore();
+                    if (chatStore) chatStore.stat_data = deepCloneSafe(floorVars.stat_data);
+                  }
+                }
               }
               if (u.data && typeof u.data === 'object') {
                 target.data = Object.assign({}, target.data || {}, u.data);
@@ -5440,7 +6345,11 @@ code, pre {
         }
         await saveTavernStore();
         if (!opts || opts.refresh !== 'none') {
-          renderTavernChatFloors(false);
+          if (canUpdateByIndex && opts?.refresh !== 'all') {
+            updatedIndices.forEach(uIdx => appendOrUpdateSingleFloorDom(uIdx, { skipMessageUpdatedEvent: true }));
+          } else {
+            renderTavernChatFloors(false);
+          }
           for (const sIdx of swipedIndices) {
             await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, sIdx);
             await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, sIdx);
@@ -5455,9 +6364,13 @@ code, pre {
       createChatMessages: async (newMsgs) => {
         const sess = getActiveChatSession();
         if (sess && Array.isArray(newMsgs)) {
+          const prevFloorVars = sess.messages.length > 0
+            ? window.getVariables({ type: 'message', message_id: sess.messages.length - 1 })
+            : getChatVariablesStore();
           newMsgs.forEach(m => {
             const text = m.message || m.mes || m.content || '';
             const nowTs = Date.now();
+            const clonedVars = prevFloorVars ? JSON.parse(JSON.stringify(prevFloorVars)) : {};
             sess.messages.push({
               mesid: sess.messages.length,
               name: m.name || (m.role === 'user' || m.is_user ? getUserDisplayName() : (getActiveCard()?.name || '角色')),
@@ -5470,11 +6383,13 @@ code, pre {
               swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: estimateTokens(text) }],
               reasoning: '',
               gen_time: '',
-              token_count: estimateTokens(text)
+              token_count: estimateTokens(text),
+              data: { variables: clonedVars },
+              variables: [clonedVars]
             });
           });
           await saveTavernStore();
-          renderTavernChatFloors(false);
+          renderTavernChatFloors(false, { scrollToBottom: true });
         }
       },
       generate: async (opts = {}) => {
@@ -6604,25 +7519,8 @@ code, pre {
     } catch (_) {}
   }
 
-  let baiBaiShadowSyncTimer = null;
   async function syncBaiBaiShadowDomCss() {
     try {
-      const chatEl = document.getElementById('chat');
-      if (!baiBaiShadowObserverBound && chatEl) {
-        baiBaiShadowObserverBound = true;
-        const obs = new MutationObserver((mutations) => {
-          const hasBbsFpAdded = mutations.some(m =>
-            Array.from(m.addedNodes || []).some(n => n && n.nodeType === 1 && (n.classList?.contains('bbs-fp-host') || n.querySelector?.('.bbs-fp-host')))
-          );
-          if (!hasBbsFpAdded) return;
-          if (baiBaiShadowSyncTimer) return;
-          baiBaiShadowSyncTimer = setTimeout(() => {
-            baiBaiShadowSyncTimer = null;
-            applyCachedBaiBaiCssToShadowRoots(true);
-          }, 120);
-        });
-        obs.observe(chatEl, { childList: true, subtree: true });
-      }
       const bbiHost = document.getElementById('bbi-app-host');
       if (bbiHost && !cachedBaiBaiShadowCss) {
         const res = await fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main/dist/index.css');
@@ -6645,9 +7543,17 @@ code, pre {
     const metaUrlVal = resolvePluginMetaUrl(plugin);
     window.__ST_META_URL__ = metaUrlVal;
     window.__ST_META__ = { url: metaUrlVal, env: {} };
+    if (window.z && !window.__ST_BRIDGE__?.z) {
+      try {
+        window.__ST_BRIDGE__.z = window.z;
+        window.__ST_BRIDGE__.registerMvuSchema = window.registerMvuSchema;
+        window.__ST_BRIDGE__.Mvu = window.Mvu;
+        window.__ST_BRIDGE__.waitGlobalInitialized = window.waitGlobalInitialized;
+      } catch (_) {}
+    }
     return String(codeStr || '')
-      .replace(/\bimport\.meta\.url\b/g, 'window.__ST_META_URL__')
-      .replace(/\bimport\.meta\b/g, 'window.__ST_META__')
+      .replace(/\bimport\.meta\.url\b/g, JSON.stringify(metaUrlVal))
+      .replace(/\bimport\.meta\b/g, JSON.stringify({ url: metaUrlVal, env: {} }))
       .replace(/(?<![.\w$])import\s*\((?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
@@ -6672,14 +7578,6 @@ code, pre {
       .replace(
         'if(o.length>1){console.log("[柏宝书] 多个摘要缺口,停止自动补摘,交由用户手动处理:",o);return}const i=Ox(s,e);if(i<0)return;const a=ni(s).find(c=>c<=i);',
         'const i=Ox(s,e);if(i<0)return;const _uns=ni(s).filter(c=>c<=i);const a=_uns.length?_uns[_uns.length-1]:void 0;'
-      )
-      .replace(
-        'if(l.length<1)return nr(o),!1;',
-        'if(l.length>=0)return nr(o),!1;'
-      )
-      .replace(
-        'n.CHARACTER_MESSAGE_RENDERED&&t.on(n.CHARACTER_MESSAGE_RENDERED,()=>xt())',
-        'n.CHARACTER_MESSAGE_RENDERED&&t.on(n.CHARACTER_MESSAGE_RENDERED,()=>{xt();setTimeout(()=>nr(!1),180)})'
       );
   }
 
@@ -6777,9 +7675,12 @@ code, pre {
       plugin.jsEntryPath = 'dist/index.js';
       if ((!plugin.code || !String(plugin.code).includes('bbs-app-host')) && !baiBaiBookUpgradeInFlight) {
         baiBaiBookUpgradeInFlight = true;
-        fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.js')
-          .then(r => (r.ok ? r.text() : ''))
-          .then(async jsTxt => {
+        Promise.all([
+          fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.js').then(r => (r.ok ? r.text() : '')),
+          fetch('https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Book/main/dist/index.css').then(r => (r.ok ? r.text() : ''))
+        ])
+          .then(async ([jsTxt, cssTxt]) => {
+            if (cssTxt) cachedBaiBaiBookShadowCss = cssTxt;
             if (jsTxt && jsTxt.includes('bbs-app-host')) {
               plugin.code = jsTxt;
               await saveTavernStore();
@@ -6790,15 +7691,11 @@ code, pre {
           .finally(() => { baiBaiBookUpgradeInFlight = false; });
         return;
       }
-      const existingBbsHost = document.getElementById('bbs-app-host');
-      if (existingBbsHost && document.getElementById('bbs-menu-item') && existingBbsHost.getAttribute('data-bbs-auto-patched') === '1' && !execOpts.forceRerun) {
+      if (window.__stBaiBaiBookMountedSingleton || document.getElementById('bbs-app-host')) {
         syncBaiBaiShadowDomCss();
         return;
       }
-      if (existingBbsHost && (existingBbsHost.getAttribute('data-bbs-auto-patched') !== '1' || execOpts.forceRerun)) {
-        try { existingBbsHost.remove(); } catch (_) {}
-        try { document.getElementById('bbs-menu-item')?.remove(); } catch (_) {}
-      }
+      window.__stBaiBaiBookMountedSingleton = true;
     }
     if (isJsSlashRunnerPlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main';
@@ -8792,10 +9689,42 @@ code, pre {
         box-sizing: border-box !important;
         max-width: 100% !important;
       }
+      #page-home .home-clock {
+        margin-top: 44px !important;
+        margin-bottom: 12px !important;
+      }
+      #page-home .app-grid-sim {
+        gap: 34px 40px !important;
+        padding: 24px 60px 44px !important;
+      }
+      #page-home.sim-page {
+        overflow-y: auto !important;
+      }
     </style>`;
 
     const bridgeScript = `<script>
 (function(){
+  window.tailwind = window.tailwind || { config: {} };
+  var origWinAddEvent = window.addEventListener;
+  window.addEventListener = function(type, listener, options) {
+    if ((type === 'DOMContentLoaded' || type === 'load') && typeof listener === 'function' && document.readyState !== 'loading') {
+      setTimeout(function() {
+        try { listener.call(window, new Event(type)); } catch (e) {}
+      }, 0);
+      return;
+    }
+    return origWinAddEvent.call(window, type, listener, options);
+  };
+  var origDocAddEvent = document.addEventListener;
+  document.addEventListener = function(type, listener, options) {
+    if (type === 'DOMContentLoaded' && typeof listener === 'function' && document.readyState !== 'loading') {
+      setTimeout(function() {
+        try { listener.call(document, new Event('DOMContentLoaded')); } catch (e) {}
+      }, 0);
+      return;
+    }
+    return origDocAddEvent.call(document, type, listener, options);
+  };
   var allowFrameAudio = ${allowAudioInFrame ? 'true' : 'false'};
   try {
     if (typeof HTMLMediaElement !== 'undefined') {
@@ -9024,6 +9953,19 @@ code, pre {
       window.replaceVariables = window.parent.replaceVariables;
       window.updateVariablesWith = window.parent.updateVariablesWith;
       window.deleteVariable = window.parent.deleteVariable;
+      window.registerVariableSchema = window.parent.registerVariableSchema;
+      window.registerMvuSchema = window.parent.registerMvuSchema;
+      window.Mvu = Object.assign({}, window.parent.Mvu || {}, {
+        getCurrentMvuData: function() {
+          return window.parent.Mvu.getMvuData({ type: 'message', message_id: window.getCurrentMessageId() });
+        },
+        replaceCurrentMvuData: function(data) {
+          return window.parent.Mvu.replaceMvuData(data, { type: 'message', message_id: window.getCurrentMessageId() });
+        }
+      });
+      window.waitGlobalInitialized = window.parent.waitGlobalInitialized;
+      window.z = window.parent.z;
+      window._ = window.parent._;
       window.getChatMessages = window.parent.getChatMessages;
       window.getChatMessage = window.parent.getChatMessage;
       window.setChatMessage = window.parent.setChatMessage;
@@ -9039,6 +9981,8 @@ code, pre {
       window.eventOnce = window.parent.eventOnce;
       window.eventEmit = window.parent.eventEmit;
       window.eventRemoveListener = window.parent.eventRemoveListener;
+      window.tavern_events = window.parent.tavern_events;
+      window.event_types = window.parent.event_types;
       window.toastr = window.parent.toastr;
       if (window.parent.$) {
         window.$ = wrapJQueryInstance(window.parent.$);
@@ -9063,9 +10007,15 @@ code, pre {
       if (!b || !d) return;
       var contentH = 0;
       var bRect = b.getBoundingClientRect();
+      var scaleContainer = document.querySelector('.scale-container');
       var outerC = document.getElementById('outerContainer');
       var rootCard = document.getElementById('statusRoot') || outerC || document.querySelector('.gourmet-main-frame');
-      if (rootCard) {
+      if (scaleContainer && document.getElementById('sim-scaler')) {
+        var scRect = scaleContainer.getBoundingClientRect();
+        if (scRect.width > 40) {
+          contentH = Math.round(scRect.width * (1312 / 736)) + 12;
+        }
+      } else if (rootCard) {
         var rcRect = rootCard.getBoundingClientRect();
         var ocBottom = outerC ? outerC.getBoundingClientRect().bottom : rcRect.bottom;
         contentH = Math.ceil(Math.max(rcRect.bottom, ocBottom) - bRect.top) + 10;
@@ -9118,7 +10068,7 @@ code, pre {
       if (typeof ResizeObserver !== 'undefined') {
         var ro = new ResizeObserver(function() { syncFrameHeight(); });
         if (document.body) ro.observe(document.body);
-        var sr = document.getElementById('statusRoot') || document.getElementById('outerContainer');
+        var sr = document.getElementById('statusRoot') || document.getElementById('outerContainer') || document.querySelector('.scale-container');
         if (sr) ro.observe(sr);
       }
       if (typeof MutationObserver !== 'undefined' && document.body) {
@@ -10677,6 +11627,22 @@ code, pre {
     return text.trim();
   }
 
+  function cleanPresetPromptContent(rawText) {
+    if (!rawText) return '';
+    // Strip HTML comments (<!-- ... -->) used by preset authors as notes or decorative section dividers
+    let cleaned = String(rawText).replace(/<!--[\s\S]*?-->/g, '').trim();
+    if (!cleaned) return '';
+    // Skip pure decorative divider lines such as "=== 思维链 ===" or "─── 预设条目 ───" that contain no actual instruction
+    if (/^[=\-*~—─━╔╗╚╝║═┏┓┗┛┃★☆◆◇■□▲△▼▽✦✧※•·\s【】\[\]「」『』《》〈〉()（）]{1,48}$/.test(cleaned)) {
+      return '';
+    }
+    const singleLine = !cleaned.includes('\n');
+    if (singleLine && cleaned.length <= 28 && /^[=\-*~—─━★☆◆◇✦✧【\[\(（]+\s*(?:思维链|CoT|思考|推理|破限|前置|后置|开始|结束|分割线|分隔线)[^=\-*~—─━】\]\)）]*[=\-*~—─━★☆◆◇✦✧】\]\)）]*$/i.test(cleaned)) {
+      return '';
+    }
+    return cleaned;
+  }
+
   function buildTavernApiMessages(options = {}) {
     const {
       isImpersonate = false,
@@ -10831,14 +11797,19 @@ code, pre {
     enabledPresetPrompts.forEach((p, seqIdx) => {
       if (!p.marker && isItemInChatDepth(p) && p.content && p.content.trim()) {
         const pDepth = Math.max(0, Number(p.injection_depth ?? 4));
-        depthInjections.push({
-          role: p.role || 'system',
-          depth: pDepth,
-          order: Number(p.injection_order ?? 100),
-          seqIdx,
-          content: applyTavernRegexPipeline(p.content, { isPrompt: true, isPresetPrompt: true, depth: pDepth, card }),
-          _debugLabel: '预设深度提示词 @D' + pDepth + ' · ' + (p.name || p.identifier || '自定义条目')
-        });
+        const processedContent = cleanPresetPromptContent(
+          applyTavernRegexPipeline(p.content, { isPrompt: true, isPresetPrompt: true, depth: pDepth, card })
+        );
+        if (processedContent) {
+          depthInjections.push({
+            role: p.role || 'system',
+            depth: pDepth,
+            order: Number(p.injection_order ?? 100),
+            seqIdx,
+            content: processedContent,
+            _debugLabel: '预设深度提示词 @D' + pDepth
+          });
+        }
       }
     });
 
@@ -10877,10 +11848,12 @@ code, pre {
       };
     });
 
-    // Group @D depth injections by depth relative to the original chatHistoryMessages length so multiple items at the same depth stay together in exact (order, seqIdx) sequence without shifting subsequent depths
+    // Official SillyTavern populationInjectionPrompts logic:
+    // Group @D depth injections by depth, sort by injection_order descending (higher order injected first, same order + role joined by \n)
     const originalChatLen = chatHistoryMessages.length;
     const depthGroupsMap = new Map();
     depthInjections.forEach(inj => {
+      if (!inj || !inj.content || !String(inj.content).trim()) return;
       const d = Math.max(0, Number(inj.depth ?? 0));
       if (!depthGroupsMap.has(d)) depthGroupsMap.set(d, []);
       depthGroupsMap.get(d).push(inj);
@@ -10891,17 +11864,27 @@ code, pre {
     sortedDepthsAsc.forEach(d => {
       const group = depthGroupsMap.get(d);
       group.sort((a, b) => {
-        const ordDiff = (a.order ?? 100) - (b.order ?? 100);
+        const ordDiff = (b.order ?? 100) - (a.order ?? 100);
         if (ordDiff !== 0) return ordDiff;
         return (a.seqIdx ?? 0) - (b.seqIdx ?? 0);
       });
       const targetIdx = Math.max(0, originalChatLen - d);
-      const formattedGroup = group.map(inj => ({
-        role: inj.role || 'system',
-        content: inj.content,
-        _debugLabel: inj._debugLabel || ('深度注入 @D' + d),
-        _isChatContext: true
-      }));
+      const formattedGroup = [];
+      group.forEach(inj => {
+        const role = inj.role || 'system';
+        const prev = formattedGroup[formattedGroup.length - 1];
+        if (prev && prev.role === role && prev._order === (inj.order ?? 100)) {
+          prev.content += '\n' + inj.content;
+        } else {
+          formattedGroup.push({
+            role,
+            content: inj.content,
+            _order: inj.order ?? 100,
+            _debugLabel: inj._debugLabel || ('深度注入 @D' + d),
+            _isChatContext: true
+          });
+        }
+      });
       chatHistoryMessages.splice(targetIdx, 0, ...formattedGroup);
     });
 
@@ -10910,11 +11893,14 @@ code, pre {
 
     if (!allPresetIds.has('main')) {
       const fallbackMain = (card && card.system_prompt && card.system_prompt.trim()) || tavernState.formatting.systemPrompt || '';
-      if (fallbackMain.trim()) {
+      const cleanedFallbackMain = cleanPresetPromptContent(
+        applyTavernRegexPipeline(fallbackMain, { isPrompt: true, isPresetPrompt: true, card })
+      );
+      if (cleanedFallbackMain) {
         finalMessages.push({
           role: 'system',
-          content: applyTavernRegexPipeline(fallbackMain, { isPrompt: true, isPresetPrompt: true, card }),
-          _debugLabel: '预设系统提示词 · Main Prompt'
+          content: cleanedFallbackMain,
+          _debugLabel: '系统主提示词'
         });
       }
     }
@@ -11057,47 +12043,63 @@ code, pre {
         }
         finalMessages.push(...chatHistoryMessages);
       } else if (id === 'main') {
-        let content = item.content || tavernState.formatting.systemPrompt || '';
+        const defaultMain = item.content || tavernState.formatting.systemPrompt || '';
+        let content = defaultMain;
         if (card && card.system_prompt && card.system_prompt.trim() && !item.forbid_overrides) {
-          content = card.system_prompt;
+          content = card.system_prompt.replace(/\{\{original\}\}/gi, defaultMain);
         }
-        if (content.trim()) {
+        const cleanedMain = cleanPresetPromptContent(
+          applyTavernRegexPipeline(content, { isPrompt: true, isPresetPrompt: true, card })
+        );
+        if (cleanedMain) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(content, { isPrompt: true, isPresetPrompt: true, card }),
-            _debugLabel: '预设系统提示词 · ' + (item.name || 'Main Prompt')
+            content: cleanedMain,
+            _debugLabel: '系统主提示词'
           });
         }
       } else if (id === 'jailbreak') {
-        let content = item.content || tavernState.formatting.postHistoryPrompt || '';
+        const defaultJb = item.content || tavernState.formatting.postHistoryPrompt || '';
+        let content = defaultJb;
         if (card && card.post_history_instructions && card.post_history_instructions.trim() && !item.forbid_overrides) {
-          content = card.post_history_instructions;
+          content = card.post_history_instructions.replace(/\{\{original\}\}/gi, defaultJb);
         }
-        if (content.trim()) {
+        const cleanedJb = cleanPresetPromptContent(
+          applyTavernRegexPipeline(content, { isPrompt: true, isPresetPrompt: true, card })
+        );
+        if (cleanedJb) {
           finalMessages.push({
             role: item.role || 'system',
-            content: applyTavernRegexPipeline(content, { isPrompt: true, isPresetPrompt: true, card }),
-            _debugLabel: '预设后置指令 · ' + (item.name || 'Post-History Instructions')
+            content: cleanedJb,
+            _debugLabel: '后置指令'
           });
         }
       } else if (!item.marker && !isItemInChatDepth(item)) {
         if (item.content && item.content.trim()) {
-          finalMessages.push({
-            role: item.role || 'system',
-            content: applyTavernRegexPipeline(item.content, { isPrompt: true, isPresetPrompt: true, card }),
-            _debugLabel: '预设提示词 · ' + (item.name || item.identifier || '自定义条目')
-          });
+          const cleanedItemContent = cleanPresetPromptContent(
+            applyTavernRegexPipeline(item.content, { isPrompt: true, isPresetPrompt: true, card })
+          );
+          if (cleanedItemContent) {
+            finalMessages.push({
+              role: item.role || 'system',
+              content: cleanedItemContent,
+              _debugLabel: '预设提示词'
+            });
+          }
         }
       }
     }
 
     if (!allPresetIds.has('jailbreak')) {
       const fallbackJb = (card && card.post_history_instructions && card.post_history_instructions.trim()) || tavernState.formatting.postHistoryPrompt || '';
-      if (fallbackJb.trim()) {
+      const cleanedFallbackJb = cleanPresetPromptContent(
+        applyTavernRegexPipeline(fallbackJb, { isPrompt: true, isPresetPrompt: true, card })
+      );
+      if (cleanedFallbackJb) {
         finalMessages.push({
           role: 'system',
-          content: applyTavernRegexPipeline(fallbackJb, { isPrompt: true, isPresetPrompt: true, card }),
-          _debugLabel: '预设后置指令 · Post-History Instructions'
+          content: cleanedFallbackJb,
+          _debugLabel: '后置指令'
         });
       }
     }
@@ -11116,17 +12118,18 @@ code, pre {
       });
     }
 
-    const filtered = finalMessages.filter(m => m && m.content && String(m.content).trim().length > 0);
+    const filtered = finalMessages.filter(m => m && ((m.content && String(m.content).trim().length > 0) || (Array.isArray(m._images) && m._images.length > 0)));
 
-    // Merge consecutive trailing assistant messages (e.g. multiple CoT prefill items at the end) and optionally squash consecutive system messages
+    // Official SillyTavern mergeMessages behavior: squash consecutive same-role messages so the wire payload is clean and never contains mid-conversation system role conflicts
     const mergedList = [];
     for (let i = 0; i < filtered.length; i++) {
       const msg = filtered[i];
       const prev = mergedList[mergedList.length - 1];
-      if (prev && prev.role === 'system' && msg.role === 'system' && preset.squash_system_messages) {
+      const hasImgs = Array.isArray(msg._images) && msg._images.length > 0;
+      const prevHasImgs = prev && Array.isArray(prev._images) && prev._images.length > 0;
+      if (prev && prev.role === msg.role && !hasImgs && !prevHasImgs) {
         prev.content += '\n\n' + msg.content;
-      } else if (prev && prev.role === 'assistant' && msg.role === 'assistant' && i >= filtered.length - 2) {
-        prev.content += '\n' + msg.content;
+        if (msg._isChatContext) prev._isChatContext = true;
       } else {
         mergedList.push({ ...msg });
       }
@@ -11134,7 +12137,7 @@ code, pre {
 
     try {
       Object.defineProperty(mergedList, '_debugBlocks', {
-        value: filtered,
+        value: mergedList,
         enumerable: false,
         configurable: true
       });
@@ -11340,6 +12343,81 @@ code, pre {
     return Boolean(preset && preset.stream_openai);
   }
 
+  async function postProcessTavernWireMessages(rawMessages, options = {}) {
+    const strict = options.strict !== false;
+    const placeholders = options.placeholders !== false;
+    const items = Array.isArray(rawMessages)
+      ? rawMessages
+          .map(m => ({
+            role: m?.role || 'system',
+            content: typeof m?.content === 'string' ? m.content : (Array.isArray(m?.content) ? m.content : String(m?.content || '')),
+            _images: Array.isArray(m?._images) ? m._images.filter(Boolean) : []
+          }))
+          .filter(m => (typeof m.content === 'string' ? m.content.trim().length > 0 : m.content.length > 0) || m._images.length > 0)
+      : [];
+
+    // Resolve vault:// image attachments if present
+    const resolvedItems = [];
+    for (const msg of items) {
+      const hasImgs = msg._images && msg._images.length > 0;
+      if (hasImgs) {
+        const multimodalParts = [];
+        if (typeof msg.content === 'string' && msg.content.trim()) {
+          multimodalParts.push({ type: 'text', text: msg.content });
+        }
+        for (const imgRef of msg._images) {
+          let finalUrl = String(imgRef || '');
+          if (finalUrl.startsWith('vault://') && typeof window.resolveVaultRefToUrl === 'function') {
+            try {
+              const unlocked = await window.resolveVaultRefToUrl(finalUrl);
+              if (unlocked) finalUrl = unlocked;
+            } catch (_) {}
+          }
+          if (finalUrl) {
+            multimodalParts.push({ type: 'image_url', image_url: { url: finalUrl } });
+          }
+        }
+        resolvedItems.push({ role: msg.role, content: multimodalParts });
+      } else {
+        resolvedItems.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    // Official SillyTavern prompt-converters.js mergeMessages(messages, names, { strict, placeholders }):
+    // 1. In strict mode, convert any non-leading system messages to 'user' role
+    if (strict) {
+      for (let i = 0; i < resolvedItems.length; i++) {
+        if (resolvedItems[i].role === 'system' && i > 0) {
+          resolvedItems[i].role = 'user';
+        }
+      }
+    }
+
+    // 2. Squash consecutive messages of the same role
+    const squashed = [];
+    for (const msg of resolvedItems) {
+      const prev = squashed[squashed.length - 1];
+      if (prev && prev.role === msg.role && typeof prev.content === 'string' && typeof msg.content === 'string') {
+        prev.content += '\n\n' + msg.content;
+      } else {
+        squashed.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    // 3. Ensure valid starting message when placeholders are enabled
+    if (placeholders) {
+      if (squashed.length === 0) {
+        squashed.push({ role: 'user', content: '[Start a new chat]' });
+      } else if (strict && squashed[0].role === 'system' && (squashed.length === 1 || squashed[1].role === 'assistant')) {
+        squashed.splice(1, 0, { role: 'user', content: '[Start a new chat]' });
+      } else if (strict && squashed[0].role === 'assistant') {
+        squashed.unshift({ role: 'user', content: '[Start a new chat]' });
+      }
+    }
+
+    return squashed;
+  }
+
   async function callTavernAiCompletion(messages, onStreamUpdate = null, options = {}) {
     const isBackground = Boolean(options && options.isBackground);
     const creds = resolveTavernApiCredentials();
@@ -11351,11 +12429,11 @@ code, pre {
       ? window.acquireBackgroundTaskKeepAlive()
       : null;
     if (typeof window.ensureBackgroundKeepAlive === 'function') {
-      window.ensureBackgroundKeepAlive();
+      window.ensureBackgroundKeepAlive(null, true);
     }
     const keepAlivePulseTimer = setInterval(() => {
       if (typeof window.ensureBackgroundKeepAlive === 'function') {
-        window.ensureBackgroundKeepAlive();
+        window.ensureBackgroundKeepAlive(null, true);
       }
     }, 2000);
 
@@ -11371,43 +12449,7 @@ code, pre {
       : (cleanBase + '/v1/chat/completions');
 
     const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
-    const rawWireMessages = Array.isArray(messages)
-      ? messages
-          .map(m => ({
-            role: m?.role || 'system',
-            content: String(m?.content || ''),
-            _images: Array.isArray(m?._images) ? m._images.filter(Boolean) : []
-          }))
-          .filter(m => m.content.trim().length > 0 || m._images.length > 0)
-      : [];
-    const cleanWireMessages = [];
-    for (const msg of rawWireMessages) {
-      const hasImgs = msg._images && msg._images.length > 0;
-      const prev = cleanWireMessages[cleanWireMessages.length - 1];
-      if (prev && prev.role === msg.role && !hasImgs && !Array.isArray(prev.content)) {
-        prev.content += '\n\n' + msg.content;
-      } else if (hasImgs) {
-        const multimodalParts = [];
-        if (msg.content && msg.content.trim()) {
-          multimodalParts.push({ type: 'text', text: msg.content });
-        }
-        for (const imgRef of msg._images) {
-          let finalUrl = String(imgRef || '');
-          if (finalUrl.startsWith('vault://') && typeof window.resolveVaultRefToUrl === 'function') {
-            try {
-              const unlocked = await window.resolveVaultRefToUrl(finalUrl);
-              if (unlocked) finalUrl = unlocked;
-            } catch (_) {}
-          }
-          if (finalUrl) {
-            multimodalParts.push({ type: 'image_url', image_url: { url: finalUrl } });
-          }
-        }
-        cleanWireMessages.push({ role: msg.role, content: multimodalParts });
-      } else {
-        cleanWireMessages.push({ role: msg.role, content: msg.content });
-      }
-    }
+    const cleanWireMessages = await postProcessTavernWireMessages(messages, { strict: true, placeholders: true });
 
     const isClaudeModel = /claude/i.test(creds.model || '');
     const payload = {
@@ -11505,12 +12547,24 @@ code, pre {
       let res = null;
       try {
         resetTavernTimeout();
-        res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
-          method: 'POST',
-          headers: reqHeaders,
-          body: JSON.stringify(payload),
-          signal: abortCtrl.signal
-        });
+        const extEffCfg = typeof window.getEffectiveApiConfig === 'function' ? window.getEffectiveApiConfig() : null;
+        const extEffBase = extEffCfg ? normalizeTavernBaseUrl(extEffCfg.proxyUrl || extEffCfg.url || extEffCfg.apiUrl || '') : '';
+        const canUseExternalPhoneTransport = typeof window.requestLlmapiWithFallback === 'function' &&
+          tavernState.apiConfig?.useExternalPhoneApi !== false &&
+          (!extEffBase || extEffBase === cleanBase);
+        if (canUseExternalPhoneTransport) {
+          res = await window.requestLlmapiWithFallback(payload, {
+            signal: abortCtrl.signal,
+            _preserveCallerStream: true
+          });
+        } else {
+          res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
+            method: 'POST',
+            headers: reqHeaders,
+            body: JSON.stringify(payload),
+            signal: abortCtrl.signal
+          });
+        }
         resetTavernTimeout();
       } catch (netErr) {
         if (netErr && netErr.name === 'AbortError') {
@@ -12009,39 +13063,23 @@ code, pre {
   };
 
   function formatTavernApiMessagesForDebugConsole(apiMessages) {
-    const blocks = Array.isArray(apiMessages?._debugBlocks)
-      ? apiMessages._debugBlocks
-      : (Array.isArray(apiMessages) ? apiMessages : []);
+    const blocks = Array.isArray(apiMessages) ? apiMessages : [];
     if (blocks.length === 0) return '';
     const textBlocks = [];
     blocks.forEach((msg, idx) => {
-      const role = msg?.role || 'system';
-      let baseRoleTitle = '系统提示与全部注入词';
-      if (role === 'user') baseRoleTitle = '用户输入';
-      else if (role === 'assistant') baseRoleTitle = '助手历史回复与预填充';
-      const detailLabel = msg?._debugLabel ? ` · ${msg._debugLabel}` : '';
+      const role = (idx > 0 && msg?.role === 'system') ? 'user' : (msg?.role || 'system');
+      let baseRoleTitle = '系统提示与设定注入';
+      if (role === 'user') baseRoleTitle = '用户消息与上下文';
+      else if (role === 'assistant') baseRoleTitle = '助手回复与预填充';
       const rawContent = String(msg?.content || '');
       const itemTokens = estimateTokens(rawContent);
-      const curIsCtx = Boolean(msg?._isChatContext);
-      const prevIsCtx = idx > 0 ? Boolean(blocks[idx - 1]?._isChatContext) : false;
-      const nextIsCtx = idx < blocks.length - 1 ? Boolean(blocks[idx + 1]?._isChatContext) : false;
-
-      let blockStr = `【第 ${idx + 1} 块消息 · ${baseRoleTitle}${detailLabel} · ${role} · ${itemTokens} Tokens】\n${rawContent}`;
-      if (curIsCtx && !prevIsCtx) {
-        blockStr = `【上下文 开始】\n${blockStr}`;
-      }
-      if (curIsCtx && !nextIsCtx) {
-        blockStr = `${blockStr}\n【上下文 结束】`;
-      }
-      textBlocks.push(blockStr);
+      textBlocks.push(`【消息 #${idx + 1} · ${baseRoleTitle} · ${role} · ${itemTokens} Tokens】\n${rawContent}`);
     });
     return textBlocks.join('\n\n');
   }
 
   function calculateTavernApiMessagesTokens(apiMessages) {
-    const blocks = Array.isArray(apiMessages?._debugBlocks)
-      ? apiMessages._debugBlocks
-      : (Array.isArray(apiMessages) ? apiMessages : []);
+    const blocks = Array.isArray(apiMessages) ? apiMessages : [];
     return blocks.reduce((sum, m) => sum + estimateTokens(String(m?.content || '')), 0);
   }
 
@@ -17482,6 +18520,12 @@ code, pre {
           rawReplyText: result.rawContent || ((result.reasoning ? `=== AI 深度思考推理 ===\n${result.reasoning}\n\n=== AI 完整回复与输出内容 ===\n` : '') + (result.content || ''))
         });
         syncTavernGeneratingUiState(false);
+        const swipeMvuStore = window.Mvu ? window.Mvu.getMvuData({ type: 'message', message_id: targetMesIndex }) : null;
+        if (swipeMvuStore && swipeMvuStore.stat_data) {
+          if (parseAndApplyMvuUpdateVariableText(result.rawContent || result.content || '', swipeMvuStore.stat_data)) {
+            await window.Mvu.replaceMvuData(swipeMvuStore, { type: 'message', message_id: targetMesIndex });
+          }
+        }
         await saveTavernStore();
         appendOrUpdateSingleFloorDom(targetMesIndex, { skipMessageUpdatedEvent: true });
         const mesBeforeSwipeEvt = targetMsg.mes;
@@ -17498,6 +18542,12 @@ code, pre {
       } else {
         const newFloorIdx = sess.messages.length;
         const nowTs = Date.now();
+        const prevFloorStore = newFloorIdx > 0 && window.Mvu
+          ? window.Mvu.getMvuData({ type: 'message', message_id: newFloorIdx - 1 })
+          : null;
+        const initialFloorVars = (prevFloorStore && typeof prevFloorStore === 'object')
+          ? JSON.parse(JSON.stringify(prevFloorStore))
+          : {};
         const botMsg = {
           mesid: newFloorIdx,
           name: card.name || '角色',
@@ -17508,11 +18558,16 @@ code, pre {
           swipes: [''],
           swipe_id: 0,
           swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: 1 }],
+          data: { variables: initialFloorVars },
+          variables: [initialFloorVars],
           reasoning: '',
           gen_time: '',
           token_count: 1
         };
         sess.messages.push(botMsg);
+        if (newFloorIdx > 0) {
+          appendOrUpdateSingleFloorDom(newFloorIdx - 1, { skipMessageUpdatedEvent: true });
+        }
         appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
         startNonStreamFloorTimer(newFloorIdx);
 
@@ -17535,8 +18590,9 @@ code, pre {
             await saveTavernStore();
             const orphanNode = document.querySelector(`#chat .mes[mesid="${newFloorIdx}"]`);
             if (orphanNode) orphanNode.remove();
-            const prevLastNode = document.querySelector(`#chat .mes[mesid="${sess.messages.length - 1}"]`);
-            if (prevLastNode) prevLastNode.classList.add('last_mes');
+            if (sess.messages.length > 0) {
+              appendOrUpdateSingleFloorDom(sess.messages.length - 1, { skipMessageUpdatedEvent: true });
+            }
           }
           throw genErr;
         }
@@ -17548,6 +18604,12 @@ code, pre {
         botMsg.gen_time = result.genTime;
         botMsg.token_count = estimateTokens(result.content);
         recordMessageToSwipeInfo(botMsg, 0);
+        const newMvuStore = window.Mvu ? window.Mvu.getMvuData({ type: 'message', message_id: newFloorIdx }) : null;
+        if (newMvuStore && newMvuStore.stat_data) {
+          if (parseAndApplyMvuUpdateVariableText(result.rawContent || result.content || '', newMvuStore.stat_data)) {
+            await window.Mvu.replaceMvuData(newMvuStore, { type: 'message', message_id: newFloorIdx });
+          }
+        }
         recordTavernDebugConsoleLog({
           id: currentDbgLogId,
           chatId: sess?.chatId || sess?.id || '',
