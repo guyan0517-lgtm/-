@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22119,12 +22119,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
         })();
 
-        // 后台保活音频自动激活：生成 8 秒真实低频微幅 PCM WAV 音频并配合 Web Locks 与 Worker 心跳，防止切后台时浏览器挂起网络与 JS 线程
+        // 后台保活音频自动激活：生成 12 秒真实多频低幅 PCM WAV 音频（Blob URL 优先）并配合 WakeLock、Web Locks 与 Worker 心跳，防止非流式长耗时请求切后台或息屏时被系统判定为静音而挂起网络
         let _keepAliveAudioCtx = null;
+        let _keepAliveBlobUrl = "";
         const _SILENT_WAV_URI = (function createKeepAliveWav() {
           try {
             const sampleRate = 8000;
-            const durationSeconds = 8;
+            const durationSeconds = 12;
             const numSamples = sampleRate * durationSeconds;
             const dataSize = numSamples * 2;
             const buffer = new ArrayBuffer(44 + dataSize);
@@ -22146,9 +22147,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             writeStr(36, "data");
             view.setUint32(40, dataSize, true);
             for (let i = 0; i < numSamples; i++) {
-              const sampleVal = Math.round(Math.sin((2 * Math.PI * 30 * i) / sampleRate) * 48);
-              view.setInt16(44 + i * 2, sampleVal || 1, true);
+              const t = i / sampleRate;
+              const wave =
+                Math.sin(2 * Math.PI * 24 * t) * 180 +
+                Math.sin(2 * Math.PI * 37 * t) * 110 +
+                Math.cos(2 * Math.PI * 53 * t) * 70;
+              const sampleVal = Math.round(wave);
+              view.setInt16(44 + i * 2, sampleVal === 0 ? 12 : sampleVal, true);
             }
+            try {
+              if (typeof Blob !== "undefined" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+                const wavBlob = new Blob([buffer], { type: "audio/wav" });
+                _keepAliveBlobUrl = URL.createObjectURL(wavBlob);
+              }
+            } catch (_) {}
             const bytes = new Uint8Array(buffer);
             let binary = "";
             const chunkSize = 4096;
@@ -22163,6 +22175,36 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         let _lastKeepAliveCheckTs = 0;
         let _keepAliveSrcConfigured = false;
+        let _keepAliveListenersBound = false;
+        let _bgTaskKeepAliveCount = 0;
+        let _activeWakeLock = null;
+
+        async function requestScreenWakeLockIfNeeded() {
+          try {
+            if (_bgTaskKeepAliveCount <= 0 && !(window.state && window.state.globalSettings && window.state.globalSettings.alwaysKeepAlive)) {
+              return;
+            }
+            if (document.hidden) return;
+            if (_activeWakeLock && !_activeWakeLock.released) return;
+            if (navigator.wakeLock && typeof navigator.wakeLock.request === "function") {
+              _activeWakeLock = await navigator.wakeLock.request("screen");
+              _activeWakeLock.addEventListener("release", () => {
+                _activeWakeLock = null;
+              });
+            }
+          } catch (_) {}
+        }
+
+        function releaseScreenWakeLockIfIdle() {
+          try {
+            if (_bgTaskKeepAliveCount > 0) return;
+            if (_activeWakeLock && typeof _activeWakeLock.release === "function") {
+              _activeWakeLock.release().catch(() => {});
+              _activeWakeLock = null;
+            }
+          } catch (_) {}
+        }
+
         function ensureBackgroundKeepAlive(evt, force) {
           const now = Date.now();
           if (!force && evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
@@ -22176,57 +22218,114 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           _lastKeepAliveCheckTs = now;
           try {
             if (audio) {
-              if (!_keepAliveSrcConfigured || audio.error) {
-                const curSrc = audio.getAttribute("src") || "";
-                if (!curSrc || curSrc.includes("catbox.moe") || audio.error) {
-                  audio.src = _SILENT_WAV_URI;
+              const preferredSrc = _keepAliveBlobUrl || _SILENT_WAV_URI;
+              const curSrc = audio.getAttribute("src") || "";
+              const isCustomUserAudio =
+                curSrc &&
+                !curSrc.includes("catbox.moe") &&
+                curSrc !== _SILENT_WAV_URI &&
+                curSrc !== _keepAliveBlobUrl &&
+                !curSrc.startsWith("data:audio/wav;base64,UklGR");
+
+              if (!_keepAliveSrcConfigured || audio.error || !curSrc || curSrc.includes("catbox.moe")) {
+                if (!isCustomUserAudio || audio.error) {
+                  audio.src = preferredSrc;
                 }
                 audio.loop = true;
-                audio.volume = 0.02;
+                audio.volume = isCustomUserAudio ? Math.max(0.15, Number(audio.volume) || 0.25) : 1.0;
                 audio.muted = false;
                 audio.setAttribute("playsinline", "");
                 audio.setAttribute("webkit-playsinline", "");
-                _keepAliveSrcConfigured = true;
+                audio.preload = "auto";
+              } else if (!isCustomUserAudio && audio.volume < 0.9) {
+                audio.volume = 1.0;
               }
+
+              if (!_keepAliveListenersBound) {
+                _keepAliveListenersBound = true;
+                audio.addEventListener("pause", () => {
+                  if (_bgTaskKeepAliveCount > 0 || document.hidden) {
+                    setTimeout(() => {
+                      try {
+                        if (audio.paused) audio.play().catch(() => {});
+                      } catch (_) {}
+                    }, 60);
+                  }
+                });
+                audio.addEventListener("ended", () => {
+                  try {
+                    audio.currentTime = 0;
+                    audio.play().catch(() => {});
+                  } catch (_) {}
+                });
+              }
+
               if (audio.paused || audio.ended) {
                 const playPromise = audio.play();
-                if (playPromise && typeof playPromise.catch === "function") {
-                  playPromise.catch(() => {
-                    try {
-                      if (audio.src !== _SILENT_WAV_URI) {
-                        audio.src = _SILENT_WAV_URI;
-                        audio.volume = 0.02;
-                        audio.play().catch(() => {});
-                      }
-                    } catch (_) {}
-                  });
+                if (playPromise && typeof playPromise.then === "function") {
+                  playPromise
+                    .then(() => {
+                      _keepAliveSrcConfigured = true;
+                      try {
+                        if ("mediaSession" in navigator && navigator.mediaSession) {
+                          navigator.mediaSession.playbackState = "playing";
+                        }
+                      } catch (_) {}
+                    })
+                    .catch(() => {
+                      _keepAliveSrcConfigured = false;
+                      try {
+                        if (audio.src !== _SILENT_WAV_URI) {
+                          audio.src = _SILENT_WAV_URI;
+                          audio.volume = 1.0;
+                          audio.play()
+                            .then(() => {
+                              _keepAliveSrcConfigured = true;
+                            })
+                            .catch(() => {});
+                        }
+                      } catch (_) {}
+                    });
+                } else {
+                  _keepAliveSrcConfigured = true;
                 }
+              } else {
+                _keepAliveSrcConfigured = true;
               }
             }
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (AudioCtx) {
               if (!_keepAliveAudioCtx) {
                 _keepAliveAudioCtx = new AudioCtx();
-                const osc = _keepAliveAudioCtx.createOscillator();
+                const osc1 = _keepAliveAudioCtx.createOscillator();
+                const osc2 = _keepAliveAudioCtx.createOscillator();
                 const gain = _keepAliveAudioCtx.createGain();
-                osc.frequency.value = 30;
-                gain.gain.value = 0.0005;
-                osc.connect(gain);
+                osc1.type = "sine";
+                osc2.type = "triangle";
+                osc1.frequency.value = 26;
+                osc2.frequency.value = 39;
+                gain.gain.value = 0.008;
+                osc1.connect(gain);
+                osc2.connect(gain);
                 gain.connect(_keepAliveAudioCtx.destination);
-                osc.start();
+                osc1.start();
+                osc2.start();
               }
-              if (_keepAliveAudioCtx.state === "suspended") {
+              if (_keepAliveAudioCtx.state === "suspended" || _keepAliveAudioCtx.state === "interrupted") {
                 _keepAliveAudioCtx.resume().catch(() => {});
               }
+            }
+            if (_bgTaskKeepAliveCount > 0) {
+              requestScreenWakeLockIfNeeded();
             }
           } catch (_) {}
         }
         window.ensureBackgroundKeepAlive = ensureBackgroundKeepAlive;
 
-        let _bgTaskKeepAliveCount = 0;
         window.acquireBackgroundTaskKeepAlive = function() {
           _bgTaskKeepAliveCount++;
           ensureBackgroundKeepAlive(null, true);
+          requestScreenWakeLockIfNeeded();
           if (typeof window.startBackgroundWorkerHeartbeat === "function") {
             window.startBackgroundWorkerHeartbeat();
           }
@@ -22245,8 +22344,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (released) return;
             released = true;
             _bgTaskKeepAliveCount = Math.max(0, _bgTaskKeepAliveCount - 1);
-            if (_bgTaskKeepAliveCount === 0 && typeof window.stopBackgroundWorkerHeartbeat === "function") {
-              window.stopBackgroundWorkerHeartbeat();
+            if (_bgTaskKeepAliveCount === 0) {
+              if (typeof window.stopBackgroundWorkerHeartbeat === "function") {
+                window.stopBackgroundWorkerHeartbeat();
+              }
+              releaseScreenWakeLockIfIdle();
             }
             if (typeof releaseLock === "function") {
               try { releaseLock(); } catch (_) {}
@@ -22266,13 +22368,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } catch (_) {}
         }
-        document.addEventListener("pointerdown", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
-        document.addEventListener("touchstart", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
-        document.addEventListener("click", () => { ensureBackgroundKeepAlive(null, true); tryRequestNotificationPermissionOnGesture(); }, { passive: true });
+        ["pointerdown", "pointerup", "touchstart", "touchend", "mouseup", "click"].forEach((evtName) => {
+          document.addEventListener(
+            evtName,
+            () => {
+              ensureBackgroundKeepAlive(null, true);
+              tryRequestNotificationPermissionOnGesture();
+            },
+            { passive: true }
+          );
+        });
         document.addEventListener("keydown", ensureBackgroundKeepAlive, { passive: true });
         document.addEventListener("visibilitychange", () => {
           ensureBackgroundKeepAlive(null, true);
           if (!document.hidden) {
+            requestScreenWakeLockIfNeeded();
             if (typeof window.recoverPendingNaiImagesInActiveChat === "function") {
               setTimeout(() => window.recoverPendingNaiImagesInActiveChat(), 120);
             }
@@ -33218,9 +33328,37 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         window.applyMashuChatSettingsUI = function (chat) {
-          if (!chat || !(chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor)) return;
+          const isMashu = Boolean(chat && (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor));
+          if (!isMashu) return;
+
           const aiPersonaCard = document.getElementById("ai-persona-card");
           if (aiPersonaCard) aiPersonaCard.style.display = "none";
+
+          const myPersonaCard = document.getElementById("my-persona-card");
+          if (myPersonaCard) myPersonaCard.style.display = "block";
+          const myPersonaGroup = document.getElementById("my-persona-group");
+          if (myPersonaGroup) myPersonaGroup.style.display = "block";
+          const myAvatarGroup = document.getElementById("my-avatar-group");
+          if (myAvatarGroup) myAvatarGroup.style.display = "block";
+          const myGroupNickGroup = document.getElementById("my-group-nickname-group");
+          if (myGroupNickGroup) myGroupNickGroup.style.display = "none";
+
+          const grpMyNickInput = document.getElementById("my-group-nickname-input");
+          const grpMyNameInput = document.getElementById("my-name-input");
+          if (grpMyNickInput) grpMyNickInput.oninput = null;
+          if (grpMyNameInput) grpMyNameInput.oninput = null;
+
+          const otherCard = document.getElementById("other-settings-card");
+          if (otherCard) otherCard.style.display = "block";
+          const summaryToggle = document.getElementById("summary-toggle");
+          const summaryDetails = document.getElementById("summary-details-container");
+          if (summaryToggle && summaryDetails) {
+            const sumEnabled = chat.settings && chat.settings.summary && chat.settings.summary.enabled !== undefined
+              ? Boolean(chat.settings.summary.enabled)
+              : true;
+            summaryToggle.checked = sumEnabled;
+            summaryDetails.style.display = sumEnabled ? "block" : "none";
+          }
 
           const chatNameGroup = document.getElementById("chat-name-group");
           if (chatNameGroup) {
@@ -33253,34 +33391,55 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const modBtn = document.getElementById("open-chat-module-btn");
           if (modBtn) modBtn.style.display = "none";
 
+          const mashuAvaUrl = window.MASHU_BUILTIN_DATA_URL || window.MASHU_AVATAR_URL || (chat.settings && chat.settings.aiAvatar) || "";
+          const aiAvaPreview = document.getElementById("ai-avatar-preview");
+          if (aiAvaPreview && mashuAvaUrl) {
+            if (typeof window.setCleanPreviewImgSrc === "function") {
+              window.setCleanPreviewImgSrc(aiAvaPreview, mashuAvaUrl);
+            } else {
+              aiAvaPreview.src = mashuAvaUrl;
+            }
+          }
+
           const aiAvatarGroup = document.getElementById("ai-avatar-group");
           if (aiAvatarGroup) {
             aiAvatarGroup.style.display = "block";
             const btnStack = aiAvatarGroup.querySelector(".btn-stack");
             if (btnStack) {
-              btnStack.style.display = "";
-              Array.from(btnStack.children).forEach((btn) => {
-                if (btn.classList && (btn.classList.contains("change-frame-btn") || btn.id === "mashu-cloud-sticker-entry-btn")) {
-                  btn.style.display = "";
-                } else {
-                  btn.style.display = "none";
-                }
-              });
+              btnStack.style.display = "flex";
+              btnStack.style.flexDirection = "row";
+              btnStack.style.flexWrap = "wrap";
+              btnStack.style.gap = "8px";
               let mashuStickerBtn = document.getElementById("mashu-cloud-sticker-entry-btn");
               if (!mashuStickerBtn) {
                 mashuStickerBtn = document.createElement("button");
                 mashuStickerBtn.type = "button";
                 mashuStickerBtn.id = "mashu-cloud-sticker-entry-btn";
-                mashuStickerBtn.className = "moe-btn-secondary change-frame-btn";
-                mashuStickerBtn.textContent = "表情";
-                mashuStickerBtn.onclick = function () {
-                  if (typeof window.openMashuStickerManagerModal === "function") {
-                    window.openMashuStickerManagerModal();
-                  }
-                };
                 btnStack.appendChild(mashuStickerBtn);
               }
-              mashuStickerBtn.style.display = isMashu ? "" : "none";
+              mashuStickerBtn.className = "moe-btn-secondary";
+              mashuStickerBtn.textContent = "表情";
+              mashuStickerBtn.onclick = function (e) {
+                if (e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+                if (typeof window.openMashuStickerManagerModal === "function") {
+                  window.openMashuStickerManagerModal();
+                }
+              };
+              Array.from(btnStack.children).forEach((btn) => {
+                if (!btn) return;
+                if (btn.id === "mashu-cloud-sticker-entry-btn") {
+                  btn.style.display = "inline-flex";
+                } else if (btn.classList && btn.classList.contains("change-frame-btn")) {
+                  btn.dataset.type = "ai";
+                  btn.textContent = "头像框";
+                  btn.style.display = "inline-flex";
+                } else {
+                  btn.style.display = "none";
+                }
+              });
             }
           }
         };
@@ -33411,6 +33570,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               mashuChat = await db.chats.get(mashuId);
             } catch (e) {}
           }
+          let personaBackup = (state.globalSettings && state.globalSettings.mashuUserPersonaBackup) || null;
+          if (!personaBackup) {
+            try {
+              const rawLs = localStorage.getItem("ephone_mashu_user_persona_backup_v1");
+              if (rawLs) personaBackup = JSON.parse(rawLs);
+            } catch (_) {}
+          }
           if (!mashuChat) {
             mashuChat = {
               id: mashuId,
@@ -33431,6 +33597,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 keeperForcedDraw: false,
                 maxMemory: 60,
                 replyCountRange: { min: 1, max: 9 },
+                summary: { enabled: true, mode: "auto", count: 20, prompt: "" },
                 aiCocPanel: typeof getDefaultCocData === "function" ? getDefaultCocData() : { stats: {}, skills: {}, calculated: {} }
               }
             };
@@ -33449,7 +33616,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             mashuChat.settings.aiAvatar = mashuAvatar;
             mashuChat.settings.aiPersona = "我是麻薯，是陪伴你的虚拟朋友。";
             mashuChat.settings.keeperForcedDraw = false;
-            mashuChat.settings.replyCountRange = { min: 1, max: 9 };
+            if (!mashuChat.settings.replyCountRange) {
+              mashuChat.settings.replyCountRange = { min: 1, max: 9 };
+            }
+            if (!mashuChat.settings.summary || typeof mashuChat.settings.summary !== "object") {
+              mashuChat.settings.summary = { enabled: true, mode: "auto", count: 20, prompt: "" };
+            }
             if (Array.isArray(mashuChat.history)) {
               mashuChat.history.forEach((msg) => {
                 if (!msg || typeof msg !== "object") return;
@@ -33459,6 +33631,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               });
             }
+          }
+          if (personaBackup && typeof personaBackup === "object" && mashuChat && mashuChat.settings) {
+            if (!mashuChat.settings.myName && personaBackup.myName) mashuChat.settings.myName = personaBackup.myName;
+            if (!mashuChat.settings.myPersona && personaBackup.myPersona) mashuChat.settings.myPersona = personaBackup.myPersona;
+            if (!mashuChat.settings.myAvatar && personaBackup.myAvatar) mashuChat.settings.myAvatar = personaBackup.myAvatar;
+            if (mashuChat.settings.myAge === undefined && personaBackup.myAge !== undefined) mashuChat.settings.myAge = personaBackup.myAge;
+            if (!mashuChat.settings.myBirthday && personaBackup.myBirthday) mashuChat.settings.myBirthday = personaBackup.myBirthday;
+            if (!mashuChat.settings.myGender && personaBackup.myGender) mashuChat.settings.myGender = personaBackup.myGender;
+            if (!mashuChat.settings.myGenderNote && personaBackup.myGenderNote) mashuChat.settings.myGenderNote = personaBackup.myGenderNote;
+            if (!mashuChat.settings.myAvatarFrame && personaBackup.myAvatarFrame) mashuChat.settings.myAvatarFrame = personaBackup.myAvatarFrame;
+            if (!mashuChat.settings.aiAvatarFrame && personaBackup.aiAvatarFrame) mashuChat.settings.aiAvatarFrame = personaBackup.aiAvatarFrame;
           }
           state.chats[mashuId] = mashuChat;
           for (const cid of Object.keys(state.chats)) {
@@ -33690,9 +33873,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   return {
                     id: e.id,
                     key: e.key || e.name || e.title || "未命名条目",
+                    groupId: e.groupId || "",
                     groupName: grp ? (grp.name || "") : "",
                     enabled: isEntryEnabled,
-                    content: String(e.content || "").slice(0, 260)
+                    content: String(e.content || "").slice(0, 2000)
                   };
                 });
                 const enabledEntryNames = mappedEntries.filter(e => e.enabled).map(e => e.key);
@@ -33700,23 +33884,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 return {
                   id: effectivePreset.id,
                   name: effectivePreset.name,
-                  headerContent: String(effectivePreset.headerContent || "").slice(0, 500),
-                  generalContent: String(effectivePreset.generalContent || "").slice(0, 800),
-                  cocContent: String(effectivePreset.cocContent || "").slice(0, 500),
+                  structureNote: "注意：该思维链为【头部/正文骨架 + 下方entries独立小条目】双层结构！headerContent和generalContent是顶部与正文框架，正文里通过名字引用下方的entries小条目。修改、新增或开关下方小条目时，必须使用entryEdits操作entries数组，绝对禁止直接改写generalContent或把小条目内容塞进generalContent正文里！",
+                  headerContent: String(effectivePreset.headerContent || "").slice(0, 3000),
+                  generalContent: String(effectivePreset.generalContent || "").slice(0, 4000),
+                  cocContent: String(effectivePreset.cocContent || "").slice(0, 3000),
                   groupCount: Array.isArray(effectivePreset.groups) ? effectivePreset.groups.length : 0,
+                  groups: Array.isArray(effectivePreset.groups) ? effectivePreset.groups.map(g => ({ id: g.id, name: g.name, enabled: g.enabled !== false })) : [],
                   entryCount: allEntries.length,
                   enabledEntryCount: enabledEntryNames.length,
                   enabledEntryNames: enabledEntryNames,
                   disabledEntryNames: disabledEntryNames,
-                  entries: mappedEntries.slice(0, 80)
+                  entries: mappedEntries.slice(0, 100)
                 };
               });
               return JSON.stringify({ totalPresets: presets.length, presets: list }, null, 2);
             }
             if (targetType === "qq_chat" || targetType === "chat" || targetType === "persona") {
-              const found = typeof window.resolveMashuTargetChat === "function"
-                ? window.resolveMashuTargetChat(qName, "")
-                : null;
+              let found = null;
+              if (!qName || qName === "麻薯" || qName.includes("麻薯")) {
+                found = (state && state.chats && state.chats[window.MASHU_COMPANION_ID]) || null;
+              }
+              if (!found && typeof window.resolveMashuTargetChat === "function") {
+                found = window.resolveMashuTargetChat(qName, "");
+              }
               if (!found) return "未找到对应的聊天、群聊或KPC档案";
               const foundHist = (Array.isArray(found.history) && found.history.length > 0)
                 ? found.history
@@ -33820,6 +34010,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             .trim();
           const ctx = String(contextText || "").trim();
 
+          if (cleanQ === "麻薯" || cleanQ === String(window.MASHU_COMPANION_ID || "mashu_companion_author")) {
+            return (state && state.chats && state.chats[window.MASHU_COMPANION_ID]) || null;
+          }
+
           const getTitle = (c) =>
             (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(c) : "") ||
             c.mainGroupName ||
@@ -33877,7 +34071,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (wantsGroup && c.isGroup) {
               score += 350;
             }
-            if (hist.length > 0) {
+            if (score > 0 && hist.length > 0) {
               score += 220 + Math.min(180, hist.length * 2);
             }
             if (score > bestScore) {
@@ -33888,6 +34082,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           if (bestChat && bestScore > 0) return bestChat;
           if (wantsGroup && groupChats.length > 0) return groupChats[0];
+          if (!cleanQ && ctx) return null;
           return groupChats[0] || singleChats[0] || allSorted[0];
         };
 
@@ -33971,12 +34166,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? `【小手机思维链预设目录】：` + cotList.map(p => `「${p.name}」[ID=${p.id}]`).join("、")
                 : "【小手机思维链预设目录】：默认思维链";
 
+              const mashuMyName = String(chat?.settings?.myName || chat?.settings?.myNickname || "我").trim();
+              const mashuMyPersona = String(chat?.settings?.myPersona || "").trim();
+              const mashuSummaries = Array.isArray(chat?.history)
+                ? chat.history.filter(m => m && m.type === "summary" && m.content)
+                : [];
+              const mashuSelfBlock = `【当前麻薯自己的聊天窗口（ID=${chat?.id || "mashu_companion_author"}）中「我的人设」】：名字=${mashuMyName}，人设=${mashuMyPersona || "暂未填写"}` +
+                (mashuSummaries.length > 0
+                  ? `\n【当前麻薯窗口已保存的长期记忆总结（共${mashuSummaries.length}条）】：\n` + mashuSummaries.slice(-8).map((s, idx) => `  [${idx + 1}] ${s.header ? "【" + s.header + "】" : ""}${String(s.content || "").trim()}`).join("\n")
+                  : "");
+
               let onDemandDetailBlock = "";
               if (userWantsDirectEditOrCheck && lastUserMsg) {
                 const matchedChat = typeof window.resolveMashuTargetChat === "function" ? window.resolveMashuTargetChat("", lastUserMsg) : null;
-                if (matchedChat) {
+                if (matchedChat && (!window.isMashuChat || !window.isMashuChat(matchedChat))) {
                   const mTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(matchedChat) : "") || matchedChat.mainGroupName || matchedChat.name;
-                  if (lastUserMsg.includes(mTitle) || /这个群|那个群|群里|我的人设|他的人设|她的人设|人设/.test(lastUserMsg)) {
+                  if (lastUserMsg.includes(mTitle) || /这个群|那个群|群里/.test(lastUserMsg)) {
                     onDemandDetailBlock += `\n【按需读取的目标聊天「${mTitle}」当前人设与配置】：\n` + window.getMashuLiveInspectionSnapshot("persona", mTitle);
                   }
                 }
@@ -33991,7 +34196,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               }
 
-              return [groupBlock, singleBlock, wbBlock, rxBlock, cotBlock, onDemandDetailBlock].filter(Boolean).join("\n");
+              return [mashuSelfBlock, groupBlock, singleBlock, wbBlock, rxBlock, cotBlock, onDemandDetailBlock].filter(Boolean).join("\n");
             } catch (_) {
               return "暂无其他聊天";
             }
@@ -34067,16 +34272,18 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
   - 查看小手机思维链：\`[申请连接:thought_chain:思维链名称或默认:让我看看]\`
 - 【二、直接帮对方写人设/改人设/加世界书/改正则/改思维链（不用动鼠标，直接改完出系统提示）】：
   当对方让你帮他在某个群聊或单聊里写/改「我的人设」（玩家人设）、改对面角色或某个群成员的人设、添加或修改小手机世界书、添加或修改小手机正则、或者修改小手机思维链时，**绝对不要用虚拟鼠标去点**！你只需要在返回的根JSON对象里附带顶级字段 \`"phoneEdits"\` 数组，系统会自动在后台直接改好并在聊天里弹出一条提示（例如「[麻薯已修改「xxx」中我的人设]」「[麻薯已新建世界书「xxx」]」）。支持的 \`phoneEdits\` 指令格式如下：
-  1. 修改某个单聊或群聊里「我的人设」（玩家自己的人设）或名字：
-     \`{"action": "update_my_persona", "chatName": "群聊或单聊名称", "myName": "可选新名字", "myPersona": "写好的完整玩家人设内容"}\`
+  1. 修改某个单聊或群聊里「我的人设」（玩家自己的人设）或名字（注意：如果对方没提群聊或别的单聊名字，默认改的是「麻薯」窗口里我的人设，chatName填"麻薯"）：
+     \`{"action": "update_my_persona", "chatName": "麻薯或指定群聊单聊名称", "myName": "可选新名字", "myPersona": "写好的完整玩家人设内容"}\`
   2. 修改某个单聊角色的人设，或修改某个群聊里特定群成员/KPC的人设：
      \`{"action": "update_ai_persona", "chatName": "群聊或单聊名称", "memberName": "如果是群聊则填群成员名字，单聊留空", "persona": "写好的完整角色人设内容"}\`
   3. 在小手机里新建或修改一条世界书（并可选自动挂载到某个聊天/群聊）：
      \`{"action": "upsert_world_book", "name": "世界书条目名称", "content": "世界书具体设定内容", "enabled": true, "constant": true, "keys": ["触发词1"], "linkToChat": "可选要自动挂载到的群聊或单聊名称"}\`
   4. 在小手机正则库里新建或修改一条正则（并设置启用或关闭）：
      \`{"action": "upsert_regex", "name": "正则名称", "findRegex": "匹配正则如 /foo/g", "replaceString": "替换内容", "enabled": true}\`
-  5. 修改或新建小手机思维链预设（或绑定到某个聊天）：
-     \`{"action": "upsert_thought_chain", "name": "思维链预设名称", "generalContent": "通用思维链内容", "headerContent": "可选头部提示", "cocContent": "可选跑团思维链内容", "bindToChat": "可选要绑定到的聊天名称"}\`
+  5. 修改或新建小手机思维链预设（严格保持【头部/正文骨架 + 下方entries独立小条目】双层格式）：
+     - 如果该思维链包含下方独立小条目（entries），你要修改或新增下方小条目时，必须使用 \`entryEdits\` 数组直接修改对应的子条目，**绝对禁止把小条目的内容塞进 generalContent 正文里，也绝对禁止乱改原有的 headerContent 或 generalContent 正文引用结构**！格式：
+       \`{"action": "upsert_thought_chain", "name": "思维链预设名称", "entryEdits": [{"action": "upsert", "key": "小条目名称", "content": "修改后的小条目完整内容", "groupName": "可选分组名", "enabled": true}], "bindToChat": "可选要绑定到的聊天名称"}\`
+     - 只有当对方明确要求修改思维链顶部/通用正文骨架本身（或新建一个纯文本思维链）时，才传 \`"headerContent"\` 或 \`"generalContent"\` 且加上 \`"replaceGeneralSkeleton": true\`。
   6. 修改酒馆内部数据（若操作对象是酒馆角色卡/酒馆世界书/酒馆正则）：
      直接调上面的对应项或使用酒馆修改能力。
 - 【三、虚拟鼠标 \`mouseActions\` 仅限「偷看」或「教学指路」时使用】：
@@ -35031,7 +35238,37 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 if (typeof edit.myName === "string" && edit.myName.trim()) {
                   targetChat.settings.myName = edit.myName.trim();
-                  targetChat.settings.myNickname = edit.myName.trim();
+                  if (targetChat.isGroup) {
+                    targetChat.settings.myNickname = edit.myName.trim();
+                  }
+                }
+                if (targetChat.id === window.MASHU_COMPANION_ID || targetChat.isMashuAuthor) {
+                  const backupObj = {
+                    myName: targetChat.settings.myName || "",
+                    myPersona: targetChat.settings.myPersona || "",
+                    myAvatar: targetChat.settings.myAvatar || "",
+                    myAge: targetChat.settings.myAge,
+                    myBirthday: targetChat.settings.myBirthday || "",
+                    myGender: targetChat.settings.myGender || "",
+                    myGenderNote: targetChat.settings.myGenderNote || "",
+                    myAvatarFrame: targetChat.settings.myAvatarFrame || "",
+                    aiAvatarFrame: targetChat.settings.aiAvatarFrame || ""
+                  };
+                  if (state && state.globalSettings) {
+                    state.globalSettings.mashuUserPersonaBackup = backupObj;
+                    if (typeof db !== "undefined" && db.globalSettings) {
+                      db.globalSettings.put(state.globalSettings).catch(() => {});
+                    }
+                  }
+                  try {
+                    localStorage.setItem("ephone_mashu_user_persona_backup_v1", JSON.stringify(backupObj));
+                  } catch (_) {}
+                }
+                if (state && String(state.activeChatId) === String(targetChat.id)) {
+                  const myNameEl = document.getElementById("my-name-input");
+                  const myPersonaEl = document.getElementById("my-persona");
+                  if (myNameEl && targetChat.settings.myName) myNameEl.value = targetChat.settings.myName;
+                  if (myPersonaEl && targetChat.settings.myPersona !== undefined) myPersonaEl.value = targetChat.settings.myPersona;
                 }
                 if (typeof db !== "undefined" && db.chats) {
                   await db.chats.put(targetChat);
@@ -35163,33 +35400,175 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   try { window.renderCustomRegexRulesList(); } catch (_) {}
                 }
                 notices.push(`[麻薯已${isNewRx ? "向正则库添加" : "修改"}正则「${rxName}」并设为${isEnabled ? "启用" : "关闭"}]`);
-              } else if (act === "upsert_thought_chain" || act === "update_thought_chain") {
+              } else if (
+                act === "upsert_thought_chain" ||
+                act === "update_thought_chain" ||
+                act === "upsert_thought_chain_entry" ||
+                act === "update_thought_chain_entry"
+              ) {
                 if (typeof db === "undefined" || !db.thoughtChainPresets) continue;
                 const allPresets = await db.thoughtChainPresets.toArray();
-                const tcName = String(edit.name || "默认思维链").trim();
-                let targetPreset = allPresets.find(p => p && (String(p.name || "").trim() === tcName || String(p.id) === tcName)) || allPresets[0];
+                const tcName = String(edit.name || edit.presetName || "默认思维链").trim();
+                let targetPreset =
+                  allPresets.find(p => p && (String(p.name || "").trim() === tcName || String(p.id) === tcName)) ||
+                  allPresets.find(p => p && (String(p.name || "").includes(tcName) || tcName.includes(String(p.name || "")))) ||
+                  allPresets[0];
                 let isNewTc = false;
+                let editedSubEntriesCount = 0;
+
+                const incomingEntryEdits = [];
+                if (Array.isArray(edit.entryEdits)) {
+                  incomingEntryEdits.push(...edit.entryEdits);
+                } else if (Array.isArray(edit.entries)) {
+                  incomingEntryEdits.push(...edit.entries);
+                }
+                if (edit.entryKey || edit.subEntryName || (act.includes("_entry") && (edit.key || edit.entryName))) {
+                  incomingEntryEdits.push({
+                    action: edit.entryAction || "upsert",
+                    id: edit.entryId,
+                    key: edit.entryKey || edit.subEntryName || edit.key || edit.entryName,
+                    content: edit.entryContent !== undefined ? edit.entryContent : edit.content,
+                    groupName: edit.groupName || edit.entryGroup,
+                    enabled: edit.entryEnabled !== undefined ? edit.entryEnabled : edit.enabled
+                  });
+                }
+
                 if (!targetPreset) {
                   isNewTc = true;
+                  const initGroups = [];
+                  const initEntries = incomingEntryEdits
+                    .filter(item => item && (item.key || item.name || item.title))
+                    .map((item, idx) => ({
+                      id: item.id || ("tce_" + Date.now() + "_" + idx + "_" + Math.random().toString(36).slice(2, 6)),
+                      key: String(item.key || item.name || item.title).trim(),
+                      groupId: "",
+                      enabled: item.enabled !== false,
+                      collapsed: false,
+                      content: String(item.content || "")
+                    }));
                   targetPreset = {
                     name: tcName,
                     headerContent: String(edit.headerContent || ""),
-                    generalContent: String(edit.generalContent || edit.content || ""),
+                    generalContent: initEntries.length > 0 && !edit.generalContent ? "" : String(edit.generalContent || edit.content || ""),
                     cocContent: String(edit.cocContent || ""),
-                    groups: [],
-                    entries: []
+                    groups: initGroups,
+                    entries: initEntries,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
                   };
                   const newId = await db.thoughtChainPresets.add(targetPreset);
                   targetPreset.id = newId;
+                  editedSubEntriesCount = initEntries.length;
                 } else {
-                  if (typeof edit.generalContent === "string" && edit.generalContent.trim()) {
-                    targetPreset.generalContent = edit.generalContent.trim();
-                  } else if (typeof edit.content === "string" && edit.content.trim()) {
-                    targetPreset.generalContent = edit.content.trim();
+                  if (
+                    (!Array.isArray(targetPreset.entries) || targetPreset.entries.length === 0) &&
+                    typeof targetPreset.generalContent === "string" &&
+                    targetPreset.generalContent.trim().startsWith("{") &&
+                    typeof window.parseThoughtChainFromText === "function"
+                  ) {
+                    const reparsed = window.parseThoughtChainFromText(targetPreset.generalContent, targetPreset.name || "导入思维链");
+                    if (reparsed && Array.isArray(reparsed.entries) && reparsed.entries.length > 0) {
+                      targetPreset.headerContent = reparsed.headerContent || targetPreset.headerContent || "";
+                      targetPreset.generalContent = reparsed.generalContent || "";
+                      targetPreset.cocContent = reparsed.cocContent || targetPreset.cocContent || "";
+                      targetPreset.groups = Array.isArray(reparsed.groups) ? reparsed.groups : [];
+                      targetPreset.entries = reparsed.entries;
+                    }
                   }
-                  if (typeof edit.headerContent === "string") targetPreset.headerContent = edit.headerContent;
-                  if (typeof edit.cocContent === "string") targetPreset.cocContent = edit.cocContent;
+                  if (!Array.isArray(targetPreset.entries)) targetPreset.entries = [];
+                  if (!Array.isArray(targetPreset.groups)) targetPreset.groups = [];
+                  const hasSubEntriesStructure = targetPreset.entries.length > 0;
+
+                  if (incomingEntryEdits.length > 0) {
+                    for (const sub of incomingEntryEdits) {
+                      if (!sub || typeof sub !== "object") continue;
+                      const subAct = String(sub.action || "upsert").toLowerCase().trim();
+                      const subKey = String(sub.key || sub.name || sub.title || "").trim();
+                      const oldKey = String(sub.oldKey || "").trim();
+                      const subId = sub.id ? String(sub.id) : "";
+                      const existingIdx = targetPreset.entries.findIndex(e => {
+                        if (!e) return false;
+                        if (subId && String(e.id) === subId) return true;
+                        const ek = String(e.key || e.name || e.title || "").trim();
+                        if (oldKey && ek === oldKey) return true;
+                        if (subKey && (ek === subKey || ek.includes(subKey) || subKey.includes(ek))) return true;
+                        return false;
+                      });
+                      if (subAct === "delete" || subAct === "remove") {
+                        if (existingIdx >= 0) {
+                          targetPreset.entries.splice(existingIdx, 1);
+                          editedSubEntriesCount++;
+                        }
+                        continue;
+                      }
+                      let resolvedGroupId = sub.groupId ? String(sub.groupId) : "";
+                      if (!resolvedGroupId && sub.groupName) {
+                        const gName = String(sub.groupName).trim();
+                        let grp = targetPreset.groups.find(g => g && String(g.name || "").trim() === gName);
+                        if (!grp && gName) {
+                          grp = {
+                            id: "tcg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                            name: gName,
+                            color: "#90b4ce",
+                            enabled: true,
+                            collapsed: false
+                          };
+                          targetPreset.groups.push(grp);
+                        }
+                        if (grp) resolvedGroupId = grp.id;
+                      }
+                      if (existingIdx >= 0) {
+                        const ex = targetPreset.entries[existingIdx];
+                        if (subKey) ex.key = subKey;
+                        if (typeof sub.content === "string") ex.content = sub.content;
+                        if (sub.enabled !== undefined) ex.enabled = Boolean(sub.enabled);
+                        if (resolvedGroupId) ex.groupId = resolvedGroupId;
+                        editedSubEntriesCount++;
+                      } else if (subKey) {
+                        targetPreset.entries.push({
+                          id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                          key: subKey,
+                          groupId: resolvedGroupId || (targetPreset.groups[0]?.id || ""),
+                          enabled: sub.enabled !== false,
+                          collapsed: false,
+                          content: String(sub.content || "")
+                        });
+                        editedSubEntriesCount++;
+                      }
+                    }
+                  } else if (hasSubEntriesStructure && (typeof edit.generalContent === "string" || typeof edit.content === "string") && !edit.replaceGeneralSkeleton) {
+                    const candidateText = String(edit.generalContent || edit.content || "").trim();
+                    const matchedEntry = targetPreset.entries.find(e => {
+                      const ek = String(e?.key || "").trim();
+                      return ek && candidateText.includes(ek);
+                    });
+                    if (matchedEntry && candidateText.length < 1800 && !candidateText.includes(String(targetPreset.generalContent || "").slice(0, 60))) {
+                      matchedEntry.content = candidateText;
+                      editedSubEntriesCount++;
+                    } else if (edit.replaceGeneralSkeleton) {
+                      targetPreset.generalContent = candidateText;
+                    }
+                  } else {
+                    if (typeof edit.generalContent === "string" && edit.generalContent.trim() && (!hasSubEntriesStructure || edit.replaceGeneralSkeleton)) {
+                      targetPreset.generalContent = edit.generalContent.trim();
+                    } else if (typeof edit.content === "string" && edit.content.trim() && !hasSubEntriesStructure) {
+                      targetPreset.generalContent = edit.content.trim();
+                    }
+                  }
+                  if (typeof edit.headerContent === "string" && (edit.replaceGeneralSkeleton || !hasSubEntriesStructure || edit.headerContent.trim())) {
+                    targetPreset.headerContent = edit.headerContent;
+                  }
+                  if (typeof edit.cocContent === "string" && edit.cocContent.trim()) {
+                    targetPreset.cocContent = edit.cocContent;
+                  }
+                  targetPreset.updatedAt = Date.now();
                   await db.thoughtChainPresets.put(targetPreset);
+                }
+                if (typeof syncPresetToAllGroupSharedThoughtChains === "function") {
+                  try { await syncPresetToAllGroupSharedThoughtChains(targetPreset); } catch (_) {}
+                }
+                if (typeof renderThoughtChainPresets === "function") {
+                  try { await renderThoughtChainPresets(); } catch (_) {}
                 }
                 if (typeof window.refreshMashuThoughtChainsCache === "function") {
                   await window.refreshMashuThoughtChainsCache();
@@ -35201,11 +35580,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     : null;
                   if (tChat) {
                     tChat.thoughtChainId = targetPreset.id;
+                    if (!tChat.settings) tChat.settings = {};
+                    tChat.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify(targetPreset));
                     if (typeof db !== "undefined" && db.chats) await db.chats.put(tChat);
                     bindLabel = `并绑定到「${(typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(tChat) : "") || tChat.mainGroupName || tChat.name}」`;
                   }
                 }
-                notices.push(`[麻薯已${isNewTc ? "新建" : "修改"}思维链「${targetPreset.name}」${bindLabel}]`);
+                const entrySummary = editedSubEntriesCount > 0 ? `中的 ${editedSubEntriesCount} 个子条目` : "";
+                notices.push(`[麻薯已${isNewTc ? "新建" : "修改"}思维链「${targetPreset.name}」${entrySummary}${bindLabel}]`);
               }
             } catch (err) {
               console.warn("麻薯直接修改小手机数据异常:", err);
@@ -41536,16 +41918,65 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         };
 
         window.uploadImageToBed = async function (dataUrl, filename) {
-          const resp = await fetch("/api/upload-image-bed", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dataUrl, filename: filename || "sticker.png" }),
-          });
-          const data = await resp.json();
-          if (!resp.ok || !data || !data.url) {
-            throw new Error((data && data.error) || "图床上传失败");
+          try {
+            const resp = await fetch("/api/upload-image-bed", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dataUrl, filename: filename || "sticker.png" }),
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && data.url) {
+                return data.url;
+              }
+            }
+          } catch (_) {}
+
+          if (typeof window.saveStickerToLocalVault === "function") {
+            try {
+              const vaultRef = await window.saveStickerToLocalVault(dataUrl);
+              if (vaultRef && !vaultRef.startsWith("data:")) {
+                return vaultRef;
+              }
+            } catch (_) {}
           }
-          return data.url;
+
+          if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
+            if (dataUrl.startsWith("data:image/gif")) {
+              return dataUrl;
+            }
+            try {
+              const compressed = await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  const maxDim = 200;
+                  let w = img.naturalWidth || img.width || 200;
+                  let h = img.naturalHeight || img.height || 200;
+                  if (w > maxDim || h > maxDim) {
+                    if (w >= h) {
+                      h = Math.max(1, Math.round((h * maxDim) / w));
+                      w = maxDim;
+                    } else {
+                      w = Math.max(1, Math.round((w * maxDim) / h));
+                      h = maxDim;
+                    }
+                  }
+                  const canvas = document.createElement("canvas");
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, 0, 0, w, h);
+                  resolve(canvas.toDataURL("image/webp", 0.82));
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+              });
+              return compressed || dataUrl;
+            } catch (_) {
+              return dataUrl;
+            }
+          }
+          throw new Error("图床上传失败");
         };
 
         window.triggerModalStickerBedUpload = function (btnEl, statusId) {
@@ -99832,9 +100263,29 @@ ${specificRules}`;
                 remarkGroup.style.display = "block"; // 单聊显示
                 // 如果没有settings对象，初始化它
                 if (!chat.settings) chat.settings = {};
+                const grpMyNickInput = document.getElementById("my-group-nickname-input");
+                const grpMyNameInput = document.getElementById("my-name-input");
+                if (grpMyNickInput) grpMyNickInput.oninput = null;
+                if (grpMyNameInput) grpMyNameInput.oninput = null;
                 remarkInput.value = chat.settings.remarkName || "";
                 const nameInpEl = document.getElementById("chat-name-input");
                 if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
+                  let personaBackup = (state.globalSettings && state.globalSettings.mashuUserPersonaBackup) || null;
+                  if (!personaBackup) {
+                    try {
+                      const rawLs = localStorage.getItem("ephone_mashu_user_persona_backup_v1");
+                      if (rawLs) personaBackup = JSON.parse(rawLs);
+                    } catch (_) {}
+                  }
+                  if (personaBackup && typeof personaBackup === "object") {
+                    if (!chat.settings.myName && personaBackup.myName) chat.settings.myName = personaBackup.myName;
+                    if (!chat.settings.myPersona && personaBackup.myPersona) chat.settings.myPersona = personaBackup.myPersona;
+                    if (!chat.settings.myAvatar && personaBackup.myAvatar) chat.settings.myAvatar = personaBackup.myAvatar;
+                    if (chat.settings.myAge === undefined && personaBackup.myAge !== undefined) chat.settings.myAge = personaBackup.myAge;
+                    if (!chat.settings.myBirthday && personaBackup.myBirthday) chat.settings.myBirthday = personaBackup.myBirthday;
+                    if (!chat.settings.myGender && personaBackup.myGender) chat.settings.myGender = personaBackup.myGender;
+                    if (!chat.settings.myGenderNote && personaBackup.myGenderNote) chat.settings.myGenderNote = personaBackup.myGenderNote;
+                  }
                   if (typeof window.applyMashuChatSettingsUI === "function") {
                     window.applyMashuChatSettingsUI(chat);
                   }
@@ -100258,7 +100709,7 @@ ${specificRules}`;
                 document.getElementById("weibo-instruction-input").value =
                   chat.settings.weiboInstruction || "";
                 const effectiveAiAvatar = (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor)
-                  ? window.MASHU_AVATAR_URL
+                  ? (window.MASHU_BUILTIN_DATA_URL || window.MASHU_AVATAR_URL || chat.settings.aiAvatar || defaultAvatar)
                   : (chat.settings.aiAvatar || defaultAvatar);
                 if (typeof window.setCleanPreviewImgSrc === "function") {
                   window.setCleanPreviewImgSrc(document.getElementById("ai-avatar-preview"), effectiveAiAvatar);
@@ -102339,6 +102790,29 @@ ${specificRules}`;
                 } else if (Array.isArray(chat.history)) {
                   chat.mainLineHistory = [...chat.history];
                 }
+              }
+              if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
+                chat.settings.aiAvatar = window.MASHU_BUILTIN_DATA_URL || window.MASHU_AVATAR_URL || chat.settings.aiAvatar;
+                const backupObj = {
+                  myName: chat.settings.myName || "",
+                  myPersona: chat.settings.myPersona || "",
+                  myAvatar: chat.settings.myAvatar || "",
+                  myAge: chat.settings.myAge,
+                  myBirthday: chat.settings.myBirthday || "",
+                  myGender: chat.settings.myGender || "",
+                  myGenderNote: chat.settings.myGenderNote || "",
+                  myAvatarFrame: chat.settings.myAvatarFrame || "",
+                  aiAvatarFrame: chat.settings.aiAvatarFrame || ""
+                };
+                if (state && state.globalSettings) {
+                  state.globalSettings.mashuUserPersonaBackup = backupObj;
+                  if (typeof db !== "undefined" && db.globalSettings) {
+                    await db.globalSettings.put(state.globalSettings).catch(() => {});
+                  }
+                }
+                try {
+                  localStorage.setItem("ephone_mashu_user_persona_backup_v1", JSON.stringify(backupObj));
+                } catch (_) {}
               }
               await db.chats.put(chat).catch(() => {});
               chatSettingsModal.classList.remove("visible");
@@ -117695,17 +118169,25 @@ ${specificRules}`;
           modal.style.display = "none";
           modal.style.zIndex = "10050";
           modal.innerHTML = `
-            <div class="modal-content" style="max-width: 380px; width: 92%; max-height: 82vh; display: flex; flex-direction: column; padding: 16px; border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">表情</h3>
-                <div style="display: flex; gap: 6px; align-items: center;">
+            <div class="modal-content" style="max-width: 390px; width: 92%; max-height: 82vh; display: flex; flex-direction: column; padding: 16px; border-radius: 18px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); box-sizing: border-box;">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); flex-shrink: 0;">表情</h3>
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; flex-shrink: 0;">
                   <input type="file" id="mashu-sticker-upload-input" accept="image/gif,image/png,image/jpeg,image/webp,image/*" multiple style="display: none;" />
-                  <button type="button" class="moe-btn" id="mashu-sticker-upload-btn" style="height: 30px; padding: 0 12px; font-size: 12px; border-radius: 8px; width: auto; margin: 0;">上传</button>
-                  <button type="button" class="moe-btn-secondary" id="mashu-sticker-close-btn" style="height: 30px; padding: 0 12px; font-size: 12px; border-radius: 8px; width: auto; margin: 0;">关闭</button>
+                  <button type="button" class="moe-btn" id="mashu-sticker-upload-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">上传</button>
+                  <button type="button" class="moe-btn-secondary" id="mashu-sticker-url-toggle-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">外链</button>
+                  <button type="button" class="moe-btn-secondary" id="mashu-sticker-all-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">全选</button>
+                  <button type="button" class="moe-btn-secondary" id="mashu-sticker-clear-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">清空</button>
+                  <button type="button" class="moe-btn-secondary" id="mashu-sticker-close-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">关闭</button>
                 </div>
               </div>
-              <div id="mashu-sticker-upload-status" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; display: none;"></div>
-              <div id="mashu-sticker-list-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px;"></div>
+              <div id="mashu-sticker-url-bar" style="display: none; align-items: center; gap: 6px; margin-bottom: 10px; padding: 8px; border-radius: 10px; background: var(--secondary-bg); border: 1px solid var(--border-color); flex-shrink: 0;">
+                <input type="text" id="mashu-sticker-ext-name" class="moe-input" placeholder="名称" style="width: 78px; flex-shrink: 0; height: 32px; font-size: 12px; padding: 0 8px; border-radius: 8px; margin: 0;" />
+                <input type="text" id="mashu-sticker-ext-url" class="moe-input" placeholder="粘贴图片外链地址" style="flex: 1; min-width: 0; height: 32px; font-size: 12px; padding: 0 8px; border-radius: 8px; margin: 0;" />
+                <button type="button" class="moe-btn" id="mashu-sticker-ext-add-btn" style="height: 32px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">添加</button>
+              </div>
+              <div id="mashu-sticker-upload-status" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; padding: 4px 8px; border-radius: 8px; background: var(--secondary-bg); display: none; flex-shrink: 0;"></div>
+              <div id="mashu-sticker-list-container" style="flex: 1; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px;"></div>
             </div>
           `;
           document.body.appendChild(modal);
@@ -117718,9 +118200,64 @@ ${specificRules}`;
             };
           }
 
+          const urlToggleBtn = modal.querySelector("#mashu-sticker-url-toggle-btn");
+          const urlBar = modal.querySelector("#mashu-sticker-url-bar");
+          const extNameInput = modal.querySelector("#mashu-sticker-ext-name");
+          const extUrlInput = modal.querySelector("#mashu-sticker-ext-url");
+          const extAddBtn = modal.querySelector("#mashu-sticker-ext-add-btn");
+          const statusEl = modal.querySelector("#mashu-sticker-upload-status");
+
+          if (urlToggleBtn && urlBar) {
+            urlToggleBtn.onclick = () => {
+              const isHidden = urlBar.style.display === "none";
+              urlBar.style.display = isHidden ? "flex" : "none";
+            };
+          }
+
+          if (extAddBtn && extUrlInput) {
+            extAddBtn.onclick = async () => {
+              const rawUrl = String(extUrlInput.value || "").trim();
+              if (!rawUrl) return;
+              const rawName = String((extNameInput && extNameInput.value) || "").trim() || "表情";
+              window.mashuCloudStickers.unshift({
+                id: "ms_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                name: rawName,
+                url: rawUrl,
+                enabled: true,
+              });
+              if (extNameInput) extNameInput.value = "";
+              extUrlInput.value = "";
+              await pushMashuStickersToServer(window.mashuCloudStickers);
+              renderMashuStickerListDom();
+            };
+          }
+
+          const allBtn = modal.querySelector("#mashu-sticker-all-btn");
+          if (allBtn) {
+            allBtn.onclick = async () => {
+              const list = window.mashuCloudStickers || [];
+              if (!list.length) return;
+              const allEnabled = list.every((item) => item && item.enabled !== false);
+              list.forEach((item) => {
+                if (item) item.enabled = !allEnabled;
+              });
+              await pushMashuStickersToServer(window.mashuCloudStickers);
+              renderMashuStickerListDom();
+            };
+          }
+
+          const clearBtn = modal.querySelector("#mashu-sticker-clear-btn");
+          if (clearBtn) {
+            clearBtn.onclick = async () => {
+              if (!Array.isArray(window.mashuCloudStickers) || !window.mashuCloudStickers.length) return;
+              window.mashuCloudStickers = [];
+              await pushMashuStickersToServer(window.mashuCloudStickers);
+              renderMashuStickerListDom();
+            };
+          }
+
           const uploadBtn = modal.querySelector("#mashu-sticker-upload-btn");
           const uploadInput = modal.querySelector("#mashu-sticker-upload-input");
-          const statusEl = modal.querySelector("#mashu-sticker-upload-status");
 
           if (uploadBtn && uploadInput) {
             uploadBtn.onclick = () => uploadInput.click();
@@ -117728,13 +118265,18 @@ ${specificRules}`;
               const files = Array.from(e.target.files || []);
               uploadInput.value = "";
               if (!files.length) return;
+              uploadBtn.disabled = true;
+              let addedCount = 0;
               if (statusEl) {
                 statusEl.style.display = "block";
-                statusEl.textContent = "正在上传图床...";
+                statusEl.textContent = "正在上传第 1 张，共 " + files.length + " 张...";
               }
               for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                const rawName = String(file.name || "表情").replace(/\.[^.]+$/, "").trim() || "表情";
+                const rawName = String(file.name || "表情").replace(/\.[^.]+$/, "").trim() || ("表情" + (i + 1));
+                if (statusEl) {
+                  statusEl.textContent = "正在上传第 " + (i + 1) + " 张，共 " + files.length + " 张...";
+                }
                 try {
                   const dataUrl = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -117761,6 +118303,7 @@ ${specificRules}`;
                       url: bedUrl,
                       enabled: true,
                     });
+                    addedCount++;
                     await pushMashuStickersToServer(window.mashuCloudStickers);
                     renderMashuStickerListDom();
                   }
@@ -117768,9 +118311,15 @@ ${specificRules}`;
                   console.warn("上传麻薯表情包失败:", err);
                 }
               }
+              uploadBtn.disabled = false;
               if (statusEl) {
-                statusEl.style.display = "none";
-                statusEl.textContent = "";
+                statusEl.textContent = addedCount > 0 ? ("已成功上传 " + addedCount + " 张表情") : "上传未成功，请重试或使用外链";
+                setTimeout(() => {
+                  if (statusEl) {
+                    statusEl.style.display = "none";
+                    statusEl.textContent = "";
+                  }
+                }, 1800);
               }
             };
           }
@@ -117782,30 +118331,32 @@ ${specificRules}`;
           if (!container) return;
           const list = window.mashuCloudStickers || [];
           if (!list.length) {
-            container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 28px 0; font-size: 12px;">暂无表情</div>`;
+            container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 32px 0; font-size: 13px;">暂无表情，点击右上角上传或外链添加</div>`;
             return;
           }
           container.innerHTML = "";
           list.forEach((item, idx) => {
             const card = document.createElement("div");
             card.style.display = "flex";
-            card.style.flexDirection = "column";
-            card.style.gap = "6px";
-            card.style.padding = "10px";
-            card.style.borderRadius = "10px";
+            card.style.flexDirection = "row";
+            card.style.alignItems = "center";
+            card.style.gap = "10px";
+            card.style.padding = "8px 10px";
+            card.style.borderRadius = "12px";
             card.style.background = "var(--secondary-bg)";
             card.style.border = "1px solid var(--border-color)";
+            card.style.boxSizing = "border-box";
+
+            const safeName = String(item.name || "").replace(/"/g, "&quot;");
+            const safeUrl = String(item.url || "").replace(/"/g, "&quot;");
 
             card.innerHTML = `
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                <img src="${item.url}" loading="lazy" style="width: 56px; height: 56px; border-radius: 8px; object-fit: contain; background: var(--card-bg); border: 1px solid var(--border-color); flex-shrink: 0;" />
-                <div style="display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0;">
-                  <input type="checkbox" class="mashu-sticker-enable-cb" style="width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--accent-color); cursor: pointer;" ${item.enabled !== false ? "checked" : ""} />
-                  <button type="button" class="moe-btn-secondary mashu-sticker-del-btn" style="height: 28px; padding: 0 10px; font-size: 11px; border-radius: 8px; width: auto; margin: 0;">删除</button>
-                </div>
+              <img src="${safeUrl}" loading="lazy" style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 8px; object-fit: contain; background: var(--card-bg); border: 1px solid var(--border-color); flex-shrink: 0;" />
+              <input type="text" class="moe-input mashu-sticker-name-input" value="${safeName}" placeholder="表情名称" style="flex: 1; min-width: 0; height: 32px; font-size: 13px; padding: 0 10px; border-radius: 8px; margin: 0;" />
+              <div style="display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0;">
+                <input type="checkbox" class="mashu-sticker-enable-cb" style="width: 18px !important; height: 18px !important; min-width: 18px !important; min-height: 18px !important; padding: 0 !important; margin: 0 !important; flex-shrink: 0 !important; accent-color: var(--accent-color); cursor: pointer;" ${item.enabled !== false ? "checked" : ""} />
+                <button type="button" class="moe-btn-secondary mashu-sticker-del-btn" style="height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; width: auto; margin: 0; flex-shrink: 0;">删除</button>
               </div>
-              <input type="text" class="moe-input mashu-sticker-name-input" value="${String(item.name || "").replace(/"/g, "&quot;")}" placeholder="名称" style="height: 30px; font-size: 12px; padding: 0 8px; border-radius: 6px;" />
-              <input type="text" class="moe-input mashu-sticker-url-input" value="${String(item.url || "").replace(/"/g, "&quot;")}" readonly style="height: 28px; font-size: 11px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary);" />
             `;
 
             const cb = card.querySelector(".mashu-sticker-enable-cb");
@@ -117828,7 +118379,10 @@ ${specificRules}`;
             const delBtn = card.querySelector(".mashu-sticker-del-btn");
             if (delBtn) {
               delBtn.onclick = () => {
-                window.mashuCloudStickers.splice(idx, 1);
+                const removed = window.mashuCloudStickers.splice(idx, 1)[0];
+                if (removed && removed.url && String(removed.url).startsWith("vault://") && typeof window.deleteVaultMediaRef === "function") {
+                  window.deleteVaultMediaRef(removed.url);
+                }
                 pushMashuStickersToServer(window.mashuCloudStickers);
                 renderMashuStickerListDom();
               };

@@ -6911,15 +6911,10 @@
     },
 
     resetPeerChatSettingsUI: function (currentChat) {
-      if (currentChat && (currentChat.id === window.MASHU_COMPANION_ID || currentChat.isMashuAuthor)) {
-        if (typeof window.applyMashuChatSettingsUI === "function") {
-          window.applyMashuChatSettingsUI(currentChat);
-        }
-        return;
-      }
+      const isMashu = Boolean(currentChat && (currentChat.id === window.MASHU_COMPANION_ID || currentChat.isMashuAuthor));
 
       const aiPersonaCard = document.getElementById("ai-persona-card");
-      if (aiPersonaCard && (!currentChat || !currentChat.isGroup)) {
+      if (aiPersonaCard && (!currentChat || (!currentChat.isGroup && !isMashu))) {
         aiPersonaCard.style.display = "block";
       }
 
@@ -6953,7 +6948,11 @@
         if (btnStack) {
           btnStack.style.display = "";
           Array.from(btnStack.children).forEach((btn) => {
-            btn.style.display = "";
+            if (btn.id === "mashu-cloud-sticker-entry-btn") {
+              btn.style.display = isMashu ? "inline-flex" : "none";
+            } else {
+              btn.style.display = "";
+            }
           });
         }
       }
@@ -6998,7 +6997,11 @@
       }
 
       const otherCard = document.getElementById("other-settings-card");
-      if (otherCard) otherCard.style.display = "";
+      if (otherCard) otherCard.style.display = "block";
+
+      if (isMashu && typeof window.applyMashuChatSettingsUI === "function") {
+        window.applyMashuChatSettingsUI(currentChat);
+      }
     },
 
     init: function () {

@@ -9347,7 +9347,7 @@ code, pre {
     }).filter(Boolean).join(', ');
   }
 
-  function scopeCssBlockRecursive(cssText) {
+  function scopeCssBlockRecursive(cssText, isGousuStyle = false) {
     let out = '';
     let i = 0;
     const len = cssText.length;
@@ -9390,8 +9390,11 @@ code, pre {
       const innerBody = cssText.slice(openBrace + 1, j - 1);
       if (/^@(?:-webkit-)?keyframes\b/i.test(header) || /^@font-face\b/i.test(header)) {
         out += header + ' {' + innerBody + '}\n';
+      } else if (/^@media\b/i.test(header) && !isGousuStyle && /max-width\s*:\s*(?:768|600|480)px/i.test(header)) {
+        // #tavern-stage-root is inside the mobile phone container (~380-430px wide), so mobile theme rules should always apply
+        out += scopeCssBlockRecursive(innerBody, isGousuStyle) + '\n';
       } else if (/^@(?:media|supports|container|layer)\b/i.test(header)) {
-        out += header + ' {\n' + scopeCssBlockRecursive(innerBody) + '\n}\n';
+        out += header + ' {\n' + scopeCssBlockRecursive(innerBody, isGousuStyle) + '\n}\n';
       } else {
         const scopedHeader = prefixSelectorListWithStageRoot(header);
         out += scopedHeader + ' {' + innerBody + '}\n';
@@ -9418,9 +9421,10 @@ code, pre {
       cleaned = cleaned
         .replace(/100dvw/g, '100%')
         .replace(/100vw/g, '100%')
+        .replace(/(-?\d+(?:\.\d+)?)vw\b/g, '$1cqw')
         .replace(/position\s*:\s*fixed\b/gi, 'position: absolute');
     }
-    return (imports.length > 0 ? imports.join('\n') + '\n' : '') + scopeCssBlockRecursive(cleaned);
+    return (imports.length > 0 ? imports.join('\n') + '\n' : '') + scopeCssBlockRecursive(cleaned, isGousuStyle);
   }
 
   function buildTavernThemeOverridePatch(theme, uiCfg) {
@@ -9815,9 +9819,15 @@ code, pre {
         left: calc(100% + 6px) !important;
       }
       #tavern-stage-root details.mes_reasoning_details {
-        position: relative !important;
         z-index: 25 !important;
         display: block !important;
+      }
+      #tavern-stage-root details.mes_reasoning_details:not([open]) {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
       }
       #tavern-stage-root details.mes_reasoning_details:not([open]) > *:not(summary) {
         display: none !important;
@@ -9880,12 +9890,46 @@ code, pre {
     if (!isGousuStyle && theme) {
       const rawThemeCss = String(theme.custom_css || '');
       const hidesTopBar = /#top-bar\s*(?:,[^{]*)?\{[^}]*display\s*:\s*none/i.test(rawThemeCss);
+      const isApplePhoneTheme = rawThemeCss.includes('--标签-文字色') || rawThemeCss.includes('9h10in.png') || rawThemeCss.includes('Hello Spring');
       rules.push(`
         /* Containment and color adaptation for imported third-party SillyTavern themes */
         #tavern-stage-root {
           color: var(--SmartThemeBodyColor, #373737);
           overflow: hidden !important;
+          container-type: inline-size !important;
+          --标签框-文字色: var(--标签-文字色, #8CA57C);
+          --标签框-背景色: transparent;
+          --标签框-边框色: transparent;
+          --标签框-分割线: transparent;
+          --标签框-内边距-pc: 0 4px;
+          --标签框-圆角: 0px;
         }
+        #tavern-stage-root details.mes_reasoning_details {
+          position: static !important;
+        }
+        #tavern-stage-root .mes .name_text {
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          max-width: 9.5em !important;
+        }
+        ${isApplePhoneTheme ? `
+        #tavern-stage-root .mesIDDisplay,
+        #tavern-stage-root .mes_timer,
+        #tavern-stage-root .tokenCounterDisplay {
+          color: var(--标签-文字色, #8CA57C) !important;
+          background: transparent !important;
+          border: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          box-shadow: none !important;
+          padding: 0 3px !important;
+        }
+        #tavern-stage-root .mes .mes_timer:not(:empty),
+        #tavern-stage-root .mes .tokenCounterDisplay:not(:empty) {
+          border-left: none !important;
+        }
+        ` : ''}
         #tavern-stage-root #top-bar,
         #tavern-stage-root #top-settings-holder {
           max-width: 100% !important;
@@ -12440,14 +12484,20 @@ code, pre {
       /* Reasoning / CoT Folded Block */
       details.mes_reasoning_details {
         display: block !important;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        font-size: 12px;
+        color: #666;
+        pointer-events: auto !important;
+      }
+      details.mes_reasoning_details[open] {
         margin: 6px 0 10px 0;
         border-radius: 12px;
         background: rgba(242, 240, 245, 0.92);
         border: 1px dashed rgba(160, 155, 170, 0.55);
         padding: 6px 10px;
-        font-size: 12px;
-        color: #666;
-        pointer-events: auto !important;
       }
       details.mes_reasoning_details > summary.mes_reasoning_summary {
         display: flex !important;

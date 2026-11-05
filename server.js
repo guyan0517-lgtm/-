@@ -116,6 +116,16 @@ app.post('/api/merge-pdf', async (req, res) => {
   }
 });
 
+const MASHU_VAULT_DIR = path.join(__dirname, 'EPhoneVault');
+const MASHU_STICKERS_FILE = path.join(MASHU_VAULT_DIR, 'mashu-stickers.json');
+const MASHU_STICKER_FILES_DIR = path.join(MASHU_VAULT_DIR, 'stickers');
+try {
+  if (!fs.existsSync(MASHU_STICKER_FILES_DIR)) {
+    fs.mkdirSync(MASHU_STICKER_FILES_DIR, { recursive: true });
+  }
+} catch (_) {}
+app.use('/api/mashu-sticker-files', express.static(MASHU_STICKER_FILES_DIR));
+
 app.post('/api/upload-image-bed', async (req, res) => {
   try {
     const { dataUrl, filename = 'sticker.png' } = req.body || {};
@@ -148,45 +158,81 @@ app.post('/api/upload-image-bed', async (req, res) => {
 
     const buffer = Buffer.from(base64Data, 'base64');
     const blob = new Blob([buffer], { type: mimeType });
-    const form = new FormData();
-    form.append('gallery', '');
-    form.append('optsize', '0');
-    form.append('expire', '0');
-    form.append('numfiles', '1');
-    form.append('upload_session', String(Date.now()) + Math.random().toString().substring(1));
-    form.append('file', blob, safeName);
-
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-    const upRes = await fetch('https://postimages.org/json', {
-      method: 'POST',
-      headers: {
-        'User-Agent': ua,
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': 'https://postimages.org/'
-      },
-      body: form
-    });
 
-    if (!upRes.ok) {
-      return res.status(502).json({ error: '图床上传请求失败: ' + upRes.status });
+    let finalUrl = '';
+
+    // 1. Try postimages.org
+    try {
+      const form = new FormData();
+      form.append('gallery', '');
+      form.append('optsize', '0');
+      form.append('expire', '0');
+      form.append('numfiles', '1');
+      form.append('upload_session', String(Date.now()) + Math.random().toString().substring(1));
+      form.append('file', blob, safeName);
+
+      const upRes = await fetch('https://postimages.org/json', {
+        method: 'POST',
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Referer': 'https://postimages.org/'
+        },
+        body: form
+      });
+
+      if (upRes.ok) {
+        const upJson = await upRes.json();
+        const pageUrl = upJson && (upJson.url || upJson.image);
+        if (pageUrl) {
+          const galRes = await fetch(pageUrl, { headers: { 'User-Agent': ua } });
+          const galHtml = await galRes.text();
+          const ogMatch = galHtml.match(/property=["']og:image["']\s+content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']/i)
+            || galHtml.match(/content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']\s+property=["']og:image["']/i);
+          const directMatch = ogMatch ? [null, ogMatch[1]] : galHtml.match(/(https:\/\/i\.postimg\.cc\/[^\s"'<>)\]]+)/i);
+          finalUrl = directMatch && directMatch[1] ? directMatch[1] : pageUrl;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback to catbox.moe if postimages failed
+    if (!finalUrl) {
+      try {
+        const catForm = new FormData();
+        catForm.append('reqtype', 'fileupload');
+        catForm.append('fileToUpload', blob, safeName);
+        const catRes = await fetch('https://catbox.moe/user/api.php', {
+          method: 'POST',
+          headers: { 'User-Agent': ua },
+          body: catForm
+        });
+        if (catRes.ok) {
+          const catText = (await catRes.text()).trim();
+          if (/^https?:\/\/files\.catbox\.moe\//i.test(catText)) {
+            finalUrl = catText;
+          }
+        }
+      } catch (_) {}
     }
 
-    const upJson = await upRes.json();
-    const pageUrl = upJson && (upJson.url || upJson.image);
-    if (!pageUrl) {
-      return res.status(502).json({ error: '图床未返回有效页面地址' });
+    // 3. Fallback to local server EPhoneVault/stickers directory so upload never fails
+    if (!finalUrl) {
+      try {
+        if (!fs.existsSync(MASHU_STICKER_FILES_DIR)) {
+          fs.mkdirSync(MASHU_STICKER_FILES_DIR, { recursive: true });
+        }
+        const uniqueFileName = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        fs.writeFileSync(path.join(MASHU_STICKER_FILES_DIR, uniqueFileName), buffer);
+        finalUrl = `/api/mashu-sticker-files/${uniqueFileName}`;
+      } catch (_) {}
     }
 
-    const galRes = await fetch(pageUrl, {
-      headers: { 'User-Agent': ua }
-    });
-    const galHtml = await galRes.text();
-    const ogMatch = galHtml.match(/property=["']og:image["']\s+content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']/i)
-      || galHtml.match(/content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']\s+property=["']og:image["']/i);
-    const directMatch = ogMatch ? [null, ogMatch[1]] : galHtml.match(/(https:\/\/i\.postimg\.cc\/[^\s"'<>)\]]+)/i);
-    const finalUrl = directMatch && directMatch[1] ? directMatch[1] : pageUrl;
+    if (!finalUrl) {
+      return res.status(502).json({ error: '图床上传失败' });
+    }
 
     return res.json({ success: true, url: finalUrl });
   } catch (err) {
@@ -194,9 +240,6 @@ app.post('/api/upload-image-bed', async (req, res) => {
     return res.status(500).json({ error: err.message || '图床上传失败' });
   }
 });
-
-const MASHU_VAULT_DIR = path.join(__dirname, 'EPhoneVault');
-const MASHU_STICKERS_FILE = path.join(MASHU_VAULT_DIR, 'mashu-stickers.json');
 
 app.get('/api/mashu-stickers', (req, res) => {
   try {
