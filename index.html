@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22505,12 +22505,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               delete parsedBody.max_tokens;
             }
             const cfgMax = typeof getConfiguredMaxTokens === "function" ? getConfiguredMaxTokens() : 0;
-            if (cfgMax > 0 && (!parsedBody.max_tokens || parsedBody.max_tokens > 30)) {
+            if (!options._preserveCallerMaxTokens && cfgMax > 0 && (!parsedBody.max_tokens || parsedBody.max_tokens > 30)) {
               parsedBody.max_tokens = cfgMax;
             }
           } else if (parsedBody && typeof parsedBody === "object" && Array.isArray(parsedBody.contents)) {
             const cfgMax = typeof getConfiguredMaxTokens === "function" ? getConfiguredMaxTokens() : 0;
-            if (cfgMax > 0) {
+            if (!options._preserveCallerMaxTokens && cfgMax > 0) {
               if (!parsedBody.generationConfig) parsedBody.generationConfig = {};
               if (!parsedBody.generationConfig.maxOutputTokens) {
                 parsedBody.generationConfig.maxOutputTokens = cfgMax;
@@ -23675,8 +23675,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               let fallbackRes = await requestLlmapiWithFallback(effectiveUrlStr, {
                 ...initForDefault,
+                _preserveCallerMaxTokens: Boolean(init && init._preserveCallerMaxTokens),
                 onStreamChunk: (chunk) => {
-                  if (isStreamActive && typeof window.onAiStreamTokenReceived === "function") {
+                  if (init && typeof init.onStreamChunk === "function") {
+                    try { init.onStreamChunk(chunk); } catch (_) {}
+                  }
+                  if (isStreamActive && !(init && init._suppressGlobalChatStream) && typeof window.onAiStreamTokenReceived === "function") {
                     window.onAiStreamTokenReceived(chunk);
                   }
                 },
@@ -23772,7 +23776,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               stream: Boolean(isStreamActive),
             };
             const cfgMax = getConfiguredMaxTokens();
-            if (parsedBody.max_tokens && parsedBody.max_tokens !== 100000) {
+            if (init && init._preserveCallerMaxTokens && parsedBody.max_tokens) {
+              openAiPayload.max_tokens = Math.max(parsedBody.max_tokens, cfgMax || 0);
+            } else if (parsedBody.max_tokens && parsedBody.max_tokens !== 100000) {
               openAiPayload.max_tokens = parsedBody.max_tokens;
             } else if (cfgMax > 0) {
               openAiPayload.max_tokens = cfgMax;
@@ -23783,6 +23789,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               method: "POST",
               signal: init?.signal,
               _noAutoRetry: true,
+              _preserveCallerMaxTokens: Boolean(init && init._preserveCallerMaxTokens),
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cleanKey}`,
@@ -23790,7 +23797,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               },
               body: JSON.stringify(openAiPayload),
               onStreamChunk: (chunk) => {
-                if (isStreamActive && typeof window.onAiStreamTokenReceived === "function") {
+                if (init && typeof init.onStreamChunk === "function") {
+                  try { init.onStreamChunk(chunk); } catch (_) {}
+                }
+                if (isStreamActive && !(init && init._suppressGlobalChatStream) && typeof window.onAiStreamTokenReceived === "function") {
                   window.onAiStreamTokenReceived(chunk);
                 }
               },
@@ -47771,15 +47781,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const requestBody = isGemini
             ? {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.3 },
+                generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
               }
             : {
                 model: cleanModel,
                 messages: [
-                  { role: "system", content: "你是一个专业的JSON地图生成器。只输出纯净JSON数组，不带Markdown。" },
+                  { role: "system", content: "你是一个专业的JSON地图生成器。只输出纯净JSON数组，不带Markdown，禁止输出<think>思考过程。" },
                   { role: "user", content: prompt },
                 ],
                 temperature: 0.3,
+                max_tokens: 8192,
                 stream: false,
               };
 
@@ -47787,6 +47798,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             method: "POST",
             headers: requestHeaders,
             body: JSON.stringify(requestBody),
+            _preserveCallerMaxTokens: true,
+            _suppressGlobalChatStream: true,
           });
 
           if (!resp.ok) {
@@ -47811,23 +47824,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           rawText = String(rawText)
             .replace(/<(?:think|thinking|thought|reasoning)\b[^>]*>[\s\S]*?<\/(?:think|thinking|thought|reasoning)>/gi, "")
+            .replace(/^[\s\S]*<\/(?:think|thinking|thought|reasoning)>/i, "")
             .replace(/```(?:json|javascript)?/gi, "")
             .replace(/```/g, "")
             .trim();
-          const match = rawText.match(/\[[\s\S]*\]/);
-          if (!match) {
-            throw new Error("人工智能返回的地图格式不是有效的列表结构");
-          }
 
           let parsedLocs = null;
-          try {
-            parsedLocs = JSON.parse(match[0]);
-          } catch (parseErr) {
-            throw new Error("解析人工智能生成的地图数据失败：" + (parseErr.message || String(parseErr)));
+          const match = rawText.match(/\[[\s\S]*\]/);
+          if (match) {
+            try {
+              parsedLocs = JSON.parse(match[0]);
+            } catch (_) {}
+          }
+          if (!Array.isArray(parsedLocs) || parsedLocs.length === 0) {
+            const arrStart = rawText.indexOf("[");
+            const candidateText = arrStart !== -1 ? rawText.slice(arrStart) : rawText;
+            const salvagedItems = [];
+            const objRegex = /\{[^{}]*\}/g;
+            let objMatch;
+            while ((objMatch = objRegex.exec(candidateText)) !== null) {
+              try {
+                const item = JSON.parse(objMatch[0]);
+                if (item && typeof item.name === "string" && item.name.trim()) {
+                  salvagedItems.push(item);
+                }
+              } catch (_) {}
+            }
+            if (salvagedItems.length > 0) {
+              parsedLocs = salvagedItems;
+            }
           }
 
           if (!Array.isArray(parsedLocs) || parsedLocs.length === 0) {
-            throw new Error("人工智能生成的地点列表为空");
+            throw new Error("解析人工智能生成的地图数据失败，请重试");
           }
 
           if (!chat.settings) chat.settings = {};
@@ -48058,9 +48087,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   miniMapGeneratingControllers.delete(String(currentChatId));
                   if (topGenBtn && String(state.activeChatId) === String(currentChatId)) {
                     topGenBtn.textContent = "生成小地图";
-                  }
-                  if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("提示", "小地图生成完毕");
                   }
                 } catch (e) {
                   miniMapGeneratingControllers.delete(String(currentChatId));
@@ -50603,12 +50629,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return;
           }
 
-          let sanitizedSvg = rawSvg.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
-          const svgMatch = sanitizedSvg.match(/<svg[\s\S]*?<\/svg>/i);
-          if (svgMatch) {
-            sanitizedSvg = svgMatch[0];
-          } else if (sanitizedSvg.includes("<svg") && !sanitizedSvg.includes("</svg>")) {
-            sanitizedSvg = sanitizedSvg + "</svg>";
+          let sanitizedSvg = typeof salvageMiniMapSvgCode === "function"
+            ? salvageMiniMapSvgCode(rawSvg)
+            : "";
+          if (!sanitizedSvg) {
+            sanitizedSvg = rawSvg.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
+            const svgMatch = sanitizedSvg.match(/<svg[\s\S]*?<\/svg>/i);
+            if (svgMatch) {
+              sanitizedSvg = svgMatch[0];
+            } else if (sanitizedSvg.includes("<svg") && !sanitizedSvg.includes("</svg>")) {
+              sanitizedSvg = sanitizedSvg + "</svg>";
+            }
           }
 
           if (!sanitizedSvg.includes("viewBox=")) {
@@ -51149,23 +51180,97 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         }
         window.buildProceduralMiniMapSvg = buildProceduralMiniMapSvg;
 
+        function stripThinkingAndFencesForSvg(rawText) {
+          if (!rawText || typeof rawText !== "string") return "";
+          let text = rawText
+            .replace(/<(?:think|thinking|thought|reasoning)\b[^>]*>[\s\S]*?<\/(?:think|thinking|thought|reasoning)>/gi, "")
+            .replace(/```(?:xml|svg|html)?/gi, "")
+            .replace(/```/g, "")
+            .trim();
+          const closeThinkMatch = text.match(/<\/(?:think|thinking|thought|reasoning)>/gi);
+          if (closeThinkMatch) {
+            const lastCloseIdx = Math.max(
+              text.lastIndexOf("</think>"),
+              text.lastIndexOf("</thinking>"),
+              text.lastIndexOf("</thought>"),
+              text.lastIndexOf("</reasoning>"),
+              text.lastIndexOf("</THINK>"),
+              text.lastIndexOf("</THINKING>")
+            );
+            if (lastCloseIdx !== -1) {
+              const afterClose = text.slice(text.indexOf(">", lastCloseIdx) + 1).trim();
+              if (afterClose.includes("<svg") || afterClose.includes("<g") || afterClose.includes("<rect") || afterClose.includes("<path")) {
+                text = afterClose;
+              }
+            }
+          }
+          const openThinkIdx = text.search(/<(?:think|thinking|thought|reasoning)\b/i);
+          if (openThinkIdx !== -1) {
+            const realSvgAfterThink = text.slice(openThinkIdx).search(/<svg\b[^>]*(?:viewBox|xmlns|width|height|style)/i);
+            if (realSvgAfterThink !== -1) {
+              text = text.slice(openThinkIdx + realSvgAfterThink).trim();
+            } else {
+              text = text.slice(0, openThinkIdx).trim();
+            }
+          }
+          return text;
+        }
+
+        function hasDrawableSvgElements(svgStr) {
+          if (!svgStr || typeof svgStr !== "string") return false;
+          const withoutDefs = svgStr.replace(/<defs\b[^>]*>[\s\S]*?<\/defs>/gi, "").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
+          return /<(?:rect|path|circle|ellipse|polygon|polyline|line|text|image|use|g)\b/i.test(withoutDefs);
+        }
+
+        function findRealSvgStartIndex(cleaned) {
+          if (!cleaned || typeof cleaned !== "string") return -1;
+          const svgRegex = /<svg\b[^>]*>/gi;
+          let match;
+          let bestIdx = -1;
+          while ((match = svgRegex.exec(cleaned)) !== null) {
+            const idx = match.index;
+            const tail = cleaned.slice(idx);
+            if (/^\s*<svg\b[^>]*>\s*\.\.\.\s*<\/svg>/i.test(tail)) {
+              continue;
+            }
+            if (/<(?:rect|path|circle|ellipse|polygon|polyline|line|defs|style|g|text|linearGradient|radialGradient|filter)\b/i.test(tail)) {
+              bestIdx = idx;
+              break;
+            }
+            if (bestIdx === -1) {
+              bestIdx = idx;
+            }
+          }
+          return bestIdx;
+        }
+
         function salvageMiniMapSvgCode(rawText) {
           if (!rawText || typeof rawText !== "string") return "";
-          let cleaned = rawText.replace(/```(?:xml|svg|html)?/gi, "").replace(/```/g, "").trim();
-          const fullMatch = cleaned.match(/<svg[\s\S]*?<\/svg>/i);
-          if (fullMatch) {
-            let svg = fullMatch[0];
-            if (!svg.includes("viewBox=")) {
-              const wMatch = svg.match(/width=["']?(\d+)["']?/i);
-              const hMatch = svg.match(/height=["']?(\d+)["']?/i);
-              const w = wMatch ? wMatch[1] : 540;
-              const h = hMatch ? hMatch[1] : 400;
-              svg = svg.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
+          const cleaned = stripThinkingAndFencesForSvg(rawText);
+          if (!cleaned) return "";
+
+          const allFullMatches = cleaned.match(/<svg\b[\s\S]*?<\/svg>/gi);
+          if (allFullMatches && allFullMatches.length > 0) {
+            let bestSvg = "";
+            for (const candidate of allFullMatches) {
+              if (/^\s*<svg\b[^>]*>\s*\.\.\.\s*<\/svg>\s*$/i.test(candidate)) continue;
+              if (hasDrawableSvgElements(candidate) && candidate.length >= bestSvg.length) {
+                bestSvg = candidate;
+              }
             }
-            return svg;
+            if (bestSvg) {
+              if (!bestSvg.includes("viewBox=")) {
+                const wMatch = bestSvg.match(/width=["']?(\d+)["']?/i);
+                const hMatch = bestSvg.match(/height=["']?(\d+)["']?/i);
+                const w = wMatch ? wMatch[1] : 540;
+                const h = hMatch ? hMatch[1] : 400;
+                bestSvg = bestSvg.replace(/<svg\b/i, `<svg viewBox="0 0 ${w} ${h}"`);
+              }
+              return bestSvg;
+            }
           }
 
-          const startIdx = cleaned.search(/<svg\b/i);
+          const startIdx = findRealSvgStartIndex(cleaned);
           if (startIdx === -1) return "";
           let partial = cleaned.substring(startIdx);
 
@@ -51174,13 +51279,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             partial = partial.substring(0, unclosedCommentIdx);
           }
 
+          const lastLt = partial.lastIndexOf("<");
           const lastGt = partial.lastIndexOf(">");
           if (lastGt === -1) return "";
-          partial = partial.substring(0, lastGt + 1);
+          if (lastLt > lastGt) {
+            partial = partial.substring(0, lastLt);
+          } else {
+            partial = partial.substring(0, lastGt + 1);
+          }
 
           const unclosedStyleStart = partial.search(/<style\b[^>]*>(?![\s\S]*<\/style>)/i);
           if (unclosedStyleStart !== -1) {
             partial = partial.substring(0, unclosedStyleStart);
+          }
+          const unclosedScriptStart = partial.search(/<script\b[^>]*>(?![\s\S]*<\/script>)/i);
+          if (unclosedScriptStart !== -1) {
+            partial = partial.substring(0, unclosedScriptStart);
           }
 
           const stack = [];
@@ -51225,7 +51339,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const unclosedTag = stack.pop();
             partial += `</${unclosedTag}>`;
           }
-          partial += "</svg>";
+          if (!partial.toLowerCase().endsWith("</svg>")) {
+            partial += "</svg>";
+          }
+
+          if (!hasDrawableSvgElements(partial)) {
+            return "";
+          }
 
           if (!partial.includes("viewBox=")) {
             const wMatch = partial.match(/width=["']?(\d+)["']?/i);
@@ -51246,6 +51366,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               const respData = JSON.parse(trimmed);
               if (isGemini && respData?.candidates?.[0]?.content?.parts) {
+                const gemText = respData.candidates[0].content.parts
+                  .filter(p => p && !p.thought)
+                  .map(p => p.text || "")
+                  .join("");
+                if (gemText && gemText.includes("<svg")) return gemText;
                 return respData.candidates[0].content.parts.map(p => p.text || "").join("");
               }
               const msgContent =
@@ -51262,10 +51387,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (msgContent && msgContent.includes("<svg")) {
                 return msgContent;
               }
-              if (msgReasoning) {
+              if (msgReasoning && msgReasoning.includes("<svg")) {
                 return (msgContent ? msgContent + "\n" : "") + msgReasoning;
               }
-              return msgContent;
+              return msgContent || msgReasoning;
             } catch (_) {}
           }
           if (trimmed.startsWith("data:") || trimmed.includes("\ndata:")) {
@@ -51295,10 +51420,136 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } catch (_) {}
             }
             if (acc && acc.includes("<svg")) return acc;
-            if (reasoningAcc) return (acc ? acc + "\n" : "") + reasoningAcc;
+            if (reasoningAcc && reasoningAcc.includes("<svg")) return (acc ? acc + "\n" : "") + reasoningAcc;
             if (acc) return acc;
           }
           return rawText;
+        }
+
+        function isRawSvgIncomplete(rawText) {
+          if (!rawText || typeof rawText !== "string") return false;
+          const cleaned = stripThinkingAndFencesForSvg(rawText);
+          const startIdx = findRealSvgStartIndex(cleaned);
+          if (startIdx === -1) return false;
+          const svgPart = cleaned.slice(startIdx);
+          return !/<\/svg\s*>/i.test(svgPart);
+        }
+
+        function stitchSvgContinuation(prevSvgText, nextChunkText) {
+          const baseClean = stripThinkingAndFencesForSvg(prevSvgText);
+          const startIdx = findRealSvgStartIndex(baseClean);
+          let prefix = startIdx !== -1 ? baseClean.slice(startIdx) : baseClean;
+          const lastLt = prefix.lastIndexOf("<");
+          const lastGt = prefix.lastIndexOf(">");
+          if (lastGt !== -1 && lastLt > lastGt) {
+            prefix = prefix.slice(0, lastLt);
+          }
+
+          let addition = stripThinkingAndFencesForSvg(nextChunkText);
+          if (!addition) return prefix;
+
+          // 若模型从头重写了完整的 <svg>...</svg>，且其中包含有效元素，直接使用新完整版本
+          if (/^\s*<svg\b/i.test(addition) && /<\/svg\s*>/i.test(addition) && hasDrawableSvgElements(addition)) {
+            return addition;
+          }
+          // 去除可能重复拼接的片段重合部分
+          const tailCheckLen = Math.min(200, prefix.length);
+          const prefixTail = prefix.slice(-tailCheckLen);
+          for (let overlap = tailCheckLen; overlap >= 12; overlap--) {
+            const sub = prefixTail.slice(-overlap);
+            if (addition.startsWith(sub)) {
+              addition = addition.slice(overlap);
+              break;
+            }
+          }
+          return prefix + addition;
+        }
+
+        async function continueTruncatedMiniMapSvg({
+          partialRawText,
+          locationsSummary,
+          requestUrl,
+          requestHeaders,
+          isGemini,
+          model,
+          apiConfig,
+          abortSignal
+        }) {
+          let workingText = stripThinkingAndFencesForSvg(partialRawText);
+          const startIdx = findRealSvgStartIndex(workingText);
+          if (startIdx === -1) return workingText;
+          workingText = workingText.slice(startIdx);
+
+          for (let round = 0; round < 2; round++) {
+            if (!isRawSvgIncomplete(workingText)) break;
+            if (abortSignal && abortSignal.aborted) break;
+
+            const lastLt = workingText.lastIndexOf("<");
+            const lastGt = workingText.lastIndexOf(">");
+            if (lastGt !== -1 && lastLt > lastGt) {
+              workingText = workingText.slice(0, lastLt);
+            }
+            const tailSnippet = workingText.slice(-1400);
+            const contPrompt =
+              `你刚才生成的SVG小地图代码在末尾处被截断，尚未闭合 </svg>。\n` +
+              `请紧接着以下【已输出代码的末尾片段】的最后一个字符，直接继续往后输出剩余未完成的SVG元素与地点节点，直到完整输出 </svg> 结束！\n` +
+              `【严格要求】：\n` +
+              `1. 严禁从头重写 <svg>，严禁重复前面已经输出过的代码，直接输出后续衔接的标签代码；\n` +
+              `2. 严禁输出 <think> 思考过程、解释文字或 Markdown 代码块标记；\n` +
+              `3. 确保所有未闭合的 <g>、<defs> 等标签以及最终的 </svg> 完整闭合。\n\n` +
+              `【地点清单参考】：\n${locationsSummary || "保持原地点"}\n\n` +
+              `【已输出代码的末尾片段】：\n${tailSnippet}`;
+
+            const contBody = isGemini
+              ? {
+                  contents: [{ role: "user", parts: [{ text: contPrompt }] }],
+                  generationConfig: { temperature: 0.25, maxOutputTokens: 16384 },
+                  systemInstruction: { parts: [{ text: "你是SVG代码断点续写器。只输出紧接末尾的剩余SVG代码片段直至</svg>闭合，不输出任何多余文字。" }] }
+                }
+              : {
+                  model: model || "gpt-4o",
+                  messages: [
+                    { role: "system", content: "你是SVG代码断点续写器。只输出紧接末尾的剩余SVG代码片段直至</svg>闭合，不输出任何多余文字。" },
+                    { role: "user", content: contPrompt }
+                  ],
+                  temperature: 0.25,
+                  max_tokens: 16384,
+                  stream: true
+                };
+
+            let streamedCont = "";
+            try {
+              const contResp = await fetch(requestUrl, {
+                method: "POST",
+                headers: requestHeaders,
+                body: JSON.stringify(contBody),
+                signal: abortSignal || undefined,
+                _noAutoRetry: true,
+                _isSubApiCall: Boolean(apiConfig && apiConfig.isSub),
+                _preserveCallerMaxTokens: true,
+                _suppressGlobalChatStream: true,
+                onStreamChunk: (chunk) => {
+                  if (chunk && typeof chunk.content === "string" && chunk.content) {
+                    streamedCont = chunk.content;
+                  }
+                }
+              });
+              const contRaw = contResp.ok
+                ? ((await extractAiTextFromResponse(contResp, isGemini)) || streamedCont)
+                : streamedCont;
+              if (contRaw && contRaw.trim()) {
+                workingText = stitchSvgContinuation(workingText, contRaw);
+              } else {
+                break;
+              }
+            } catch (_) {
+              if (streamedCont && streamedCont.trim()) {
+                workingText = stitchSvgContinuation(workingText, streamedCont);
+              }
+              break;
+            }
+          }
+          return workingText;
         }
 
         async function generateChatMiniMapSvg(styleName = "自适应", targetChatId = null, abortSignal = null) {
@@ -51355,7 +51606,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return `- 层级${l.level} ${l.name}${l.parent ? ' 所属：' + l.parent : ' 顶级'}：${l.desc || '场景区域'} 状态：${imgTag}`;
           }).join("\n");
 
-          const gallerySummary = (referenceImages || []).map((img, idx) => {
+          const gallerySummary = (referenceImages || []).slice(0, 8).map((img, idx) => {
             const mapTag = isMapImage(img) ? "【核心地图与布局图】" : "【场景/角色参考插图】";
             return `【参考图${idx + 1}】${mapTag} 名称：${img.name || '未命名'}，说明：${img.desc || img.annotation || img.category || '场景插图'}${img.dataUrl || img.url ? '，包含图像数据' : ''}`;
           }).join("\n");
@@ -51414,9 +51665,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             `   - 每个具体地点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致；\n` +
             `   - 【严禁在SVG内部或<style>中编写任何针对 .map-location-node 或任何元素的 :hover / :active 的 transform 缩放或偏移样式】！因为SVG中覆盖 transform 会重置坐标导致节点瞬间飞移到左上角 (0,0)！节点只需保留默认视觉样式即可；\n` +
             `   - 交互仅为点击地点弹出白色悬浮信息气泡；\n` +
-            `6. 纯净内联SVG：\n` +
-            `   - 严禁包含 <a> 标签或外部页面跳转代码；\n` +
-            `   - 只输出纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，不带任何Markdown代码块与多余文字。`;
+            `6. 纯净内联SVG与防截断准则：\n` +
+            `   - 严禁包含 <a> 标签或外部页面跳转代码，严禁在SVG中嵌入base64图片或冗长注释；\n` +
+            `   - 所有坐标与路径数值保留整数或最多一位小数，使用 <symbol> / <use> 或精练的矢量图元复用成片植被与装饰，确保代码精练高效、一次性完整输出闭合的 </svg>，严禁半途截断；\n` +
+            `   - 严禁输出 <think> 思考过程、Markdown代码块或任何多余解释文字，直接以 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> 开头并以 </svg> 结尾。`;
 
           const apiConfig = (typeof getEffectiveApiConfig === "function")
             ? getEffectiveApiConfig("map")
@@ -51430,6 +51682,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (!apiKey || apiKey.trim() === "") {
             generationError = new Error(apiConfig.isSub ? "请先在API设置中配置有效的副API Key" : "请先在API设置中配置有效的主API Key");
           } else {
+            let streamedMapText = "";
             try {
               let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
               let cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
@@ -51466,9 +51719,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       imageEl.onload = () => {
                         clearTimeout(timer);
                         try {
-                          const maxSide = 1024;
-                          let w = imageEl.naturalWidth || imageEl.width || 800;
-                          let h = imageEl.naturalHeight || imageEl.height || 600;
+                          const maxSide = 768;
+                          let w = imageEl.naturalWidth || imageEl.width || 640;
+                          let h = imageEl.naturalHeight || imageEl.height || 480;
                           if (w > maxSide || h > maxSide) {
                             if (w >= h) {
                               h = Math.max(1, Math.round((h * maxSide) / w));
@@ -51485,7 +51738,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           ctx.fillStyle = "#ffffff";
                           ctx.fillRect(0, 0, w, h);
                           ctx.drawImage(imageEl, 0, 0, w, h);
-                          resolve(cvs.toDataURL("image/jpeg", 0.78));
+                          resolve(cvs.toDataURL("image/jpeg", 0.72));
                         } catch (_) {
                           resolve("");
                         }
@@ -51506,7 +51759,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               const geminiImageParts = [];
               const openaiImageParts = [];
-              for (const img of (referenceImages || []).slice(0, 6)) {
+              for (const img of (referenceImages || []).slice(0, 3)) {
                 let dUrl = await resolveAndCompressRefImg(img.dataUrl || img.url || '');
                 if (dUrl) {
                   if (dUrl.startsWith('data:image/')) {
@@ -51533,30 +51786,32 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
 
-              const mapTemperature = (styleName === "自适应" || !styleName) ? 0.75 : 0.6;
+              const mapTemperature = (styleName === "自适应" || !styleName) ? 0.7 : 0.55;
               let requestBody = isGemini
                 ? {
                     contents: [{ role: "user", parts: [...geminiImageParts, { text: prompt }] }],
-                    generationConfig: { temperature: mapTemperature },
-                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。特别注意：不要规定底色必须是某种固定颜色，但严禁使用黑色、深蓝色或深灰色作为底色，必须采用舒适明朗的浅色调或自然明快色调。" }] }
+                    generationConfig: { temperature: mapTemperature, maxOutputTokens: 16384 },
+                    systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，直接输出完整闭合的纯净SVG代码，严禁输出<think>思考过程、Markdown代码块或多余文字。底色严禁使用黑色、深蓝色或深灰色，必须采用舒适明朗的浅色调或自然明快色调。" }] }
                   }
                 : {
                     model: model || "gpt-4o",
                     messages: [
-                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。特别注意：不要规定底色必须是某种固定颜色，但严禁使用黑色、深蓝色或深灰色作为底色，必须采用舒适明朗的浅色调或自然明快色调。" },
+                      { role: "system", content: "你是一个专业的矢量SVG地图生成器。请参考用户提供的图库插图与地点，直接输出完整闭合的纯净SVG代码，严禁输出<think>思考过程、Markdown代码块或多余文字。底色严禁使用黑色、深蓝色或深灰色，必须采用舒适明朗的浅色调或自然明快色调。" },
                       { role: "user", content: openaiImageParts.length > 0 ? [{ type: "text", text: prompt }, ...openaiImageParts] : prompt }
                     ],
                     temperature: mapTemperature,
+                    max_tokens: 16384,
                     stream: useStreamForMap
                   };
 
-              let streamedMapText = "";
               const fetchOptions = {
                 method: "POST",
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody),
                 _noAutoRetry: true,
                 _isSubApiCall: Boolean(apiConfig.isSub),
+                _preserveCallerMaxTokens: true,
+                _suppressGlobalChatStream: true,
                 onStreamChunk: (chunk) => {
                   if (chunk && typeof chunk.content === "string" && chunk.content) {
                     streamedMapText = chunk.content;
@@ -51569,8 +51824,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const resp = await fetch(requestUrl, fetchOptions);
 
               if (resp.ok) {
-                const rawAiText = (await extractAiTextFromResponse(resp, isGemini)) || streamedMapText;
+                let rawAiText = (await extractAiTextFromResponse(resp, isGemini)) || streamedMapText;
                 if (rawAiText) {
+                  if (isRawSvgIncomplete(rawAiText) && !(abortSignal && abortSignal.aborted)) {
+                    rawAiText = await continueTruncatedMiniMapSvg({
+                      partialRawText: rawAiText,
+                      locationsSummary: locSummary,
+                      requestUrl,
+                      requestHeaders,
+                      isGemini,
+                      model,
+                      apiConfig,
+                      abortSignal
+                    });
+                  }
                   const salvaged = salvageMiniMapSvgCode(rawAiText);
                   if (salvaged) {
                     svgCode = salvaged;
@@ -51579,6 +51846,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               } else {
                 if (streamedMapText) {
+                  if (isRawSvgIncomplete(streamedMapText) && !(abortSignal && abortSignal.aborted)) {
+                    streamedMapText = await continueTruncatedMiniMapSvg({
+                      partialRawText: streamedMapText,
+                      locationsSummary: locSummary,
+                      requestUrl,
+                      requestHeaders,
+                      isGemini,
+                      model,
+                      apiConfig,
+                      abortSignal
+                    });
+                  }
                   const salvagedFromPartial = salvageMiniMapSvgCode(streamedMapText);
                   if (salvagedFromPartial) {
                     svgCode = salvagedFromPartial;
@@ -51587,7 +51866,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 if (!generationSucceeded) {
                   const errData = await resp.json().catch(() => null);
-                  throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+                  throw new Error(errData?.error?.message || `请求失败，状态码 ${resp.status}`);
                 }
               }
             } catch (err) {
@@ -51649,14 +51928,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             window.PeerManager.syncGroupSettingsToPeers(chat);
           }
 
-          // 若当前活跃查看的正是此聊天且地图浮层已处于打开状态，立即原地刷新渲染
-          const miniModal = document.getElementById("chat-mini-map-modal");
-          if (miniModal && miniModal.classList.contains("visible") && String(state.activeChatId) === String(chat.id)) {
+          // 若当前活跃查看的正是此聊天，立即刷新小地图渲染
+          if (String(state.activeChatId) === String(chat.id) && typeof renderChatMiniMap === "function") {
             renderChatMiniMap();
           }
 
           if (typeof window.showCustomAlert === "function") {
-            window.showCustomAlert("提示", "地图生成成功");
+            window.showCustomAlert("提示", "小地图生成完毕");
           }
         }
         window.generateChatMiniMapSvg = generateChatMiniMapSvg;
@@ -51695,7 +51973,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             `【修改与优化准则】：\n` +
             `1. 必须完全基于现有的SVG代码进行增量修改、补充新增地点、调整视觉元素与布局，保持原有的【${curStyle}】艺术画风、配色与精致度。\n` +
             `2. 保持构图饱满，每个地点节点最外层 <g> 标签必须附带 class="map-location-node" data-name="地点名称"，地点名称必须与地点清单完全一致。\n` +
-            `3. 纯净内联SVG：只输出修改后的纯净合法的 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，严禁包含任何Markdown代码块或多余文字。\n` +
+            `3. 纯净内联SVG与防截断：直接输出修改后的完整闭合 <svg viewBox="0 0 540 400" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto;"> ... </svg> 代码，严禁输出 <think> 思考过程、Markdown代码块或多余文字，坐标保留整数或一位小数以确保一次性完整闭合输出。\n` +
             `4. 底色规范：不要规定底色必须是某种固定颜色，但严禁使用黑色或者是深蓝色、深灰色作为底色，必须采用明朗舒适的浅色调或自然明快色调。`;
 
           const apiConfig = (typeof getEffectiveApiConfig === "function")
@@ -51722,16 +52000,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let requestBody = isGemini
             ? {
                 contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.3 },
-                systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图增量修改器。请严格基于用户现有的SVG代码进行修改与优化，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" }] }
+                generationConfig: { temperature: 0.3, maxOutputTokens: 16384 },
+                systemInstruction: { parts: [{ text: "你是一个专业的矢量SVG地图增量修改器。请严格基于用户现有的SVG代码进行修改与优化，直接输出完整闭合的纯净SVG代码，严禁输出<think>思考过程、Markdown代码块与多余文字。" }] }
               }
             : {
                 model: model || "gpt-4o",
                 messages: [
-                  { role: "system", content: "你是一个专业的矢量SVG地图增量修改器。请严格基于用户现有的SVG代码进行修改与优化，只输出纯净合法的SVG代码，不带Markdown代码块与多余文字。" },
+                  { role: "system", content: "你是一个专业的矢量SVG地图增量修改器。请严格基于用户现有的SVG代码进行修改与优化，直接输出完整闭合的纯净SVG代码，严禁输出<think>思考过程、Markdown代码块与多余文字。" },
                   { role: "user", content: prompt }
                 ],
                 temperature: 0.3,
+                max_tokens: 16384,
                 stream: useStreamForModMap
               };
 
@@ -51742,6 +52021,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               method: "POST",
               headers: requestHeaders,
               body: JSON.stringify(requestBody),
+              _noAutoRetry: true,
+              _isSubApiCall: Boolean(apiConfig.isSub),
+              _preserveCallerMaxTokens: true,
+              _suppressGlobalChatStream: true,
               onStreamChunk: (chunk) => {
                 if (chunk && typeof chunk.content === "string" && chunk.content) {
                   streamedModMapText = chunk.content;
@@ -51750,17 +52033,41 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
 
             if (resp.ok) {
-              const rawAiText = (await extractAiTextFromResponse(resp, isGemini)) || streamedModMapText;
+              let rawAiText = (await extractAiTextFromResponse(resp, isGemini)) || streamedModMapText;
               if (rawAiText) {
+                if (isRawSvgIncomplete(rawAiText)) {
+                  rawAiText = await continueTruncatedMiniMapSvg({
+                    partialRawText: rawAiText,
+                    locationsSummary: locSummary,
+                    requestUrl,
+                    requestHeaders,
+                    isGemini,
+                    model,
+                    apiConfig,
+                    abortSignal: null
+                  });
+                }
                 newSvgCode = salvageMiniMapSvgCode(rawAiText);
               }
             } else {
               if (streamedModMapText) {
+                if (isRawSvgIncomplete(streamedModMapText)) {
+                  streamedModMapText = await continueTruncatedMiniMapSvg({
+                    partialRawText: streamedModMapText,
+                    locationsSummary: locSummary,
+                    requestUrl,
+                    requestHeaders,
+                    isGemini,
+                    model,
+                    apiConfig,
+                    abortSignal: null
+                  });
+                }
                 newSvgCode = salvageMiniMapSvgCode(streamedModMapText);
               }
               if (!newSvgCode) {
                 const errData = await resp.json().catch(() => null);
-                throw new Error(errData?.error?.message || `请求失败 (${resp.status})`);
+                throw new Error(errData?.error?.message || `请求失败，状态码 ${resp.status}`);
               }
             }
           } catch (modErr) {
