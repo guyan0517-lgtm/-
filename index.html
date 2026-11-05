@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -42373,7 +42373,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           chatScreen.style.backgroundColor = chat.settings.background
             ? "transparent"
             : isDarkMode
-              ? "#000000"
+              ? "#24262e"
               : "#f0f2f5";
           const history = chat.history;
           const totalMessages = history.length;
@@ -47025,8 +47025,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           if (genBtn) {
             genBtn.onclick = async () => {
+              if ((toggle && toggle.checked) || isChatModuleMapMode(chat)) {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前已勾选使用模组地图，禁止重写或覆盖模组地图");
+                }
+                return;
+              }
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", "正在根据上下文推断生成地图，请稍候");
+                window.showCustomAlert("提示", "正在连接人工智能根据上下文推断生成地图，请稍候");
               }
               try {
                 await generateContextMapFromAI(chat);
@@ -47035,7 +47041,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   updateHint();
                 }
                 if (typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("成功", "已成功根据上下文生成地图地点");
+                  window.showCustomAlert("成功", "已成功根据上下文生成并覆盖最新地图地点");
                 }
               } catch (err) {
                 console.error("生成上下文地图失败:", err);
@@ -47063,13 +47069,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         window.openCharMapConfigModal = openCharMapConfigModal;
 
         async function generateContextMapFromAI(chat) {
+          if (!chat) {
+            throw new Error("未找到当前聊天会话");
+          }
+          if (isChatModuleMapMode(chat) || chat.settings?.mapSource === "module") {
+            throw new Error("当前已勾选使用模组地图，禁止重写或覆盖模组地图");
+          }
+
           const apiConfig = (typeof getEffectiveApiConfig === "function")
             ? getEffectiveApiConfig("map")
             : ((state && state.apiConfig) || (window.state && window.state.apiConfig) || {});
 
           const { proxyUrl, apiKey, model } = apiConfig;
-          if (!apiKey || !apiKey.trim()) {
-            throw new Error(apiConfig.isSub ? "请先在API设置中配置有效的副API Key" : "请先在API设置中配置有效的主API Key");
+          const activeKey = typeof getRandomValue === "function" ? String(getRandomValue(apiKey) || "").trim() : String(apiKey || "").trim();
+          if (!activeKey) {
+            throw new Error(apiConfig.isSub ? "请先在API设置中配置有效的副API密钥" : "请先在API设置中配置有效的主API密钥");
           }
 
           const history = chat.history || [];
@@ -47098,102 +47112,86 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             `7. 严格输出标准JSON数组，不带Markdown代码块，格式示例：\n` +
             `[{"id":"loc_1","name":"巴黎","parent":"","level":1,"desc":"法国浪漫艺术之都"},{"id":"loc_2","name":"塞纳河畔","parent":"巴黎","level":2,"desc":"流经市中心的著名河流与两岸步道"},{"id":"loc_3","name":"河畔古书店","parent":"塞纳河畔","level":3,"desc":"坐落于河堤旁的独立旧书屋"},{"id":"loc_4","name":"巴黎铁塔","parent":"巴黎","level":2,"desc":"战神广场上的地标建筑"},{"id":"loc_5","name":"卢浮宫","parent":"巴黎","level":2,"desc":"艺术宝库与世界级博物馆"}]`;
 
-          let parsedLocs = null;
+          const isGemini = apiConfig.protocol === "gemini" || proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
+          const cleanModel = String(model || (isGemini ? "gemini-2.5-flash" : "gpt-4o")).replace(/^models\//i, "").trim();
+          let cleanedProxy = String(proxyUrl || (isGemini ? GEMINI_API_URL : "https://api.openai.com")).replace(/\/+$/, "");
 
-          if (apiKey && apiKey.trim() !== "") {
-            try {
-              let isGemini = proxyUrl === GEMINI_API_URL || (proxyUrl && proxyUrl.includes("generativelanguage.googleapis.com"));
-              let cleanedProxy = (proxyUrl || "https://api.openai.com").replace(/\/+$/, "");
-
-              let requestUrl = isGemini
-                ? `${GEMINI_API_URL}/${model || "gemini-1.5-flash"}:generateContent?key=${getRandomValue(apiKey)}`
-                : (cleanedProxy.endsWith("/v1") ? `${cleanedProxy}/chat/completions` : `${cleanedProxy}/v1/chat/completions`);
-
-              let requestHeaders = isGemini
-                ? { "Content-Type": "application/json" }
-                : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}` };
-
-              let requestBody = isGemini
-                ? {
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.3 },
-                  }
-                : {
-                    model: model || "gpt-4o",
-                    messages: [
-                      { role: "system", content: "你是一个专业的JSON地图生成器。只输出纯净JSON数组，不带Markdown。" },
-                      { role: "user", content: prompt },
-                    ],
-                    temperature: 0.3,
-                    stream: false,
-                  };
-
-              const resp = await fetch(requestUrl, {
-                method: "POST",
-                headers: requestHeaders,
-                body: JSON.stringify(requestBody),
-              });
-
-              if (resp.ok) {
-                const respData = await resp.json();
-                let rawText = isGemini
-                  ? respData?.candidates?.[0]?.content?.parts?.[0]?.text
-                  : respData?.choices?.[0]?.message?.content;
-
-                if (rawText) {
-                  rawText = rawText.replace(/```(?:json|javascript)?/gi, "").replace(/```/g, "").trim();
-                  const match = rawText.match(/\[[\s\S]*\]/);
-                  if (match) rawText = match[0];
-                  const tempParsed = JSON.parse(rawText);
-                  if (Array.isArray(tempParsed) && tempParsed.length > 0) {
-                    parsedLocs = tempParsed;
-                  }
-                }
-              }
-            } catch (err) {
-              console.warn("AI 生成上下文地图网络异常，使用本地上下文推断:", err);
-            }
+          let requestUrl;
+          if (isGemini) {
+            const geminiBase = cleanedProxy.includes("/v1beta/models") ? cleanedProxy : GEMINI_API_URL;
+            requestUrl = `${geminiBase}/${cleanModel}:generateContent?key=${encodeURIComponent(activeKey)}`;
+          } else if (/\/chat\/completions$/i.test(cleanedProxy)) {
+            requestUrl = cleanedProxy;
+          } else if (/\/v1$/i.test(cleanedProxy)) {
+            requestUrl = `${cleanedProxy}/chat/completions`;
+          } else {
+            requestUrl = `${cleanedProxy}/v1/chat/completions`;
           }
 
-          if (!parsedLocs || !Array.isArray(parsedLocs) || parsedLocs.length === 0) {
-            const locTriplets = [];
-            for (let i = history.length - 1; i >= 0; i--) {
-              const h = history[i];
-              if (!h || typeof h.content !== "string") continue;
-              const match = h.content.match(/(?:\[?地点\]?)[：:]\s*([^\n\r\]]+)/);
-              if (match) {
-                const rawLocStr = match[1].trim();
-                const parts = rawLocStr.split(/[-–—/]/).map(p => p.trim()).filter(Boolean);
-                if (parts.length > 0 && !locTriplets.some(t => t.join("-") === parts.join("-"))) {
-                  locTriplets.push(parts);
-                }
-              }
-            }
+          const requestHeaders = isGemini
+            ? { "Content-Type": "application/json" }
+            : { "Content-Type": "application/json", Authorization: `Bearer ${activeKey}` };
 
-            if (locTriplets.length > 0) {
-              const resultMap = new Map();
-              locTriplets.forEach((parts, tIdx) => {
-                const l1Name = parts[0];
-                if (l1Name && !resultMap.has(l1Name)) {
-                  resultMap.set(l1Name, { id: `ctx_loc_${resultMap.size + 1}`, name: l1Name, parent: "", level: 1, desc: `剧情核心大地图 ${l1Name}` });
-                }
-                if (parts.length > 1) {
-                  const l2Name = parts[1];
-                  if (l2Name && !resultMap.has(l2Name)) {
-                    resultMap.set(l2Name, { id: `ctx_loc_${resultMap.size + 1}`, name: l2Name, parent: l1Name, level: 2, desc: `${l1Name} 区域内的主要场所 ${l2Name}` });
-                  }
-                }
-                if (parts.length > 2) {
-                  const l3Name = parts[2];
-                  if (l3Name && !resultMap.has(l3Name)) {
-                    resultMap.set(l3Name, { id: `ctx_loc_${resultMap.size + 1}`, name: l3Name, parent: parts[1], level: 3, desc: `${parts[1]} 内部具体据点 ${l3Name}` });
-                  }
-                }
-              });
-              parsedLocs = Array.from(resultMap.values());
-            } else {
-              parsedLocs = [];
+          const requestBody = isGemini
+            ? {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.3 },
+              }
+            : {
+                model: cleanModel,
+                messages: [
+                  { role: "system", content: "你是一个专业的JSON地图生成器。只输出纯净JSON数组，不带Markdown。" },
+                  { role: "user", content: prompt },
+                ],
+                temperature: 0.3,
+                stream: false,
+              };
+
+          const resp = await fetch(requestUrl, {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify(requestBody),
+          });
+
+          if (!resp.ok) {
+            let errDetail = "";
+            try {
+              const errJson = await resp.json();
+              errDetail = errJson?.error?.message || JSON.stringify(errJson);
+            } catch (_) {
+              try { errDetail = await resp.text(); } catch (__) {}
             }
+            throw new Error(`地图生成接口请求失败，状态码 ${resp.status}${errDetail ? "：" + String(errDetail).slice(0, 120) : ""}`);
+          }
+
+          const respData = await resp.json();
+          let rawText = isGemini
+            ? respData?.candidates?.[0]?.content?.parts?.map(p => p?.text || "").join("")
+            : (respData?.choices?.[0]?.message?.content || respData?.choices?.[0]?.text || "");
+
+          if (!rawText || !String(rawText).trim()) {
+            throw new Error("人工智能未返回有效的地图内容");
+          }
+
+          rawText = String(rawText)
+            .replace(/<(?:think|thinking|thought|reasoning)\b[^>]*>[\s\S]*?<\/(?:think|thinking|thought|reasoning)>/gi, "")
+            .replace(/```(?:json|javascript)?/gi, "")
+            .replace(/```/g, "")
+            .trim();
+          const match = rawText.match(/\[[\s\S]*\]/);
+          if (!match) {
+            throw new Error("人工智能返回的地图格式不是有效的列表结构");
+          }
+
+          let parsedLocs = null;
+          try {
+            parsedLocs = JSON.parse(match[0]);
+          } catch (parseErr) {
+            throw new Error("解析人工智能生成的地图数据失败：" + (parseErr.message || String(parseErr)));
+          }
+
+          if (!Array.isArray(parsedLocs) || parsedLocs.length === 0) {
+            throw new Error("人工智能生成的地点列表为空");
           }
 
           if (!chat.settings) chat.settings = {};
@@ -47484,14 +47482,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (writeOptionMap) {
             writeOptionMap.onclick = async () => {
               if (writeMenu) writeMenu.style.display = "none";
+              if (isChatModuleMapMode(chat) || chat.settings?.mapSource === "module") {
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "当前已勾选使用模组地图，禁止重写或覆盖模组地图");
+                }
+                return;
+              }
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("编写地图", "正在根据上下文分析地点并编写文字地图");
+                window.showCustomAlert("编写地图", "正在连接人工智能根据上下文思考并编写地图，请稍候");
               }
               try {
                 await generateContextMapFromAI(chat);
                 await renderChatMapList();
                 if (typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("编写完成", "已根据当前对话记录生成最新地图地点");
+                  window.showCustomAlert("编写完成", "已根据当前对话记录由人工智能编写并覆盖最新上下文地图");
                 }
               } catch (err) {
                 console.error("编写地图失败:", err);
@@ -71249,7 +71253,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           } else {
             phoneHomeScreen.style.backgroundImage = "none";
             phoneHomeScreen.style.backgroundColor = isDarkMode
-              ? "#000000"
+              ? "#24262e"
               : "#f0f2f5";
           }
 
@@ -74014,11 +74018,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const darkModeCss = `
 			/* 1. 全局重新定义颜色变量 */
 			:root {
-			  --secondary-bg: #1c1c1e;
-			  --border-color: #38383a;
-			  --text-primary: #ffffff;
-			  --text-secondary: #8e8e93;
-			  --status-bar-text-color: #ffffff;
+			  --background-color: #24262e;
+			  --card-bg: #2e313b;
+			  --secondary-bg: #2b2e38;
+			  --border-color: #424654;
+			  --text-primary: #eae8e3;
+			  --text-secondary: #a2a09a;
+			  --status-bar-text-color: #eae8e3;
 			  --accent-color: #0A84FF; /* iOS风格的蓝色 */
 			}
 
@@ -74026,14 +74032,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 			#phone-screen, .screen, #chat-list, #world-book-list, .list-container, .form-container, #chat-messages,
 			#wallpaper-screen, #font-settings-screen, #api-settings-screen, #character-selection-screen,
 			#world-book-screen, #world-book-editor-screen, #character-phone-inner-screen, #character-phone-page {
-			    background-color: #000000 !important;
+			    background-color: #24262e !important;
 			}
 
 			/* 3. 主屏幕专属样式 */
-			#home-screen { background: #111827 !important; }
+			#home-screen { background: #1e2330 !important; }
 			#desktop-dock { background-color: rgba(55, 65, 81, 0.5); }
 			.desktop-app-icon .label, .widget-subtext { color: #e5e7eb; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
-			#profile-widget .profile-info { background: linear-gradient(to bottom, rgba(28, 28, 30, 0.85) 20%, rgba(28, 28, 30, 0)); color: #f9fafb; }
+			#profile-widget .profile-info { background: linear-gradient(to bottom, rgba(38, 41, 50, 0.85) 20%, rgba(38, 41, 50, 0)); color: #f9fafb; }
 			#profile-username, #profile-bio, #profile-location span { color: #f9fafb; }
 			#profile-sub-username, #profile-location { color: #9ca3af; }
 			#profile-location { background-color: rgba(255,255,255,0.1); }
@@ -74042,34 +74048,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
 			/* 4. 适配所有页面的头部Header */
 			.header, .qzone-header, .character-phone-header {
-			    background-color: rgba(28, 28, 30, 0.85) !important;
+			    background-color: rgba(38, 41, 50, 0.9) !important;
 			    border-bottom-color: var(--border-color) !important;
 			    color: var(--text-primary) !important;
 			}
 
 			/* 5. 适配所有通用组件 */
-			#chat-input-area, #chat-list-bottom-nav { background-color: rgba(28, 28, 30, 0.85); border-top-color: var(--border-color); }
+			#chat-input-area, #chat-list-bottom-nav { background-color: rgba(38, 41, 50, 0.9); border-top-color: var(--border-color); }
 			#chat-input { background-color: var(--secondary-bg); color: var(--text-primary); }
-			.modal-content, #custom-modal { background-color: #2c2c2e; }
+			.modal-content, #custom-modal { background-color: #2e313b; }
 			.modal-header, .modal-footer, .custom-modal-footer, .custom-modal-footer button:first-child { border-color: var(--border-color); }
 			.form-group input, .form-group select, .form-group textarea { background-color: var(--secondary-bg); color: var(--text-primary); border-color: var(--border-color); }
 			.list-item, .chat-list-item-swipe-container:not(:last-child), .chat-group-container, .world-book-group-container { border-bottom-color: var(--border-color) !important; }
 			.chat-group-container:first-of-type { border-top-color: var(--border-color) !important; }
-			.list-item:hover, .chat-list-item:hover { background-color: #2c2c2e; }
+			.list-item:hover, .chat-list-item:hover { background-color: #343844; }
 
 			/* 6. 特殊页面深度适配 */
-			.chat-group-header, .world-book-group-header { background-color: #1c1c1e; }
-			.chat-list-item-content.pinned { background-color: #3a3a3c; }
-			#font-preview, #wallpaper-preview, .font-preset-slot { background-color: #1c1c1e !important; border-color: #38383a !important; }
+			.chat-group-header, .world-book-group-header { background-color: #2b2e38; }
+			.chat-list-item-content.pinned { background-color: #383c48; }
+			#font-preview, #wallpaper-preview, .font-preset-slot { background-color: #2e313b !important; border-color: #424654 !important; }
 
 			/* 7. 角色手机内部适配 & 全局文字颜色修复 */
-			#character-phone-container { background-color: #000000; }
-			.character-phone-frame { background-color: #111; }
-			#character-chat-history-messages { background-color: #0e0e0e !important; }
-			.character-chat-bubble.received { background-color: #2c2c2e !important; }
+			#character-phone-container { background-color: #24262e; }
+			.character-phone-frame { background-color: #20222a; }
+			#character-chat-history-messages { background-color: #22242c !important; }
+			.character-chat-bubble.received { background-color: #323540 !important; }
 			.character-data-item, .character-bank-transaction, .character-cart-item, .character-browser-item {
-			    background-color: #1c1c1e;
-			    border-color: #38383a;
+			    background-color: #2e313b;
+			    border-color: #424654;
 			}
 
 			/* ▼▼▼ 核心修复：把所有这些元素的文字颜色都改为低饱和度的浅灰色 ▼▼▼ */

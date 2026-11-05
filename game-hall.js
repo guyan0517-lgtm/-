@@ -35,36 +35,36 @@
     italics_text_color: 'rgba(162, 158, 152, 1)',
     underline_text_color: 'rgba(218, 166, 180, 1)',
     quote_text_color: 'rgba(226, 174, 188, 1)',
-    blur_tint_color: 'rgba(34, 36, 43, 0.96)',
-    chat_tint_color: 'rgba(26, 28, 34, 1)',
-    user_mes_blur_tint_color: 'rgba(42, 45, 54, 1)',
-    bot_mes_blur_tint_color: 'rgba(36, 39, 47, 1)',
-    shadow_color: 'rgba(12, 13, 18, 0.45)',
-    border_color: 'rgba(76, 80, 92, 0.88)',
+    blur_tint_color: 'rgba(42, 45, 54, 0.96)',
+    chat_tint_color: 'rgba(38, 41, 50, 1)',
+    user_mes_blur_tint_color: 'rgba(50, 54, 65, 1)',
+    bot_mes_blur_tint_color: 'rgba(45, 49, 59, 1)',
+    shadow_color: 'rgba(18, 20, 26, 0.38)',
+    border_color: 'rgba(86, 91, 105, 0.88)',
     custom_css: DEFAULT_GOUSU_THEME.custom_css + `\n
 /* ===== 夜间狗塑 护眼暗色适配 ===== */
 #tavern-stage-root {
-    --gousu-meta-border: #454856;
-    background-color: #1a1c22 !important;
-    color: #e2e0da !important;
+    --gousu-meta-border: #505566;
+    background-color: #262932 !important;
+    color: #e4e2dc !important;
 }
 .mes_block {
-    --msg-bg-color: #282b34 !important;
+    --msg-bg-color: #323642 !important;
 }
 .mes_block::before {
-    box-shadow: inset 0 0 14px rgba(16, 18, 22, 0.65) !important;
-    border: 1px solid #3e4250 !important;
+    box-shadow: inset 0 0 14px rgba(20, 22, 28, 0.52) !important;
+    border: 1px solid #484d5e !important;
 }
 .mes_block::after {
-    background-color: #2e313c !important;
-    border: 1px solid #484c5c !important;
-    color: #b8b5ad !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+    background-color: #383c4a !important;
+    border: 1px solid #525768 !important;
+    color: #c4c1b9 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.24) !important;
 }
 .mes_text {
-    background: #20222a !important;
-    color: var(--SmartThemeBodyColor, #e2e0da) !important;
-    border: 1.5px solid #383c48 !important;
+    background: #2c2f3a !important;
+    color: var(--SmartThemeBodyColor, #e4e2dc) !important;
+    border: 1.5px solid #454a5a !important;
 }
 .mes_text q {
     background-color: rgba(226, 174, 188, 0.13) !important;
@@ -123,37 +123,37 @@
     color: #262932 !important;
 }
 #send_textarea {
-    background: #22252e !important;
-    color: #e2e0da !important;
-    border: 1.5px solid #414554 !important;
+    background: #2e323e !important;
+    color: #e4e2dc !important;
+    border: 1.5px solid #4a4f60 !important;
 }
 #nonQRFormItems:has(#send_textarea:placeholder-shown)::after {
-    color: #9e9b93 !important;
-    opacity: 0.72 !important;
+    color: #a8a59d !important;
+    opacity: 0.76 !important;
 }
 details.mes_reasoning_details {
-    background: rgba(34, 37, 45, 0.92) !important;
-    border: 1px dashed #484c5c !important;
-    color: #aba8a0 !important;
-}
-.mes_reasoning_header {
-    background-color: rgba(48, 52, 62, 0.84) !important;
-    background-blend-mode: multiply !important;
-    border: 1px solid #4c5060 !important;
-    color: #dcd9d2 !important;
-}
-.mes_reasoning_details[open] .mes_reasoning_header.flex-container {
-    background: #2c2f3a !important;
-}
-.mes_reasoning {
-    background-color: #1d1f26 !important;
-    border: 1px dashed #454958 !important;
+    background: rgba(44, 48, 58, 0.92) !important;
+    border: 1px dashed #525768 !important;
     color: #b8b5ad !important;
 }
+.mes_reasoning_header {
+    background-color: rgba(54, 58, 70, 0.86) !important;
+    background-blend-mode: multiply !important;
+    border: 1px solid #565b6c !important;
+    color: #e2dfd8 !important;
+}
+.mes_reasoning_details[open] .mes_reasoning_header.flex-container {
+    background: #363a47 !important;
+}
+.mes_reasoning {
+    background-color: #282b35 !important;
+    border: 1px dashed #4e5364 !important;
+    color: #c2bfb7 !important;
+}
 code, pre {
-    color: #dcd9d2 !important;
-    background-color: #262932 !important;
-    border: 1px solid #454856 !important;
+    color: #e2dfd8 !important;
+    background-color: #303440 !important;
+    border: 1px solid #4e5364 !important;
 }
 ::-webkit-scrollbar-thumb {
     background-color: #3d414f !important;
@@ -3451,6 +3451,16 @@ code, pre {
         await startNewChatForActiveCard();
       },
       substituteParams: (str) => replaceTavernMacros(String(str || ''), card),
+      messageFormatting: (mes, ch_name, is_system, is_user, message_id) => {
+        return renderTavernMessageHtml(String(mes || ''), {
+          isUser: Boolean(is_user),
+          mesId: typeof message_id === 'number' ? message_id : undefined,
+          isLastFloor: true
+        });
+      },
+      getRegexedString: (rawStr, placement) => {
+        return applyTavernRegexPipeline(String(rawStr || ''), { isPrompt: false, placement });
+      },
       eventSource: tavernEventSource,
       event_types: TAVERN_EVENT_TYPES,
       eventTypes: TAVERN_EVENT_TYPES,
@@ -3495,14 +3505,7 @@ code, pre {
       POPUP_TYPE: { TEXT: 1, CONFIRM: 2, INPUT: 3, DISPLAY: 4 },
       POPUP_RESULT: { AFFIRMATIVE: 1, NEGATIVE: 0, CANCELLED: null },
       saveChat: async () => {
-        const res = await saveTavernStore();
-        if (!uiRuntime.isGenerating && isTavernActive()) {
-          const sess = getActiveChatSession();
-          if (sess && Array.isArray(sess.messages) && sess.messages.length > 0) {
-            appendOrUpdateSingleFloorDom(sess.messages.length - 1);
-          }
-        }
-        return res;
+        return await saveTavernStore();
       },
       saveMetadata: async () => saveTavernStore(),
       saveMetadataDebounced: () => saveTavernStore(),
@@ -5582,6 +5585,16 @@ code, pre {
     window.substitudeMacros = window.TavernHelper.substitudeMacros;
     window.substituteMacros = window.TavernHelper.substituteMacros;
     window.formatAsTavernRegexedString = window.TavernHelper.formatAsTavernRegexedString;
+    window.messageFormatting = (mes, ch_name, is_system, is_user, message_id) => {
+      return renderTavernMessageHtml(String(mes || ''), {
+        isUser: Boolean(is_user),
+        mesId: typeof message_id === 'number' ? message_id : undefined,
+        isLastFloor: true
+      });
+    };
+    window.getRegexedString = (rawStr, placement) => {
+      return applyTavernRegexPipeline(String(rawStr || ''), { isPrompt: false, placement });
+    };
     window.isCharacterTavernRegexesEnabled = window.TavernHelper.isCharacterTavernRegexesEnabled;
     window.getPresetNames = window.TavernHelper.getPresetNames;
     window.getLoadedPresetName = window.TavernHelper.getLoadedPresetName;
@@ -6036,27 +6049,31 @@ code, pre {
   function convertCssDeclBlockToSoftDark(cssBlockText, selectorContext = '') {
     if (!cssBlockText || typeof cssBlockText !== 'string') return cssBlockText;
     const isInteractiveActiveRule = /(?:^|[\s.#:\-_])(?:active|selected|submit|primary|btn-dark)(?:$|[\s.#:\-_])/i.test(selectorContext || '');
-    const colorTokenRx = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[0-9.]+)?\s*\)|\b(?:white|ivory|snow|floralwhite|oldlace|linen|seashell|cornsilk|beige|whitesmoke|black)\b/gi;
+    const colorTokenRx = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[0-9.]+)?\s*\)|\b(?:white|ivory|snow|floralwhite|oldlace|linen|seashell|cornsilk|beige|whitesmoke|ghostwhite|aliceblue|mintcream|honeydew|azure|lavenderblush|papayawhip|blanchedalmond|antiquewhite|black)\b/gi;
 
     return cssBlockText.replace(/([a-zA-Z-]+|--[a-zA-Z0-9_-]+)\s*:\s*([^;{}]+)/g, (fullDecl, rawProp, rawVal) => {
       const prop = String(rawProp || '').trim().toLowerCase();
       const val = String(rawVal || '');
       if (/url\s*\(/i.test(val)) return fullDecl;
 
+      const isTextVar = prop.startsWith('--') && /(?:text|ink|font|fg|title|heading|label|link|accent|brand|primary|highlight)/i.test(prop) && !/bg|background|surface|card|panel|paper|box/i.test(prop);
+      const isBorderVar = prop.startsWith('--') && /(?:border|line|divider|frame|stroke|outline)/i.test(prop);
       const isBgProp = (
         prop === 'background' ||
         prop === 'background-color' ||
-        (prop.startsWith('--') && /(?:bg|background|paper|surface|card|panel|box|canvas|fill)/i.test(prop) && !/text|ink|font|border|line/i.test(prop))
+        prop === 'background-image' ||
+        (prop.startsWith('--') && !isTextVar && !isBorderVar)
       );
       const isTextProp = (
         prop === 'color' ||
-        (prop.startsWith('--') && /(?:text|ink|font|fg|title|color)/i.test(prop) && !/bg|background|border|line|shadow/i.test(prop))
+        isTextVar
       );
       const isBorderProp = (
         prop.startsWith('border') ||
         prop === 'outline' ||
         prop === 'outline-color' ||
-        (prop.startsWith('--') && /(?:border|line|divider|frame|stroke)/i.test(prop))
+        prop === 'box-shadow' ||
+        isBorderVar
       );
 
       if (!isBgProp && !isTextProp && !isBorderProp) return fullDecl;
@@ -6066,40 +6083,40 @@ code, pre {
         if (!comp) return token;
         const { r, g, b, a } = comp;
         if (a <= 0.05) return token;
-        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        const lum = (0.299 * r + 0.587 * comp.g + 0.114 * comp.b) / 255;
         const maxC = Math.max(r, g, b);
         const minC = Math.min(r, g, b);
         const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
 
         if (isBgProp) {
           if (isInteractiveActiveRule && lum < 0.18 && sat < 0.28) {
-            return '#56617a';
+            return '#58637c';
           }
-          if (lum > 0.92 && sat < 0.36) {
-            return a < 0.96 ? `rgba(34, 37, 46, ${Number(a.toFixed(2))})` : '#22252e';
+          if (lum > 0.90 && sat < 0.65) {
+            return a < 0.96 ? `rgba(43, 46, 56, ${Number(a.toFixed(2))})` : '#2b2e38';
           }
-          if (lum > 0.80 && sat < 0.44) {
-            return a < 0.96 ? `rgba(43, 47, 58, ${Number(a.toFixed(2))})` : '#2b2f3a';
+          if (lum > 0.78 && sat < 0.68) {
+            return a < 0.96 ? `rgba(51, 55, 66, ${Number(a.toFixed(2))})` : '#333742';
           }
-          if (lum > 0.66 && sat < 0.48) {
-            return a < 0.96 ? `rgba(52, 57, 70, ${Number(a.toFixed(2))})` : '#343946';
+          if (lum > 0.64 && sat < 0.65) {
+            return a < 0.96 ? `rgba(59, 63, 76, ${Number(a.toFixed(2))})` : '#3b3f4c';
           }
           return token;
         }
 
         if (isTextProp) {
-          if (lum < 0.26 && sat < 0.48) {
+          if (lum < 0.28 && sat < 0.55) {
             return '#e5e2dc';
           }
-          if (lum >= 0.26 && lum < 0.50 && sat < 0.52) {
-            return '#b8b4ac';
+          if (lum >= 0.28 && lum < 0.52 && sat < 0.58) {
+            return '#bab6ae';
           }
           return token;
         }
 
         if (isBorderProp) {
-          if (lum > 0.64 && sat < 0.48) {
-            return a < 0.96 ? `rgba(66, 71, 86, ${Number(a.toFixed(2))})` : '#3e4352';
+          if (lum > 0.62 && sat < 0.60) {
+            return a < 0.96 ? `rgba(72, 77, 92, ${Number(a.toFixed(2))})` : '#454a59';
           }
           if (lum < 0.20 && sat < 0.30) {
             return '#555b6e';
@@ -6114,33 +6131,44 @@ code, pre {
     });
   }
 
+  function convertCssStylesheetToSoftDark(cssContent) {
+    if (!cssContent || typeof cssContent !== 'string') return cssContent;
+    let out = String(cssContent);
+    out = out.replace(/(@(?:media|supports)[^{]+\{)([\s\S]*?)(\}\s*\})/gi, (full, head, inner, tail) => {
+      const convertedInner = inner.replace(/([^{}]+)\{([^{}]*)\}/g, (m, s, b) => s + '{' + convertCssDeclBlockToSoftDark(b, s) + '}');
+      return head + convertedInner + tail;
+    });
+    out = out.replace(/([^{}]+)\{([^{}]*)\}/g, (ruleMatch, sel, body) => {
+      if (/^\s*@(?:media|supports|keyframes)/i.test(sel)) return ruleMatch;
+      return sel + '{' + convertCssDeclBlockToSoftDark(body, sel) + '}';
+    });
+    return out;
+  }
+
   function convertHtmlDocToSoftDark(rawHtml) {
     if (!rawHtml || typeof rawHtml !== 'string') return rawHtml;
     let lightSurfaceHits = 0;
     let darkSurfaceHits = 0;
-    const bgScanRx = /(?:background(?:-color)?|--[a-zA-Z0-9_-]*(?:bg|paper|surface|card)[a-zA-Z0-9_-]*)\s*:\s*([^;"{}>]+)/gi;
+    const bgScanRx = /(?:background(?:-color|-image)?|--[a-zA-Z0-9_-]+)\s*:\s*([^;"{}>]+)/gi;
     let m;
     while ((m = bgScanRx.exec(rawHtml)) !== null) {
       const val = m[1] || '';
-      const tokMatch = val.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[0-9.]+)?\s*\)|\b(?:white|ivory|snow|floralwhite|oldlace|linen|black)\b/i);
+      const tokMatch = val.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*[0-9.]+)?\s*\)|\b(?:white|ivory|snow|floralwhite|oldlace|linen|beige|whitesmoke|black)\b/i);
       if (tokMatch) {
         const comp = parseColorComponents(tokMatch[0]);
         if (comp && comp.a > 0.2) {
           const lum = (0.299 * comp.r + 0.587 * comp.g + 0.114 * comp.b) / 255;
-          if (lum > 0.68) lightSurfaceHits++;
-          else if (lum < 0.24) darkSurfaceHits++;
+          if (lum > 0.64) lightSurfaceHits++;
+          else if (lum < 0.22) darkSurfaceHits++;
         }
       }
     }
-    if (lightSurfaceHits === 0 && darkSurfaceHits > 0) {
+    if (lightSurfaceHits === 0 && darkSurfaceHits > 2) {
       return rawHtml;
     }
 
     let transformed = rawHtml.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (fullTag, attrs, cssContent) => {
-      const updatedCss = String(cssContent || '').replace(/([^{}]+)\{([^{}]*)\}/g, (ruleMatch, sel, body) => {
-        return sel + '{' + convertCssDeclBlockToSoftDark(body, sel) + '}';
-      });
-      return `<style${attrs}>${updatedCss}</style>`;
+      return `<style${attrs}>${convertCssStylesheetToSoftDark(cssContent)}</style>`;
     });
 
     transformed = transformed.replace(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/gi, (fullAttr, quote, inlineCss) => {
@@ -7787,7 +7815,7 @@ code, pre {
         if (list.length === 0) return '';
         const sess = getActiveChatSession();
         const chatSeedId = (sess && sess.chatId) ? String(sess.chatId) : (card && card.id ? String(card.id) : 'default');
-        const seedInput = `${chatSeedId}-${str.length}-${offset}-${listString.length}`;
+        const seedInput = `${chatSeedId}-${String(rawText || '').length}-${offset}-${listString.length}`;
         let hash = 2166136261;
         for (let i = 0; i < seedInput.length; i++) {
           hash ^= seedInput.charCodeAt(i);
@@ -8878,7 +8906,10 @@ code, pre {
 
   function renderTavernMessageHtml(rawText, options = {}) {
     if (!rawText) return '';
+    const activeThemeForMsg = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+    const shouldAdaptDarkInline = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeThemeForMsg));
     let cleanedForDisplay = String(rawText)
+      .replace(/<bbs_start\b[^>]*>[\s\S]*?(?:<\/?bbs_end\b[^>]*>|$)/gi, '')
       .replace(/<bbs_start\b[^>]*>[\s\S]*?<\/bbs_start>/gi, '')
       .replace(/<bbs_end\b[^>]*>[\s\S]*?<\/bbs_end>/gi, '')
       .replace(/<bbs_items\b[^>]*>[\s\S]*?<\/bbs_items>/gi, '')
@@ -8929,27 +8960,18 @@ code, pre {
       protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
       return '\n' + token + '\n';
     });
-    // 2b. If an unfenced status bar / card block contains <script>...</script> (like Border Tavern / JS-Slash-Runner regex replacements without <html>), render the interactive block inside a sandboxed iframe so scripts execute 1:1 like SillyTavern
-    if (/<script\b[\s\S]*?<\/script>/i.test(working)) {
-      working = working.replace(/(?:<(?:style|div|section|main|header|article|details|table|form|svg)\b[\s\S]*?<\/script>\s*(?:<\/(?:div|section|main|header|article|details|table|form)>)*)|(?:<script\b[\s\S]*?<\/script>)/gi, match => {
-        const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-        protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
-        return '\n' + token + '\n';
-      });
-    }
-
     // Strip residual XML wrapper tags like <content>...</content> so story paragraphs inside them always display cleanly
     working = working.replace(/<\/?(?:content|正文)\b[^>]*>/gi, '');
 
     // 3. Protect standalone <style>...</style> + <script>...</script> + <pre>...</pre> blocks
     working = working.replace(/<style[\s\S]*?<\/style>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(match);
+      protectedBlocks.push(shouldAdaptDarkInline ? convertHtmlDocToSoftDark(match) : match);
       return token;
     });
     working = working.replace(/<script[\s\S]*?<\/script>/gi, match => {
       const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(buildSandboxIframeHtml(match, { isLastFloor }));
+      protectedBlocks.push(match);
       return token;
     });
     working = working.replace(/```([a-zA-Z0-9_-]*)[ \t]*\r?\n([\s\S]*?)```/g, (full, lang, codeBody) => {
@@ -9106,6 +9128,11 @@ code, pre {
     });
 
     let finalHtml = htmlLines.join('\n');
+    if (shouldAdaptDarkInline) {
+      finalHtml = finalHtml.replace(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/gi, (fullAttr, quote, inlineCss) => {
+        return `style=${quote}${convertCssDeclBlockToSoftDark(inlineCss, '')}${quote}`;
+      });
+    }
     finalHtml = finalHtml.replace(/___TAVERN_PROTECTED_BLOCK_(\d+)___/g, (_, idx) => protectedBlocks[Number(idx)] || '');
     return finalHtml;
   }
@@ -9476,43 +9503,43 @@ code, pre {
         #game-hall-screen,
         #tavern-app-shell,
         #tavern-stage-root {
-          background-color: #1a1c22 !important;
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          background-color: #262932 !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
         }
         #tavern-stage-root .mes .extraMesButtons {
-          background: rgba(36, 39, 48, 0.94) !important;
-          border: 1px solid #484c5c !important;
+          background: rgba(44, 48, 58, 0.95) !important;
+          border: 1px solid #525768 !important;
         }
         #tavern-stage-root .mes .tavern-mes-icon-btn {
-          background: #2b2e39 !important;
-          color: #d0cdc4 !important;
-          border: 1px solid #484c5c !important;
+          background: #343844 !important;
+          color: #dcd9d0 !important;
+          border: 1px solid #525768 !important;
           box-shadow: none !important;
         }
         #tavern-stage-root #qr--bar .qr--button {
-          background: rgba(40, 43, 52, 0.94) !important;
-          color: #dcd9d2 !important;
-          border: 1px solid #4a4e5e !important;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+          background: rgba(46, 50, 60, 0.94) !important;
+          color: #e0ddd6 !important;
+          border: 1px solid #525768 !important;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
         }
         #tavern-stage-root .tavern-stop-gen-btn {
-          background: rgba(68, 42, 46, 0.95) !important;
+          background: rgba(76, 48, 52, 0.95) !important;
           color: #f0b8c0 !important;
           border: 1px solid rgba(180, 100, 112, 0.65) !important;
         }
         #tavern-stage-root #tavern-drawer-host {
-          background: rgba(20, 22, 28, 0.92) !important;
-          border-bottom: 1px solid var(--SmartThemeBorderColor, #3c404e) !important;
+          background: rgba(30, 33, 40, 0.94) !important;
+          border-bottom: 1px solid var(--SmartThemeBorderColor, #484d5e) !important;
         }
         #tavern-stage-root #tavern-drawer-host .drawer-content.openDrawer {
-          background-color: #1e2028 !important;
-          background-image: linear-gradient(var(--SmartThemeBlurTintColor, rgba(30, 32, 40, 0.96)), var(--SmartThemeBlurTintColor, rgba(30, 32, 40, 0.96))) !important;
-          border: 1.5px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.14)) !important;
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
-          box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42) !important;
+          background-color: #2b2e38 !important;
+          background-image: linear-gradient(var(--SmartThemeBlurTintColor, rgba(43, 46, 56, 0.96)), var(--SmartThemeBlurTintColor, rgba(43, 46, 56, 0.96))) !important;
+          border: 1.5px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.16)) !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
+          box-shadow: 0 14px 36px rgba(0, 0, 0, 0.36) !important;
         }
         #tavern-stage-root .tavern-drawer-header {
-          border-bottom: 1px solid var(--SmartThemeBorderColor, #383c4a) !important;
+          border-bottom: 1px solid var(--SmartThemeBorderColor, #454a5a) !important;
         }
         #tavern-stage-root .tavern-drawer-title,
         #tavern-stage-root .tavern-section-label,
@@ -9520,25 +9547,25 @@ code, pre {
         #tavern-stage-root .inline-drawer-header,
         #tavern-stage-root .tavern-check-row,
         #tavern-stage-root .tavern-check-row span {
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
         }
         #tavern-stage-root .tavern-section-card,
         #tavern-stage-root .inline-drawer {
-          background-color: #262934 !important;
-          background-image: linear-gradient(var(--SmartThemeBotMesBlurTintColor, rgba(38, 41, 52, 0.94)), var(--SmartThemeBotMesBlurTintColor, rgba(38, 41, 52, 0.94))) !important;
-          border: 1px solid var(--SmartThemeBorderColor, #3e4250) !important;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28) !important;
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          background-color: #323642 !important;
+          background-image: linear-gradient(var(--SmartThemeBotMesBlurTintColor, rgba(50, 54, 66, 0.94)), var(--SmartThemeBotMesBlurTintColor, rgba(50, 54, 66, 0.94))) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #4a4f60) !important;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22) !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
         }
         #tavern-stage-root .tavern-list-row {
-          background: rgba(42, 45, 55, 0.92) !important;
-          border: 1px solid var(--SmartThemeBorderColor, #464a58) !important;
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          background: rgba(52, 56, 68, 0.92) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #505566) !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
         }
         #tavern-stage-root .tavern-field-group label,
         #tavern-stage-root .tavern-field-hint,
         #tavern-stage-root .tavern-list-row-sub {
-          color: var(--SmartThemeEmColor, #b5b0a8) !important;
+          color: var(--SmartThemeEmColor, #bab5ad) !important;
         }
         #tavern-stage-root .drawer-content .tavern-input,
         #tavern-stage-root .drawer-content .tavern-textarea,
@@ -9546,38 +9573,38 @@ code, pre {
         #tavern-stage-root .tavern-input,
         #tavern-stage-root .tavern-textarea,
         #tavern-stage-root .tavern-select {
-          background-color: #1c1f28 !important;
-          background: #1c1f28 !important;
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
-          border: 1px solid var(--SmartThemeBorderColor, #454958) !important;
+          background-color: #262932 !important;
+          background: #262932 !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #4e5364) !important;
         }
         #tavern-stage-root .tavern-btn {
-          background: #2e313c !important;
-          color: var(--SmartThemeBodyColor, #dcd9d2) !important;
-          border: 1px solid var(--SmartThemeBorderColor, #484c5c) !important;
+          background: #383c4a !important;
+          color: var(--SmartThemeBodyColor, #e0ddd6) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #525768) !important;
         }
         #tavern-stage-root .tavern-btn.primary {
-          background: #4a5062 !important;
-          color: #f2f0ec !important;
-          border-color: #5c6378 !important;
+          background: #52586c !important;
+          color: #f4f2ee !important;
+          border-color: #646b82 !important;
         }
         #tavern-stage-root .tavern-btn.danger {
-          background: rgba(74, 38, 42, 0.9) !important;
+          background: rgba(82, 44, 48, 0.9) !important;
           color: #f0a8b0 !important;
           border-color: rgba(168, 86, 94, 0.6) !important;
         }
         #tavern-stage-root .tavern-bottom-popup {
-          background: rgba(32, 35, 43, 0.98) !important;
-          border: 1px solid var(--SmartThemeBorderColor, #454958) !important;
-          color: var(--SmartThemeBodyColor, #e2e0da) !important;
+          background: rgba(40, 44, 54, 0.98) !important;
+          border: 1px solid var(--SmartThemeBorderColor, #505566) !important;
+          color: var(--SmartThemeBodyColor, #e4e2dc) !important;
         }
         #tavern-stage-root .tavern-popup-item,
         #tavern-stage-root #extensionsMenu > * {
-          color: var(--SmartThemeBodyColor, #dcd9d2) !important;
+          color: var(--SmartThemeBodyColor, #e0ddd6) !important;
         }
         #tavern-stage-root .tavern-popup-item:hover,
         #tavern-stage-root #extensionsMenu > *:hover {
-          background: rgba(255, 255, 255, 0.06) !important;
+          background: rgba(255, 255, 255, 0.08) !important;
         }
       `);
     }
@@ -9737,13 +9764,25 @@ code, pre {
           box-sizing: border-box !important;
         }
         #tavern-stage-root .mes {
+          position: relative !important;
           max-width: 100% !important;
           box-sizing: border-box !important;
         }
         #tavern-stage-root .mes_block {
+          position: relative;
           max-width: 100% !important;
           box-sizing: border-box !important;
           overflow-wrap: break-word !important;
+          overflow-x: hidden !important;
+        }
+        #tavern-stage-root .mes_text {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          overflow-x: hidden !important;
+        }
+        #tavern-stage-root .mes_text > * {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
         }
       `);
     }
@@ -11945,6 +11984,7 @@ code, pre {
         position: relative;
         box-sizing: border-box;
         width: 100%;
+        padding-bottom: 24px;
         margin-bottom: 18px;
       }
       .mes .mesAvatarWrapper {
@@ -11969,9 +12009,11 @@ code, pre {
         background: #f0ece9;
       }
       .mes_block {
-        position: static;
+        position: relative;
         width: 100%;
+        max-width: 100%;
         box-sizing: border-box;
+        overflow-x: hidden;
       }
       .ch_name {
         position: static;
@@ -12242,6 +12284,9 @@ code, pre {
       /* Swipe Footer Navigation */
       .swipe_left,
       .swipe_right {
+        position: absolute;
+        bottom: 2px;
+        z-index: 30;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -12251,7 +12296,17 @@ code, pre {
         user-select: none;
         flex-shrink: 0;
       }
+      .swipe_left {
+        left: 10px;
+      }
+      .swipe_right {
+        right: 10px;
+      }
       .swipes-counter {
+        position: absolute;
+        right: 36px;
+        bottom: 4px;
+        z-index: 30;
         font-size: 11px;
         color: #777;
         font-weight: 600;
@@ -12837,6 +12892,7 @@ code, pre {
       renderTavernChatFloors(true);
     } catch (err) {
       console.error('renderTavernChatFloors error:', err);
+      showTavernErrorBanner('角色卡楼层渲染异常', err && err.message ? err.message : String(err));
     }
     try {
       bindTavernStageEvents();
@@ -13043,6 +13099,11 @@ code, pre {
 
     const newChatPlaceholder = document.getElementById('chat');
     if (prevChatEl && newChatPlaceholder && prevChatEl !== newChatPlaceholder) {
+      const activeSessNow = getActiveChatSession();
+      const currentChatId = activeSessNow ? (activeSessNow.chatId || activeSessNow.id || 'chat_default') : 'chat_default';
+      if (uiRuntime.lazyFloorChatId && uiRuntime.lazyFloorChatId !== currentChatId) {
+        prevChatEl.innerHTML = '';
+      }
       newChatPlaceholder.replaceWith(prevChatEl);
     }
 
@@ -14179,18 +14240,20 @@ code, pre {
       const isEditingTransition = Boolean(existingNode.querySelector('.edit_textarea, .tavern-floor-edit-box') || newFloorNode.querySelector('.edit_textarea, .tavern-floor-edit-box'));
       const oldTextEl = existingNode.querySelector('.mes_text');
       const newTextEl = newFloorNode.querySelector('.mes_text');
-      const isStreamingThisFloor = Boolean(uiRuntime.isGenerating && idx === messages.length - 1);
-      const hasLiveFramesOrImgs = oldTextEl && (oldTextEl.querySelector('iframe.tavern-html-sandbox-frame') || oldTextEl.querySelector('img'));
       const preservedBbsHosts = Array.from(existingNode.querySelectorAll('.bbs-fp-host'));
-      if (isStreamingThisFloor && !isEditingTransition && oldTextEl && newTextEl && hasLiveFramesOrImgs) {
-        // Update in-place during live stream so already-mounted iframes and images inside .mes_text never detach
+      if (!isEditingTransition && oldTextEl && newTextEl) {
+        // Update in-place so already-mounted iframes, images, and plugin cards inside .mes never detach or flash
         existingNode.className = newFloorNode.className;
         const oldAvatarWrapper = existingNode.querySelector('.mesAvatarWrapper');
         const newAvatarWrapper = newFloorNode.querySelector('.mesAvatarWrapper');
-        if (oldAvatarWrapper && newAvatarWrapper) oldAvatarWrapper.innerHTML = newAvatarWrapper.innerHTML;
+        if (oldAvatarWrapper && newAvatarWrapper && oldAvatarWrapper.innerHTML !== newAvatarWrapper.innerHTML) {
+          oldAvatarWrapper.innerHTML = newAvatarWrapper.innerHTML;
+        }
         const oldChName = existingNode.querySelector('.ch_name');
         const newChName = newFloorNode.querySelector('.ch_name');
-        if (oldChName && newChName) oldChName.innerHTML = newChName.innerHTML;
+        if (oldChName && newChName && oldChName.innerHTML !== newChName.innerHTML) {
+          oldChName.innerHTML = newChName.innerHTML;
+        }
         if (newDetails && !oldDetails) {
           oldTextEl.parentNode.insertBefore(newDetails, oldTextEl);
         } else if (oldDetails && newDetails) {
@@ -14206,7 +14269,17 @@ code, pre {
         patchStreamingMesTextDom(oldTextEl, newTextEl.innerHTML);
         const oldSwipesCounter = existingNode.querySelector('.swipes-counter');
         const newSwipesCounter = newFloorNode.querySelector('.swipes-counter');
-        if (oldSwipesCounter && newSwipesCounter) oldSwipesCounter.outerHTML = newSwipesCounter.outerHTML;
+        if (oldSwipesCounter && newSwipesCounter && oldSwipesCounter.outerHTML !== newSwipesCounter.outerHTML) {
+          oldSwipesCounter.outerHTML = newSwipesCounter.outerHTML;
+        }
+        if (preservedBbsHosts.length > 0) {
+          const targetMesBlock = existingNode.querySelector('.mes_block') || existingNode;
+          preservedBbsHosts.forEach(hostEl => {
+            if (hostEl && !existingNode.contains(hostEl)) {
+              targetMesBlock.appendChild(hostEl);
+            }
+          });
+        }
         executeInlineMessageScripts(existingNode);
       } else {
         existingNode.replaceWith(newFloorNode);
@@ -14230,7 +14303,7 @@ code, pre {
     } else if (uiRuntime.userScrolledUpDuringStream || !(options && options.scrollToBottom)) {
       chatEl.scrollTop = prevScrollTop;
     }
-    if (!uiRuntime.isGenerating) {
+    if (!uiRuntime.isGenerating && !(options && options.skipMessageUpdatedEvent)) {
       Promise.resolve().then(() => {
         try {
           tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_UPDATED, idx);
@@ -16296,8 +16369,8 @@ code, pre {
       updateCut(lastDoctype);
     }
 
-    // 2. Check unclosed card status/interactive blocks (e.g. <gourmet_journal>, <chef_newspaper>, <magical_menu>, <Achievement>, <status_block>)
-    const blockTags = ['gourmet_journal', 'chef_newspaper', 'magical_menu', 'Achievement', 'status_block', 'status_bar', 'rpg_status'];
+    // 2. Check unclosed card status/interactive blocks (e.g. <gourmet_journal>, <chef_newspaper>, <magical_menu>, <Achievement>, <status_block>, <bbs_start>)
+    const blockTags = ['gourmet_journal', 'chef_newspaper', 'magical_menu', 'Achievement', 'status_block', 'status_bar', 'rpg_status', 'bbs_start', 'bbs_items', 'bbs_vars'];
     for (const tag of blockTags) {
       const openRx = new RegExp('<' + tag + '\\b[^>]*>', 'gi');
       let match;
@@ -16306,7 +16379,9 @@ code, pre {
         lastOpenIdx = match.index;
       }
       if (lastOpenIdx !== -1) {
-        const closeRx = new RegExp('<\\/' + tag + '\\s*>', 'i');
+        const closeRx = tag === 'bbs_start'
+          ? /<(?:\/bbs_start|\/?bbs_end)\b[^>]*>/i
+          : new RegExp('<\\/' + tag + '\\s*>', 'i');
         if (!closeRx.test(text.slice(lastOpenIdx))) {
           updateCut(lastOpenIdx);
         }
@@ -16379,10 +16454,11 @@ code, pre {
 
   function patchStreamingMesTextDom(textEl, newHtml) {
     if (!textEl) return;
+    const bbsHostNodes = Array.from(textEl.querySelectorAll(':scope > .bbs-fp-host'));
     const temp = document.createElement('div');
     temp.innerHTML = newHtml;
     const newChildren = Array.from(temp.childNodes);
-    const oldChildren = Array.from(textEl.childNodes);
+    const oldChildren = Array.from(textEl.childNodes).filter(n => !(n.nodeType === 1 && n.classList && n.classList.contains('bbs-fp-host')));
 
     for (let i = 0; i < newChildren.length; i++) {
       const newChild = newChildren[i];
@@ -16414,9 +16490,18 @@ code, pre {
       textEl.replaceChild(newChild, oldChild);
     }
 
-    while (textEl.childNodes.length > newChildren.length) {
-      textEl.removeChild(textEl.lastChild);
+    const currentNonBbs = Array.from(textEl.childNodes).filter(n => !(n.nodeType === 1 && n.classList && n.classList.contains('bbs-fp-host')));
+    while (currentNonBbs.length > newChildren.length) {
+      const stale = currentNonBbs.pop();
+      if (stale && stale.parentNode === textEl) {
+        textEl.removeChild(stale);
+      }
     }
+    bbsHostNodes.forEach(hostEl => {
+      if (hostEl && hostEl.parentNode !== textEl) {
+        textEl.appendChild(hostEl);
+      }
+    });
   }
 
   function updateStreamingFloorDom(mesIndex, forceImmediate = false) {
@@ -16864,14 +16949,14 @@ code, pre {
         });
         syncTavernGeneratingUiState(false);
         await saveTavernStore();
-        appendOrUpdateSingleFloorDom(targetMesIndex);
+        appendOrUpdateSingleFloorDom(targetMesIndex, { skipMessageUpdatedEvent: true });
         const mesBeforeSwipeEvt = targetMsg.mes;
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, targetMesIndex);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, targetMesIndex, genType);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, targetMesIndex, genType);
         if (targetMsg.mes !== mesBeforeSwipeEvt) {
           targetMsg.swipes[newSwipeIdx] = targetMsg.mes;
-          appendOrUpdateSingleFloorDom(targetMesIndex);
+          appendOrUpdateSingleFloorDom(targetMesIndex, { skipMessageUpdatedEvent: true });
         }
         if (tavernState.formatting?.autoTranslateIncoming) {
           translateTavernFloor(targetMesIndex, true);
@@ -16939,13 +17024,13 @@ code, pre {
         });
         syncTavernGeneratingUiState(false);
         await saveTavernStore();
-        appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
+        appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream, skipMessageUpdatedEvent: true });
         const mesBeforeRecvEvt = botMsg.mes;
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_RECEIVED, newFloorIdx, genType);
         await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, newFloorIdx, genType);
         if (botMsg.mes !== mesBeforeRecvEvt) {
           botMsg.swipes[0] = botMsg.mes;
-          appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream });
+          appendOrUpdateSingleFloorDom(newFloorIdx, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream, skipMessageUpdatedEvent: true });
         }
         if (tavernState.formatting?.autoTranslateIncoming) {
           translateTavernFloor(newFloorIdx, true);
