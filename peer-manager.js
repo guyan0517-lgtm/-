@@ -442,6 +442,17 @@
               item.payload.type === "profile_update"
             )
         );
+      } else if (payload.type === "tavern_game_sync") {
+        list = list.filter(
+          (item) =>
+            !(
+              item &&
+              this.normalizePeerCode(item.targetCode) === normTarget &&
+              item.payload &&
+              item.payload.type === "tavern_game_sync" &&
+              String(item.payload.groupId || "") === String(payload.groupId || "")
+            )
+        );
       }
       list.push({
         eventId: payload.eventId,
@@ -2211,6 +2222,8 @@
         await this.receiveGroupModuleImage(data);
       } else if (data.type === "peer_presence") {
         this.handleImmediatePresenceEvent(data);
+      } else if (data.type === "tavern_game_sync") {
+        await this.receiveTavernGameSync(data);
       }
 
       const senderPeer = data.fromCode || data.peerCode;
@@ -3393,7 +3406,18 @@
           keeperCharPrompts: groupChat.settings?.keeperCharPrompts || {},
           keeperActivePresetId: groupChat.settings?.keeperActivePresetId || ""
         },
-        sharedKeeperPresets: typeof window.getKeeperPresets === "function" ? window.getKeeperPresets() : []
+        sharedKeeperPresets: typeof window.getKeeperPresets === "function" ? window.getKeeperPresets() : [],
+        tavernGameState: groupChat.tavernGameState
+          ? (function () {
+              try {
+                const clone = JSON.parse(JSON.stringify(groupChat.tavernGameState));
+                delete clone.preAiSnapshot;
+                return clone;
+              } catch (e) {
+                return null;
+              }
+            })()
+          : null
       };
     },
 
@@ -3774,6 +3798,9 @@
         }
         if (typeof window.renderGroupMemberSettings === "function") {
           window.renderGroupMemberSettings(groupChat.members);
+        }
+        if (typeof window.updateTavernGameUI === "function") {
+          window.updateTavernGameUI(groupChat.id);
         }
       }
       this.showPeerNotice(
@@ -4446,6 +4473,16 @@
       if (Array.isArray(data.sharedKeeperPresets)) {
         groupChat.settings.sharedKeeperPresets = data.sharedKeeperPresets;
       }
+      if (data.tavernGameState && typeof data.tavernGameState === "object") {
+        const prevCollapsed = groupChat.tavernGameState ? Boolean(groupChat.tavernGameState.collapsed) : false;
+        groupChat.tavernGameState = {
+          ...data.tavernGameState,
+          collapsed: prevCollapsed,
+          showGamePicker: false,
+          showOpponentPicker: false,
+          showParticipantEditor: false
+        };
+      }
 
       if (window.state && window.state.chats) {
         window.state.chats[groupChat.id] = groupChat;
@@ -4467,6 +4504,9 @@
         }
         if (typeof window.renderGroupMemberSettings === "function") {
           window.renderGroupMemberSettings(groupChat.members);
+        }
+        if (typeof window.updateTavernGameUI === "function") {
+          window.updateTavernGameUI(groupChat.id);
         }
         const modPickerModal = document.getElementById("chat-module-picker-modal");
         if (modPickerModal && modPickerModal.classList.contains("visible") && typeof window.renderChatModulePickerList === "function") {
@@ -6247,6 +6287,10 @@
       if (!isPeer && !isPeerGroup && stickerPanel) {
         stickerPanel.classList.remove("visible");
       }
+      const peerGameEntryBtn = document.getElementById("peer-game-entry-btn");
+      if (peerGameEntryBtn) {
+        peerGameEntryBtn.style.display = (isPeer || isPeerGroup) ? "inline-flex" : "none";
+      }
 
       if (timelineBtn) {
         timelineBtn.style.display = "";
@@ -7182,6 +7226,107 @@
       }
       this._initTimestamp = Date.now();
       this.refreshOnlineSoundSettingsUI();
+    },
+
+    broadcastTavernGameState: function (chat, actionType) {
+      if (!chat || !chat.tavernGameState) return;
+      const myCode = this.getOrCreateMyPeerCode();
+      let cleanState = null;
+      try {
+        cleanState = JSON.parse(JSON.stringify(chat.tavernGameState));
+        delete cleanState.preAiSnapshot;
+        cleanState.showGamePicker = false;
+        cleanState.showOpponentPicker = false;
+        cleanState.showParticipantEditor = false;
+      } catch (e) {
+        return;
+      }
+      const baseEventId = "tgame_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+      if (chat.isGroup && this.isPeerGroupChat(chat)) {
+        const groupId = chat.peerGroupId || chat.id;
+        const peerMembers = this.collectAllGroupPeerMembers(chat).filter(
+          (m) => m && m.peerCode && this.normalizePeerCode(m.peerCode) !== myCode
+        );
+        peerMembers.forEach((m, idx) => {
+          const targetCode = this.normalizePeerCode(m.peerCode);
+          if (!targetCode) return;
+          this.dispatchEventToTarget(
+            targetCode,
+            {
+              type: "tavern_game_sync",
+              eventId: baseEventId + "_" + idx,
+              fromCode: myCode,
+              targetCode: targetCode,
+              isGroup: true,
+              groupId: groupId,
+              chatId: chat.id,
+              actionType: actionType || "sync",
+              gameState: cleanState,
+              timestamp: Date.now()
+            },
+            "/api/peer/send"
+          );
+        });
+      } else if (!chat.isGroup && (chat.roleType === "peer" || chat.peerCode || String(chat.id || "").startsWith("peer_"))) {
+        const targetCode = this.normalizePeerCode(chat.peerCode || String(chat.id || "").replace(/^peer_/, ""));
+        if (!targetCode || targetCode === myCode) return;
+        this.dispatchEventToTarget(
+          targetCode,
+          {
+            type: "tavern_game_sync",
+            eventId: baseEventId,
+            fromCode: myCode,
+            targetCode: targetCode,
+            isGroup: false,
+            chatId: chat.id,
+            actionType: actionType || "sync",
+            gameState: cleanState,
+            timestamp: Date.now()
+          },
+          "/api/peer/send"
+        );
+      }
+    },
+
+    receiveTavernGameSync: async function (data) {
+      if (!data || !data.gameState || typeof data.gameState !== "object") return;
+      const fromCode = this.normalizePeerCode(data.fromCode || data.peerCode);
+      if (!fromCode) return;
+      let targetChat = null;
+      if (data.isGroup && data.groupId) {
+        targetChat = await this.findPeerGroupChat(data.groupId);
+      } else {
+        targetChat = await this.findPeerChatByCode(fromCode);
+      }
+      if (!targetChat) return;
+
+      const incoming = data.gameState;
+      const wasActive = Boolean(targetChat.tavernGameState && targetChat.tavernGameState.active);
+      const prevCollapsed = targetChat.tavernGameState ? Boolean(targetChat.tavernGameState.collapsed) : false;
+
+      targetChat.tavernGameState = {
+        ...incoming,
+        collapsed: !wasActive && incoming.active ? false : prevCollapsed,
+        showGamePicker: false,
+        showOpponentPicker: false,
+        showParticipantEditor: false
+      };
+
+      if (window.state && window.state.chats) {
+        window.state.chats[targetChat.id] = targetChat;
+        window.state.chats[String(targetChat.id)] = targetChat;
+      }
+      if (window.db && window.db.chats) {
+        try {
+          await window.db.chats.put(targetChat);
+        } catch (e) {}
+      }
+
+      if (window.state && String(window.state.activeChatId) === String(targetChat.id)) {
+        if (typeof window.updateTavernGameUI === "function") {
+          window.updateTavernGameUI(targetChat.id);
+        }
+      }
     }
   };
 
