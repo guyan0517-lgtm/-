@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v14.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -25445,7 +25445,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           studio: "lrq小剧场",
         };
         const STICKER_REGEX =
-          /^(vault:\/\/)|^(\/api\/local-vault\/media\/)|^(data:image\/)|(https?:\/\/.*?\.(?:png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff))|(https?:\/\/.*(?:catbox|postimg|imgbb|sinaimg|telegraph|wx[1-4])\..*)/i;
+          /^(?:vault:\/\/[^\s<>]+|\/api\/local-vault\/media\/[^\s<>]+|data:image\/[^\s<>]+|https?:\/\/[^\s<>]+\.(?:png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff)(?:\?[^\s<>]*)?|https?:\/\/[^\s<>]*(?:catbox|postimg|imgbb|sinaimg|telegraph|wx[1-4])\.[^\s<>]+)$/i;
         const MESSAGE_RENDER_WINDOW = 50;
         let currentRenderedCount = 0;
         let lastKnownBatteryLevel = 1;
@@ -45325,7 +45325,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 			            </div>
 			        </div>
 			    `;
-          } else if (msg.type === "sticker" && msg.content) {
+          } else if (msg.type === "sticker" && msg.content && !(typeof msg.content === "string" && msg.content.trim().startsWith("<"))) {
             bubble.classList.add("is-sticker");
             // 直接从消息对象中获取 url 和 meaning
             contentHtml = `<img src="${msg.content}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
@@ -45334,6 +45334,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           // 旧的逻辑保持不变，作为兼容
           else if (
             typeof msg.content === "string" &&
+            !msg.content.trim().startsWith("<") &&
             STICKER_REGEX.test(msg.content.trim())
           ) {
             bubble.classList.add("is-sticker");
@@ -45654,6 +45655,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                 }
               } catch (e) {}
+            }
+
+            if (typeof rawContentText === "string" && rawContentText) {
+              rawContentText = rawContentText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\\n/g, "\n").trim();
             }
 
             if (typeof window.applyCustomRegexRules === "function" && typeof rawContentText === "string" && rawContentText) {
@@ -46550,6 +46555,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             contentText = `[转账] 金额: ${msg.amount}, 备注: ${msg.note || "无"}`;
           } else {
             contentText = String(msg.content || "");
+            if (typeof window.applyCustomRegexRules === "function" && contentText) {
+              contentText = window.applyCustomRegexRules(contentText, "chat", {
+                mode: "prompt",
+                chat: chat,
+                msg: msg,
+              });
+            }
           }
 
           // added by lrq 251029 在每条消息记录前添加发送日期时间
@@ -53769,7 +53781,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               messagesPayload = historySlice
                 .map((msg, index) => {
-                  const effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
+                  let effectiveContent = (typeof msg.optimizedContent === "string" && msg.optimizedContent !== "") ? msg.optimizedContent : msg.content;
+                  if (typeof effectiveContent === "string" && effectiveContent && typeof window.applyCustomRegexRules === "function") {
+                    effectiveContent = window.applyCustomRegexRules(effectiveContent, "chat", { mode: "prompt", chat: chat, msg: msg });
+                  }
                   const tsPrefix = isCognitionEnabled ? `(Timestamp: ${msg.timestamp}) ` : "";
 
                   if (msg.isHidden) {
@@ -59954,23 +59969,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 if (typeof aiMessage.content === "string" && aiMessage.content && typeof window.sanitizeAiHumanDiceCommands === "function") {
                   aiMessage.content = window.sanitizeAiHumanDiceCommands(aiMessage.content, chat);
-                }
-                if (
-                  !aiMessage.isPeerUserMessage &&
-                  !aiMessage.senderPeerCode &&
-                  aiMessage.role === "assistant" &&
-                  aiMessage.type !== "system_status" &&
-                  aiMessage.type !== "inventory_card" &&
-                  aiMessage.type !== "naiimag" &&
-                  typeof window.applyCustomRegexRules === "function"
-                ) {
-                  if (typeof aiMessage.content === "string" && aiMessage.content) {
-                    aiMessage.content = window.applyCustomRegexRules(aiMessage.content, "chat");
-                  }
-                  if (aiMessage.type === "quote_reply" && typeof aiMessage.reply_content === "string" && aiMessage.reply_content) {
-                    aiMessage.reply_content = window.applyCustomRegexRules(aiMessage.reply_content, "chat");
-                  }
-                  aiMessage._regexApplied = true;
                 }
                 if (chat.isGroup && chat.activeLineMode === "solo") {
                   const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
@@ -68417,9 +68415,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const aiMessage = {
                     role: "assistant",
                     senderName: msgData.name,
-                    content: typeof window.applyCustomRegexRules === "function" ? window.applyCustomRegexRules(rawBgMsg, "chat") : rawBgMsg,
+                    content: rawBgMsg,
                     timestamp: messageTimestamp++,
-                    _regexApplied: true,
                   };
                   chat.history.push(aiMessage);
                   if (chat.isGroup && Array.isArray(chat.mainLineHistory) && chat.activeLineMode !== "solo") {
