@@ -2516,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -45328,8 +45328,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 			    `;
           } else if (msg.type === "sticker" && msg.content && !(typeof msg.content === "string" && msg.content.trim().startsWith("<"))) {
             bubble.classList.add("is-sticker");
-            // 直接从消息对象中获取 url 和 meaning
-            contentHtml = `<img src="${msg.content}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+            const stkUrl = String(msg.content || "");
+            if (stkUrl.startsWith("vault://")) {
+              const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(stkUrl) : null;
+              contentHtml = cachedUrl
+                ? `<img src="${cachedUrl}" data-vault-ref="${stkUrl}" data-vault-hydrated-src="${cachedUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`
+                : `<img src="${stkUrl}" data-vault-ref="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+            } else {
+              contentHtml = `<img src="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+            }
           }
 
           // 旧的逻辑保持不变，作为兼容
@@ -45339,7 +45346,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             STICKER_REGEX.test(msg.content.trim())
           ) {
             bubble.classList.add("is-sticker");
-            contentHtml = `<img src="${msg.content}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+            const stkUrl = msg.content.trim();
+            if (stkUrl.startsWith("vault://")) {
+              const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(stkUrl) : null;
+              contentHtml = cachedUrl
+                ? `<img src="${cachedUrl}" data-vault-ref="${stkUrl}" data-vault-hydrated-src="${cachedUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`
+                : `<img src="${stkUrl}" data-vault-ref="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+            } else {
+              contentHtml = `<img src="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+            }
           } else if (
             Array.isArray(msg.content) &&
             msg.content[0]?.type === "image_url"
@@ -119380,7 +119395,17 @@ ${specificRules}`;
       // 1. 麻薯云端图床表情包管理与共享同步系统
       (function () {
         const MASHU_CLOUD_STICKER_LS_KEY = "ephone_mashu_cloud_stickers_v1";
+        const MASHU_CLOUD_STICKER_META_KEY = "ephone_mashu_cloud_stickers_updated_at_v1";
+        const MASHU_GLOBAL_CLOUD_TOPIC = "ephone_mashu_cloud_stickers_sync_prod_v1";
         window.mashuCloudStickers = [];
+
+        function getLocalMashuUpdatedAt() {
+          try {
+            return Number(localStorage.getItem(MASHU_CLOUD_STICKER_META_KEY)) || 0;
+          } catch (_) {
+            return 0;
+          }
+        }
 
         function loadLocalMashuStickers() {
           try {
@@ -119395,10 +119420,13 @@ ${specificRules}`;
           return window.mashuCloudStickers;
         }
 
-        function saveLocalMashuStickers(list) {
+        function saveLocalMashuStickers(list, updatedAt) {
           window.mashuCloudStickers = Array.isArray(list) ? list : [];
           try {
             localStorage.setItem(MASHU_CLOUD_STICKER_LS_KEY, JSON.stringify(window.mashuCloudStickers));
+            if (updatedAt !== undefined) {
+              localStorage.setItem(MASHU_CLOUD_STICKER_META_KEY, String(Number(updatedAt) || Date.now()));
+            }
           } catch (_) {}
         }
 
@@ -119406,27 +119434,284 @@ ${specificRules}`;
           return (window.mashuCloudStickers || []).filter(s => s && s.enabled !== false && s.name && s.url);
         };
 
-        async function syncMashuStickersFromServer() {
-          loadLocalMashuStickers();
+        async function compressStickerDataUrlForCloud(dataUrl) {
+          if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return dataUrl;
+          if (dataUrl.startsWith("data:image/gif") && dataUrl.length <= 140000) {
+            return dataUrl;
+          }
           try {
-            const res = await fetch("/api/mashu-stickers");
-            if (res.ok) {
-              const data = await res.json();
-              if (data && Array.isArray(data.stickers) && data.stickers.length > 0) {
-                saveLocalMashuStickers(data.stickers);
+            return await new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const maxDim = 160;
+                let w = img.naturalWidth || img.width || 160;
+                let h = img.naturalHeight || img.height || 160;
+                if (w > maxDim || h > maxDim) {
+                  if (w >= h) {
+                    h = Math.max(1, Math.round((h * maxDim) / w));
+                    w = maxDim;
+                  } else {
+                    w = Math.max(1, Math.round((w * maxDim) / h));
+                    h = maxDim;
+                  }
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, w, h);
+                let out = canvas.toDataURL("image/webp", 0.78);
+                if (!out || out === "data:," || out.length > dataUrl.length) {
+                  out = canvas.toDataURL("image/png");
+                }
+                resolve(out || dataUrl);
+              };
+              img.onerror = () => resolve(dataUrl);
+              img.src = dataUrl;
+            });
+          } catch (_) {
+            return dataUrl;
+          }
+        }
+
+        async function uploadMashuStickerToPublicCloud(dataUrl, filename) {
+          if (!dataUrl || typeof dataUrl !== "string") return "";
+          if (/^https?:\/\//i.test(dataUrl)) return dataUrl;
+
+          // 1. 优先走后端 /api/upload-image-bed (Postimages / Imgur / Uguu / 静态资源目录)
+          try {
+            const resp = await fetch("/api/upload-image-bed", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dataUrl, filename: filename || "sticker.png" }),
+            });
+            if (resp.ok) {
+              const rj = await resp.json();
+              if (rj && typeof rj.url === "string" && (/^https?:\/\//i.test(rj.url) || rj.url.startsWith("/mashu-stickers-assets/"))) {
+                return rj.url;
               }
             }
           } catch (_) {}
+
+          // 2. 若用户在设置中配置了 GitHub 仓库与 Token，直接传到 GitHub 仓库并用 jsDelivr 全球加速外链
+          try {
+            const ghToken = (typeof state !== "undefined" && state.apiConfig?.githubToken ? state.apiConfig.githubToken : localStorage.getItem("github-token") || "").trim();
+            const ghUser = (typeof state !== "undefined" && state.apiConfig?.githubUsername ? state.apiConfig.githubUsername : localStorage.getItem("github-username") || "").trim();
+            const ghRepoRaw = (typeof state !== "undefined" && state.apiConfig?.githubRepo ? state.apiConfig.githubRepo : localStorage.getItem("github-repo") || "").trim();
+            const ghRepo = ghRepoRaw.replace(/\/$/, "").split("/").pop().replace(/\.git$/i, "");
+            if (ghToken && ghUser && ghRepo && dataUrl.includes(",")) {
+              const base64Content = dataUrl.split(",")[1];
+              const mimeMatch = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,/);
+              const ext = mimeMatch ? mimeMatch[1].replace("jpeg", "jpg") : "png";
+              const filePath = `mashu-stickers-assets/ms_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+              const ghRes = await fetch(`https://api.github.com/repos/${ghUser}/${ghRepo}/contents/${filePath}`, {
+                method: "PUT",
+                headers: {
+                  Authorization: `token ${ghToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  message: `Upload Mashu sticker ${filename || ""}`,
+                  content: base64Content,
+                }),
+              });
+              if (ghRes.ok) {
+                return `https://cdn.jsdelivr.net/gh/${ghUser}/${ghRepo}/${filePath}`;
+              }
+            }
+          } catch (_) {}
+
+          // 3. 浏览器端直连支持跨域的公共图床 Imgur
+          try {
+            if (dataUrl.includes(",")) {
+              const base64Data = dataUrl.split(",")[1];
+              const fd = new FormData();
+              fd.append("image", base64Data);
+              fd.append("type", "base64");
+              const imgurRes = await fetch("https://api.imgur.com/3/image", {
+                method: "POST",
+                headers: { Authorization: "Client-ID 546c25a59c58ad7" },
+                body: fd,
+              });
+              if (imgurRes.ok) {
+                const imgurJson = await imgurRes.json();
+                if (imgurJson && imgurJson.data && imgurJson.data.link) {
+                  return imgurJson.data.link;
+                }
+              }
+            }
+          } catch (_) {}
+
+          // 4. 保底压成轻量自包含图片数据（绝不存入仅本机可见的 vault://，确保所有人的设备都能直接显示）
+          return await compressStickerDataUrlForCloud(dataUrl);
+        }
+
+        async function migrateLocalVaultMashuStickersIfNeeded() {
+          const list = window.mashuCloudStickers || [];
+          if (!list.length) return false;
+          let changed = false;
+          for (let i = 0; i < list.length; i++) {
+            const item = list[i];
+            if (!item || typeof item.url !== "string") continue;
+            if (item.url.startsWith("vault://") && typeof window.resolveVaultRefToDataUrl === "function") {
+              try {
+                const dataUrl = await window.resolveVaultRefToDataUrl(item.url);
+                if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
+                  const cloudUrl = await uploadMashuStickerToPublicCloud(dataUrl, (item.name || "sticker") + ".png");
+                  if (cloudUrl && !cloudUrl.startsWith("vault://")) {
+                    item.url = cloudUrl;
+                    changed = true;
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+          if (changed) {
+            saveLocalMashuStickers(list, Date.now());
+          }
+          return changed;
+        }
+
+        async function fetchRemoteMashuStickersBest() {
+          let best = { updatedAt: 0, stickers: [] };
+          const consider = (ts, list) => {
+            if (!Array.isArray(list)) return;
+            const cleanTs = Number(ts) || 0;
+            if (
+              (list.length > 0 && best.stickers.length === 0 && best.updatedAt === 0) ||
+              (cleanTs > best.updatedAt && (list.length > 0 || best.stickers.length === 0))
+            ) {
+              best = { updatedAt: cleanTs, stickers: list };
+            }
+          };
+
+          // 通道 A: 后端接口 /api/mashu-stickers
+          try {
+            const res = await fetch("/api/mashu-stickers", { cache: "no-store" });
+            if (res.ok) {
+              const ct = String(res.headers.get("content-type") || "").toLowerCase();
+              if (ct.includes("application/json")) {
+                const data = await res.json();
+                if (data && Array.isArray(data.stickers)) {
+                  consider(data.updatedAt || (data.stickers.length ? 1 : 0), data.stickers);
+                }
+              }
+            }
+          } catch (_) {}
+
+          // 通道 B: 静态构建文件 ./mashu-stickers.json (适配 GitHub Pages / APK 静态部署)
+          try {
+            const staticRes = await fetch("./mashu-stickers.json?t=" + Date.now(), { cache: "no-store" });
+            if (staticRes.ok) {
+              const ct = String(staticRes.headers.get("content-type") || "").toLowerCase();
+              if (ct.includes("application/json")) {
+                const sData = await staticRes.json();
+                const sList = Array.isArray(sData) ? sData : (Array.isArray(sData?.stickers) ? sData.stickers : []);
+                consider(sData?.updatedAt || (sList.length ? 1 : 0), sList);
+              }
+            }
+          } catch (_) {}
+
+          // 通道 C: 全球跨端实时云同步通道 (无需后端即可在所有人的手机/网页间同步)
+          try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3200);
+            const ntfyRes = await fetch(`https://ntfy.sh/${MASHU_GLOBAL_CLOUD_TOPIC}/json?poll=1&since=all`, {
+              cache: "no-store",
+              signal: controller.signal,
+            });
+            clearTimeout(timer);
+            if (ntfyRes.ok) {
+              const txt = await ntfyRes.text();
+              const lines = txt.split("\n").map((l) => l.trim()).filter(Boolean);
+              for (let i = lines.length - 1; i >= 0; i--) {
+                try {
+                  const evt = JSON.parse(lines[i]);
+                  if (evt && evt.event === "message" && typeof evt.message === "string") {
+                    const payload = JSON.parse(evt.message);
+                    if (payload && Array.isArray(payload.stickers)) {
+                      const rTs = Number(payload.updatedAt) || (Number(evt.time) * 1000) || 1;
+                      consider(rTs, payload.stickers);
+                      break;
+                    }
+                  }
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
+
+          return best;
+        }
+
+        async function syncMashuStickersFromServer() {
+          loadLocalMashuStickers();
+          const migrated = await migrateLocalVaultMashuStickersIfNeeded();
+          const localList = Array.isArray(window.mashuCloudStickers) ? window.mashuCloudStickers : [];
+          const localTs = getLocalMashuUpdatedAt();
+
+          const remote = await fetchRemoteMashuStickersBest();
+
+          if (remote.updatedAt > localTs && (remote.stickers.length > 0 || localList.length === 0)) {
+            saveLocalMashuStickers(remote.stickers, remote.updatedAt);
+          } else if (localList.length > 0 && (remote.stickers.length === 0 || migrated || localTs > remote.updatedAt)) {
+            await pushMashuStickersToServer(localList);
+          } else if (remote.stickers.length > 0 && localList.length === 0) {
+            saveLocalMashuStickers(remote.stickers, remote.updatedAt || Date.now());
+          }
         }
 
         async function pushMashuStickersToServer(list) {
-          saveLocalMashuStickers(list);
+          const updatedAt = Date.now();
+          saveLocalMashuStickers(list, updatedAt);
+          const payload = { updatedAt, stickers: window.mashuCloudStickers };
+
+          // 1. 同步至后端并写入 public/mashu-stickers.json 与 EPhoneVault/mashu-stickers.json
           try {
             await fetch("/api/mashu-stickers", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ stickers: window.mashuCloudStickers }),
+              body: JSON.stringify(payload),
             });
+          } catch (_) {}
+
+          // 2. 同步至全球跨端云通道（让 GitHub Pages / APK / 其他所有人的设备无需后端也能即时收到）
+          try {
+            await fetch(`https://ntfy.sh/${MASHU_GLOBAL_CLOUD_TOPIC}`, {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+          } catch (_) {}
+
+          // 3. 若配置了 GitHub Token，自动同步写入仓库的 mashu-stickers.json
+          try {
+            const ghToken = (typeof state !== "undefined" && state.apiConfig?.githubToken ? state.apiConfig.githubToken : localStorage.getItem("github-token") || "").trim();
+            const ghUser = (typeof state !== "undefined" && state.apiConfig?.githubUsername ? state.apiConfig.githubUsername : localStorage.getItem("github-username") || "").trim();
+            const ghRepoRaw = (typeof state !== "undefined" && state.apiConfig?.githubRepo ? state.apiConfig.githubRepo : localStorage.getItem("github-repo") || "").trim();
+            const ghRepo = ghRepoRaw.replace(/\/$/, "").split("/").pop().replace(/\.git$/i, "");
+            if (ghToken && ghUser && ghRepo) {
+              const apiUrl = `https://api.github.com/repos/${ghUser}/${ghRepo}/contents/mashu-stickers.json`;
+              let sha = undefined;
+              try {
+                const getRes = await fetch(apiUrl, { headers: { Authorization: `token ${ghToken}` } });
+                if (getRes.ok) {
+                  const getJson = await getRes.json();
+                  sha = getJson && getJson.sha;
+                }
+              } catch (_) {}
+              const contentB64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+              await fetch(apiUrl, {
+                method: "PUT",
+                headers: {
+                  Authorization: `token ${ghToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  message: "Update shared Mashu stickers",
+                  content: contentB64,
+                  ...(sha ? { sha } : {}),
+                }),
+              });
+            }
           } catch (_) {}
         }
 
@@ -119567,18 +119852,7 @@ ${specificRules}`;
                     reader.onerror = reject;
                     reader.readAsDataURL(file);
                   });
-                  let bedUrl = "";
-                  if (typeof window.uploadImageToBed === "function") {
-                    bedUrl = await window.uploadImageToBed(dataUrl, file.name);
-                  } else {
-                    const resp = await fetch("/api/upload-image-bed", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ dataUrl, filename: file.name }),
-                    });
-                    const rj = await resp.json();
-                    bedUrl = rj && rj.url ? rj.url : "";
-                  }
+                  const bedUrl = await uploadMashuStickerToPublicCloud(dataUrl, file.name);
                   if (bedUrl) {
                     window.mashuCloudStickers.unshift({
                       id: "ms_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -119596,7 +119870,7 @@ ${specificRules}`;
               }
               uploadBtn.disabled = false;
               if (statusEl) {
-                statusEl.textContent = addedCount > 0 ? ("已成功上传 " + addedCount + " 张表情") : "上传未成功，请重试或使用外链";
+                statusEl.textContent = addedCount > 0 ? ("已成功上传并全局同步 " + addedCount + " 张表情") : "上传未成功，请重试或使用外链";
                 setTimeout(() => {
                   if (statusEl) {
                     statusEl.style.display = "none";
@@ -119631,10 +119905,15 @@ ${specificRules}`;
             card.style.boxSizing = "border-box";
 
             const safeName = String(item.name || "").replace(/"/g, "&quot;");
-            const safeUrl = String(item.url || "").replace(/"/g, "&quot;");
+            const rawUrl = String(item.url || "");
+            const cachedVaultBlob = rawUrl.startsWith("vault://") && typeof window.getCachedVaultBlobUrl === "function"
+              ? window.getCachedVaultBlobUrl(rawUrl)
+              : null;
+            const displayUrl = String(cachedVaultBlob || rawUrl).replace(/"/g, "&quot;");
+            const vaultAttr = rawUrl.startsWith("vault://") ? `data-vault-ref="${rawUrl.replace(/"/g, "&quot;")}"` : "";
 
             card.innerHTML = `
-              <img src="${safeUrl}" loading="lazy" style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 8px; object-fit: contain; background: var(--card-bg); border: 1px solid var(--border-color); flex-shrink: 0;" />
+              <img src="${displayUrl}" ${vaultAttr} loading="lazy" style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 8px; object-fit: contain; background: var(--card-bg); border: 1px solid var(--border-color); flex-shrink: 0;" />
               <input type="text" class="moe-input mashu-sticker-name-input" value="${safeName}" placeholder="表情名称" style="flex: 1; min-width: 0; height: 32px; font-size: 13px; padding: 0 10px; border-radius: 8px; margin: 0;" />
               <div style="display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0;">
                 <input type="checkbox" class="mashu-sticker-enable-cb" style="width: 18px !important; height: 18px !important; min-width: 18px !important; min-height: 18px !important; padding: 0 !important; margin: 0 !important; flex-shrink: 0 !important; accent-color: var(--accent-color); cursor: pointer;" ${item.enabled !== false ? "checked" : ""} />

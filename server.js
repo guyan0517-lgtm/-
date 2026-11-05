@@ -118,13 +118,59 @@ app.post('/api/merge-pdf', async (req, res) => {
 
 const MASHU_VAULT_DIR = path.join(__dirname, 'EPhoneVault');
 const MASHU_STICKERS_FILE = path.join(MASHU_VAULT_DIR, 'mashu-stickers.json');
+const MASHU_ROOT_STICKERS_FILE = path.join(__dirname, 'mashu-stickers.json');
+const MASHU_PUBLIC_DIR = path.join(__dirname, 'public');
+const MASHU_PUBLIC_STICKERS_FILE = path.join(MASHU_PUBLIC_DIR, 'mashu-stickers.json');
 const MASHU_STICKER_FILES_DIR = path.join(MASHU_VAULT_DIR, 'stickers');
+const MASHU_PUBLIC_ASSETS_DIR = path.join(MASHU_PUBLIC_DIR, 'mashu-stickers-assets');
+const MASHU_GLOBAL_CLOUD_TOPIC = 'ephone_mashu_cloud_stickers_sync_prod_v1';
+
 try {
   if (!fs.existsSync(MASHU_STICKER_FILES_DIR)) {
     fs.mkdirSync(MASHU_STICKER_FILES_DIR, { recursive: true });
   }
+  if (!fs.existsSync(MASHU_PUBLIC_ASSETS_DIR)) {
+    fs.mkdirSync(MASHU_PUBLIC_ASSETS_DIR, { recursive: true });
+  }
 } catch (_) {}
 app.use('/api/mashu-sticker-files', express.static(MASHU_STICKER_FILES_DIR));
+app.use('/mashu-stickers-assets', express.static(MASHU_PUBLIC_ASSETS_DIR));
+
+function readBestLocalMashuStickersPayload() {
+  const candidates = [MASHU_STICKERS_FILE, MASHU_PUBLIC_STICKERS_FILE, MASHU_ROOT_STICKERS_FILE];
+  let best = { updatedAt: 0, stickers: [] };
+  for (const filePath of candidates) {
+    try {
+      if (!fs.existsSync(filePath)) continue;
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.stickers) ? parsed.stickers : []);
+      const ts = Number(parsed?.updatedAt) || 0;
+      if (
+        (list.length > 0 && best.stickers.length === 0) ||
+        (ts > best.updatedAt && (list.length > 0 || best.stickers.length === 0))
+      ) {
+        best = { updatedAt: ts, stickers: list };
+      }
+    } catch (_) {}
+  }
+  return best;
+}
+
+function writeAllLocalMashuStickersFiles(payload) {
+  const jsonStr = JSON.stringify(payload, null, 2);
+  try {
+    if (!fs.existsSync(MASHU_VAULT_DIR)) fs.mkdirSync(MASHU_VAULT_DIR, { recursive: true });
+    fs.writeFileSync(MASHU_STICKERS_FILE, jsonStr, 'utf8');
+  } catch (_) {}
+  try {
+    if (!fs.existsSync(MASHU_PUBLIC_DIR)) fs.mkdirSync(MASHU_PUBLIC_DIR, { recursive: true });
+    fs.writeFileSync(MASHU_PUBLIC_STICKERS_FILE, jsonStr, 'utf8');
+  } catch (_) {}
+  try {
+    fs.writeFileSync(MASHU_ROOT_STICKERS_FILE, jsonStr, 'utf8');
+  } catch (_) {}
+}
 
 app.post('/api/upload-image-bed', async (req, res) => {
   try {
@@ -162,7 +208,7 @@ app.post('/api/upload-image-bed', async (req, res) => {
 
     let finalUrl = '';
 
-    // 1. Try postimages.org
+    // 1. Try postimages.org (returns permanent global https://i.postimg.cc/... URL)
     try {
       const form = new FormData();
       form.append('gallery', '');
@@ -198,7 +244,50 @@ app.post('/api/upload-image-bed', async (req, res) => {
       }
     } catch (_) {}
 
-    // 2. Fallback to catbox.moe if postimages failed
+    // 2. Fallback to Imgur anonymous API
+    if (!finalUrl) {
+      try {
+        const imgurForm = new FormData();
+        imgurForm.append('image', base64Data);
+        imgurForm.append('type', 'base64');
+        const imgurRes = await fetch('https://api.imgur.com/3/image', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Client-ID 546c25a59c58ad7',
+            'User-Agent': ua
+          },
+          body: imgurForm
+        });
+        if (imgurRes.ok) {
+          const imgurJson = await imgurRes.json();
+          if (imgurJson && imgurJson.data && imgurJson.data.link) {
+            finalUrl = imgurJson.data.link;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback to uguu.se
+    if (!finalUrl) {
+      try {
+        const ugForm = new FormData();
+        ugForm.append('files[]', blob, safeName);
+        const ugRes = await fetch('https://uguu.se/upload', {
+          method: 'POST',
+          headers: { 'User-Agent': ua },
+          body: ugForm
+        });
+        if (ugRes.ok) {
+          const ugJson = await ugRes.json();
+          const ugUrl = ugJson && Array.isArray(ugJson.files) && ugJson.files[0] && ugJson.files[0].url;
+          if (ugUrl && /^https?:\/\//i.test(ugUrl)) {
+            finalUrl = ugUrl;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. Fallback to catbox.moe
     if (!finalUrl) {
       try {
         const catForm = new FormData();
@@ -218,15 +307,19 @@ app.post('/api/upload-image-bed', async (req, res) => {
       } catch (_) {}
     }
 
-    // 3. Fallback to local server EPhoneVault/stickers directory so upload never fails
+    // 5. Fallback to public/mashu-stickers-assets and EPhoneVault/stickers
     if (!finalUrl) {
       try {
+        const uniqueFileName = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        if (!fs.existsSync(MASHU_PUBLIC_ASSETS_DIR)) {
+          fs.mkdirSync(MASHU_PUBLIC_ASSETS_DIR, { recursive: true });
+        }
+        fs.writeFileSync(path.join(MASHU_PUBLIC_ASSETS_DIR, uniqueFileName), buffer);
         if (!fs.existsSync(MASHU_STICKER_FILES_DIR)) {
           fs.mkdirSync(MASHU_STICKER_FILES_DIR, { recursive: true });
         }
-        const uniqueFileName = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
         fs.writeFileSync(path.join(MASHU_STICKER_FILES_DIR, uniqueFileName), buffer);
-        finalUrl = `/api/mashu-sticker-files/${uniqueFileName}`;
+        finalUrl = `/mashu-stickers-assets/${uniqueFileName}`;
       } catch (_) {}
     }
 
@@ -241,23 +334,47 @@ app.post('/api/upload-image-bed', async (req, res) => {
   }
 });
 
-app.get('/api/mashu-stickers', (req, res) => {
+app.get('/api/mashu-stickers', async (req, res) => {
   try {
-    if (!fs.existsSync(MASHU_STICKERS_FILE)) {
-      return res.json({ ok: true, stickers: [] });
-    }
-    const raw = fs.readFileSync(MASHU_STICKERS_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.stickers) ? parsed.stickers : []);
-    return res.json({ ok: true, stickers: list });
+    let best = readBestLocalMashuStickersPayload();
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2800);
+      const ntfyRes = await fetch(`https://ntfy.sh/${MASHU_GLOBAL_CLOUD_TOPIC}/json?poll=1&since=all`, {
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (ntfyRes.ok) {
+        const txt = await ntfyRes.text();
+        const lines = txt.split('\n').map(l => l.trim()).filter(Boolean);
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try {
+            const evt = JSON.parse(lines[i]);
+            if (evt && evt.event === 'message' && typeof evt.message === 'string') {
+              const payload = JSON.parse(evt.message);
+              if (payload && Array.isArray(payload.stickers)) {
+                const remoteTs = Number(payload.updatedAt) || (Number(evt.time) * 1000) || 0;
+                if (remoteTs > best.updatedAt || (best.stickers.length === 0 && payload.stickers.length > 0)) {
+                  best = { updatedAt: remoteTs, stickers: payload.stickers };
+                  writeAllLocalMashuStickersFiles(best);
+                }
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    return res.json({ ok: true, updatedAt: best.updatedAt, stickers: best.stickers });
   } catch (err) {
-    return res.json({ ok: true, stickers: [] });
+    return res.json({ ok: true, updatedAt: 0, stickers: [] });
   }
 });
 
-app.post('/api/mashu-stickers', (req, res) => {
+app.post('/api/mashu-stickers', async (req, res) => {
   try {
     const incoming = req.body && Array.isArray(req.body.stickers) ? req.body.stickers : [];
+    const updatedAt = Number(req.body?.updatedAt) || Date.now();
     const cleaned = incoming
       .filter(s => s && typeof s.name === 'string' && typeof s.url === 'string' && s.name.trim() && s.url.trim())
       .map(s => ({
@@ -266,11 +383,13 @@ app.post('/api/mashu-stickers', (req, res) => {
         url: s.url.trim(),
         enabled: s.enabled !== false
       }));
-    if (!fs.existsSync(MASHU_VAULT_DIR)) {
-      fs.mkdirSync(MASHU_VAULT_DIR, { recursive: true });
-    }
-    fs.writeFileSync(MASHU_STICKERS_FILE, JSON.stringify({ updatedAt: Date.now(), stickers: cleaned }, null, 2), 'utf8');
-    return res.json({ ok: true, stickers: cleaned });
+    const payload = { updatedAt, stickers: cleaned };
+    writeAllLocalMashuStickersFiles(payload);
+    fetch(`https://ntfy.sh/${MASHU_GLOBAL_CLOUD_TOPIC}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+    return res.json({ ok: true, updatedAt, stickers: cleaned });
   } catch (err) {
     return res.status(500).json({ error: err.message || '保存麻薯表情包失败' });
   }
