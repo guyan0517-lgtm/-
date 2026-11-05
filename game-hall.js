@@ -3901,20 +3901,15 @@ code, pre {
   function isCompleteTavernNonStreamPayload(rawStr) {
     const stripped = String(rawStr || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
     if (!stripped) return false;
-    if (
-      stripped.includes('data: [DONE]') ||
-      stripped.includes('data:[DONE]') ||
-      stripped.includes('"message_stop"')
-    ) {
-      return true;
-    }
-    if (stripped.startsWith('{') && stripped.endsWith('}')) {
+    if (stripped.startsWith('{')) {
+      if (!stripped.endsWith('}')) return false;
       try {
         const obj = JSON.parse(stripped);
         if (
           obj &&
           typeof obj === 'object' &&
-          (Array.isArray(obj.choices) ||
+          (obj._proxy_error ||
+            Array.isArray(obj.choices) ||
             Array.isArray(obj.candidates) ||
             Array.isArray(obj.content) ||
             typeof obj.content === 'string' ||
@@ -3923,59 +3918,109 @@ code, pre {
           return true;
         }
       } catch (_) {}
+      return false;
+    }
+    if (
+      /^\s*data:/m.test(stripped) &&
+      (stripped.includes('data: [DONE]') ||
+        stripped.includes('data:[DONE]') ||
+        stripped.includes('"message_stop"'))
+    ) {
+      return true;
     }
     return false;
   }
 
   async function readTavernNonStreamBodySafely(resObj, onChunkProgress) {
-    let accText = '';
-    let readErrCaught = null;
-    if (resObj && resObj.body && typeof resObj.body.getReader === 'function') {
-      const reader = resObj.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
+    const readSingleRes = async (targetRes) => {
+      let accText = '';
+      let readErrCaught = null;
+      if (targetRes && targetRes.body && typeof targetRes.body.getReader === 'function') {
+        const reader = targetRes.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (typeof onChunkProgress === 'function') {
+              try { onChunkProgress(); } catch (_) {}
+            }
+            if (typeof window.ensureBackgroundKeepAlive === 'function') {
+              try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+            }
+            if (done) {
+              const tail = decoder.decode();
+              if (tail) accText += tail;
+              break;
+            }
+            if (value && value.byteLength > 0) {
+              accText += decoder.decode(value, { stream: true });
+              if (isCompleteTavernNonStreamPayload(accText)) {
+                const tail = decoder.decode();
+                if (tail) accText += tail;
+                try { await reader.cancel(); } catch (_) {}
+                break;
+              }
+            }
+          }
+        } catch (err) {
+          try {
+            const tail = decoder.decode();
+            if (tail) accText += tail;
+          } catch (_) {}
+          readErrCaught = err;
+        }
+      } else if (targetRes && typeof targetRes.text === 'function') {
+        try {
+          accText = await targetRes.text();
           if (typeof onChunkProgress === 'function') {
             try { onChunkProgress(); } catch (_) {}
           }
-          if (typeof window.ensureBackgroundKeepAlive === 'function') {
-            try { window.ensureBackgroundKeepAlive(); } catch (_) {}
-          }
-          if (done) {
-            const tail = decoder.decode();
-            if (tail) accText += tail;
-            break;
-          }
-          if (value && value.byteLength > 0) {
-            accText += decoder.decode(value, { stream: true });
-            if (isCompleteTavernNonStreamPayload(accText)) {
-              const tail = decoder.decode();
-              if (tail) accText += tail;
-              try { await reader.cancel(); } catch (_) {}
-              break;
-            }
-          }
+        } catch (err) {
+          readErrCaught = err;
         }
-      } catch (err) {
-        try {
-          const tail = decoder.decode();
-          if (tail) accText += tail;
-        } catch (_) {}
-        readErrCaught = err;
       }
-    } else if (resObj && typeof resObj.text === 'function') {
+      return { accText, readErrCaught };
+    };
+
+    let { accText, readErrCaught } = await readSingleRes(resObj);
+    let stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
+
+    if (resObj && resObj._usedProxyHeartbeat && stripped.startsWith('{')) {
+      let proxyErrObj = null;
       try {
-        accText = await resObj.text();
-        if (typeof onChunkProgress === 'function') {
-          try { onChunkProgress(); } catch (_) {}
+        const parsed = JSON.parse(stripped);
+        if (parsed && parsed._proxy_error) {
+          proxyErrObj = parsed;
         }
-      } catch (err) {
-        readErrCaught = err;
+      } catch (_) {}
+
+      if (proxyErrObj) {
+        if (proxyErrObj._proxy_net_fail && typeof resObj._directFallbackFn === 'function') {
+          const directRes = await resObj._directFallbackFn();
+          if (!directRes.ok) {
+            const errTxt = await directRes.text().catch(() => '');
+            throw new Error('API请求失败 HTTP ' + directRes.status + ': ' + (errTxt.slice(0, 200) || directRes.statusText));
+          }
+          const directRead = await readSingleRes(directRes);
+          accText = directRead.accText;
+          readErrCaught = directRead.readErrCaught;
+          stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
+        } else {
+          const upStatus = Number(proxyErrObj._proxy_status) || 502;
+          let detail = proxyErrObj.error?.message || proxyErrObj.message || ('HTTP ' + upStatus);
+          try {
+            const innerJson = JSON.parse(detail);
+            if (innerJson && innerJson.error) {
+              detail = innerJson.error.message || innerJson.error.code || JSON.stringify(innerJson.error);
+            } else if (innerJson && innerJson.message) {
+              detail = innerJson.message;
+            }
+          } catch (_) {}
+          throw new Error('API请求失败 HTTP ' + upStatus + ': ' + String(detail).slice(0, 200));
+        }
       }
     }
 
-    const stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
     if (readErrCaught && !stripped) {
       throw readErrCaught;
     }
@@ -3987,13 +4032,63 @@ code, pre {
     if (typeof window.ensureBackgroundKeepAlive === 'function') {
       try { window.ensureBackgroundKeepAlive(); } catch (_) {}
     }
-    try {
-      const res = await rawFetch(url, options);
-      return res;
-    } catch (err) {
-      if (err && err.name === 'AbortError') throw err;
-      throw err || new Error('Failed to fetch');
+    const method = String(options.method || 'GET').toUpperCase();
+    let isStreamReq = false;
+    let parsedBody = options.body;
+    if (method === 'POST' && typeof options.body === 'string') {
+      try {
+        parsedBody = JSON.parse(options.body);
+        if (parsedBody && parsedBody.stream === true) {
+          isStreamReq = true;
+        }
+      } catch (_) {}
     }
+
+    const doDirectFetchWithRetry = async () => {
+      let lastErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (typeof window.ensureBackgroundKeepAlive === 'function') {
+            try { window.ensureBackgroundKeepAlive(); } catch (_) {}
+          }
+          return await rawFetch(url, options);
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw err;
+          lastErr = err;
+          if (attempt === 0) {
+            await (typeof window.waitDelay === 'function' ? window.waitDelay(500) : new Promise(r => setTimeout(r, 500)));
+          }
+        }
+      }
+      throw lastErr || new Error('Failed to fetch');
+    };
+
+    // 对酒馆非流式 POST 请求优先启用后端 /api/proxy 的 3 秒空白换行符心跳保活通道
+    if (method === 'POST' && !isStreamReq) {
+      try {
+        const proxyRes = await rawFetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            method: 'POST',
+            headers: options.headers || {},
+            body: parsedBody !== undefined ? parsedBody : options.body,
+            keepAliveHeartbeat: true
+          }),
+          signal: options.signal
+        });
+        if (proxyRes && proxyRes.ok) {
+          proxyRes._usedProxyHeartbeat = true;
+          proxyRes._directFallbackFn = doDirectFetchWithRetry;
+          return proxyRes;
+        }
+      } catch (proxyErr) {
+        if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
+      }
+    }
+
+    return await doDirectFetchWithRetry();
   }
 
   function setupSillyTavernGlobalBridge() {
@@ -5117,6 +5212,9 @@ code, pre {
     window.__isTavernScreenActive = () => isTavernActive();
     window.__registerTavernAudioInstance = (audioEl, isAllowedFloor = true) => {
       if (!audioEl) return false;
+      if (audioEl.id === 'strong-keep-alive-player' || audioEl.id === 'keep-alive-audio' || audioEl._isKeepAliveAudio) {
+        return true;
+      }
       if (!window.__tavernActiveAudioSet) {
         window.__tavernActiveAudioSet = new Set();
       }
@@ -5132,7 +5230,7 @@ code, pre {
       const hasValidSrc = Boolean((audioEl.src && String(audioEl.src).trim()) || (audioEl.currentSrc && String(audioEl.currentSrc).trim()));
       if (hasValidSrc) {
         window.__tavernActiveAudioSet.forEach(other => {
-          if (other && other !== audioEl) {
+          if (other && other !== audioEl && other.id !== 'strong-keep-alive-player' && other.id !== 'keep-alive-audio' && !other._isKeepAliveAudio) {
             try {
               if (!other.paused) {
                 other.pause();
@@ -5149,6 +5247,9 @@ code, pre {
       const origMediaPlay = HTMLMediaElement.prototype.play;
       HTMLMediaElement.prototype.play = function (...args) {
         try {
+          if (this.id === 'strong-keep-alive-player' || this.id === 'keep-alive-audio' || this._isKeepAliveAudio) {
+            return origMediaPlay.apply(this, args);
+          }
           const inTavernDom = Boolean(
             (this.closest && (this.closest('#game-hall-screen') || this.closest('[id^="gourmet-fixed-"]') || this.closest('#adv-codex-panel') || this.closest('#bbi-app-host'))) ||
             this._createdWhileTavernActive
@@ -5166,7 +5267,7 @@ code, pre {
       if (typeof OrigAudio === 'function' && !OrigAudio._tavernWrapped) {
         const WrappedAudio = function (...a) {
           const inst = new OrigAudio(...a);
-          if (isTavernActive()) {
+          if (isTavernActive() && !inst._isKeepAliveAudio) {
             inst._createdWhileTavernActive = true;
             if (!window.__tavernActiveAudioSet) window.__tavernActiveAudioSet = new Set();
             window.__tavernActiveAudioSet.add(inst);
@@ -8740,6 +8841,9 @@ code, pre {
   } catch (e) {}
   function notifyParentGesture() {
     try {
+      if (window.parent && typeof window.parent.ensureBackgroundKeepAlive === 'function') {
+        window.parent.ensureBackgroundKeepAlive(null, true);
+      }
       if (window.parent && typeof window.parent.pushMobileBackGuard === 'function') {
         window.parent.pushMobileBackGuard('tavern_iframe');
       } else if (window.parent) {
@@ -8749,6 +8853,7 @@ code, pre {
   }
   document.addEventListener('touchstart', notifyParentGesture, { passive: true, capture: true });
   document.addEventListener('pointerdown', notifyParentGesture, { passive: true, capture: true });
+  document.addEventListener('click', notifyParentGesture, { passive: true, capture: true });
   document.addEventListener('selectstart', function(e) {
     var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
     if (t && t.closest && t.closest('input, textarea, [contenteditable="true"]')) {
@@ -21322,7 +21427,7 @@ code, pre {
       if (window.__tavernActiveAudioSet) {
         window.__tavernActiveAudioSet.forEach(a => {
           try {
-            if (a && typeof a.pause === 'function') {
+            if (a && typeof a.pause === 'function' && a.id !== 'strong-keep-alive-player' && a.id !== 'keep-alive-audio' && !a._isKeepAliveAudio) {
               a.pause();
               a.currentTime = 0;
             }

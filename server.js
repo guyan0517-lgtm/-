@@ -1205,6 +1205,7 @@ app.post('/api/proxy', async (req, res) => {
     if (heartbeatStarted && !res.writableEnded) {
       res.write(JSON.stringify({
         _proxy_error: true,
+        _proxy_net_fail: true,
         _proxy_status: 502,
         error: { message: err.message || 'Proxy request failed', code: 502 },
         message: err.message || 'Proxy request failed'
@@ -1212,7 +1213,7 @@ app.post('/api/proxy', async (req, res) => {
       return res.end();
     }
     if (!res.headersSent) {
-      res.status(500).json({ error: err.message || 'Proxy request failed' });
+      res.status(502).json({ _proxy_net_fail: true, error: err.message || 'Proxy request failed' });
     } else if (!res.writableEnded) {
       res.end();
     }
