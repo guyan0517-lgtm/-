@@ -48,7 +48,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=16.1" defer></script>
+    <script src="game-hall.js?v=16.8" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2528,7 +2528,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22627,6 +22627,43 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return s.trim();
             };
 
+            const proxyTaskId = (!isStreamReq && method === "POST")
+              ? ("llm_task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8))
+              : "";
+
+            const recoverProxyTaskFromServer = async (taskId) => {
+              if (!taskId) return null;
+              const pollStartTs = Date.now();
+              let consecutive404 = 0;
+              while (Date.now() - pollStartTs < 900000) {
+                if (options.signal && options.signal.aborted) {
+                  throw new Error("请求已取消");
+                }
+                resetTimeout();
+                ensureBackgroundKeepAlive();
+                try {
+                  const pollRes = await origFetch("/api/proxy-task/" + encodeURIComponent(taskId), {
+                    method: "GET",
+                    headers: { "Cache-Control": "no-cache" },
+                    signal: controller.signal,
+                  });
+                  if (pollRes.status === 404) {
+                    consecutive404++;
+                    if (consecutive404 >= 3) return null;
+                  } else if (pollRes.ok) {
+                    const data = await pollRes.json();
+                    if (data && data.status === "done") {
+                      return data;
+                    }
+                  }
+                } catch (pollErr) {
+                  if (options.signal && options.signal.aborted) throw pollErr;
+                }
+                await (typeof window.waitDelay === "function" ? window.waitDelay(2000) : new Promise((r) => setTimeout(r, 2000)));
+              }
+              return null;
+            };
+
             const executeUpstreamFetch = async (activeBodyObj) => {
               let currentRes = null;
               let currentDirectErr = null;
@@ -22635,9 +22672,60 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 : undefined;
 
               if (!controller.signal.aborted) {
+                ensureBackgroundKeepAlive();
+                resetTimeout();
+
+                if (!isStreamReq && method === "POST" && proxyTaskId) {
+                  try {
+                    const proxyRes = await origFetch("/api/proxy", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        url: finalUrl,
+                        method,
+                        headers,
+                        body: activeBodyObj,
+                        keepAliveHeartbeat: true,
+                        taskId: proxyTaskId,
+                      }),
+                      signal: controller.signal,
+                    });
+                    if (proxyRes && proxyRes.ok) {
+                      proxyRes._usedProxyHeartbeat = true;
+                      proxyRes._proxyTaskId = proxyTaskId;
+                      return { res: proxyRes, directErr: null };
+                    }
+                    if (proxyRes && (proxyRes.status === 404 || proxyRes.status === 405)) {
+                      // Pure static server without /api/proxy endpoint: execute single direct fetch
+                      currentRes = await origFetch(finalUrl, {
+                        method,
+                        headers,
+                        body: currentPayload,
+                        signal: controller.signal,
+                      });
+                      return { res: currentRes, directErr: null };
+                    }
+                    if (proxyRes) {
+                      return { res: proxyRes, directErr: null };
+                    }
+                  } catch (proxyFetchErr) {
+                    if (options.signal && options.signal.aborted) {
+                      return { res: null, directErr: proxyFetchErr };
+                    }
+                    const recovered = await recoverProxyTaskFromServer(proxyTaskId);
+                    if (recovered && recovered.status === "done") {
+                      const synthRes = new Response(String(recovered.bodyText || ""), {
+                        status: recovered.ok ? (recovered.httpStatus || 200) : (recovered.httpStatus || 502),
+                        headers: { "Content-Type": recovered.contentType || "application/json" },
+                      });
+                      return { res: synthRes, directErr: null };
+                    }
+                    currentDirectErr = proxyFetchErr;
+                    return { res: null, directErr: currentDirectErr };
+                  }
+                }
+
                 try {
-                  ensureBackgroundKeepAlive();
-                  resetTimeout();
                   currentRes = await origFetch(finalUrl, {
                     method,
                     headers,
@@ -22935,9 +23023,54 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             let { accText: resText, readErrCaught: nonStreamReadErr } = await readNonStreamResponseText(res);
 
+            let strippedNonStream = stripLeadingKeepAliveNoise(resText);
+
+            if ((!strippedNonStream || nonStreamReadErr) && proxyTaskId) {
+              const recovered = await recoverProxyTaskFromServer(proxyTaskId);
+              if (recovered && recovered.status === "done") {
+                if (!recovered.ok) {
+                  if (timeoutId) clearTimeout(timeoutId);
+                  const upStatus = Number(recovered.httpStatus) || 502;
+                  const errRaw = String(recovered.bodyText || recovered.errorMessage || `HTTP ${upStatus}`);
+                  const simplifiedMsg = extractApiErrorMessage(upStatus, errRaw);
+                  return {
+                    ok: false,
+                    status: upStatus,
+                    text: errRaw,
+                    error: simplifiedMsg,
+                    headers: new Headers({ "Content-Type": "application/json" }),
+                  };
+                }
+                resText = String(recovered.bodyText || "");
+                strippedNonStream = stripLeadingKeepAliveNoise(resText);
+                nonStreamReadErr = null;
+              }
+            }
+
             if (timeoutId) clearTimeout(timeoutId);
 
-            const strippedNonStream = stripLeadingKeepAliveNoise(resText);
+            if (res && res._usedProxyHeartbeat && strippedNonStream.startsWith("{")) {
+              let proxyErrObj = null;
+              try {
+                const parsedProxyObj = JSON.parse(strippedNonStream);
+                if (parsedProxyObj && parsedProxyObj._proxy_error) {
+                  proxyErrObj = parsedProxyObj;
+                }
+              } catch (_) {}
+              if (proxyErrObj) {
+                const upStatus = Number(proxyErrObj._proxy_status) || 502;
+                const rawProxyErrText = String(proxyErrObj.error?.message || proxyErrObj.message || `HTTP ${upStatus}`);
+                const simplifiedMsg = extractApiErrorMessage(upStatus, rawProxyErrText);
+                return {
+                  ok: false,
+                  status: upStatus,
+                  text: rawProxyErrText,
+                  error: simplifiedMsg,
+                  headers: new Headers({ "Content-Type": "application/json" }),
+                };
+              }
+            }
+
             let hasValidNonStreamData = false;
             if (strippedNonStream) {
               if (strippedNonStream.startsWith("{") || strippedNonStream.startsWith("[")) {
@@ -23684,26 +23817,47 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
 
             fetchStartT = Date.now();
-            let res = await requestLlmapiWithFallback(targetUrl, {
-              method: "POST",
-              signal: init?.signal,
-              _noAutoRetry: true,
-              _preserveCallerMaxTokens: Boolean(init && init._preserveCallerMaxTokens),
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${cleanKey}`,
-                ...(openAiPayload.stream ? { Accept: "text/event-stream" } : {})
-              },
-              body: JSON.stringify(openAiPayload),
-              onStreamChunk: (chunk) => {
-                if (init && typeof init.onStreamChunk === "function") {
-                  try { init.onStreamChunk(chunk); } catch (_) {}
-                }
-                if (isStreamActive && !(init && init._suppressGlobalChatStream) && typeof window.onAiStreamTokenReceived === "function") {
-                  window.onAiStreamTokenReceived(chunk);
-                }
-              },
-            });
+            window._inFlightLlmRequests = window._inFlightLlmRequests || new Map();
+            const reqDedupKey = !openAiPayload.stream ? (targetUrl + "|" + JSON.stringify(openAiPayload)) : "";
+            let res;
+            if (reqDedupKey && window._inFlightLlmRequests.has(reqDedupKey)) {
+              const existingEntry = window._inFlightLlmRequests.get(reqDedupKey);
+              if (Date.now() - existingEntry.ts < 300000) {
+                res = await existingEntry.promise;
+              }
+            }
+            if (!res) {
+              const reqPromise = requestLlmapiWithFallback(targetUrl, {
+                method: "POST",
+                signal: init?.signal,
+                _noAutoRetry: true,
+                _preserveCallerMaxTokens: Boolean(init && init._preserveCallerMaxTokens),
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${cleanKey}`,
+                  ...(openAiPayload.stream ? { Accept: "text/event-stream" } : {})
+                },
+                body: JSON.stringify(openAiPayload),
+                onStreamChunk: (chunk) => {
+                  if (init && typeof init.onStreamChunk === "function") {
+                    try { init.onStreamChunk(chunk); } catch (_) {}
+                  }
+                  if (isStreamActive && !(init && init._suppressGlobalChatStream) && typeof window.onAiStreamTokenReceived === "function") {
+                    window.onAiStreamTokenReceived(chunk);
+                  }
+                },
+              });
+              if (reqDedupKey) {
+                const entryObj = { ts: Date.now(), promise: reqPromise };
+                window._inFlightLlmRequests.set(reqDedupKey, entryObj);
+                reqPromise.finally(() => {
+                  if (window._inFlightLlmRequests.get(reqDedupKey) === entryObj) {
+                    window._inFlightLlmRequests.delete(reqDedupKey);
+                  }
+                });
+              }
+              res = await reqPromise;
+            }
 
             if (!res.ok) {
               const errMsg = extractApiErrorMessage(res.status, res.text);
@@ -52241,6 +52395,26 @@ ${recentHistoryText}
           let finishTurnRender = null;
           const chatId = (typeof targetChatId === "string" || typeof targetChatId === "number") ? targetChatId : state.activeChatId;
           if (!chatId && chatId !== 0) return;
+
+          window.activeGeneratingChats = window.activeGeneratingChats || {};
+          window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
+          if (window.activeGeneratingChats[chatId] || window.activeGeneratingChats[String(chatId)]) {
+            console.warn("当前聊天正在生成回复中，忽略重复触发");
+            return;
+          }
+          window.activeGeneratingChats[chatId] = true;
+          window.activeGeneratingChats[String(chatId)] = true;
+          const clearGeneratingLock = (cObj) => {
+            if (window.activeGeneratingChats) {
+              delete window.activeGeneratingChats[chatId];
+              delete window.activeGeneratingChats[String(chatId)];
+              if (cObj && cObj.id !== undefined) {
+                delete window.activeGeneratingChats[cObj.id];
+                delete window.activeGeneratingChats[String(cObj.id)];
+              }
+            }
+          };
+
           let chat = (state.chats && state.chats[chatId]) ||
                      (state.chats && state.chats[String(chatId)]) ||
                      (state.chats && state.chats[Number(chatId)]) ||
@@ -52263,14 +52437,20 @@ ${recentHistoryText}
               }
             } catch (e) {}
           }
-          if (!chat) return;
+          if (!chat) {
+            clearGeneratingLock(null);
+            return;
+          }
           if (!state.chats) state.chats = {};
           state.chats[chat.id] = chat;
           state.chats[String(chat.id)] = chat;
           state.chats[chatId] = chat;
+          window.activeGeneratingChats[chat.id] = true;
+          window.activeGeneratingChats[String(chat.id)] = true;
 
           // 骰子角色的消息由本地规则生成，密友为真人对话，均不调用 AI 接口
           if (!chat.isGroup && (chat.roleType === "dice" || chat.roleType === "peer")) {
+            clearGeneratingLock(chat);
             return;
           }
 
@@ -52279,19 +52459,10 @@ ${recentHistoryText}
             const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
             const canSpeak = typeof window.canCurrentUserSpeakInSoloThread === "function" ? window.canCurrentUserSpeakInSoloThread(activeThread, chat) : true;
             if (!canSpeak) {
+              clearGeneratingLock(chat);
               return;
             }
           }
-
-          window.activeGeneratingChats = window.activeGeneratingChats || {};
-          window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
-          if (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]) {
-            console.warn("当前聊天正在生成回复中，忽略重复触发");
-            return;
-          }
-          window.activeGeneratingChats[chat.id] = true;
-          window.activeGeneratingChats[String(chat.id)] = true;
-          window.activeGeneratingChats[chatId] = true;
 
           const releaseBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
             ? window.acquireBackgroundTaskKeepAlive()
@@ -52482,6 +52653,10 @@ ${recentHistoryText}
               (m) => m.roleType !== "system_status" && m.roleType !== "dice" && !m.isPeerMember && m.roleType !== "peer" && !m.isMuted
             );
             if (roleplayMembers.length === 0 && !statusMember) {
+              if (typeof releaseBgKeepAlive === "function") {
+                try { releaseBgKeepAlive(); } catch (_) {}
+              }
+              clearGeneratingLock(chat);
               renderChatList();
               return;
             }
@@ -52875,6 +53050,7 @@ ${recentHistoryText}
               if (typeof releaseBgKeepAlive === "function") {
                 try { releaseBgKeepAlive(); } catch (_) {}
               }
+              clearGeneratingLock(chat);
               if (chatHeaderTitle && state.chats[chatId]) {
                 chatHeaderTitle.style.opacity = 0;
                 setTimeout(() => {
@@ -62818,29 +62994,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const frequency = config[chat.id]; // 获取当前角色的频率设置
               const probability = frequencyProbabilities[frequency]; // 获取对应的概率
 
-              // added by lrq 251028
-              // 添加最后一条聊天记录时间的检查，避免频繁行动
+              // 如果当前有任何主对话正在生成，禁止后台角色插队发起请求
+              if (window.activeGeneratingChats && Object.keys(window.activeGeneratingChats).length > 0) {
+                return;
+              }
               const lastMessage = chat.history.slice(-1)[0];
-              if (lastMessage) {
-                const timeSinceLastMessage = lastMessage
-                  ? Date.now() - lastMessage.timestamp
-                  : Infinity;
+              const lastActiveTs = Math.max(lastMessage ? (lastMessage.timestamp || 0) : 0, chat._lastBgAttemptTs || 0);
+              if (lastActiveTs > 0) {
+                const timeSinceLastMessage = Date.now() - lastActiveTs;
                 const minInterval =
                   (state.globalSettings.backgroundActivityInterval || 10) *
                   1000;
                 if (timeSinceLastMessage < minInterval) {
-                  console.log(
-                    `角色 "${chat.name}" 距离上次消息发送时间不足，跳过本次行动。`,
-                  );
-                  return; // 跳过本次行动
+                  return;
                 }
               }
 
-              // 如果这个角色设置了频率，并且随机数小于它的行动概率，就触发行动
               if (probability && Math.random() < probability) {
-                console.log(
-                  `角色 "${chat.name}" (频率: ${frequency}) 被唤醒，准备独立行动...`,
-                );
+                chat._lastBgAttemptTs = Date.now();
                 triggerInactiveAiAction(chat.id);
               }
               // 如果没有设置频率，或者随机数没达到概率，就不会行动。
@@ -68858,23 +69029,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const bgSettings = chat.settings.backgroundActivity;
             // 检查1：该群聊自己的开关是否开启
             if (bgSettings && bgSettings.enabled) {
+              if (window.activeGeneratingChats && Object.keys(window.activeGeneratingChats).length > 0) {
+                return;
+              }
+              if (String(chat.id) === String(state.activeChatId)) {
+                return;
+              }
               const now = Date.now();
-
-              // 检查2：使用该群聊自己设置的间隔期
               const intervalMs = (bgSettings.interval || 120) * 1000;
-              //const lastActivity = bgSettings.lastActivityTimestamp || 0;
-
-              // updated by lrq 251028
-              // 使用当前群聊最后一条消息时间作为最后活动时间
               const lastMessage = chat.history.slice(-1)[0];
-              const lastActivity = lastMessage ? lastMessage.timestamp : 0;
+              const lastActivity = Math.max(
+                lastMessage ? (lastMessage.timestamp || 0) : 0,
+                bgSettings.lastActivityTimestamp || 0,
+                chat._lastBgAttemptTs || 0
+              );
 
-              // 检查3：是否到达了该群聊的行动时间
               if (now - lastActivity > intervalMs) {
-                console.log(
-                  `群聊 "${chat.name}" 到达行动时间 (间隔: ${bgSettings.interval}秒)，准备触发后台互动...`,
-                );
-                // 触发群聊专属的后台行动函数
+                chat._lastBgAttemptTs = now;
+                bgSettings.lastActivityTimestamp = now;
                 triggerGroupAiAction(chat.id);
               }
             }

@@ -1135,18 +1135,28 @@ try {
 
 // In-memory task store for non-streaming AI requests so mobile tab switches or connection drops never lose a completed response or trigger duplicate upstream requests
 const proxyTasks = new Map();
+const inFlightProxyFingerprints = new Map();
 
 function cleanupOldProxyTasks() {
   const now = Date.now();
   for (const [id, task] of proxyTasks.entries()) {
-    const maxAge = task.status === 'pending' ? 660000 : 300000;
+    const maxAge = task.status === 'pending' ? 900000 : 300000;
     if (now - task.createdAt > maxAge) {
       proxyTasks.delete(id);
+      if (task.fingerprint && inFlightProxyFingerprints.get(task.fingerprint) === task) {
+        inFlightProxyFingerprints.delete(task.fingerprint);
+      }
     }
   }
-  if (proxyTasks.size > 30) {
+  if (proxyTasks.size > 50) {
     const oldestKey = proxyTasks.keys().next().value;
-    if (oldestKey) proxyTasks.delete(oldestKey);
+    if (oldestKey) {
+      const oldTask = proxyTasks.get(oldestKey);
+      if (oldTask && oldTask.fingerprint && inFlightProxyFingerprints.get(oldTask.fingerprint) === oldTask) {
+        inFlightProxyFingerprints.delete(oldTask.fingerprint);
+      }
+      proxyTasks.delete(oldestKey);
+    }
   }
 }
 
@@ -1162,7 +1172,7 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
         httpStatus: 400,
         contentType: 'application/json',
         bodyText: JSON.stringify({ error: { message: 'Invalid URL: ' + urlErr.message } }),
-        isNetFail: true,
+        isNetFail: false,
         elapsedMs: Date.now() - startTs
       });
     }
@@ -1171,13 +1181,25 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
     const transport = isHttps ? https : http;
     const reqHeaders = { ...headers };
     delete reqHeaders['host'];
+    delete reqHeaders['Host'];
     delete reqHeaders['origin'];
+    delete reqHeaders['Origin'];
     delete reqHeaders['referer'];
+    delete reqHeaders['Referer'];
     delete reqHeaders['content-length'];
     delete reqHeaders['Content-Length'];
+    delete reqHeaders['connection'];
+    delete reqHeaders['Connection'];
+    if (!reqHeaders['user-agent'] && !reqHeaders['User-Agent']) {
+      reqHeaders['User-Agent'] = 'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
+    }
     if (!reqHeaders['accept-encoding'] && !reqHeaders['Accept-Encoding']) {
       reqHeaders['Accept-Encoding'] = 'gzip, deflate, br';
     }
+    if (!reqHeaders['accept'] && !reqHeaders['Accept']) {
+      reqHeaders['Accept'] = 'application/json, text/plain, */*';
+    }
+    reqHeaders['Connection'] = 'keep-alive';
     if (bodyBuffer && bodyBuffer.length > 0) {
       reqHeaders['Content-Length'] = Buffer.byteLength(bodyBuffer);
     }
@@ -1189,6 +1211,7 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
       path: parsedUrl.pathname + parsedUrl.search,
       method: method || 'POST',
       headers: reqHeaders,
+      agent: false,
       timeout: timeoutMs
     };
 
@@ -1245,7 +1268,7 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
           httpStatus: statusCode || 502,
           contentType: String(upRes.headers['content-type'] || 'application/json'),
           bodyText: partialText || JSON.stringify({ error: { message: resErr.message || 'Upstream response stream error' } }),
-          isNetFail: partialText.length === 0,
+          isNetFail: false,
           elapsedMs: Date.now() - startTs
         });
       });
@@ -1269,7 +1292,7 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
         httpStatus: 502,
         contentType: 'application/json',
         bodyText: JSON.stringify({ error: { message: reqErr.message || 'Upstream connection failed' } }),
-        isNetFail: elapsed < 15000,
+        isNetFail: false,
         errorMessage: reqErr.message || 'Upstream connection failed',
         elapsedMs: elapsed
       });
@@ -1298,14 +1321,14 @@ app.get('/api/proxy-task/:taskId', (req, res) => {
   const result = task.result;
   setTimeout(() => {
     proxyTasks.delete(taskId);
-  }, 30000);
+  }, 120000);
   return res.json({
     status: 'done',
     ok: result.ok,
     httpStatus: result.httpStatus,
     contentType: result.contentType,
     bodyText: result.bodyText,
-    isNetFail: result.isNetFail,
+    isNetFail: false,
     errorMessage: result.errorMessage || '',
     elapsedMs: result.elapsedMs || 0
   });
@@ -1350,6 +1373,11 @@ app.post('/api/proxy', async (req, res) => {
       return res.status(400).json({ error: 'Missing target url' });
     }
 
+    const forwardHeaders = { ...headers };
+    if (!forwardHeaders['User-Agent'] && !forwardHeaders['user-agent'] && req.headers['user-agent']) {
+      forwardHeaders['User-Agent'] = req.headers['user-agent'];
+    }
+
     // Non-streaming requests with taskId or keepAliveHeartbeat use native http/https + proxyTasks so 255s+ responses never get dropped or duplicated
     if (keepAliveHeartbeat || taskId) {
       res.status(200);
@@ -1362,7 +1390,7 @@ app.post('/api/proxy', async (req, res) => {
       }
       if (keepAliveHeartbeat) {
         heartbeatStarted = true;
-        // Send 2KB whitespace chunk immediately and every 5s to force cloud proxy / mobile network buffer flush
+        // Send 2KB whitespace chunk immediately and every 3s to force cloud proxy / mobile network buffer flush
         const heartbeatChunk = ' '.repeat(2048) + '\n';
         try {
           res.write(heartbeatChunk);
@@ -1373,29 +1401,47 @@ app.post('/api/proxy', async (req, res) => {
               res.write(heartbeatChunk);
             }
           } catch (_) {}
-        }, 5000);
+        }, 3000);
       }
 
+      const bodyStr = (body !== undefined && method !== 'GET' && method !== 'HEAD')
+        ? (typeof body === 'object' ? JSON.stringify(body) : String(body))
+        : '';
+      const fingerprint = method === 'POST' && bodyStr ? (url + '|' + method + '|' + bodyStr) : '';
+
       let taskEntry = taskId ? proxyTasks.get(taskId) : null;
-      if (!taskEntry) {
-        let bodyBuffer = null;
-        if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
-          const bodyStr = typeof body === 'object' ? JSON.stringify(body) : String(body);
-          bodyBuffer = Buffer.from(bodyStr, 'utf-8');
+      if (!taskEntry && fingerprint) {
+        const existingInFlight = inFlightProxyFingerprints.get(fingerprint);
+        if (existingInFlight && existingInFlight.status === 'pending' && (Date.now() - existingInFlight.createdAt < 300000)) {
+          taskEntry = existingInFlight;
+          if (taskId) {
+            proxyTasks.set(taskId, taskEntry);
+          }
         }
-        const upstreamPromise = performNativeUpstreamRequest(url, method, headers, bodyBuffer, 900000);
+      }
+
+      if (!taskEntry) {
+        const bodyBuffer = bodyStr ? Buffer.from(bodyStr, 'utf-8') : null;
+        const upstreamPromise = performNativeUpstreamRequest(url, method, forwardHeaders, bodyBuffer, 900000);
         taskEntry = {
           status: 'pending',
           createdAt: Date.now(),
+          fingerprint,
           result: null,
           promise: upstreamPromise
         };
         if (taskId) {
           proxyTasks.set(taskId, taskEntry);
         }
+        if (fingerprint) {
+          inFlightProxyFingerprints.set(fingerprint, taskEntry);
+        }
         upstreamPromise.then((result) => {
           taskEntry.status = 'done';
           taskEntry.result = result;
+          if (fingerprint && inFlightProxyFingerprints.get(fingerprint) === taskEntry) {
+            inFlightProxyFingerprints.delete(fingerprint);
+          }
         });
       }
 
@@ -1409,7 +1455,7 @@ app.post('/api/proxy', async (req, res) => {
       if (!result.ok) {
         const errPayload = {
           _proxy_error: true,
-          _proxy_net_fail: Boolean(result.isNetFail),
+          _proxy_net_fail: false,
           _proxy_status: result.httpStatus || 502,
           _proxy_elapsed_ms: result.elapsedMs || 0,
           error: {
@@ -1425,7 +1471,7 @@ app.post('/api/proxy', async (req, res) => {
       if (taskId) {
         setTimeout(() => {
           proxyTasks.delete(taskId);
-        }, 30000);
+        }, 120000);
       }
       res.write(result.bodyText);
       return res.end();
