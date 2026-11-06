@@ -1397,18 +1397,6 @@ code, pre {
         }
       }
       tavernEventListeners[evt].push(cb);
-      if (evt === TAVERN_EVENT_TYPES.APP_READY && window.SillyTavern && !cb._appReadyAutoFired) {
-        cb._appReadyAutoFired = true;
-        setTimeout(() => {
-          try {
-            if (!cb._ownerCardId || cb._ownerCardId === tavernState.activeCardId) {
-              cb();
-            }
-          } catch (err) {
-            console.error('APP_READY listener error:', err);
-          }
-        }, 30);
-      }
     },
     makeFirst(evt, cb) {
       if (!evt || typeof cb !== 'function') return;
@@ -1423,23 +1411,10 @@ code, pre {
     },
     once(evt, cb) {
       if (!evt || typeof cb !== 'function') return;
-      if (evt === TAVERN_EVENT_TYPES.APP_READY && window.SillyTavern) {
-        setTimeout(() => {
-          try {
-            if (!cb._ownerCardId || cb._ownerCardId === tavernState.activeCardId) {
-              cb();
-            }
-          } catch (err) {
-            console.error('APP_READY once listener error:', err);
-          }
-        }, 30);
-        return;
-      }
       const wrapper = async (...args) => {
         tavernEventSource.off(evt, wrapper);
         return await cb(...args);
       };
-      if (cb._ownerCardId) wrapper._ownerCardId = cb._ownerCardId;
       tavernEventSource.on(evt, wrapper);
     },
     removeListener(evt, cb) {
@@ -1452,14 +1427,6 @@ code, pre {
         if (fn === cb) return false;
         if (cbStr.length > 35 && String(fn.toString ? fn.toString() : '').trim() === cbStr) return false;
         return true;
-      });
-    },
-    clearCardListeners(cardId) {
-      if (!cardId) return;
-      Object.keys(tavernEventListeners).forEach(evt => {
-        if (Array.isArray(tavernEventListeners[evt])) {
-          tavernEventListeners[evt] = tavernEventListeners[evt].filter(fn => !fn || !fn._ownerCardId || fn._ownerCardId === cardId);
-        }
       });
     },
     async emit(evt, ...args) {
@@ -1712,12 +1679,6 @@ code, pre {
     }
     if (!persistentExtSettingsEl.parentNode) holdingArea.appendChild(persistentExtSettingsEl);
     if (!persistentExtSettings2El.parentNode) holdingArea.appendChild(persistentExtSettings2El);
-    if (!document.getElementById('qr_container')) {
-      const qrCont = document.createElement('div');
-      qrCont.id = 'qr_container';
-      qrCont.className = 'extension_container';
-      persistentExtSettingsEl.appendChild(qrCont);
-    }
 
     let themeSelectEl = document.getElementById('themes');
     if (!themeSelectEl) {
@@ -2514,9 +2475,6 @@ code, pre {
         _isTavernJq: true,
         elements: arr,
         length: arr.length,
-        [Symbol.iterator]() {
-          return arr[Symbol.iterator]();
-        },
         get(idx) { return idx === undefined ? arr : arr[idx]; },
         eq(idx) { return wrapElements(arr[idx] ? [arr[idx]] : []); },
         first() { return wrapElements(arr[0] ? [arr[0]] : []); },
@@ -2968,231 +2926,6 @@ code, pre {
               el.dispatchEvent(new CustomEvent(evtName, { bubbles: true, cancelable: true }));
             } catch (_) {}
           });
-          return api;
-        },
-        position() {
-          const el = arr[0];
-          if (!el || typeof el.getBoundingClientRect !== 'function') return { top: 0, left: 0 };
-          return {
-            top: Number(el.offsetTop) || 0,
-            left: Number(el.offsetLeft) || 0
-          };
-        },
-        offset(coords) {
-          const el = arr[0];
-          if (coords === undefined) {
-            if (!el || typeof el.getBoundingClientRect !== 'function') return { top: 0, left: 0 };
-            const rect = el.getBoundingClientRect();
-            return {
-              top: rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0),
-              left: rect.left + (window.pageXOffset || document.documentElement.scrollLeft || 0)
-            };
-          }
-          if (coords && typeof coords === 'object') {
-            arr.forEach(node => {
-              if (!node || !node.style) return;
-              if (coords.top !== undefined) node.style.top = typeof coords.top === 'number' ? `${coords.top}px` : String(coords.top);
-              if (coords.left !== undefined) node.style.left = typeof coords.left === 'number' ? `${coords.left}px` : String(coords.left);
-            });
-          }
-          return api;
-        },
-        width(val) {
-          if (val === undefined) {
-            const el = arr[0];
-            if (!el) return 0;
-            if (el === window) return window.innerWidth || 0;
-            if (el === document) return document.documentElement.clientWidth || 0;
-            return el.getBoundingClientRect ? el.getBoundingClientRect().width : (el.offsetWidth || 0);
-          }
-          arr.forEach(el => {
-            if (el && el.style) el.style.width = typeof val === 'number' ? `${val}px` : String(val);
-          });
-          return api;
-        },
-        height(val) {
-          if (val === undefined) {
-            const el = arr[0];
-            if (!el) return 0;
-            if (el === window) return window.innerHeight || 0;
-            if (el === document) return document.documentElement.clientHeight || 0;
-            return el.getBoundingClientRect ? el.getBoundingClientRect().height : (el.offsetHeight || 0);
-          }
-          arr.forEach(el => {
-            if (el && el.style) el.style.height = typeof val === 'number' ? `${val}px` : String(val);
-          });
-          return api;
-        },
-        innerWidth() {
-          const el = arr[0];
-          if (!el) return 0;
-          if (el === window) return window.innerWidth || 0;
-          return el.clientWidth || (el.getBoundingClientRect ? el.getBoundingClientRect().width : 0);
-        },
-        innerHeight() {
-          const el = arr[0];
-          if (!el) return 0;
-          if (el === window) return window.innerHeight || 0;
-          return el.clientHeight || (el.getBoundingClientRect ? el.getBoundingClientRect().height : 0);
-        },
-        outerWidth(includeMargin) {
-          const el = arr[0];
-          if (!el) return 0;
-          if (el === window) return window.innerWidth || 0;
-          const base = el.offsetWidth || (el.getBoundingClientRect ? el.getBoundingClientRect().width : 0);
-          if (!includeMargin || typeof window.getComputedStyle !== 'function') return base;
-          const cs = window.getComputedStyle(el);
-          return base + (parseFloat(cs.marginLeft) || 0) + (parseFloat(cs.marginRight) || 0);
-        },
-        outerHeight(includeMargin) {
-          const el = arr[0];
-          if (!el) return 0;
-          if (el === window) return window.innerHeight || 0;
-          const base = el.offsetHeight || (el.getBoundingClientRect ? el.getBoundingClientRect().height : 0);
-          if (!includeMargin || typeof window.getComputedStyle !== 'function') return base;
-          const cs = window.getComputedStyle(el);
-          return base + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
-        },
-        scrollTop(val) {
-          if (val === undefined) {
-            const el = arr[0];
-            if (!el) return 0;
-            if (el === window || el === document) return window.pageYOffset || document.documentElement.scrollTop || 0;
-            return el.scrollTop || 0;
-          }
-          arr.forEach(el => {
-            if (!el) return;
-            if (el === window || el === document) window.scrollTo(window.pageXOffset || 0, Number(val) || 0);
-            else el.scrollTop = Number(val) || 0;
-          });
-          return api;
-        },
-        scrollLeft(val) {
-          if (val === undefined) {
-            const el = arr[0];
-            if (!el) return 0;
-            if (el === window || el === document) return window.pageXOffset || document.documentElement.scrollLeft || 0;
-            return el.scrollLeft || 0;
-          }
-          arr.forEach(el => {
-            if (!el) return;
-            if (el === window || el === document) window.scrollTo(Number(val) || 0, window.pageYOffset || 0);
-            else el.scrollLeft = Number(val) || 0;
-          });
-          return api;
-        },
-        data(key, val) {
-          const el = arr[0];
-          if (key === undefined) {
-            if (!el) return {};
-            return Object.assign({}, el.dataset || {}, el._tavernJqData || {});
-          }
-          if (typeof key === 'object' && key !== null) {
-            arr.forEach(node => {
-              if (!node) return;
-              if (!node._tavernJqData) node._tavernJqData = {};
-              Object.assign(node._tavernJqData, key);
-            });
-            return api;
-          }
-          const camelKey = String(key).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-          if (val === undefined) {
-            if (!el) return undefined;
-            if (el._tavernJqData && camelKey in el._tavernJqData) return el._tavernJqData[camelKey];
-            if (el._tavernJqData && key in el._tavernJqData) return el._tavernJqData[key];
-            if (el.dataset && camelKey in el.dataset) return el.dataset[camelKey];
-            return el.getAttribute ? el.getAttribute('data-' + key) : undefined;
-          }
-          arr.forEach(node => {
-            if (!node) return;
-            if (!node._tavernJqData) node._tavernJqData = {};
-            node._tavernJqData[camelKey] = val;
-            node._tavernJqData[key] = val;
-          });
-          return api;
-        },
-        removeData(key) {
-          arr.forEach(node => {
-            if (!node || !node._tavernJqData) return;
-            if (key === undefined) {
-              node._tavernJqData = {};
-            } else {
-              const camelKey = String(key).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-              delete node._tavernJqData[camelKey];
-              delete node._tavernJqData[key];
-            }
-          });
-          return api;
-        },
-        index(sel) {
-          const el = arr[0];
-          if (!el || !el.parentElement) return -1;
-          if (!sel) return Array.from(el.parentElement.children).indexOf(el);
-          if (typeof sel === 'string') return resolveSelectorElements(sel).indexOf(el);
-          const target = sel && sel._isTavernJq ? sel.get(0) : sel;
-          return arr.indexOf(target);
-        },
-        next(sel) {
-          const out = [];
-          arr.forEach(el => {
-            const nxt = el && el.nextElementSibling;
-            if (nxt && (!sel || (nxt.matches && nxt.matches(sel)))) out.push(nxt);
-          });
-          return wrapElements(out);
-        },
-        prev(sel) {
-          const out = [];
-          arr.forEach(el => {
-            const prv = el && el.previousElementSibling;
-            if (prv && (!sel || (prv.matches && prv.matches(sel)))) out.push(prv);
-          });
-          return wrapElements(out);
-        },
-        parents(sel) {
-          const out = [];
-          arr.forEach(el => {
-            let cur = el && el.parentElement;
-            while (cur) {
-              if (!sel || (cur.matches && cur.matches(sel))) {
-                if (!out.includes(cur)) out.push(cur);
-              }
-              cur = cur.parentElement;
-            }
-          });
-          return wrapElements(out);
-        },
-        hover(fnOver, fnOut) {
-          if (typeof fnOver === 'function') api.on('mouseenter', fnOver);
-          if (typeof fnOut === 'function') api.on('mouseleave', fnOut);
-          else if (typeof fnOver === 'function') api.on('mouseleave', fnOver);
-          return api;
-        },
-        one(evtStr, selOrFn, maybeFn) {
-          const fn = typeof selOrFn === 'function' ? selOrFn : maybeFn;
-          if (typeof fn !== 'function') return api;
-          const wrapper = function (ev) {
-            api.off(evtStr, wrapper);
-            return fn.call(this, ev);
-          };
-          return typeof selOrFn === 'string' ? api.on(evtStr, selOrFn, wrapper) : api.on(evtStr, wrapper);
-        },
-        stop() { return api; },
-        slideUp(dur, cb) {
-          api.hide();
-          const fn = typeof dur === 'function' ? dur : cb;
-          if (typeof fn === 'function') fn.call(arr[0]);
-          return api;
-        },
-        slideDown(dur, cb) {
-          api.show();
-          const fn = typeof dur === 'function' ? dur : cb;
-          if (typeof fn === 'function') fn.call(arr[0]);
-          return api;
-        },
-        slideToggle(dur, cb) {
-          api.toggle();
-          const fn = typeof dur === 'function' ? dur : cb;
-          if (typeof fn === 'function') fn.call(arr[0]);
           return api;
         },
         toArray() {
@@ -3876,15 +3609,6 @@ code, pre {
       characterId: card ? String(cardIdx >= 0 ? cardIdx : 0) : null,
       groupId: null,
       groups: [],
-      selected_group: null,
-      getGroupMembers: () => [],
-      getCharaFilename: (chid) => {
-        const c = (chid !== undefined && tavernState.cards && tavernState.cards[chid]) ? tavernState.cards[chid] : getActiveCard();
-        return c ? String(c.id || c.name || 'default') : 'default';
-      },
-      copyText: async (txt) => {
-        try { if (navigator.clipboard) await navigator.clipboard.writeText(String(txt ?? '')); } catch (_) {}
-      },
       name1: getUserDisplayName(),
       name2: card ? card.name : '角色',
       mainApi: 'openai',
@@ -4383,43 +4107,6 @@ code, pre {
     return false;
   }
 
-  async function recoverTavernProxyTaskResult(taskId, signal) {
-    if (!taskId) return null;
-    const rawFetch = getTavernRawFetch();
-    const startPollTs = Date.now();
-    let notFoundCount = 0;
-    while (Date.now() - startPollTs < 900000) {
-      if (signal && signal.aborted) {
-        const abortErr = new Error('Aborted');
-        abortErr.name = 'AbortError';
-        throw abortErr;
-      }
-      if (typeof window.ensureBackgroundKeepAlive === 'function') {
-        try { window.ensureBackgroundKeepAlive(); } catch (_) {}
-      }
-      try {
-        const pollRes = await rawFetch('/api/proxy-task/' + encodeURIComponent(taskId), {
-          method: 'GET',
-          headers: { 'Cache-Control': 'no-cache' },
-          signal
-        });
-        if (pollRes.status === 404) {
-          notFoundCount++;
-          if (notFoundCount >= 3) return null;
-        } else if (pollRes.ok) {
-          const data = await pollRes.json();
-          if (data && data.status === 'done') {
-            return data;
-          }
-        }
-      } catch (pollErr) {
-        if (pollErr && pollErr.name === 'AbortError') throw pollErr;
-      }
-      await (typeof window.waitDelay === 'function' ? window.waitDelay(2000) : new Promise(r => setTimeout(r, 2000)));
-    }
-    return null;
-  }
-
   async function readTavernNonStreamBodySafely(resObj, onChunkProgress) {
     const readSingleRes = async (targetRes) => {
       let accText = '';
@@ -4474,18 +4161,6 @@ code, pre {
     let { accText, readErrCaught } = await readSingleRes(resObj);
     let stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
 
-    if ((!stripped || readErrCaught) && resObj && resObj._proxyTaskId) {
-      const recovered = await recoverTavernProxyTaskResult(resObj._proxyTaskId, resObj._callerSignal);
-      if (recovered && recovered.status === 'done') {
-        if (!recovered.ok) {
-          throw new Error('API请求失败 HTTP ' + (recovered.httpStatus || 502) + ': ' + String(recovered.bodyText || recovered.errorMessage || '').slice(0, 200));
-        }
-        accText = String(recovered.bodyText || '');
-        stripped = accText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
-        readErrCaught = null;
-      }
-    }
-
     if (resObj && resObj._usedProxyHeartbeat && stripped.startsWith('{')) {
       let proxyErrObj = null;
       try {
@@ -4496,17 +4171,29 @@ code, pre {
       } catch (_) {}
 
       if (proxyErrObj) {
-        const upStatus = Number(proxyErrObj._proxy_status) || 502;
-        let detail = proxyErrObj.error?.message || proxyErrObj.message || ('HTTP ' + upStatus);
-        try {
-          const innerJson = JSON.parse(detail);
-          if (innerJson && innerJson.error) {
-            detail = innerJson.error.message || innerJson.error.code || JSON.stringify(innerJson.error);
-          } else if (innerJson && innerJson.message) {
-            detail = innerJson.message;
+        if (proxyErrObj._proxy_net_fail && typeof resObj._directFallbackFn === 'function') {
+          const directRes = await resObj._directFallbackFn();
+          if (!directRes.ok) {
+            const errTxt = await directRes.text().catch(() => '');
+            throw new Error('API请求失败 HTTP ' + directRes.status + ': ' + (errTxt.slice(0, 200) || directRes.statusText));
           }
-        } catch (_) {}
-        throw new Error('API请求失败 HTTP ' + upStatus + ': ' + String(detail).slice(0, 200));
+          const directRead = await readSingleRes(directRes);
+          accText = directRead.accText;
+          readErrCaught = directRead.readErrCaught;
+          stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
+        } else {
+          const upStatus = Number(proxyErrObj._proxy_status) || 502;
+          let detail = proxyErrObj.error?.message || proxyErrObj.message || ('HTTP ' + upStatus);
+          try {
+            const innerJson = JSON.parse(detail);
+            if (innerJson && innerJson.error) {
+              detail = innerJson.error.message || innerJson.error.code || JSON.stringify(innerJson.error);
+            } else if (innerJson && innerJson.message) {
+              detail = innerJson.message;
+            }
+          } catch (_) {}
+          throw new Error('API请求失败 HTTP ' + upStatus + ': ' + String(detail).slice(0, 200));
+        }
       }
     }
 
@@ -4533,15 +4220,26 @@ code, pre {
       } catch (_) {}
     }
 
-    const doDirectSingleFetch = async () => {
-      if (typeof window.ensureBackgroundKeepAlive === 'function') {
-        try { window.ensureBackgroundKeepAlive(null, true); } catch (_) {}
+    const doDirectFetchWithRetry = async () => {
+      let lastErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (typeof window.ensureBackgroundKeepAlive === 'function') {
+            try { window.ensureBackgroundKeepAlive(null, true); } catch (_) {}
+          }
+          return await rawFetch(url, options);
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw err;
+          lastErr = err;
+          if (attempt === 0) {
+            await (typeof window.waitDelay === 'function' ? window.waitDelay(500) : new Promise(r => setTimeout(r, 500)));
+          }
+        }
       }
-      return await rawFetch(url, options);
+      throw lastErr || new Error('Failed to fetch');
     };
 
     if (method === 'POST' && !isStreamReq) {
-      const taskId = 'tv_task_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
       try {
         const proxyRes = await rawFetch('/api/proxy', {
           method: 'POST',
@@ -4551,41 +4249,44 @@ code, pre {
             method: 'POST',
             headers: options.headers || {},
             body: parsedBody !== undefined ? parsedBody : options.body,
-            keepAliveHeartbeat: true,
-            taskId
+            keepAliveHeartbeat: true
           }),
           signal: options.signal
         });
         if (proxyRes && proxyRes.ok) {
           proxyRes._usedProxyHeartbeat = true;
-          proxyRes._proxyTaskId = taskId;
-          proxyRes._callerSignal = options.signal;
-          return proxyRes;
-        }
-        if (proxyRes && (proxyRes.status === 404 || proxyRes.status === 405)) {
-          return await doDirectSingleFetch();
-        }
-        if (proxyRes) {
+          proxyRes._directFallbackFn = doDirectFetchWithRetry;
           return proxyRes;
         }
       } catch (proxyErr) {
         if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
-        const recovered = await recoverTavernProxyTaskResult(taskId, options.signal);
-        if (recovered && recovered.status === 'done') {
-          return new Response(String(recovered.bodyText || ''), {
-            status: recovered.ok ? (recovered.httpStatus || 200) : (recovered.httpStatus || 502),
-            headers: { 'Content-Type': recovered.contentType || 'application/json' }
-          });
-        }
-        throw proxyErr;
       }
+      return await doDirectFetchWithRetry();
     }
 
     if (method === 'POST' && isStreamReq) {
-      return await doDirectSingleFetch();
+      try {
+        return await doDirectFetchWithRetry();
+      } catch (directStreamErr) {
+        if (directStreamErr && directStreamErr.name === 'AbortError') throw directStreamErr;
+        const proxyStreamRes = await rawFetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url,
+            method: 'POST',
+            headers: options.headers || {},
+            body: parsedBody !== undefined ? parsedBody : options.body,
+            keepAliveHeartbeat: false
+          }),
+          signal: options.signal
+        });
+        if (proxyStreamRes) return proxyStreamRes;
+        throw directStreamErr;
+      }
     }
 
-    return await doDirectSingleFetch();
+    return await doDirectFetchWithRetry();
   }
 
   function setupSillyTavernGlobalBridge() {
@@ -5302,41 +5003,7 @@ code, pre {
     window.event_types = TAVERN_EVENT_TYPES;
     window.eventTypes = TAVERN_EVENT_TYPES;
     window.extension_prompt_types = TAVERN_EXT_PROMPT_TYPES;
-    const getLiveExtensionSettings = () => {
-      if (!tavernState.extensionSettings || typeof tavernState.extensionSettings !== 'object') {
-        tavernState.extensionSettings = {};
-      }
-      if (!Array.isArray(tavernState.extensionSettings.regex)) {
-        tavernState.extensionSettings.regex = [];
-      }
-      if (!Array.isArray(tavernState.extensionSettings.character_allowed_regex)) {
-        tavernState.extensionSettings.character_allowed_regex = [];
-      }
-      if (!tavernState.extensionSettings.variables || typeof tavernState.extensionSettings.variables !== 'object') {
-        tavernState.extensionSettings.variables = { global: getGlobalVariablesStore() };
-      } else if (!tavernState.extensionSettings.variables.global || typeof tavernState.extensionSettings.variables.global !== 'object') {
-        tavernState.extensionSettings.variables.global = getGlobalVariablesStore();
-      }
-      return tavernState.extensionSettings;
-    };
-    Object.defineProperty(window, 'extension_settings', {
-      configurable: true,
-      get: getLiveExtensionSettings,
-      set: (val) => {
-        if (val && typeof val === 'object') {
-          tavernState.extensionSettings = val;
-        }
-      }
-    });
-    Object.defineProperty(window, 'extensionSettings', {
-      configurable: true,
-      get: getLiveExtensionSettings,
-      set: (val) => {
-        if (val && typeof val === 'object') {
-          tavernState.extensionSettings = val;
-        }
-      }
-    });
+    window.extension_settings = tavernState.extensionSettings;
     window.setExtensionPrompt = setExtensionPrompt;
     window.executeSlashCommands = executeTavernSlashCommand;
     window.executeSlashCommandsWithOptions = executeTavernSlashCommand;
@@ -5358,33 +5025,6 @@ code, pre {
     window.generateQuietPrompt = async (quietPrompt) => {
       const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }], null, { isBackground: true });
       return res.content;
-    };
-    window.reloadIframe = () => {
-      try {
-        renderTavernChatFloors(true);
-      } catch (_) {}
-    };
-    window.Logger = {
-      info: (...args) => console.log('[Plugin]', ...args),
-      warn: (...args) => console.warn('[Plugin]', ...args),
-      error: (...args) => console.error('[Plugin]', ...args),
-      debug: (...args) => console.debug('[Plugin]', ...args),
-      getDomStructure: (id) => {
-        try {
-          return document.getElementById(id)?.outerHTML?.slice(0, 300) || '';
-        } catch (_) {
-          return '';
-        }
-      }
-    };
-    window.LogCategory = {
-      SYSTEM: 'SYSTEM',
-      CORE: 'CORE',
-      UI: 'UI',
-      EVENT: 'EVENT',
-      SETTINGS: 'SETTINGS',
-      WHITELIST: 'WHITELIST',
-      UPDATE: 'UPDATE'
     };
     window.SlashCommandParser = {
       commands: {},
@@ -5457,55 +5097,6 @@ code, pre {
     window.copyText = async (txt) => {
       try { if (navigator.clipboard) await navigator.clipboard.writeText(String(txt ?? '')); } catch (_) {}
     };
-    window.groups = [];
-    window.selected_group = null;
-    window.getGroupMembers = () => [];
-    if (!window.EjsTemplate) {
-      window.EjsTemplate = {
-        getFeatures: () => Object.assign({
-          enabled: true,
-          generate_enabled: true,
-          render_enabled: true,
-          generate_loader_enabled: true,
-          filter_message_enabled: true,
-          raw_message_evaluation_enabled: false,
-          preload_world_info_enabled: true,
-          with_context_disabled: false,
-          debug_enabled: false,
-          sandbox_mode: false,
-          autosave_enabled: true
-        }, getLiveExtensionSettings().EjsTemplate || {}),
-        setFeatures: (features = {}) => {
-          const s = getLiveExtensionSettings();
-          s.EjsTemplate = Object.assign(s.EjsTemplate || {}, features);
-          saveTavernStore();
-          return s.EjsTemplate;
-        },
-        resetFeatures: () => {
-          const s = getLiveExtensionSettings();
-          s.EjsTemplate = {};
-          saveTavernStore();
-          return s.EjsTemplate;
-        },
-        evalTemplate: async (tmpl, ctx = {}, opts = {}) => String(tmpl ?? ''),
-        prepareContext: async (extra = {}, endFloor = -1) => Object.assign({
-          variables: getChatVariablesStore(),
-          global_variables: getGlobalVariablesStore(),
-          charName: getActiveCard()?.name || '角色',
-          userName: getUserDisplayName()
-        }, extra),
-        allVariables: (endFloor = -1) => Object.assign({}, getGlobalVariablesStore(), getChatVariablesStore()),
-        saveVariables: async (vars = {}) => {
-          Object.assign(getChatVariablesStore(), vars);
-          await saveTavernStore();
-        },
-        refreshWorldInfo: async () => {},
-        parseJSON: (text) => {
-          try { return JSON.parse(text); } catch (_) { return {}; }
-        },
-        jsonPatch: (obj, ops) => obj
-      };
-    }
     window.parseRegexFromString = parseFindRegexString;
     window.getRegexedString = (rawStr, placement, options = {}) => applyTavernRegexPipeline(String(rawStr ?? ''), {
       isUser: placement === 1,
@@ -5531,263 +5122,11 @@ code, pre {
       parse: (str) => parseSimpleYamlOrJsonInitVars(str) || {},
       stringify: (obj) => { try { return JSON.stringify(obj, null, 2); } catch (_) { return ''; } },
       load: (str) => parseSimpleYamlOrJsonInitVars(str) || {},
-      dump: (obj) => { try { return JSON.stringify(obj, null, 2); } catch (_) { return ''; } },
-      parseDocument: (str) => {
-        const parsed = parseSimpleYamlOrJsonInitVars(str) || {};
-        return {
-          getIn: (pathArr) => Array.isArray(pathArr) ? pathArr.reduce((acc, k) => (acc && typeof acc === 'object' ? acc[k] : undefined), parsed) : undefined,
-          setIn: (pathArr, val) => {
-            if (!Array.isArray(pathArr) || !pathArr.length) return;
-            let cur = parsed;
-            for (let i = 0; i < pathArr.length - 1; i++) {
-              const k = pathArr[i];
-              if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
-              cur = cur[k];
-            }
-            cur[pathArr[pathArr.length - 1]] = val;
-          },
-          toJSON: () => parsed,
-          toString: () => { try { return JSON.stringify(parsed, null, 2); } catch (_) { return String(str || ''); } }
-        };
-      }
-    };
-    window.addCopyToCodeBlocks = () => {};
-    window.appendMediaToMessage = () => {};
-    window.updateReasoningUI = () => {};
-    window.substituteParams = (str) => replaceTavernMacros(String(str ?? ''), getActiveCard());
-    window.substituteParamsExtended = (str) => replaceTavernMacros(String(str ?? ''), getActiveCard());
-    window.messageFormatting = (mes, ch_name, is_system, is_user, message_id) => renderTavernMessageHtml(String(mes ?? ''), {
-      isUser: Boolean(is_user),
-      mesId: typeof message_id === 'number' ? message_id : undefined,
-      isLastFloor: true
-    });
-    window.getChatCompletionModel = () => resolveTavernApiCredentials().model || 'gpt-4o-mini';
-    window.getTokenCount = (text) => estimateTokens(String(text ?? ''));
-    window.getTokenCountAsync = async (text) => estimateTokens(String(text ?? ''));
-    window.saveChatConditional = async () => await saveTavernStore();
-    window.saveChatDebounced = () => saveTavernStore();
-    window.saveCharacterDebounced = () => saveTavernStore();
-    window.saveSettings = async () => await saveTavernStore();
-    window.saveMetadata = async () => await saveTavernStore();
-    window.updateMessageBlock = (mesId) => {
-      if (typeof mesId === 'number' && mesId >= 0) appendOrUpdateSingleFloorDom(mesId);
-    };
-    window.nai_settings = window.nai_settings || {};
-    window.world_info_case_sensitive = false;
-    window.world_info_match_whole_words = false;
-    window.world_info_max_recursion_steps = 2;
-    window.world_info_use_group_scoring = false;
-    window.world_info_include_names = true;
-    window.wi_anchor_position = { before: 0, after: 1 };
-    window.delay = (ms) => new Promise(r => setTimeout(r, Number(ms) || 0));
-    window.download = (content, fileName, contentType = 'application/octet-stream') => {
-      try {
-        const blob = content instanceof Blob ? content : new Blob([content], { type: contentType });
-        const u = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = u;
-        a.download = fileName || 'download';
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(u), 5000);
-      } catch (_) {}
-    };
-    window.ensureImageFormatSupported = async (url) => url;
-    window.getBase64Async = (file) => new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result || ''));
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-    window.getImageSizeFromDataURL = async () => ({ width: 512, height: 512 });
-    window.getSanitizedFilename = (name) => String(name || 'file').replace(/[\\/:*?"<>|]/g, '_');
-    window.getStringHash = (str) => {
-      let h = 0;
-      const s = String(str || '');
-      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-      return String(Math.abs(h));
-    };
-    window.isDataURL = (str) => /^data:/i.test(String(str || ''));
-    window.showFontAwesomePicker = async () => '';
-    window.uuidv4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = Math.random() * 16 | 0;
-      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-    window.MAX_INJECTION_DEPTH = 10000;
-    window.activateSendButtons = () => {};
-    window.deactivateSendButtons = () => {};
-    window.addOneMessage = (mes) => {
-      const sess = getActiveChatSession();
-      if (sess && Array.isArray(sess.messages) && mes) {
-        sess.messages.push(mes);
-        renderTavernChatFloors(false);
-      }
-    };
-    window.baseChatReplace = (str) => replaceTavernMacros(String(str ?? ''), getActiveCard());
-    window.cleanUpMessage = ({ mes } = {}) => String(mes ?? '');
-    window.clearChat = () => {};
-    window.countOccurrences = (str, sub) => (str && sub) ? (String(str).split(String(sub)).length - 1) : 0;
-    window.default_avatar = 'img/ai4.png';
-    window.default_user_avatar = 'img/user-default.png';
-    window.system_avatar = 'img/five.png';
-    window.deleteCharacter = async () => {};
-    window.extension_prompts = tavernState.extensionPrompts || {};
-    window.getBiasStrings = () => [];
-    window.getCharacterCardFields = () => ({
-      system: getActiveCard()?.system_prompt || '',
-      mesExamples: getActiveCard()?.mes_example || '',
-      description: getActiveCard()?.description || '',
-      personality: getActiveCard()?.personality || '',
-      persona: getActivePersona()?.description || '',
-      scenario: getActiveCard()?.scenario || '',
-      jailbreak: getActiveCard()?.post_history_instructions || '',
-      version: '1.0',
-      charDepthPrompt: '',
-      charDepthPromptDepth: 4,
-      charDepthPromptRole: 'system',
-      creatorNotes: ''
-    });
-    window.getCharacters = async () => window.characters;
-    window.getExtensionPromptRoleByName = (name) => ({ system: 0, user: 1, assistant: 2 }[String(name || '').toLowerCase()] ?? 0);
-    window.getMaxContextSize = () => Number(getActivePreset()?.openai_max_context || 64000);
-    window.getOneCharacter = async (chid) => window.characters[chid ?? window.this_chid] || getActiveCard();
-    window.getPastCharacterChats = async () => [];
-    window.isOdd = (n) => Math.abs(Number(n) % 2) === 1;
-    window.is_send_press = false;
-    window.parseMesExamples = (str) => String(str || '') ? [String(str)] : [];
-    window.printCharacters = async () => {};
-    window.printMessages = async () => renderTavernChatFloors(false);
-    window.reloadCurrentChat = async () => renderTavernChatFloors(false);
-    window.reloadMarkdownProcessor = () => {};
-    window.scrollChatToBottom = () => {};
-    window.selectCharacterById = async (idx) => {
-      const c = (tavernState.cards || [])[Number(idx)];
-      if (c) {
-        tavernState.activeCardId = c.id;
-        await saveTavernStore();
-        renderTavernShell();
-      }
-    };
-    window.setGenerationProgress = () => {};
-    window.setUserName = (n) => {
-      const p = getActivePersona();
-      if (p && n) { p.name = String(n); saveTavernStore(); }
-    };
-    window.showSwipeButtons = () => {};
-    window.stopGeneration = () => {
-      if (uiRuntime.abortController) {
-        try { uiRuntime.abortController.abort(); } catch (_) {}
-      }
-      return true;
-    };
-    window.unshallowCharacter = async (chid) => window.characters[chid ?? window.this_chid] || getActiveCard();
-    window.convertCharacterBook = (book) => book || { entries: {} };
-    window.createNewWorldInfo = async (name) => { await window.saveWorldInfo(name, { entries: {} }); return true; };
-    window.getWorldInfoSettings = () => ({
-      world_info: window.world_info,
-      world_info_depth: 4,
-      world_info_budget: 25,
-      world_info_include_names: true,
-      world_info_recursive: true,
-      world_info_overflow_alert: false,
-      world_info_case_sensitive: false,
-      world_info_match_whole_words: false,
-      world_info_character_strategy: 0,
-      world_info_budget_cap: 0,
-      world_info_max_recursion_steps: 2,
-      world_info_min_activations: 0,
-      world_info_min_activations_depth_max: 0,
-      world_info_use_group_scoring: false
-    });
-    window.newWorldInfoEntryTemplate = {
-      uid: 0, key: [], keysecondary: [], comment: '', content: '', constant: false, vectorized: false,
-      selective: true, selectiveLogic: 0, addMemo: true, order: 100, position: 0, disable: false,
-      excludeRecursion: false, preventRecursion: false, delayUntilRecursion: false, probability: 100,
-      useProbability: true, depth: 4, group: '', groupOverride: false, groupWeight: 100, scanDepth: null,
-      caseSensitive: null, matchWholeWords: null, useGroupScoring: null, automationId: '', role: null,
-      sticky: 0, cooldown: 0, delay: 0
-    };
-    window.setWorldInfoButtonClass = () => {};
-    window.extensionTypes = {};
-    window.ChatCompletion = class ChatCompletion { constructor() { this.messages = []; } };
-    window.Message = class Message { constructor(role = 'user', content = '', identifier = '') { this.role = role; this.content = content; this.identifier = identifier; } };
-    window.MessageCollection = class MessageCollection { constructor() { this.collection = []; } getChat() { return []; } };
-    window.Prompt = class Prompt { constructor(props = {}) { Object.assign(this, props); } };
-    window.PromptCollection = class PromptCollection {
-      constructor() { this.collection = []; }
-      add(p) { this.collection.push(p); }
-      has(id) { return this.collection.some(x => x && x.identifier === id); }
-      get(id) { return this.collection.find(x => x && x.identifier === id); }
-      index(id) { return this.collection.findIndex(x => x && x.identifier === id); }
-    };
-    window.getStreamingReply = async () => '';
-    window.isImageInliningSupported = () => true;
-    window.prepareOpenAIMessages = async () => [];
-    window.promptManager = getTavernPresetManager();
-    window.proxies = [];
-    window.sendOpenAIRequest = async (type, messages) => {
-      const res = await callTavernAiCompletion(Array.isArray(messages) ? messages : [], null, { isBackground: true });
-      return { choices: [{ message: { content: res.content || '' } }] };
-    };
-    window.setOpenAIMessageExamples = () => [];
-    window.setOpenAIMessages = () => [];
-    window.setupChatCompletionPromptManager = () => getTavernPresetManager();
-    window.tryParseStreamingError = () => null;
-    window.getLastMessageId = () => Math.max(0, (window.chat?.length || 1) - 1);
-    window.favsToHotswap = () => {};
-    window.isMobile = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || window.innerWidth <= 900;
-    window.flushEphemeralStoppingStrings = () => {};
-    window.persona_description_positions = { IN_PROMPT: 0, TOP_AN: 2, BOTTOM_AN: 3, AT_DEPTH: 4, NONE: -1 };
-    window.isAdmin = () => true;
-    window.NOTE_MODULE_NAME = 'authors_note';
-    window.metadata_keys = { prompt: 'note_prompt', interval: 'note_interval', depth: 'note_depth', position: 'note_position', role: 'note_role' };
-    window.shouldWIAddPrompt = () => true;
-    window.extractReasoningFromData = () => '';
-    window.getEventSourceStream = () => new TransformStream();
-    const ensureCardStV2Shape = (c) => {
-      if (!c || typeof c !== 'object') return c;
-      if (typeof c.mes_example !== 'string') c.mes_example = String(c.mesExample ?? '');
-      if (typeof c.first_mes !== 'string') c.first_mes = String(c.firstMes ?? '');
-      if (typeof c.description !== 'string') c.description = String(c.description ?? '');
-      if (typeof c.personality !== 'string') c.personality = String(c.personality ?? '');
-      if (typeof c.scenario !== 'string') c.scenario = String(c.scenario ?? '');
-      if (typeof c.creatorcomment !== 'string') c.creatorcomment = String(c.creator_notes ?? '');
-      if (typeof c.system_prompt !== 'string') c.system_prompt = String(c.systemPrompt ?? '');
-      if (typeof c.post_history_instructions !== 'string') c.post_history_instructions = String(c.jailbreak ?? '');
-      if (!Array.isArray(c.alternate_greetings)) {
-        c.alternate_greetings = Array.isArray(c.alternateGreetings) ? c.alternateGreetings : [];
-      }
-      if (!c.extensions || typeof c.extensions !== 'object') c.extensions = {};
-      if (!c.data || typeof c.data !== 'object') c.data = {};
-      if (typeof c.data.name !== 'string') c.data.name = String(c.name || '');
-      if (typeof c.data.description !== 'string') c.data.description = c.description;
-      if (typeof c.data.personality !== 'string') c.data.personality = c.personality;
-      if (typeof c.data.scenario !== 'string') c.data.scenario = c.scenario;
-      if (typeof c.data.first_mes !== 'string') c.data.first_mes = c.first_mes;
-      if (typeof c.data.mes_example !== 'string') c.data.mes_example = c.mes_example;
-      if (typeof c.data.creator_notes !== 'string') c.data.creator_notes = String(c.creator_notes ?? c.creatorcomment ?? '');
-      if (typeof c.data.system_prompt !== 'string') c.data.system_prompt = c.system_prompt;
-      if (typeof c.data.post_history_instructions !== 'string') c.data.post_history_instructions = c.post_history_instructions;
-      if (!Array.isArray(c.data.alternate_greetings)) c.data.alternate_greetings = c.alternate_greetings;
-      if (typeof c.data.creator !== 'string') c.data.creator = String(c.creator ?? '');
-      if (!c.data.extensions || typeof c.data.extensions !== 'object') c.data.extensions = c.extensions;
-      if (!c.data.depth_prompt || typeof c.data.depth_prompt !== 'object') {
-        c.data.depth_prompt = c.extensions.depth_prompt || {
-          prompt: String(c.depthPrompt || ''),
-          depth: Number(c.depthPromptDepth ?? 4),
-          role: String(c.depthPromptRole || 'system')
-        };
-      }
-      return c;
+      dump: (obj) => { try { return JSON.stringify(obj, null, 2); } catch (_) { return ''; } }
     };
     Object.defineProperty(window, 'characters', {
       configurable: true,
-      get: () => {
-        const list = tavernState.cards || [];
-        for (let i = 0; i < list.length; i++) {
-          if (list[i]) ensureCardStV2Shape(list[i]);
-        }
-        return list;
-      }
+      get: () => tavernState.cards || []
     });
     Object.defineProperty(window, 'this_chid', {
       configurable: true,
@@ -6079,293 +5418,6 @@ code, pre {
           if (k in obj) out[k] = obj[k];
         });
         return out;
-      },
-      entries: (obj) => (obj && typeof obj === 'object') ? Object.entries(obj) : [],
-      toPairs: (obj) => (obj && typeof obj === 'object') ? Object.entries(obj) : [],
-      fromPairs: (pairs) => Array.isArray(pairs) ? Object.fromEntries(pairs) : {},
-      keys: (obj) => (obj && typeof obj === 'object') ? Object.keys(obj) : [],
-      values: (obj) => (obj && typeof obj === 'object') ? Object.values(obj) : [],
-      isFunction: (v) => typeof v === 'function',
-      isUndefined: (v) => v === undefined,
-      isNull: (v) => v === null,
-      concat: (...args) => [].concat(...args),
-      mergeWith: (target, ...args) => {
-        if (!target || typeof target !== 'object') return target;
-        const customizer = typeof args[args.length - 1] === 'function' ? args.pop() : null;
-        const mergeTwo = (dst, src) => {
-          if (!src || typeof src !== 'object') return dst;
-          Object.keys(src).forEach(k => {
-            const customRes = customizer ? customizer(dst[k], src[k], k, dst, src) : undefined;
-            if (customRes !== undefined) {
-              dst[k] = customRes;
-            } else if (src[k] && typeof src[k] === 'object' && !Array.isArray(src[k]) && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) {
-              mergeTwo(dst[k], src[k]);
-            } else {
-              dst[k] = deepCloneSafe(src[k]);
-            }
-          });
-          return dst;
-        };
-        args.forEach(src => mergeTwo(target, src));
-        return target;
-      },
-      defaults: (target, ...sources) => {
-        if (!target || typeof target !== 'object') return target;
-        sources.forEach(src => {
-          if (!src || typeof src !== 'object') return;
-          Object.keys(src).forEach(k => {
-            if (target[k] === undefined) target[k] = src[k];
-          });
-        });
-        return target;
-      },
-      defaultsDeep: (target, ...sources) => {
-        if (!target || typeof target !== 'object') return target;
-        const applyDef = (dst, src) => {
-          if (!src || typeof src !== 'object') return;
-          Object.keys(src).forEach(k => {
-            if (dst[k] === undefined) {
-              dst[k] = deepCloneSafe(src[k]);
-            } else if (dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k]) && src[k] && typeof src[k] === 'object' && !Array.isArray(src[k])) {
-              applyDef(dst[k], src[k]);
-            }
-          });
-        };
-        sources.forEach(src => applyDef(target, src));
-        return target;
-      },
-      castArray: (...args) => {
-        if (!args.length) return [];
-        const v = args[0];
-        return Array.isArray(v) ? v : [v];
-      },
-      chunk: (arr, size = 1) => {
-        if (!Array.isArray(arr) || size < 1) return [];
-        const res = [];
-        for (let i = 0; i < arr.length; i += size) res.push(arr.slice(i, i + size));
-        return res;
-      },
-      compact: (arr) => Array.isArray(arr) ? arr.filter(Boolean) : [],
-      constant: (val) => () => val,
-      noop: () => {},
-      identity: (v) => v,
-      debounce: (fn, wait = 0) => {
-        if (typeof fn !== 'function') return () => {};
-        let timer = null;
-        const wrapped = function (...args) {
-          clearTimeout(timer);
-          timer = setTimeout(() => fn.apply(this, args), wait);
-        };
-        wrapped.cancel = () => clearTimeout(timer);
-        wrapped.flush = () => {};
-        return wrapped;
-      },
-      throttle: (fn, wait = 0) => {
-        if (typeof fn !== 'function') return () => {};
-        let last = 0;
-        let timer = null;
-        const wrapped = function (...args) {
-          const now = Date.now();
-          const remaining = wait - (now - last);
-          if (remaining <= 0) {
-            clearTimeout(timer);
-            timer = null;
-            last = now;
-            return fn.apply(this, args);
-          } else if (!timer) {
-            timer = setTimeout(() => {
-              last = Date.now();
-              timer = null;
-              fn.apply(this, args);
-            }, remaining);
-          }
-        };
-        wrapped.cancel = () => clearTimeout(timer);
-        return wrapped;
-      },
-      delay: (fn, wait = 0, ...args) => setTimeout(() => (typeof fn === 'function' ? fn(...args) : undefined), wait),
-      difference: (arr, ...values) => {
-        if (!Array.isArray(arr)) return [];
-        const excl = new Set([].concat(...values));
-        return arr.filter(x => !excl.has(x));
-      },
-      intersection: (...arrays) => {
-        if (!arrays.length || !Array.isArray(arrays[0])) return [];
-        return arrays[0].filter(item => arrays.slice(1).every(a => Array.isArray(a) && a.includes(item)));
-      },
-      drop: (arr, n = 1) => Array.isArray(arr) ? arr.slice(n) : [],
-      dropRight: (arr, n = 1) => Array.isArray(arr) ? (n > 0 ? arr.slice(0, -n) : arr.slice()) : [],
-      take: (arr, n = 1) => Array.isArray(arr) ? arr.slice(0, n) : [],
-      takeRight: (arr, n = 1) => Array.isArray(arr) ? (n > 0 ? arr.slice(-n) : []) : [],
-      escapeRegExp: (str) => String(str ?? '').replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'),
-      unescape: (str) => String(str ?? '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"),
-      groupBy: (col, iteratee) => {
-        const list = Array.isArray(col) ? col : Object.values(col || {});
-        const fn = typeof iteratee === 'function' ? iteratee : (x => x?.[iteratee]);
-        return list.reduce((acc, item) => {
-          const k = fn(item);
-          (acc[k] || (acc[k] = [])).push(item);
-          return acc;
-        }, {});
-      },
-      inRange: (n, start = 0, end) => {
-        if (end === undefined) { end = start; start = 0; }
-        return n >= Math.min(start, end) && n < Math.max(start, end);
-      },
-      includes: (col, val) => {
-        if (typeof col === 'string' || Array.isArray(col)) return col.includes(val);
-        if (col && typeof col === 'object') return Object.values(col).includes(val);
-        return false;
-      },
-      mapKeys: (obj, fn) => {
-        const out = {};
-        if (!obj || typeof obj !== 'object') return out;
-        Object.entries(obj).forEach(([k, v]) => {
-          const nk = typeof fn === 'function' ? fn(v, k, obj) : k;
-          out[nk] = v;
-        });
-        return out;
-      },
-      mapValues: (obj, fn) => {
-        const out = {};
-        if (!obj || typeof obj !== 'object') return out;
-        Object.entries(obj).forEach(([k, v]) => {
-          out[k] = typeof fn === 'function' ? fn(v, k, obj) : v;
-        });
-        return out;
-      },
-      max: (arr) => Array.isArray(arr) && arr.length ? Math.max(...arr) : undefined,
-      min: (arr) => Array.isArray(arr) && arr.length ? Math.min(...arr) : undefined,
-      omitBy: (obj, pred) => {
-        const out = {};
-        if (!obj || typeof obj !== 'object') return out;
-        Object.entries(obj).forEach(([k, v]) => {
-          if (!(typeof pred === 'function' ? pred(v, k) : Boolean(v))) out[k] = v;
-        });
-        return out;
-      },
-      pickBy: (obj, pred) => {
-        const out = {};
-        if (!obj || typeof obj !== 'object') return out;
-        Object.entries(obj).forEach(([k, v]) => {
-          if (typeof pred === 'function' ? pred(v, k) : Boolean(v)) out[k] = v;
-        });
-        return out;
-      },
-      partition: (col, pred) => {
-        const list = Array.isArray(col) ? col : Object.values(col || {});
-        const pass = [], fail = [];
-        const fn = typeof pred === 'function' ? pred : (x => Boolean(x?.[pred]));
-        list.forEach(item => (fn(item) ? pass : fail).push(item));
-        return [pass, fail];
-      },
-      pull: (arr, ...vals) => {
-        if (!Array.isArray(arr)) return arr;
-        const s = new Set(vals);
-        for (let i = arr.length - 1; i >= 0; i--) {
-          if (s.has(arr[i])) arr.splice(i, 1);
-        }
-        return arr;
-      },
-      pullAt: (arr, indexes = []) => {
-        if (!Array.isArray(arr)) return [];
-        const idxList = [].concat(indexes).sort((a, b) => b - a);
-        const removed = [];
-        idxList.forEach(idx => {
-          if (idx >= 0 && idx < arr.length) removed.unshift(arr.splice(idx, 1)[0]);
-        });
-        return removed;
-      },
-      range: (start = 0, end, step = 1) => {
-        if (end === undefined) { end = start; start = 0; }
-        if (step === 0) return [];
-        const res = [];
-        if (end > start) {
-          for (let i = start; i < end; i += Math.abs(step || 1)) res.push(i);
-        } else {
-          for (let i = start; i > end; i -= Math.abs(step || 1)) res.push(i);
-        }
-        return res;
-      },
-      reject: (col, pred) => {
-        const list = Array.isArray(col) ? col : Object.values(col || {});
-        const fn = typeof pred === 'function' ? pred : (x => Boolean(x?.[pred]));
-        return list.filter((x, i) => !fn(x, i, list));
-      },
-      remove: (arr, pred) => {
-        if (!Array.isArray(arr)) return [];
-        const removed = [];
-        const fn = typeof pred === 'function' ? pred : (x => Boolean(x));
-        for (let i = arr.length - 1; i >= 0; i--) {
-          if (fn(arr[i], i, arr)) removed.unshift(arr.splice(i, 1)[0]);
-        }
-        return removed;
-      },
-      size: (col) => {
-        if (col == null) return 0;
-        if (Array.isArray(col) || typeof col === 'string') return col.length;
-        if (typeof col === 'object') return Object.keys(col).length;
-        return 0;
-      },
-      snakeCase: (str) => String(str ?? '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[\s\-]+/g, '_').toLowerCase(),
-      sortBy: (col, iteratee) => {
-        const list = Array.isArray(col) ? [...col] : Object.values(col || {});
-        const fn = typeof iteratee === 'function' ? iteratee : (x => x?.[iteratee]);
-        return list.sort((a, b) => {
-          const va = fn(a), vb = fn(b);
-          return va > vb ? 1 : (va < vb ? -1 : 0);
-        });
-      },
-      times: (n, fn = (x => x)) => Array.from({ length: Math.max(0, Number(n) || 0) }, (_, i) => fn(i)),
-      zip: (...arrays) => {
-        const maxLen = Math.max(0, ...arrays.map(a => (Array.isArray(a) ? a.length : 0)));
-        return Array.from({ length: maxLen }, (_, i) => arrays.map(a => (Array.isArray(a) ? a[i] : undefined)));
-      },
-      map: (col, fn) => Array.isArray(col) ? col.map(fn) : Object.values(col || {}).map(fn),
-      filter: (col, fn) => Array.isArray(col) ? col.filter(fn) : Object.values(col || {}).filter(fn),
-      find: (col, fn) => Array.isArray(col) ? col.find(fn) : Object.values(col || {}).find(fn),
-      forEach: (col, fn) => {
-        if (Array.isArray(col)) col.forEach(fn);
-        else if (col && typeof col === 'object') Object.entries(col).forEach(([k, v]) => fn(v, k, col));
-        return col;
-      },
-      each: (col, fn) => {
-        if (Array.isArray(col)) col.forEach(fn);
-        else if (col && typeof col === 'object') Object.entries(col).forEach(([k, v]) => fn(v, k, col));
-        return col;
-      },
-      some: (col, fn) => Array.isArray(col) ? col.some(fn) : Object.values(col || {}).some(fn),
-      every: (col, fn) => Array.isArray(col) ? col.every(fn) : Object.values(col || {}).every(fn),
-      uniqBy: (arr, iteratee) => {
-        if (!Array.isArray(arr)) return [];
-        const fn = typeof iteratee === 'function' ? iteratee : (x => x?.[iteratee]);
-        const seen = new Set();
-        return arr.filter(x => {
-          const k = fn(x);
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-      },
-      flatten: (arr) => Array.isArray(arr) ? arr.flat(1) : [],
-      flattenDeep: (arr) => Array.isArray(arr) ? arr.flat(Infinity) : [],
-      first: (arr) => Array.isArray(arr) ? arr[0] : undefined,
-      head: (arr) => Array.isArray(arr) ? arr[0] : undefined,
-      last: (arr) => Array.isArray(arr) && arr.length ? arr[arr.length - 1] : undefined,
-      random: (min = 0, max = 1, floating = false) => {
-        if (typeof max === 'boolean') { floating = max; max = min; min = 0; }
-        const r = min + Math.random() * (max - min);
-        return floating ? r : Math.floor(r);
-      },
-      sample: (arr) => Array.isArray(arr) && arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : undefined,
-      shuffle: (arr) => {
-        if (!Array.isArray(arr)) return [];
-        const copy = [...arr];
-        for (let i = copy.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [copy[i], copy[j]] = [copy[j], copy[i]];
-        }
-        return copy;
       }
     };
     if (!window._) {
@@ -6543,33 +5595,6 @@ code, pre {
             });
           }
         } catch (_) {}
-      }
-      if (String(activeCard.name || '').includes('奶茶店')) {
-        if (!statData.worldConfig || typeof statData.worldConfig !== 'object') statData.worldConfig = {};
-        if (!statData.worldConfig.year) statData.worldConfig.year = '2026年';
-        if (!statData.worldConfig.season) statData.worldConfig.season = '春天';
-        if (!statData.worldConfig.time) statData.worldConfig.time = '白天';
-        if (!statData.worldConfig.weather) statData.worldConfig.weather = '晴天';
-        if (!statData.shopFinancials || typeof statData.shopFinancials !== 'object') statData.shopFinancials = {};
-        if (statData.shopFinancials.currentBalance === undefined || statData.shopFinancials.currentBalance === null) {
-          statData.shopFinancials.currentBalance = 500;
-        }
-        if (!Array.isArray(statData.shopFinancials.records)) statData.shopFinancials.records = [];
-        if (!statData.shopConfig || typeof statData.shopConfig !== 'object') statData.shopConfig = {};
-        if (!statData.shopConfig.identity || typeof statData.shopConfig.identity !== 'object') statData.shopConfig.identity = {};
-        if (!statData.shopConfig.identity.name) statData.shopConfig.identity.name = '微风茶舍';
-        if (statData.shopConfig.identity.level === undefined) statData.shopConfig.identity.level = 1;
-        if (statData.shopConfig.identity.xp === undefined) statData.shopConfig.identity.xp = 0;
-        if (statData.shopConfig.identity.xpNext === undefined) statData.shopConfig.identity.xpNext = 100;
-        if (!statData.shopConfig.identity.reputation) statData.shopConfig.identity.reputation = '默默无闻';
-        if (!statData.shopConfig.stats || typeof statData.shopConfig.stats !== 'object') {
-          statData.shopConfig.stats = { popularity: 10, hygiene: 80, service: 80, seatingCapacity: 4, staffCount: 1, dailyRent: 50, avgWaitTime: '10min' };
-        }
-        if (!Array.isArray(statData.shopConfig.activeEffects)) statData.shopConfig.activeEffects = [];
-        if (!Array.isArray(statData.shopConfig.buffMarket)) statData.shopConfig.buffMarket = [];
-        if (!statData.appSettings || typeof statData.appSettings !== 'object') {
-          statData.appSettings = { drinkBackground: null, pendingScenes: [] };
-        }
       }
     };
 
@@ -7193,11 +6218,6 @@ code, pre {
 
     window.TavernHelper = {
       isFrontendRenderEnabled: () => true,
-      reloadIframe: () => {
-        try {
-          renderTavernChatFloors(true);
-        } catch (_) {}
-      },
       getCurrentMessageId: () => {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
@@ -7208,7 +6228,7 @@ code, pre {
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
         return Math.max(0, msgs.length - 1);
       },
-      getChatMessages: (rangeOrId, filterOpts = {}) => {
+      getChatMessages: (rangeOrId) => {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
         const wrapMsg = (m, idx) => {
@@ -7238,35 +6258,23 @@ code, pre {
             extra: (m.extra && typeof m.extra === 'object') ? m.extra : {}
           });
         };
-        const filterRole = filterOpts && typeof filterOpts === 'object' ? filterOpts.role : null;
-        const allWrapped = msgs.map((m, idx) => wrapMsg(m, idx));
-        const roleFiltered = filterRole
-          ? allWrapped.filter(w => w.role === filterRole || (filterRole === 'assistant' && !w.is_user && !w.is_system))
-          : allWrapped;
-
         if (Array.isArray(rangeOrId)) {
-          return rangeOrId.flatMap(item => window.TavernHelper.getChatMessages(item, filterOpts));
+          return rangeOrId.flatMap(item => window.TavernHelper.getChatMessages(item));
         }
         if (typeof rangeOrId === 'number') {
-          if (filterRole) {
-            const idx = rangeOrId < 0 ? roleFiltered.length + rangeOrId : rangeOrId;
-            return roleFiltered[idx] ? [roleFiltered[idx]] : [];
-          }
           const idx = rangeOrId < 0 ? msgs.length + rangeOrId : rangeOrId;
           return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
         }
         if (typeof rangeOrId === 'string') {
           const trimmed = rangeOrId.trim();
           if (trimmed === '\x7b\x7blastMessageId\x7d\x7d' || trimmed === 'last' || trimmed === 'current') {
-            const list = filterRole ? roleFiltered : allWrapped;
-            const lastIdx = Math.max(0, list.length - 1);
-            return list[lastIdx] ? [list[lastIdx]] : [];
+            const lastIdx = Math.max(0, msgs.length - 1);
+            return msgs[lastIdx] ? [wrapMsg(msgs[lastIdx], lastIdx)] : [];
           }
           if (/^-?\d+$/.test(trimmed)) {
             const num = Number(trimmed);
-            const list = filterRole ? roleFiltered : allWrapped;
-            const idx = num < 0 ? list.length + num : num;
-            return list[idx] ? [list[idx]] : [];
+            const idx = num < 0 ? msgs.length + num : num;
+            return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
           }
           const rangeMatch = trimmed.match(/^(-?\d+)\s*-\s*(-?\d+)$/);
           if (rangeMatch) {
@@ -7280,10 +6288,10 @@ code, pre {
             for (let i = start; i <= end && i < msgs.length; i++) {
               if (msgs[i]) out.push(wrapMsg(msgs[i], i));
             }
-            return filterRole ? out.filter(w => w.role === filterRole) : out;
+            return out;
           }
         }
-        return roleFiltered;
+        return msgs.map((m, idx) => wrapMsg(m, idx));
       },
       getChatMessage: (messageId) => {
         const list = window.TavernHelper.getChatMessages(messageId ?? -1);
@@ -7424,60 +6432,11 @@ code, pre {
         }
       },
       generate: async (opts = {}) => {
-        if (opts && typeof opts === 'object' && (opts.should_silence || Array.isArray(opts.injects) || opts.max_chat_history !== undefined)) {
-          const promptArr = [];
-          const activeCard = getActiveCard();
-          const sess = getActiveChatSession();
-          const msgs = (sess && Array.isArray(sess.messages)) ? sess.messages : [];
-          if (activeCard && activeCard.description) {
-            promptArr.push({ role: 'system', content: replaceTavernMacros(activeCard.description, activeCard) });
-          }
-          const maxHist = (opts.max_chat_history !== undefined && opts.max_chat_history !== 'all')
-            ? Math.max(0, Number(opts.max_chat_history))
-            : msgs.length;
-          if (maxHist > 0 && msgs.length > 0) {
-            const sliceMsgs = msgs.slice(-maxHist);
-            sliceMsgs.forEach((m, idx) => {
-              const rawTxt = String(m.mes || '');
-              const cleanedTxt = applyTavernRegexPipeline(rawTxt, {
-                isPrompt: true,
-                isChatFloor: true,
-                isUser: Boolean(m.is_user),
-                depth: sliceMsgs.length - 1 - idx,
-                card: activeCard
-              });
-              if (cleanedTxt.trim()) {
-                promptArr.push({
-                  role: m.is_user ? 'user' : (m.is_system ? 'system' : 'assistant'),
-                  content: cleanedTxt
-                });
-              }
-            });
-          }
-          if (Array.isArray(opts.injects)) {
-            opts.injects.forEach(inj => {
-              if (inj && inj.content) {
-                promptArr.push({
-                  role: inj.role || 'system',
-                  content: replaceTavernMacros(String(inj.content), activeCard)
-                });
-              }
-            });
-          }
-          if (opts.user_input) {
-            promptArr.push({ role: 'user', content: replaceTavernMacros(String(opts.user_input), activeCard) });
-          }
-          const res = await callTavernAiCompletion(promptArr, null, { isBackground: true });
-          return res.content || res.rawContent || res.reasoning || '';
-        }
         if (opts && opts.user_input) {
           await executeTavernSlashCommand('/send ' + opts.user_input + ' | /trigger');
-          const lastMsgs = window.TavernHelper.getChatMessages(-1);
-          return lastMsgs[0] ? lastMsgs[0].message : '';
+        } else {
+          await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
         }
-        await triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false });
-        const lastMsgs = window.TavernHelper.getChatMessages(-1);
-        return lastMsgs[0] ? lastMsgs[0].message : '';
       },
       generateRaw: async (opts = {}) => {
         let promptArr = [];
@@ -7509,36 +6468,6 @@ code, pre {
       getScriptButtons: window.getScriptButtons,
       replaceScriptButtons: window.replaceScriptButtons,
       appendInexistentScriptButtons: window.appendInexistentScriptButtons,
-      getAllEnabledScriptButtons: () => {
-        const result = {};
-        const card = getActiveCard();
-        const cardScripts = (card && Array.isArray(card.helperScripts)) ? card.helperScripts : [];
-        cardScripts.forEach(hs => {
-          if (!hs || hs.enabled === false) return;
-          const sid = hs.id || ('card_script_' + (hs.name || 'default'));
-          const btns = Array.isArray(hs.buttons)
-            ? hs.buttons
-            : (Array.isArray(socketButtonsMap.get(sid)) ? socketButtonsMap.get(sid) : []);
-          const visibleBtns = btns.filter(b => b && b.visible !== false && (b.name || b.button_name));
-          if (visibleBtns.length > 0) {
-            result[sid] = visibleBtns.map(b => ({
-              button_name: b.button_name || b.name,
-              name: b.name || b.button_name
-            }));
-          }
-        });
-        socketButtonsMap.forEach((btns, sid) => {
-          if (result[sid] || !Array.isArray(btns)) return;
-          const visibleBtns = btns.filter(b => b && b.visible !== false && (b.name || b.button_name));
-          if (visibleBtns.length > 0) {
-            result[sid] = visibleBtns.map(b => ({
-              button_name: b.button_name || b.name,
-              name: b.name || b.button_name
-            }));
-          }
-        });
-        return result;
-      },
       injectPrompts: window.injectPrompts,
       uninjectPrompts: window.uninjectPrompts,
       triggerSlash: executeTavernSlashCommand,
@@ -7893,104 +6822,12 @@ code, pre {
       window.ARGUMENT_TYPE = { STRING: 'string', NUMBER: 'number', BOOLEAN: 'boolean' };
     }
 
-    // Native SillyTavern i18n & QuickReplyV2 API shims (used by JS-Slash-Runner and uhhhh15/QR)
-    window.translate = (text) => String(text ?? '');
-    window.t = window.translate;
-    window.addLocaleData = () => {};
-    window.getCurrentLocale = () => 'zh-CN';
-    window.applyLocale = () => {};
-    window.quickReplyApi = {
-      isEnabled: () => true,
-      settings: {
-        get isEnabled() { return true; },
-        get config() {
-          return {
-            setList: [{
-              set: {
-                name: '默认快捷回复集',
-                qrList: (tavernState.quickReplies || []).map((q, idx) => ({
-                  id: q.id || (idx + 1),
-                  label: q.label || '',
-                  title: q.label || '',
-                  message: q.message || '',
-                  isHidden: !q.enabled,
-                  executeOnStartup: false,
-                  executeOnUser: false,
-                  executeOnAi: false,
-                  executeOnChatChange: false,
-                  preventAutoExecute: true
-                }))
-              }
-            }]
-          };
-        },
-        get chatConfig() { return { setList: [] }; },
-        get charConfig() { return { setList: [] }; }
-      },
-      listSets: () => ['默认快捷回复集'],
-      listGlobalSets: () => ['默认快捷回复集'],
-      listChatSets: () => [],
-      listCharSets: () => [],
-      getSetByName: (name) => ({
-        name: name || '默认快捷回复集',
-        qrList: (tavernState.quickReplies || []).map((q, idx) => ({
-          id: q.id || (idx + 1),
-          label: q.label || '',
-          title: q.label || '',
-          message: q.message || '',
-          isHidden: !q.enabled
-        }))
-      }),
-      getQrByLabel: (_setName, label) => {
-        const found = (tavernState.quickReplies || []).find(q => q && q.label === label);
-        return found ? { id: found.id, label: found.label, message: found.message, isHidden: !found.enabled } : null;
-      },
-      executeQuickReply: async (_setName, label) => {
-        const found = (tavernState.quickReplies || []).find(q => q && (q.label === label || String(q.id) === String(label)));
-        if (found && found.message) {
-          return await executeTavernSlashCommand(found.message);
-        }
-        return '';
-      },
-      createQuickReply: async (_setName, label, opts = {}) => {
-        const newQr = {
-          id: 'qr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-          label: String(label || '新快捷回复'),
-          message: String(opts.message || ''),
-          enabled: !opts.isHidden
-        };
-        tavernState.quickReplies.push(newQr);
-        await saveTavernStore();
-        updateQuickReplyBarOnly();
-        return newQr;
-      },
-      updateQuickReply: async (_setName, label, opts = {}) => {
-        const found = (tavernState.quickReplies || []).find(q => q && q.label === label);
-        if (found) {
-          if (opts.newLabel !== undefined) found.label = String(opts.newLabel);
-          if (opts.message !== undefined) found.message = String(opts.message);
-          if (opts.isHidden !== undefined) found.enabled = !opts.isHidden;
-          await saveTavernStore();
-          updateQuickReplyBarOnly();
-        }
-      },
-      deleteQuickReply: async (_setName, label) => {
-        tavernState.quickReplies = (tavernState.quickReplies || []).filter(q => q && q.label !== label);
-        await saveTavernStore();
-        updateQuickReplyBarOnly();
-      }
-    };
-
-    window.__ST_DYNAMIC_EXPORTS__ = window.__ST_DYNAMIC_EXPORTS__ || {};
     window.__ST_BRIDGE__ = new Proxy({}, {
       get(_, prop) {
         if (prop === 'then' || prop === 'catch' || prop === 'finally' || typeof prop === 'symbol') {
           return undefined;
         }
         if (prop === '__esModule') return true;
-        if (window.__ST_DYNAMIC_EXPORTS__ && prop in window.__ST_DYNAMIC_EXPORTS__) {
-          return window.__ST_DYNAMIC_EXPORTS__[prop];
-        }
         if (prop in window) return window[prop];
         const ctx = buildSillyTavernContextObject();
         if (prop in ctx) return ctx[prop];
@@ -8635,21 +7472,7 @@ code, pre {
         }
       }
       document.querySelectorAll('.bbs-fp-host').forEach(fpHost => {
-        if (!fpHost) return;
-        const mesEl = fpHost.closest('.mes');
-        if (mesEl) {
-          const mesId = Number(mesEl.getAttribute('mesid'));
-          const sess = getActiveChatSession();
-          const msgObj = (sess && Array.isArray(sess.messages) && !Number.isNaN(mesId)) ? sess.messages[mesId] : null;
-          const rawMesTxt = String(msgObj?.mes || '').trim();
-          const isPureSystemOrIframeFloor = Boolean(
-            (!rawMesTxt || /^<tavern_system>\s*<\/tavern_system>$/i.test(rawMesTxt)) ||
-            (mesEl.querySelector('iframe.tavern-html-sandbox-frame') && !String(mesEl.querySelector('.mes_text')?.textContent || '').trim())
-          );
-          fpHost.style.display = isPureSystemOrIframeFloor ? 'none' : '';
-          if (isPureSystemOrIframeFloor) return;
-        }
-        if (!fpHost.shadowRoot) return;
+        if (!fpHost || !fpHost.shadowRoot) return;
         if (cachedBaiBaiBookShadowCss && !fpHost.shadowRoot.getElementById('bbs-fp-inline-shadow-css')) {
           const styleEl = document.createElement('style');
           styleEl.id = 'bbs-fp-inline-shadow-css';
@@ -8773,21 +7596,18 @@ code, pre {
       .replace(/(?<![.\w$'"])import\s*\((?!\s*\))(?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
-        return `var ${defName} = window.__ST_BRIDGE__; var { ${mapped} } = window.__ST_BRIDGE__;`;
+        return `const ${defName} = window.__ST_BRIDGE__; const { ${mapped} } = window.__ST_BRIDGE__;`;
       })
-      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\*\s*as\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'var $1 = window.__ST_BRIDGE__;')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\*\s*as\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
-        return `var { ${mapped} } = window.__ST_BRIDGE__;`;
+        return `const { ${mapped} } = window.__ST_BRIDGE__;`;
       })
-      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'var $1 = window.__ST_BRIDGE__;')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*['"][^'"]+['"]\s*;?/gm, '')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+default\s+/gm, '')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s*\{[^}]*\}\s*;?/gm, '')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+(?=(?:async\s+)?function\b|const\b|let\b|var\b|class\b)/gm, '')
-      // Redirect window.parent and window.top inside host-executed helper scripts to the SillyTavern host window so it never hits AI Studio's outer cross-origin iframe
-      .replace(/\bwindow\.parent\b/g, 'window')
-      .replace(/\bwindow\.top\b/g, 'window')
       // Prevent helper scripts (such as Gourmet handbook) from auto-pausing playing music when opening the panel or scanning floors without a new STATUS tag
       .replace(
         /if\s*\(\s*!target\s*\)\s*\{\s*if\s*\(\s*!audio\.paused\s*\)\s*audio\.pause\(\)\s*;\s*statusMusicUrl\s*=\s*['"]['"]\s*;\s*statusMusicMessageId\s*=\s*null\s*;\s*statusMusicInitialized\s*=\s*true\s*;\s*return\s*;\s*\}/g,
@@ -8965,28 +7785,6 @@ code, pre {
         return;
       }
     }
-    if (plugin && (/uhhhh15\/QR/i.test(String(plugin.repoBaseUrl || '')) || /qr-assistant|Quick Reply Menu|快速回复菜单/i.test(String(plugin.name || '') + ' ' + String(plugin.code || '').slice(0, 500)))) {
-      const qrBaseUrl = 'https://raw.githubusercontent.com/uhhhh15/QR/main';
-      plugin.repoBaseUrl = qrBaseUrl;
-      plugin.jsEntryPath = 'index.js';
-      if (!String(plugin.code || '').includes('__mod_ns_') && !window._qrAssistantUpgradeInFlight) {
-        window._qrAssistantUpgradeInFlight = true;
-        Promise.all([
-          bundleMultiFileRepoModule(qrBaseUrl, 'index.js', new Set()),
-          fetch(qrBaseUrl + '/style.css').then(r => (r.ok ? r.text() : '')).catch(() => '')
-        ]).then(async ([bundledJs, cssTxt]) => {
-          if (bundledJs && bundledJs.includes('__mod_ns_')) {
-            const injectCss = cssTxt
-              ? `try{if(!document.getElementById('qr-assistant-official-css')){const s=document.createElement('style');s.id='qr-assistant-official-css';s.textContent=${JSON.stringify(cssTxt)};document.head.appendChild(s);}}catch(_){}\n`
-              : '';
-            plugin.code = injectCss + bundledJs;
-            await saveTavernStore();
-            executeUserPluginScript(plugin, { forceRerun: true });
-          }
-        }).catch(() => {}).finally(() => { window._qrAssistantUpgradeInFlight = false; });
-        return;
-      }
-    }
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
 
@@ -9084,69 +7882,41 @@ code, pre {
           : { getContext: effectiveGetContext })
       : window.SillyTavern;
 
-    const effectiveEventOn = ownerCardId
-      ? (evt, cb) => effectiveEventSource.on(evt, cb)
-      : window.eventOn;
-    const effectiveEventOnce = ownerCardId
-      ? (evt, cb) => effectiveEventSource.once(evt, cb)
-      : window.eventOnce;
-    const effectiveTavernHelper = ownerCardId
-      ? Object.assign({}, window.TavernHelper, {
-          eventOn: effectiveEventOn,
-          eventOnce: effectiveEventOnce
-        })
-      : window.TavernHelper;
-
     inFlightPluginExecutionSet.add(pluginRunKey);
     try {
       const transformedCode = transpilePluginImports(codeStr, plugin);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-      const allCandidateParams = [
-        ['SillyTavern', effectiveSillyTavern],
-        ['TavernHelper', effectiveTavernHelper],
-        ['getContext', effectiveGetContext],
-        ['eventSource', effectiveEventSource],
-        ['eventOn', effectiveEventOn],
-        ['eventOnce', effectiveEventOnce],
-        ['event_types', TAVERN_EVENT_TYPES],
-        ['extension_prompt_types', TAVERN_EXT_PROMPT_TYPES],
-        ['extension_settings', window.extension_settings],
-        ['setExtensionPrompt', setExtensionPrompt],
-        ['triggerSlash', executeTavernSlashCommand],
-        ['executeSlashCommands', executeTavernSlashCommand],
-        ['toastr', window.toastr],
-        ['jQuery', window.jQuery],
-        ['$', window.$]
-      ];
-      const activePairs = allCandidateParams.filter(([pName]) => {
-        if (pName === '$' || pName === 'jQuery') {
-          return !/(?:\b(?:const|let|var|function|class)\s+(?:\$|jQuery)(?![a-zA-Z0-9_$]))/.test(transformedCode);
-        }
-        const esc = pName.replace(/\$/g, '\\$');
-        const declRx = new RegExp('(?:\\b(?:const|let|var|function|class)\\s+' + esc + '\\b|\\b(?:const|let|var)\\s*\\{[^}]*\\b' + esc + '\\b)');
-        return !declRx.test(transformedCode);
-      });
-      const runnerParamNames = activePairs.map(p => p[0]);
-      const runnerParamValues = activePairs.map(p => p[1]);
-      let runner;
-      try {
-        runner = new AsyncFunction(...runnerParamNames, transformedCode);
-      } catch (syntaxErr) {
-        if (syntaxErr instanceof SyntaxError) {
-          const relaxedCode = transformedCode
-            .replace(/\b(?:const|let)\b(?=\s*[a-zA-Z_$[{])/g, 'var ')
-            .replace(/(?:^|(?<=[;\n\r\}]))\s*class\s+([A-Za-z0-9_$]+)(?=\s+(?:extends\b|\{)|\{)/gm, 'var $1 = class $1');
-          try {
-            runner = new AsyncFunction(...runnerParamNames, relaxedCode);
-          } catch (_) {
-            runner = new AsyncFunction(relaxedCode);
-            runnerParamValues.length = 0;
-          }
-        } else {
-          throw syntaxErr;
-        }
-      }
-      runner(...runnerParamValues).then(() => {
+      const runner = new AsyncFunction(
+        'SillyTavern',
+        'TavernHelper',
+        'getContext',
+        'eventSource',
+        'event_types',
+        'extension_prompt_types',
+        'extension_settings',
+        'setExtensionPrompt',
+        'triggerSlash',
+        'executeSlashCommands',
+        'toastr',
+        'jQuery',
+        '$',
+        transformedCode
+      );
+      runner(
+        effectiveSillyTavern,
+        window.TavernHelper,
+        effectiveGetContext,
+        effectiveEventSource,
+        TAVERN_EVENT_TYPES,
+        TAVERN_EXT_PROMPT_TYPES,
+        tavernState.extensionSettings,
+        setExtensionPrompt,
+        executeTavernSlashCommand,
+        executeTavernSlashCommand,
+        window.toastr,
+        window.jQuery,
+        window.$
+      ).then(() => {
         mountedCustomPluginCodeMap.set(pluginRunKey, codeSignature);
         if (isBaiBaiBookPlugin(plugin)) {
           const mountedBbs = document.getElementById('bbs-app-host');
@@ -9459,16 +8229,12 @@ code, pre {
       [];
     const normalizedCardRegexes = normalizeRegexList(rawRegexes, 'card');
 
-    // Extract tavern_helper scripts embedded in the character card (supports both Array pair format, Object { scripts: [...] }, and top-level helperScripts)
+    // Extract tavern_helper scripts embedded in the character card (supports both Array pair format and Object { scripts: [...] } format)
     const helperScripts = [];
-    const seenHelperIds = new Set();
     const pushRawHelperScript = (sc, idx) => {
       if (sc && typeof sc === 'object' && (sc.content || sc.code || sc.script)) {
-        const sid = sc.id || ('helper_' + Date.now() + '_' + idx);
-        if (seenHelperIds.has(sid)) return;
-        seenHelperIds.add(sid);
         helperScripts.push({
-          id: sid,
+          id: sc.id || ('helper_' + Date.now() + '_' + idx),
           name: String(sc.name || ('内嵌脚本 ' + (idx + 1))).trim(),
           content: sc.content || sc.code || sc.script || '',
           info: sc.info || '',
@@ -9492,11 +8258,9 @@ code, pre {
         Object.values(ext.tavern_helper.scripts).forEach((sc, idx) => pushRawHelperScript(sc, idx));
       }
     }
-    [data.tavern_helper_scripts, data.helperScripts, rawJson && rawJson.helperScripts, ext.helperScripts].forEach(arr => {
-      if (Array.isArray(arr)) {
-        arr.forEach((sc, idx) => pushRawHelperScript(sc, idx));
-      }
-    });
+    if (Array.isArray(data.tavern_helper_scripts)) {
+      data.tavern_helper_scripts.forEach((sc, idx) => pushRawHelperScript(sc, idx));
+    }
 
     const altGreetings = Array.isArray(data.alternate_greetings)
       ? data.alternate_greetings.filter(g => typeof g === 'string' && g.trim().length > 0)
@@ -9707,35 +8471,30 @@ code, pre {
   function syncCardScopedFloatingWidgets() {
     const activeCard = getActiveCard();
     if (!activeCard || !cardHasFloatingWidgetScript(activeCard)) {
-      document.querySelectorAll('[id^="gourmet-fixed-"], [id^="th-fixed"], #th-detail-popup-ui, #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
-      stopAllTavernAudioAndMedia();
+      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
     }
   }
 
   function executeCardHelperScripts(cardObj, forceRun = false) {
     const card = cardObj || getActiveCard();
     if (!card) return;
-    if (lastExecutedHelperCardId && lastExecutedHelperCardId !== card.id) {
-      if (typeof tavernEventSource.clearCardListeners === 'function') {
-        tavernEventSource.clearCardListeners(lastExecutedHelperCardId);
-      }
-      stopAllTavernAudioAndMedia();
-      window.__mvuActiveSchema = null;
-      window.__mvuDefaultStatData = null;
-      window.__mvuActiveSchemaCardId = null;
-      document.querySelectorAll('[id^="gourmet-fixed-"], [id^="th-fixed"], #th-detail-popup-ui, #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
-    }
     const scripts = (Array.isArray(card.helperScripts) ? card.helperScripts : []).filter(hs => hs && hs.enabled !== false && (hs.content || hs.code));
     if (scripts.length === 0) {
       lastExecutedHelperCardId = card.id;
       syncCardScopedFloatingWidgets();
       return;
     }
-    const usesFloatingBall = scripts.some(hs => /gourmet-fixed-ball-ui|adv-codex-toggle|th-fixed/.test(String(hs.content || hs.code || '')));
-    const ballInDom = document.getElementById('gourmet-fixed-ball-ui') || document.getElementById('adv-codex-toggle') || document.querySelector('[id^="th-fixed"]');
+    const usesFloatingBall = scripts.some(hs => /gourmet-fixed-ball-ui|adv-codex-toggle/.test(String(hs.content || hs.code || '')));
+    const ballInDom = document.getElementById('gourmet-fixed-ball-ui') || document.getElementById('adv-codex-toggle');
     if (!forceRun && lastExecutedHelperCardId === card.id && (!usesFloatingBall || ballInDom)) {
       enhanceFloatingHelperWidgets();
       return;
+    }
+    if (lastExecutedHelperCardId !== card.id) {
+      window.__mvuActiveSchema = null;
+      window.__mvuDefaultStatData = null;
+      window.__mvuActiveSchemaCardId = null;
+      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
     }
     lastExecutedHelperCardId = card.id;
     scripts.forEach(hs => {
@@ -9763,63 +8522,42 @@ code, pre {
     if (!card || !card.id || cardBackfillInFlightSet.has(card.id)) return;
     const hasRegexes = Array.isArray(card.regexScripts) && card.regexScripts.length > 0;
     const hasHelpers = Array.isArray(card.helperScripts) && card.helperScripts.length > 0;
-    const cardNameStr = String(card.name || '');
-    const isGourmetCard = cardNameStr.includes('美食物语') ||
+    const isGourmetCard = String(card.name || '').includes('美食物语') ||
       (hasRegexes && card.regexScripts.some(r => String(r.findRegex || '').includes('gourmet_journal')));
-    const isMilkTeaCard = cardNameStr.includes('奶茶店');
-    const isAbyssTavernCard = cardNameStr.includes('边境酒馆') || cardNameStr.includes('深渊酒馆');
-    if (hasRegexes && (hasHelpers || (!isGourmetCard && !isMilkTeaCard && !isAbyssTavernCard && card._checkedPngEmbeddedAssets))) return;
+    if (hasRegexes && (hasHelpers || (!isGourmetCard && card._checkedPngEmbeddedAssets))) return;
 
     cardBackfillInFlightSet.add(card.id);
     try {
-      let rawJson = null;
-      if (isMilkTeaCard && !hasHelpers) {
+      let buf = null;
+      if (isGourmetCard) {
         try {
-          const res = await fetch('/assets/aistudio/______4c6bacde.json');
-          if (res.ok) rawJson = await res.json();
-        } catch (_) {}
-      } else if (isAbyssTavernCard && (!hasHelpers || !hasRegexes)) {
-        try {
-          const res = await fetch('/assets/aistudio/________V2.1_6cfcfe2b.json');
-          if (res.ok) rawJson = await res.json();
+          const res = await fetch('/assets/aistudio/2_1_cb1723ff.png');
+          if (res.ok) buf = await res.arrayBuffer();
         } catch (_) {}
       }
-
-      if (!rawJson) {
-        let buf = null;
-        if (isGourmetCard) {
-          try {
-            const res = await fetch('/assets/aistudio/2_1_cb1723ff.png');
-            if (res.ok) buf = await res.arrayBuffer();
-          } catch (_) {}
-        }
-        if (!buf && card.avatar) {
-          let avUrl = card.avatar;
-          if (String(avUrl).startsWith('vault://')) {
-            if (typeof window.resolveVaultRefToUrl === 'function') {
-              try {
-                avUrl = await window.resolveVaultRefToUrl(avUrl);
-              } catch (_) {}
-            }
-            if (!avUrl || String(avUrl).startsWith('vault://')) {
-              const fileKey = String(card.avatar).replace(/^vault:\/\//, '');
-              avUrl = getTermuxBaseUrl() + '/files/' + encodeURIComponent(fileKey);
-            }
-          }
-          if (avUrl && !String(avUrl).startsWith('data:image/svg') && !String(avUrl).startsWith('vault://')) {
+      if (!buf && card.avatar) {
+        let avUrl = card.avatar;
+        if (String(avUrl).startsWith('vault://')) {
+          if (typeof window.resolveVaultRefToUrl === 'function') {
             try {
-              const avRes = await fetch(avUrl);
-              if (avRes.ok) buf = await avRes.arrayBuffer();
+              avUrl = await window.resolveVaultRefToUrl(avUrl);
             } catch (_) {}
           }
+          if (!avUrl || String(avUrl).startsWith('vault://')) {
+            const fileKey = String(card.avatar).replace(/^vault:\/\//, '');
+            avUrl = getTermuxBaseUrl() + '/files/' + encodeURIComponent(fileKey);
+          }
         }
-        card._checkedPngEmbeddedAssets = true;
-        if (buf) {
-          rawJson = await extractCharacterJsonFromPngBuffer(buf);
+        if (avUrl && !String(avUrl).startsWith('data:image/svg') && !String(avUrl).startsWith('vault://')) {
+          try {
+            const avRes = await fetch(avUrl);
+            if (avRes.ok) buf = await avRes.arrayBuffer();
+          } catch (_) {}
         }
       }
-
       card._checkedPngEmbeddedAssets = true;
+      if (!buf) return;
+      const rawJson = await extractCharacterJsonFromPngBuffer(buf);
       if (!rawJson || typeof rawJson !== 'object') return;
       const data = (rawJson.data && typeof rawJson.data === 'object') ? rawJson.data : rawJson;
       const ext = (data && data.extensions) || rawJson.extensions || {};
@@ -9846,14 +8584,10 @@ code, pre {
       if (!hasHelpers) {
         const th = ext.tavern_helper;
         const extracted = [];
-        const seenIds = new Set();
         const pushExtracted = (sc, idx) => {
           if (sc && (sc.content || sc.code || sc.script)) {
-            const sid = sc.id || ('helper_' + card.id + '_' + idx);
-            if (seenIds.has(sid)) return;
-            seenIds.add(sid);
             extracted.push({
-              id: sid,
+              id: sc.id || ('helper_' + card.id + '_' + idx),
               name: String(sc.name || '角色内嵌脚本').trim(),
               content: sc.content || sc.code || sc.script,
               info: sc.info || '',
@@ -9871,11 +8605,6 @@ code, pre {
         } else if (th && typeof th === 'object' && Array.isArray(th.scripts)) {
           th.scripts.forEach((sc, idx) => pushExtracted(sc, idx));
         }
-        [data.tavern_helper_scripts, data.helperScripts, rawJson.helperScripts, ext.helperScripts].forEach(arr => {
-          if (Array.isArray(arr)) {
-            arr.forEach((sc, idx) => pushExtracted(sc, idx));
-          }
-        });
         if (extracted.length > 0) {
           card.helperScripts = extracted;
           didRestoreAnything = true;
@@ -9886,11 +8615,11 @@ code, pre {
         await saveTavernStore();
         if (isTavernActive()) {
           if (card.id === tavernState.activeCardId) {
-            executeCardHelperScripts(card, true);
             renderTavernChatFloors(false);
             if (uiRuntime.openDrawerKey === 'cubes') {
               refreshOpenDrawerOnly();
             }
+            executeCardHelperScripts(card, true);
           }
         }
       }
@@ -10860,13 +9589,6 @@ code, pre {
     const hasDepthContext = depth !== undefined && depth !== null && !Number.isNaN(Number(depth));
     const numericDepth = hasDepthContext ? Number(depth) : 0;
 
-    if (!isPrompt && !isUser && !isWorldInfo && !isCharacterDef && !isPresetPrompt) {
-      const hasStatusPlaceholderRegex = scripts.some(s => s && !s.disabled && String(s.findRegex || '').includes('StatusPlaceHolderImpl'));
-      if (hasStatusPlaceholderRegex && !output.includes('<StatusPlaceHolderImpl') && !output.includes('【自定义开局】')) {
-        output = output + '\n<StatusPlaceHolderImpl/>';
-      }
-    }
-
     for (const script of scripts) {
       if (isEdit && !script.runOnEdit) continue;
       // SillyTavern engine.js exact check:
@@ -10968,9 +9690,6 @@ code, pre {
           return replaceTavernMacros(substituted, card);
         });
 
-        if (!isPrompt && !rawRepTemplate.trim() && !nextOutput.trim() && prevOutput.trim()) {
-          continue;
-        }
         output = nextOutput;
       } catch (err) {
         console.warn('Regex execution warning:', script.scriptName, err);
@@ -11004,11 +9723,7 @@ code, pre {
       cleaned = convertHtmlDocToSoftDark(cleaned);
     }
 
-    const faLinkTag = /font-awesome/i.test(cleaned)
-      ? ''
-      : '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">';
-
-    const sandboxClampCss = `${faLinkTag}<style>
+    const sandboxClampCss = `<style>
       *, *::before, *::after {
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent !important;
@@ -11045,7 +9760,7 @@ code, pre {
         background: transparent !important;
         color: inherit !important;
       }
-      input, textarea, [contenteditable="true"] {
+      div, span, p, li, td, th, dd, dt, font, b, i, em, strong, small, u, s, del, ins, mark, sub, sup, blockquote, pre, code, h1, h2, h3, h4, h5, h6, section, article, details, summary, q, cite, abbr, ruby, rb, rt, time, input, textarea, [contenteditable="true"] {
         -webkit-user-select: text !important;
         user-select: text !important;
       }
@@ -11164,6 +9879,13 @@ code, pre {
   document.addEventListener('selectstart', function(e) {
     var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
     if (t && t.closest && t.closest('input, textarea, [contenteditable="true"]')) {
+      return;
+    }
+    var selActive = false;
+    try {
+      selActive = Boolean(window.parent && typeof window.parent.__isTavernSelectionPluginActive === 'function' && window.parent.__isTavernSelectionPluginActive());
+    } catch (err) {}
+    if (selActive && (!t || !t.closest || !t.closest('button, img, svg'))) {
       return;
     }
     e.preventDefault();
@@ -11342,15 +10064,6 @@ code, pre {
       window.setChatMessage = window.parent.setChatMessage;
       window.setChatMessages = window.parent.setChatMessages;
       window.createChatMessages = window.parent.createChatMessages;
-      window.deleteChatMessages = window.parent.deleteChatMessages;
-      window.rotateChatMessages = window.parent.rotateChatMessages;
-      window.getWorldbook = window.parent.getWorldbook;
-      window.getWorldbookNames = window.parent.getWorldbookNames;
-      window.createOrReplaceWorldbook = window.parent.createOrReplaceWorldbook;
-      window.substitudeMacros = window.parent.substitudeMacros || window.parent.substituteMacros;
-      window.substituteMacros = window.parent.substituteMacros || window.parent.substitudeMacros;
-      window.substituteParams = window.parent.substituteParams || window.parent.substituteMacros;
-      window.formatAsTavernRegexedString = window.parent.formatAsTavernRegexedString;
       window.getButtonEvent = window.parent.getButtonEvent;
       window.getScriptButtons = window.parent.getScriptButtons;
       window.replaceScriptButtons = window.parent.replaceScriptButtons;
@@ -11388,16 +10101,12 @@ code, pre {
       var contentH = 0;
       var bRect = b.getBoundingClientRect();
       var scaleContainer = document.querySelector('.scale-container');
-      var simScaler = document.getElementById('sim-scaler') || document.querySelector('.scale-container > .outer-container');
       var outerC = document.getElementById('outerContainer');
       var rootCard = document.getElementById('statusRoot') || outerC || document.querySelector('.gourmet-main-frame');
-      if (scaleContainer && simScaler) {
-        var availW = Math.max(frame.clientWidth || 0, bRect.width || 0);
-        if (availW > 40) {
-          var scaleRatio = Math.min(availW / 736, 1);
-          contentH = Math.round(1312 * scaleRatio) + 16;
-          scaleContainer.style.width = '736px';
-          scaleContainer.style.height = '1312px';
+      if (scaleContainer && document.getElementById('sim-scaler')) {
+        var scRect = scaleContainer.getBoundingClientRect();
+        if (scRect.width > 40) {
+          contentH = Math.round(scRect.width * (1312 / 736)) + 12;
         }
       } else if (rootCard) {
         var rcRect = rootCard.getBoundingClientRect();
@@ -11437,18 +10146,6 @@ code, pre {
         frame.style.height = targetH + 'px';
         frame.style.minHeight = '0px';
         frame.style.maxHeight = 'none';
-      }
-      if (scaleContainer && simScaler) {
-        if (typeof window.setScale === 'function') {
-          try { window.setScale(); } catch (_) {}
-        } else {
-          var wNow = Math.max(frame.clientWidth || 0, window.innerWidth || 0);
-          var hNow = Math.max(targetH, window.innerHeight || 0);
-          if (wNow > 40 && hNow > 40) {
-            var sNow = Math.min(wNow / 736, hNow / 1312, 1);
-            scaleContainer.style.transform = 'translate(-50%, -50%) scale(' + sNow + ')';
-          }
-        }
       }
     } catch (e) {}
   }
@@ -11549,36 +10246,12 @@ code, pre {
     cleanedForDisplay = cleanedForDisplay.trim();
     if (!cleanedForDisplay) return '';
     cleanedForDisplay = applyStptRenderWorldbookEntries(cleanedForDisplay, options);
-    let afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
-    if (afterRegex.includes('<%') && afterRegex.includes('%>')) {
-      afterRegex = evaluateStPromptTemplate(afterRegex, { floorIdx: options.floorIdx });
-    }
+    const afterRegex = applyTavernRegexPipeline(cleanedForDisplay, { ...options, isPrompt: false });
 
-    // 1. JS-Slash-Runner / SillyTavern 1-to-1: First extract fenced full HTML documents (<!DOCTYPE html>...</html>, <html...>...</html>, <body...>...</body>, <iframe...>...</iframe>) where the closing ``` follows the closing HTML tag so ``` inside <script> regex literals never cuts the document in half!
+    // 1. JS-Slash-Runner / SillyTavern 1-to-1: Extract fenced HTML blocks (```html ... ``` or ``` ... ```) into isolated sandboxed iframes using non-bridging (?:(?!```)[\s\S])*? so unclosed fences never swallow story text
     const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
     const protectedBlocks = [];
-    let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?(\s*(?:<!DOCTYPE\s+html[^>]*>\s*)?<html\b[\s\S]*?<\/html>\s*)```/gi, (full, inner) => {
-      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(buildSandboxIframeHtml(inner.trim(), { isLastFloor }));
-      return '\n' + token + '\n';
-    });
-    working = working.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?(\s*<body\b[\s\S]*?<\/body>\s*)```/gi, (full, inner) => {
-      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(buildSandboxIframeHtml(inner.trim(), { isLastFloor }));
-      return '\n' + token + '\n';
-    });
-    working = working.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?(\s*<iframe\b[^>]*\bsrcdoc=(['"])([\s\S]*?)\2[^>]*>\s*<\/iframe>\s*)```/gi, (full, inner, quote, rawSrcdoc) => {
-      const unescapedSrcdoc = rawSrcdoc
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&');
-      const token = '___TAVERN_PROTECTED_BLOCK_' + protectedBlocks.length + '___';
-      protectedBlocks.push(buildSandboxIframeHtml(unescapedSrcdoc, { isLastFloor }));
-      return '\n' + token + '\n';
-    });
-    working = working.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?((?:(?!\r?\n[ \t]*```)[\s\S])*?)(?:\r?\n[ \t]*```[ \t]*(?=\r?\n|$)|```[ \t]*$)/g, (full, inner) => {
+    let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?((?:(?!```)[\s\S])*?)```/g, (full, inner) => {
       const trimmed = inner.trim();
       const singleIframeMatch = trimmed.match(/^<iframe\b([^>]*?)srcdoc=(['"])([\s\S]*?)\2([^>]*?)>\s*<\/iframe>$/i);
       if (singleIframeMatch) {
@@ -11952,14 +10625,14 @@ code, pre {
         #tavern-stage-root #chat {
           mask: none !important;
           -webkit-mask: none !important;
-          padding: 12px var(--tavernPageMargin, 10px) 124px var(--tavernPageMargin, 10px) !important;
+          padding: 12px var(--tavernPageMargin, 10px) 92px var(--tavernPageMargin, 10px) !important;
         }
         #tavern-stage-root .mes {
           padding: 16px 8px 0 8px !important;
           margin-bottom: 22px !important;
         }
         #tavern-stage-root .mes.last_mes {
-          margin-bottom: 18px !important;
+          margin-bottom: 12px !important;
         }
         /* Shrink character & user avatars to 68px so they never cover expanded .extraMesButtons */
         #tavern-stage-root .mesAvatarWrapper {
@@ -12321,13 +10994,16 @@ code, pre {
       #tavern-stage-root .mes .extraMesButtons {
         position: absolute !important;
         right: calc(100% + 6px) !important;
-        left: auto !important;
         top: 50% !important;
         transform: translateY(-50%) !important;
         z-index: 50 !important;
         pointer-events: auto !important;
         flex-wrap: nowrap !important;
         white-space: nowrap !important;
+      }
+      #tavern-stage-root .mes[is_user="true"] .extraMesButtons {
+        right: auto !important;
+        left: calc(100% + 6px) !important;
       }
       #tavern-stage-root details.mes_reasoning_details {
         z-index: 25 !important;
@@ -12392,10 +11068,6 @@ code, pre {
 
     if (isGousuStyle) {
       rules.push(`
-        #tavern-stage-root .mes[is_user="true"] .extraMesButtons {
-          right: auto !important;
-          left: calc(100% + 6px) !important;
-        }
         #tavern-stage-root .mes .ch_name .timestamp {
           display: none !important;
         }
@@ -12426,19 +11098,8 @@ code, pre {
           --标签框-内边距-pc: 0 4px;
           --标签框-圆角: 0px;
         }
-        #tavern-stage-root .mes_block {
-          overflow: visible !important;
-        }
         #tavern-stage-root details.mes_reasoning_details {
           position: static !important;
-          overflow: visible !important;
-        }
-        #tavern-stage-root details.mes_reasoning_details > summary.mes_reasoning_summary,
-        #tavern-stage-root details.mes_reasoning_details .mes_reasoning_header {
-          overflow: visible !important;
-          position: relative !important;
-          min-width: 26px !important;
-          min-height: 26px !important;
         }
         #tavern-stage-root .mes .name_text {
           white-space: nowrap !important;
@@ -12520,7 +11181,6 @@ code, pre {
           margin-right: auto !important;
           padding-left: 8px !important;
           padding-right: 8px !important;
-          padding-bottom: 118px !important;
           box-sizing: border-box !important;
         }
         #tavern-stage-root #form_sheld,
@@ -13980,12 +12640,24 @@ code, pre {
       let res = null;
       try {
         resetTavernTimeout();
-        res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
-          method: 'POST',
-          headers: reqHeaders,
-          body: JSON.stringify(payload),
-          signal: abortCtrl.signal
-        });
+        const extEffCfg = typeof window.getEffectiveApiConfig === 'function' ? window.getEffectiveApiConfig() : null;
+        const extEffBase = extEffCfg ? normalizeTavernBaseUrl(extEffCfg.proxyUrl || extEffCfg.url || extEffCfg.apiUrl || '') : '';
+        const canUseExternalPhoneTransport = typeof window.requestLlmapiWithFallback === 'function' &&
+          tavernState.apiConfig?.useExternalPhoneApi !== false &&
+          (!extEffBase || extEffBase === cleanBase);
+        if (canUseExternalPhoneTransport) {
+          res = await window.requestLlmapiWithFallback(payload, {
+            signal: abortCtrl.signal,
+            _preserveCallerStream: true
+          });
+        } else {
+          res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
+            method: 'POST',
+            headers: reqHeaders,
+            body: JSON.stringify(payload),
+            signal: abortCtrl.signal
+          });
+        }
         resetTavernTimeout();
       } catch (netErr) {
         if (netErr && netErr.name === 'AbortError') {
@@ -15817,15 +14489,9 @@ code, pre {
         opacity: 1;
         transform: translateX(-50%) translateY(0);
       }
-      /* Allow native .qr--buttons, [data-action="run-qr"], script containers, and QR assistant rocket button inside #qr--bar */
-      #tavern-stage-root #qr--bar > :not([data-action="run-qr"]):not(.qr--buttons):not([id^="script_container_"]):not(#quick-reply-rocket-button) {
+      /* Strictly forbid any plugin or helper script buttons in #qr--bar: only Quick Replies [data-action="run-qr"] are allowed */
+      #tavern-stage-root #qr--bar > :not([data-action="run-qr"]) {
         display: none !important;
-      }
-      #tavern-stage-root #qr--bar > .qr--buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        align-items: center;
       }
     `;
     document.head.appendChild(style);
@@ -15901,7 +14567,7 @@ code, pre {
   function rescueLivePluginDomNodes() {
     ensurePersistentExtensionContainers();
     if (persistentExtSettingsEl) {
-      ['tavern_helper', 'prompt_template_settings', 'qr_container'].forEach(liveId => {
+      ['tavern_helper', 'prompt_template_settings'].forEach(liveId => {
         const liveNode = document.getElementById(liveId);
         if (liveNode && !persistentExtSettingsEl.contains(liveNode)) {
           persistentExtSettingsEl.appendChild(liveNode);
@@ -15932,7 +14598,7 @@ code, pre {
         }
       }
     } else if (persistentExtSettingsEl) {
-      ['tavern_helper', 'prompt_template_settings', 'qr_container'].forEach(liveId => {
+      ['tavern_helper', 'prompt_template_settings'].forEach(liveId => {
         const liveNode = document.getElementById(liveId);
         if (liveNode && !persistentExtSettingsEl.contains(liveNode)) {
           persistentExtSettingsEl.appendChild(liveNode);
@@ -15978,10 +14644,10 @@ code, pre {
       cardHasFloatingWidgetScript(activeCardForShell)
     );
     const prevFloatingWidgetNodes = canPreserveFloatingWidgets
-      ? Array.from(document.querySelectorAll('#tavern-stage-root > [id^="gourmet-fixed-"], #tavern-stage-root > [id^="th-fixed"], #tavern-stage-root > #th-detail-popup-ui, #tavern-stage-root > #adv-codex-panel, #tavern-stage-root > #adv-codex-toggle'))
+      ? Array.from(document.querySelectorAll('#tavern-stage-root > [id^="gourmet-fixed-"], #tavern-stage-root > #adv-codex-panel, #tavern-stage-root > #adv-codex-toggle'))
       : [];
     if (!canPreserveFloatingWidgets) {
-      document.querySelectorAll('[id^="gourmet-fixed-"], [id^="th-fixed"], #th-detail-popup-ui, #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
     }
 
     shell.innerHTML = `
@@ -16028,11 +14694,9 @@ code, pre {
           <div id="form_sheld">
             <form id="send_form" onsubmit="return false;">
               <div id="qr--bar">
-                <div class="qr--buttons">
-                  ${qrs.map(q => `
-                    <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
-                  `).join('')}
-                </div>
+                ${qrs.map(q => `
+                  <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
+                `).join('')}
               </div>
               <div id="tavern-chat-attach-preview">${renderChatAttachPreviewHtml()}</div>
               <div id="nonQRFormItems">
@@ -16176,16 +14840,9 @@ code, pre {
     const qrBar = document.getElementById('qr--bar');
     if (!qrBar) return;
     const qrs = (tavernState.quickReplies || []).filter(q => q && q.enabled);
-    const buttonsHtml = qrs.map(q => `
+    qrBar.innerHTML = qrs.map(q => `
       <button type="button" class="qr--button" data-action="run-qr" data-qr-id="${q.id}">${escapeHtmlSimple(stripUiEmojis(q.label))}</button>
     `).join('');
-    let btnsWrap = qrBar.querySelector('.qr--buttons');
-    if (!btnsWrap) {
-      btnsWrap = document.createElement('div');
-      btnsWrap.className = 'qr--buttons';
-      qrBar.insertBefore(btnsWrap, qrBar.firstChild);
-    }
-    btnsWrap.innerHTML = buttonsHtml;
   }
 
   function renderChatAttachPreviewHtml() {
@@ -20319,7 +18976,7 @@ code, pre {
         if (!e.touches || e.touches.length !== 1) return;
         const t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
         if (!t || !t.closest) return;
-        if (t.closest('iframe, .tavern-Regex-html-output, button, input, textarea, select, a, summary, #be-float-bar, #be-hl-bar, #be-card-hl-bar, #be-card-hl-pop, .be-highlight, .mes_buttons, .extraMesButtons')) {
+        if (t.closest('button, input, textarea, select, a, summary, #be-float-bar, #be-hl-bar, #be-card-hl-bar, #be-card-hl-pop, .be-highlight, .mes_buttons, .extraMesButtons')) {
           return;
         }
         const selectableHost = t.closest('#tavern-stage-root .mes_text, .be-quote');
@@ -22828,7 +21485,6 @@ code, pre {
             try { uiRuntime.abortController.abort(); } catch (_) {}
             syncTavernGeneratingUiState(false);
           }
-          stopAllTavernAudioAndMedia();
           syncAllCardSessionsAndArchives();
           tavernState.activeCardId = cid;
           const nextCard = getActiveCard();
@@ -23500,114 +22156,22 @@ code, pre {
     }
   }
 
-  async function bundleMultiFileRepoModule(repoBaseUrl, relPath, visitedSet) {
-    const cleanPath = String(relPath || '').replace(/^\/+/, '');
-    if (!cleanPath || visitedSet.has(cleanPath)) return '';
-    visitedSet.add(cleanPath);
-    try {
-      const res = await fetch(`${repoBaseUrl}/${cleanPath}`);
-      if (!res.ok) return '';
-      let code = await res.text();
-      if (!code || isHostAppHtmlFallback(code)) return '';
-      const dir = cleanPath.includes('/') ? cleanPath.slice(0, cleanPath.lastIndexOf('/') + 1) : '';
-      const resolveRelModPath = (rawTarget) => {
-        const parts = (dir + String(rawTarget || '')).split('/');
-        const normParts = [];
-        for (const p of parts) {
-          if (!p || p === '.') continue;
-          if (p === '..') normParts.pop();
-          else normParts.push(p);
-        }
-        return normParts.join('/');
-      };
-      const toModNsVar = (modPath) => '__mod_ns_' + String(modPath || '').replace(/[^a-zA-Z0-9_$]/g, '_');
-      const relImportRegex = /(?:^|(?<=[;\n\r\}]))\s*import\s+([\s\S]*?\s+from\s+)?['"](\.[^'"]+\.js)['"]\s*;?/gm;
-      const matches = Array.from(code.matchAll(relImportRegex));
-      let depBundle = '';
-      for (const m of matches) {
-        const childPath = resolveRelModPath(m[2]);
-        if (childPath) {
-          const childCode = await bundleMultiFileRepoModule(repoBaseUrl, childPath, visitedSet);
-          if (childCode) depBundle += childCode + '\n;\n';
-        }
-      }
-      const exportedNames = new Set();
-      for (const em of code.matchAll(/export\s+(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z0-9_$]+)/g)) {
-        if (em[1]) exportedNames.add(em[1]);
-      }
-      for (const bm of code.matchAll(/export\s*\{([^}]*)\}/g)) {
-        const items = String(bm[1] || '').split(',');
-        for (const it of items) {
-          const parts = it.trim().split(/\s+as\s+/i);
-          const expName = (parts[1] || parts[0] || '').trim();
-          if (expName && /^[A-Za-z0-9_$]+$/.test(expName)) exportedNames.add(expName);
-        }
-      }
-      code = code.replace(relImportRegex, (_full, clause, rawTarget) => {
-        if (!clause) return '';
-        const childPath = resolveRelModPath(rawTarget);
-        const nsVar = toModNsVar(childPath);
-        const trimmedClause = String(clause).replace(/\s+from\s*$/i, '').trim();
-        const starMatch = trimmedClause.match(/^\*\s+as\s+([A-Za-z0-9_$]+)$/);
-        if (starMatch) {
-          return `var ${starMatch[1]} = typeof ${nsVar} !== 'undefined' ? ${nsVar} : window.__ST_BRIDGE__;`;
-        }
-        const aliasMatches = Array.from(trimmedClause.matchAll(/([A-Za-z0-9_$]+)\s+as\s+([A-Za-z0-9_$]+)/g));
-        if (aliasMatches.length > 0) {
-          return aliasMatches.map(am => `var ${am[2]} = (typeof ${nsVar} !== 'undefined' && ${nsVar}.${am[1]} !== undefined) ? ${nsVar}.${am[1]} : ${am[1]};`).join(' ');
-        }
-        return '';
-      });
-      code = code.replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+default\s+/gm, 'var __st_default_export__ = ');
-      code = code.replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+(?:const|let)\s+/gm, 'var ');
-      code = code.replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+(?=(?:async\s+)?function\b|class\b|var\b)/gm, '');
-      code = code.replace(/(?:^|(?<=[;\n\r\}]))\s*export\s*\{[^}]*\}\s*;?/gm, '');
-      const nsVarSelf = toModNsVar(cleanPath);
-      const nsFooter = exportedNames.size > 0
-        ? `\n;var ${nsVarSelf} = { ${Array.from(exportedNames).join(', ')} }; try { window.__ST_DYNAMIC_EXPORTS__ = Object.assign(window.__ST_DYNAMIC_EXPORTS__ || {}, ${nsVarSelf}); } catch (_) {}\n`
-        : `\n;var ${nsVarSelf} = {};\n`;
-      return depBundle + `/* Module: ${cleanPath} */\n` + code + nsFooter;
-    } catch (_) {
-      return '';
-    }
-  }
-
   async function handleImportPluginFromUrl(rawUrl) {
     try {
       showTavernToast('正在从链接获取插件...');
       let cleanUrl = String(rawUrl || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '');
       cleanUrl = cleanUrl.replace(/github\.com\/wenshui012\/thetheme-mgr/i, 'github.com/wenshui012/theme-mgr');
-      const gitRepoMatch = cleanUrl.match(/^https?:\/\/(github\.com|gitlab\.com)\/([^/]+)\/([^/]+)$/i);
-      if (gitRepoMatch) {
-        const host = gitRepoMatch[1].toLowerCase();
-        const owner = gitRepoMatch[2];
-        let repo = gitRepoMatch[3];
+      const ghRepoMatch = cleanUrl.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
+      if (ghRepoMatch) {
+        const owner = ghRepoMatch[1];
+        let repo = ghRepoMatch[2];
         if (/^thetheme-mgr$/i.test(repo)) repo = 'theme-mgr';
         if (/^JS-Slash-Runner$/i.test(repo) || /^TavernHelper$/i.test(repo)) {
-          if (tavernState.extensionSettings) {
-            delete tavernState.extensionSettings._uninstalledJsSlashRunner;
-            tavernState.extensionSettings.tavern_helper_enabled = true;
-          }
-          ensureDefaultTavernPlugins();
-          await saveTavernStore();
-          refreshOpenDrawerOnly();
-          showTavernToast('已启用酒馆助手 (JS-Slash-Runner)');
-          return;
+          if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledJsSlashRunner;
         }
         if (/^ST-Prompt-Template$/i.test(repo)) {
-          if (tavernState.extensionSettings) {
-            delete tavernState.extensionSettings._uninstalledStPromptTemplate;
-            tavernState.extensionSettings.st_prompt_template_enabled = true;
-          }
-          ensureDefaultTavernPlugins();
-          await saveTavernStore();
-          refreshOpenDrawerOnly();
-          showTavernToast('已启用提示词模板 (ST-Prompt-Template)');
-          return;
+          if (tavernState.extensionSettings) delete tavernState.extensionSettings._uninstalledStPromptTemplate;
         }
-        const buildRawBase = (tryRepo, tryBranch) => host === 'gitlab.com'
-          ? `https://gitlab.com/${owner}/${tryRepo}/-/raw/${tryBranch}`
-          : `https://raw.githubusercontent.com/${owner}/${tryRepo}/${tryBranch}`;
         let branch = 'main';
         let manifest = null;
         const repoCandidates = [repo];
@@ -23616,33 +22180,57 @@ code, pre {
         }
         for (const tryRepo of repoCandidates) {
           for (const tryBranch of ['main', 'master']) {
-            try {
-              const mRes = await fetch(`${buildRawBase(tryRepo, tryBranch)}/manifest.json`);
-              if (mRes.ok) {
-                repo = tryRepo;
-                branch = tryBranch;
-                manifest = await mRes.json();
-                break;
-              }
-            } catch (_) {}
+            const mRes = await fetch(`https://raw.githubusercontent.com/${owner}/${tryRepo}/${tryBranch}/manifest.json`);
+            if (mRes.ok) {
+              repo = tryRepo;
+              branch = tryBranch;
+              manifest = await mRes.json();
+              break;
+            }
           }
           if (manifest) break;
         }
-        const repoBaseUrl = buildRawBase(repo, branch);
         const rawJsFile = (manifest && manifest.js) ? manifest.js : 'index.js';
         const rawCssFile = (manifest && manifest.css) ? manifest.css : 'style.css';
         const jsFile = String(rawJsFile).split('?')[0].replace(/^\/+/, '');
         const cssFile = String(rawCssFile).split('?')[0].replace(/^\/+/, '');
+        let jsCode = '';
         let cssCode = '';
-        try {
-          const cssRes = await fetch(`${repoBaseUrl}/${cssFile}`);
-          if (cssRes.ok) cssCode = await cssRes.text();
-        } catch (_) {}
-
-        const visitedModules = new Set();
-        let jsCode = await bundleMultiFileRepoModule(repoBaseUrl, jsFile, visitedModules);
+        const jsRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${jsFile}`);
+        if (jsRes.ok) jsCode = await jsRes.text();
         if (!jsCode) {
-          throw new Error('无法从该仓库获取插件脚本，请确认仓库地址是否正确: ' + owner + '/' + repo);
+          throw new Error('无法从该GitHub仓库获取插件脚本，请确认仓库地址是否正确: ' + owner + '/' + repo);
+        }
+        const cssRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cssFile}`);
+        if (cssRes.ok) cssCode = await cssRes.text();
+
+        const repoBaseUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}`;
+        const entryDir = jsFile.includes('/') ? jsFile.slice(0, jsFile.lastIndexOf('/') + 1) : '';
+        // Resolve relative local module imports (e.g. import { x } from './utils.js') for multi-file ST extensions
+        const relImportRegex = /(?:^|(?<=[;\n\r\}]))\s*import\s+(?:[\s\S]*?\s+from\s+)?['"](\.[^'"]+\.js)['"]\s*;?/gm;
+        const relMatches = Array.from(jsCode.matchAll(relImportRegex));
+        if (relMatches.length > 0) {
+          const fetchedModules = [];
+          const seenRelPaths = new Set();
+          for (const rm of relMatches) {
+            const relPath = String(rm[1] || '').replace(/^\.\//, '');
+            const fullModPath = (entryDir + relPath).replace(/^\/+/, '');
+            if (!fullModPath || seenRelPaths.has(fullModPath)) continue;
+            seenRelPaths.add(fullModPath);
+            try {
+              const modRes = await fetch(`${repoBaseUrl}/${fullModPath}`);
+              if (modRes.ok) {
+                const modTxt = await modRes.text();
+                if (modTxt && !isHostAppHtmlFallback(modTxt)) {
+                  fetchedModules.push(`/* Submodule: ${fullModPath} */\n` + modTxt);
+                }
+              }
+            } catch (_) {}
+          }
+          if (fetchedModules.length > 0) {
+            jsCode = jsCode.replace(relImportRegex, '');
+            jsCode = fetchedModules.join('\n;\n') + '\n;\n' + jsCode;
+          }
         }
 
         const htmlTemplates = {};
@@ -23682,7 +22270,7 @@ code, pre {
           htmlTemplates,
           repoBaseUrl,
           jsEntryPath: jsFile,
-          description: (manifest && manifest.description) || ('从仓库安装的扩展: ' + owner + '/' + repo)
+          description: (manifest && manifest.description) || ('从GitHub安装的扩展: ' + owner + '/' + repo)
         };
         if (existingIdx >= 0) {
           tavernState.plugins[existingIdx] = plugin;
@@ -23692,7 +22280,7 @@ code, pre {
         if (plugin.code) executeUserPluginScript(plugin, { forceRerun: true });
         await saveTavernStore();
         refreshOpenDrawerOnly();
-        showTavernToast('成功安装酒馆插件: ' + plugin.name);
+        showTavernToast('成功安装GitHub酒馆插件: ' + plugin.name);
         return;
       }
 
