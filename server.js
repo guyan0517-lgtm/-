@@ -1150,7 +1150,7 @@ function cleanupOldProxyTasks() {
   }
 }
 
-function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, timeoutMs = 600000, redirectCount = 0) {
+function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, timeoutMs = 900000, redirectCount = 0) {
   return new Promise((resolve) => {
     const startTs = Date.now();
     let parsedUrl;
@@ -1313,8 +1313,8 @@ app.get('/api/proxy-task/:taskId', (req, res) => {
 
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
-  req.setTimeout(600000);
-  res.setTimeout(600000);
+  req.setTimeout(900000);
+  res.setTimeout(900000);
   cleanupOldProxyTasks();
 
   const proxyCtrl = new AbortController();
@@ -1335,7 +1335,7 @@ app.post('/api/proxy', async (req, res) => {
     if (proxyTimer) clearTimeout(proxyTimer);
     proxyTimer = setTimeout(() => {
       proxyCtrl.abort(new Error('Proxy upstream timeout'));
-    }, 600000);
+    }, 900000);
   };
   resetProxyTimeout();
 
@@ -1383,7 +1383,7 @@ app.post('/api/proxy', async (req, res) => {
           const bodyStr = typeof body === 'object' ? JSON.stringify(body) : String(body);
           bodyBuffer = Buffer.from(bodyStr, 'utf-8');
         }
-        const upstreamPromise = performNativeUpstreamRequest(url, method, headers, bodyBuffer, 600000);
+        const upstreamPromise = performNativeUpstreamRequest(url, method, headers, bodyBuffer, 900000);
         taskEntry = {
           status: 'pending',
           createdAt: Date.now(),
@@ -3943,10 +3943,10 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Server] Unhandled rejection:', reason);
 });
 
-server.timeout = 600000;
-server.requestTimeout = 600000;
-server.headersTimeout = 610000;
-server.keepAliveTimeout = 600000;
+server.timeout = 900000;
+server.requestTimeout = 900000;
+server.headersTimeout = 910000;
+server.keepAliveTimeout = 900000;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);

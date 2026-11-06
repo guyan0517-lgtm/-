@@ -2528,7 +2528,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22305,10 +22305,30 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             audio._isKeepAliveAudio = true;
           }
           const isAudioPaused = !audio || audio.paused || audio.ended;
-          if (!force && !isAudioPaused && now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
+          const isCtxSuspended = !_keepAliveAudioCtx || _keepAliveAudioCtx.state !== "running";
+          if (!force && !isAudioPaused && !isCtxSuspended && now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
             return;
           }
           _lastKeepAliveCheckTs = now;
+          try {
+            const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtxClass && (_bgTaskKeepAliveCount > 0 || force || (window.state && window.state.globalSettings && window.state.globalSettings.alwaysKeepAlive))) {
+              if (!_keepAliveAudioCtx) {
+                _keepAliveAudioCtx = new AudioCtxClass();
+                const osc = _keepAliveAudioCtx.createOscillator();
+                const gain = _keepAliveAudioCtx.createGain();
+                osc.type = "sine";
+                osc.frequency.value = 30;
+                gain.gain.value = 0.0001;
+                osc.connect(gain);
+                gain.connect(_keepAliveAudioCtx.destination);
+                osc.start();
+              }
+              if (_keepAliveAudioCtx && _keepAliveAudioCtx.state === "suspended") {
+                _keepAliveAudioCtx.resume().catch(() => {});
+              }
+            }
+          } catch (_) {}
           try {
             if (audio) {
               audio._isKeepAliveAudio = true;
@@ -22356,6 +22376,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (typeof window.startBackgroundWorkerHeartbeat === "function") {
             window.startBackgroundWorkerHeartbeat();
           }
+          const taskPulseInterval = setInterval(() => {
+            try { ensureBackgroundKeepAlive(); } catch (_) {}
+          }, 2000);
           let releaseLock = null;
           if (navigator.locks && typeof navigator.locks.request === "function") {
             try {
@@ -22370,6 +22393,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return function release() {
             if (released) return;
             released = true;
+            clearInterval(taskPulseInterval);
             _bgTaskKeepAliveCount = Math.max(0, _bgTaskKeepAliveCount - 1);
             if (_bgTaskKeepAliveCount === 0) {
               if (typeof window.stopBackgroundWorkerHeartbeat === "function") {
@@ -22514,7 +22538,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             timeoutId = setTimeout(() => {
               didWatchdogTimeout = true;
               controller.abort(new Error("请求超时：等待模型响应超时，连接已切断"));
-            }, 600000);
+            }, 900000);
           };
           resetTimeout();
 
@@ -22592,8 +22616,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           try {
             const isStreamReq = Boolean((parsedBody && parsedBody.stream === true) || finalUrl.includes("streamGenerateContent"));
-            const currentTaskId = "aitask_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-            const isLocalTarget = isLocalPrivateUrl(finalUrl);
 
             const stripLeadingKeepAliveNoise = (rawStr) => {
               let s = String(rawStr || "").replace(/^\uFEFF/, "");
@@ -22605,94 +22627,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return s.trim();
             };
 
-            const pollProxyTaskResult = async (taskIdToPoll) => {
-              const pollStart = Date.now();
-              while (Date.now() - pollStart < 600000) {
-                if (options.signal && options.signal.aborted) {
-                  throw new Error("请求已取消");
-                }
-                resetTimeout();
-                try {
-                  const pollRes = await origFetch("/api/proxy-task/" + encodeURIComponent(taskIdToPoll), {
-                    method: "GET",
-                    headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
-                  });
-                  if (pollRes.status === 404) {
-                    return null;
-                  }
-                  if (pollRes.ok) {
-                    const taskData = await pollRes.json();
-                    if (taskData && taskData.status === "done") {
-                      return taskData;
-                    }
-                  }
-                } catch (_) {}
-                await (typeof window.waitDelay === "function"
-                  ? window.waitDelay(1500)
-                  : new Promise((r) => setTimeout(r, 1500)));
-              }
-              return null;
-            };
-
-            const executeUpstreamFetch = async (activeBodyObj, forceDirectOnly = false) => {
+            const executeUpstreamFetch = async (activeBodyObj) => {
               let currentRes = null;
               let currentDirectErr = null;
-              let usedProxyHeartbeat = false;
-              let polledTaskData = null;
               const currentPayload = method !== "GET" && method !== "HEAD"
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
-              // 非流式请求且非手机本地回环地址时，走后端 /api/proxy 的任务池与 2KB 实时冲刷保活通道，严禁重发第二次上游请求
-              if (!forceDirectOnly && !isLocalTarget && method === "POST" && !isStreamReq) {
-                const proxyStartTs = Date.now();
-                try {
-                  ensureBackgroundKeepAlive();
-                  resetTimeout();
-                  const proxyRes = await origFetch("/api/proxy", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      url: finalUrl,
-                      method,
-                      headers,
-                      body: activeBodyObj !== undefined ? activeBodyObj : body,
-                      keepAliveHeartbeat: !(
-                        (window.state && window.state.apiConfig && window.state.apiConfig.gatewayKeepAliveEnabled === false) ||
-                        localStorage.getItem("api_gateway_keepalive_enabled") === "false"
-                      ),
-                      taskId: currentTaskId,
-                    }),
-                    signal: controller.signal,
-                  });
-                  if (proxyRes && proxyRes.ok) {
-                    currentRes = proxyRes;
-                    usedProxyHeartbeat = true;
-                  } else if (proxyRes && proxyRes.status >= 500 && Date.now() - proxyStartTs >= 3000) {
-                    const recovered = await pollProxyTaskResult(currentTaskId);
-                    if (recovered) {
-                      polledTaskData = recovered;
-                      usedProxyHeartbeat = true;
-                    }
-                  }
-                } catch (proxyFetchErr) {
-                  if (options.signal && options.signal.aborted) {
-                    currentDirectErr = proxyFetchErr;
-                  } else if (Date.now() - proxyStartTs >= 2000) {
-                    // 手机切后台或网络闪断导致 /api/proxy 连接中断时，后端仍在等待同一个上游请求完成，直接轮询取回结果，绝不重发请求
-                    const recovered = await pollProxyTaskResult(currentTaskId);
-                    if (recovered) {
-                      polledTaskData = recovered;
-                      usedProxyHeartbeat = true;
-                    } else {
-                      currentDirectErr = proxyFetchErr;
-                    }
-                  }
-                }
-              }
-
-              // 仅当是本地地址、流式请求、或 /api/proxy 在最初 2 秒内根本未建立时，才直连发起 1 次请求，严禁循环重试连发多次请求
-              if (!currentRes && !polledTaskData && !controller.signal.aborted) {
+              if (!controller.signal.aborted) {
                 try {
                   ensureBackgroundKeepAlive();
                   resetTimeout();
@@ -22708,42 +22650,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 }
               }
 
-              return { res: currentRes, directErr: currentDirectErr, usedProxyHeartbeat, polledTaskData };
+              return { res: currentRes, directErr: currentDirectErr };
             };
 
-            let { res, directErr, usedProxyHeartbeat, polledTaskData } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, false);
-
-            if (polledTaskData) {
-              if (timeoutId) clearTimeout(timeoutId);
-              if (!polledTaskData.ok) {
-                if (polledTaskData.isNetFail && (polledTaskData.elapsedMs || 0) < 15000 && !controller.signal.aborted) {
-                  const directFallback = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, true);
-                  res = directFallback.res;
-                  directErr = directFallback.directErr;
-                  usedProxyHeartbeat = false;
-                  polledTaskData = null;
-                } else {
-                  const upStatus = Number(polledTaskData.httpStatus) || 502;
-                  const rawUpErr = polledTaskData.bodyText || polledTaskData.errorMessage || ("HTTP " + upStatus);
-                  const simplifiedMsg = extractApiErrorMessage(upStatus, rawUpErr);
-                  return {
-                    ok: false,
-                    status: upStatus,
-                    text: typeof rawUpErr === "string" ? rawUpErr : JSON.stringify(rawUpErr),
-                    error: simplifiedMsg,
-                    headers: new Headers({ "Content-Type": "application/json" }),
-                  };
-                }
-              } else {
-                const cleanPolledText = stripLeadingKeepAliveNoise(polledTaskData.bodyText || "");
-                return {
-                  ok: true,
-                  status: polledTaskData.httpStatus || 200,
-                  text: cleanPolledText,
-                  headers: new Headers({ "Content-Type": "application/json" }),
-                };
-              }
-            }
+            let { res, directErr } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body);
 
             if (!res) {
               if (timeoutId) clearTimeout(timeoutId);
@@ -23025,94 +22935,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             let { accText: resText, readErrCaught: nonStreamReadErr } = await readNonStreamResponseText(res);
 
-            // 如果 /api/proxy 的流在手机切后台或网络波动时提前断开且尚未拿到正体，直接从后端任务池轮询取回同一个请求的结果，绝不重发请求
-            if (usedProxyHeartbeat && (!stripLeadingKeepAliveNoise(resText) || nonStreamReadErr)) {
-              const trimmedCheck = stripLeadingKeepAliveNoise(resText);
-              let hasCompleteJson = false;
-              if (trimmedCheck.startsWith("{") && trimmedCheck.endsWith("}")) {
-                try {
-                  JSON.parse(trimmedCheck);
-                  hasCompleteJson = true;
-                } catch (_) {}
-              }
-              if (!hasCompleteJson && !(options.signal && options.signal.aborted)) {
-                const recoveredTask = await pollProxyTaskResult(currentTaskId);
-                if (recoveredTask && recoveredTask.status === "done") {
-                  if (recoveredTask.ok) {
-                    resText = recoveredTask.bodyText || "";
-                    nonStreamReadErr = null;
-                  } else {
-                    resText = JSON.stringify({
-                      _proxy_error: true,
-                      _proxy_net_fail: Boolean(recoveredTask.isNetFail),
-                      _proxy_status: recoveredTask.httpStatus || 502,
-                      _proxy_elapsed_ms: recoveredTask.elapsedMs || 0,
-                      error: {
-                        message: recoveredTask.bodyText || recoveredTask.errorMessage || ("HTTP " + (recoveredTask.httpStatus || 502)),
-                        code: recoveredTask.httpStatus || 502
-                      },
-                      message: recoveredTask.bodyText || recoveredTask.errorMessage || ("HTTP " + (recoveredTask.httpStatus || 502))
-                    });
-                    nonStreamReadErr = null;
-                  }
-                }
-              }
-            }
-
-            // 若后端代理返回了 _proxy_error，仅当是最初 15 秒内的连接不可达才直连回退一次；若已等待模型生成，直接返回错误绝不重发第二次请求
-            if (usedProxyHeartbeat) {
-              const trimmedProxyOut = stripLeadingKeepAliveNoise(resText);
-              let proxyErrObj = null;
-              if (trimmedProxyOut.startsWith("{")) {
-                try {
-                  const parsedOut = JSON.parse(trimmedProxyOut);
-                  if (parsedOut && parsedOut._proxy_error) {
-                    proxyErrObj = parsedOut;
-                  }
-                } catch (_) {}
-              }
-              if (proxyErrObj) {
-                const proxyElapsed = Number(proxyErrObj._proxy_elapsed_ms) || 0;
-                if (proxyErrObj._proxy_net_fail && proxyElapsed < 15000 && !controller.signal.aborted) {
-                  const directFallback = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, true);
-                  if (directFallback.res) {
-                    res = directFallback.res;
-                    if (!res.ok) {
-                      let dErrText = "";
-                      try { dErrText = await res.text(); } catch (_) {}
-                      if (timeoutId) clearTimeout(timeoutId);
-                      const simplifiedMsg = extractApiErrorMessage(res.status, dErrText);
-                      return {
-                        ok: false,
-                        status: res.status,
-                        text: dErrText,
-                        error: simplifiedMsg,
-                        headers: new Headers({ "Content-Type": "application/json" }),
-                      };
-                    }
-                    const directRead = await readNonStreamResponseText(res);
-                    resText = directRead.accText;
-                    nonStreamReadErr = directRead.readErrCaught;
-                  } else {
-                    if (timeoutId) clearTimeout(timeoutId);
-                    throw directFallback.directErr || new Error(proxyErrObj.message || "网络请求失败");
-                  }
-                } else {
-                  if (timeoutId) clearTimeout(timeoutId);
-                  const upStatus = Number(proxyErrObj._proxy_status) || 502;
-                  const rawUpErr = proxyErrObj.error?.message || proxyErrObj.message || ("HTTP " + upStatus);
-                  const simplifiedMsg = extractApiErrorMessage(upStatus, rawUpErr);
-                  return {
-                    ok: false,
-                    status: upStatus,
-                    text: typeof rawUpErr === "string" ? rawUpErr : JSON.stringify(proxyErrObj),
-                    error: simplifiedMsg,
-                    headers: new Headers({ "Content-Type": "application/json" }),
-                  };
-                }
-              }
-            }
-
             if (timeoutId) clearTimeout(timeoutId);
 
             const strippedNonStream = stripLeadingKeepAliveNoise(resText);
@@ -23173,10 +22995,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           } catch (err) {
             if (timeoutId) clearTimeout(timeoutId);
             if (didWatchdogTimeout && !(options.signal && options.signal.aborted)) {
-              throw new Error("请求超时：已等待超过8分钟未收到模型数据，连接已切断，请检查网络或模型服务状态");
+              throw new Error("请求超时：已等待超过15分钟未收到模型数据，连接已切断，请检查网络或模型服务状态");
             }
             if ((err.name === "AbortError" || controller.signal.aborted) && !(options.signal && options.signal.aborted)) {
-              throw new Error("网络连接在等待回复期间中断，请保持页面在前台或开启流式后重试");
+              throw new Error("网络连接在等待回复期间中断，请检查网络或模型服务状态");
             }
             throw err;
           } finally {
@@ -56730,6 +56552,80 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (typeof window.maybeApplyMashuTypoAndCorrection === "function") {
               window.maybeApplyMashuTypoAndCorrection(chat, messagesArray);
+            }
+
+            const isCurrentlyViewingPreLoop =
+              document.getElementById("chat-interface-screen")?.classList.contains("active") &&
+              String(state.activeChatId) === String(chat.id);
+            const isAppInBackgroundPreLoop = Boolean(
+              document.hidden || document.visibilityState === "hidden"
+            );
+            if (!notificationShown && (!isCurrentlyViewingPreLoop || isAppInBackgroundPreLoop) && Array.isArray(messagesArray)) {
+              for (const preItem of messagesArray) {
+                if (!preItem || typeof preItem !== "object") continue;
+                const pType = String(preItem.type || "").trim();
+                if (
+                  pType === "system_status" ||
+                  pType === "status_bar" ||
+                  pType === "thinking" ||
+                  pType === "thought" ||
+                  (pType === "naiimag" && !preItem.imageUrl)
+                ) {
+                  continue;
+                }
+                let preNotifText = "";
+                if (pType === "transfer") {
+                  preNotifText = "[收到一笔转账]";
+                } else if (pType === "waimai_request") {
+                  preNotifText = "[收到一个外卖代付请求]";
+                } else if (pType === "voice_message") {
+                  preNotifText = "[语音]";
+                } else if (pType === "sticker") {
+                  preNotifText = preItem.meaning ? `[表情: ${preItem.meaning}]` : "[表情]";
+                } else if (
+                  pType === "ai_image" ||
+                  pType === "realimag" ||
+                  pType === "image" ||
+                  pType === "nov" ||
+                  pType === "sd" ||
+                  pType === "novelai" ||
+                  pType === "nai_image" ||
+                  pType === "module_pure_image" ||
+                  preItem.imageUrl ||
+                  preItem.image
+                ) {
+                  preNotifText = "[图片]";
+                } else {
+                  preNotifText = String(
+                    preItem.content ||
+                    preItem.message ||
+                    preItem.text ||
+                    preItem.reply ||
+                    preItem.reply_content ||
+                    (preItem.quote_reply && preItem.quote_reply.reply_content) ||
+                    ""
+                  ).trim();
+                }
+                if (!preNotifText) continue;
+                const pSender = preItem.name || preItem.senderName || chat.name;
+                const finalPreNotif = chat.isGroup ? `${pSender}: ${preNotifText}` : preNotifText;
+                let preAvatar = null;
+                if (chat.isGroup) {
+                  const mem = (chat.members || []).find(
+                    (m) => m && (m.originalName === pSender || m.groupNickname === pSender)
+                  );
+                  if (mem) preAvatar = mem.avatar;
+                } else {
+                  preAvatar = chat.settings?.aiAvatar || null;
+                }
+                notificationShown = true;
+                showNotification(
+                  chat.id,
+                  finalPreNotif.substring(0, 60) + (finalPreNotif.length > 60 ? "..." : ""),
+                  preAvatar
+                );
+                break;
+              }
             }
 
             for (const msgData of messagesArray) {
