@@ -48,7 +48,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=16.1" defer></script>
+    <script src="game-hall.js?v=15.4" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -1299,18 +1299,6 @@
                   自动清洗正文英文标点与多余双换行（推荐开启）
                 </p>
               </div>
-              <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
-                <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
-                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">网关保活</span>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="gateway-keepalive-switch" checked />
-                    <span class="slider"></span>
-                  </label>
-                </label>
-                <p style="font-size: 12px; color: var(--text-secondary, #888); margin-top: 4px; line-height: 1.4;">
-                  非流式请求定时发送空白心跳防止网关超时断连
-                </p>
-              </div>
             </div>
           </div>
 
@@ -2528,7 +2516,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v15.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -21992,33 +21980,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         window._origNativeFetch = origFetch;
         window._rawNativeFetch = origFetch;
 
-        function isLocalPrivateUrl(rawUrl) {
-          try {
-            const u = new URL(String(rawUrl || "").trim());
-            const h = (u.hostname || "").toLowerCase();
-            if (
-              h === "localhost" ||
-              h === "127.0.0.1" ||
-              h === "0.0.0.0" ||
-              h === "::1" ||
-              h === "[::1]" ||
-              h.startsWith("192.168.") ||
-              h.startsWith("10.") ||
-              /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)
-            ) {
-              return true;
-            }
-          } catch (_) {}
-          return false;
-        }
-
         function normalizeLlmapiBaseUrl(rawUrl) {
           let u = String(rawUrl || "").replace(/[\u200B-\u200D\uFEFF"'\s]+/g, "").trim();
           if (!u) return "";
           if (!/^https?:\/\//i.test(u)) {
-            const cleanHost = u.replace(/^\/+/, "");
-            const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(cleanHost);
-            u = (isLocal ? "http://" : "https://") + cleanHost;
+            u = "https://" + u.replace(/^\/+/, "");
           }
           u = u.replace(/\/+$/, "");
           let prev = "";
@@ -22042,9 +22008,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           let u = String(rawUrl || "").replace(/[\u200B-\u200D\uFEFF"'\s]+/g, "").trim();
           if (!u) return "";
           if (!/^https?:\/\//i.test(u)) {
-            const cleanHost = u.replace(/^\/+/, "");
-            const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(cleanHost);
-            u = (isLocal ? "http://" : "https://") + cleanHost;
+            u = "https://" + u.replace(/^\/+/, "");
           }
           u = u.replace(/\/+$/, "");
           let prev = "";
@@ -22310,6 +22274,35 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           _lastKeepAliveCheckTs = now;
           try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+              if (!_keepAliveAudioCtx) {
+                _keepAliveAudioCtx = new AudioCtx();
+                const osc1 = _keepAliveAudioCtx.createOscillator();
+                const osc2 = _keepAliveAudioCtx.createOscillator();
+                const gain = _keepAliveAudioCtx.createGain();
+                osc1.type = "sine";
+                osc2.type = "triangle";
+                osc1.frequency.value = 65;
+                osc2.frequency.value = 95;
+                gain.gain.value = 0.002;
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(_keepAliveAudioCtx.destination);
+                try {
+                  if (typeof _keepAliveAudioCtx.createMediaStreamDestination === "function") {
+                    _keepAliveStreamDest = _keepAliveAudioCtx.createMediaStreamDestination();
+                    gain.connect(_keepAliveStreamDest);
+                  }
+                } catch (_) {}
+                osc1.start();
+                osc2.start();
+              }
+              if (_keepAliveAudioCtx.state === "suspended" || _keepAliveAudioCtx.state === "interrupted") {
+                _keepAliveAudioCtx.resume().catch(() => {});
+              }
+            }
+
             if (audio) {
               audio._isKeepAliveAudio = true;
               const preferredSrc = _keepAliveBlobUrl || _SILENT_WAV_URI;
@@ -22318,11 +22311,32 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (!_keepAliveSrcConfigured || audio.error || !curSrc || curSrc.includes("catbox.moe")) {
                 audio.src = preferredSrc;
                 audio.loop = true;
-                audio.volume = 0.01;
+                audio.volume = 0.02;
                 audio.muted = false;
                 audio.setAttribute("playsinline", "");
                 audio.setAttribute("webkit-playsinline", "");
                 audio.preload = "auto";
+              } else if (audio.volume > 0.05 || audio.volume <= 0) {
+                audio.volume = 0.02;
+              }
+
+              if (!_keepAliveListenersBound) {
+                _keepAliveListenersBound = true;
+                audio.addEventListener("pause", () => {
+                  if (_bgTaskKeepAliveCount > 0 || document.hidden) {
+                    setTimeout(() => {
+                      try {
+                        if (audio.paused) audio.play().catch(() => {});
+                      } catch (_) {}
+                    }, 60);
+                  }
+                });
+                audio.addEventListener("ended", () => {
+                  try {
+                    audio.currentTime = 0;
+                    audio.play().catch(() => {});
+                  } catch (_) {}
+                });
               }
 
               if (audio.paused || audio.ended) {
@@ -22334,6 +22348,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     })
                     .catch(() => {
                       _keepAliveSrcConfigured = false;
+                      try {
+                        if (audio.src !== _SILENT_WAV_URI) {
+                          audio.src = _SILENT_WAV_URI;
+                          audio.volume = 0.02;
+                          audio.play()
+                            .then(() => {
+                              _keepAliveSrcConfigured = true;
+                            })
+                            .catch(() => {});
+                        }
+                      } catch (_) {}
                     });
                 } else {
                   _keepAliveSrcConfigured = true;
@@ -22592,60 +22617,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           try {
             const isStreamReq = Boolean((parsedBody && parsedBody.stream === true) || finalUrl.includes("streamGenerateContent"));
-            const currentTaskId = "aitask_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
-            const isLocalTarget = isLocalPrivateUrl(finalUrl);
-
-            const stripLeadingKeepAliveNoise = (rawStr) => {
-              let s = String(rawStr || "").replace(/^\uFEFF/, "");
-              while (true) {
-                const next = s.replace(/^\s+/, "").replace(/^:[^\r\n]*(\r?\n|$)/, "");
-                if (next === s) break;
-                s = next;
-              }
-              return s.trim();
-            };
-
-            const pollProxyTaskResult = async (taskIdToPoll) => {
-              const pollStart = Date.now();
-              while (Date.now() - pollStart < 600000) {
-                if (options.signal && options.signal.aborted) {
-                  throw new Error("请求已取消");
-                }
-                resetTimeout();
-                try {
-                  const pollRes = await origFetch("/api/proxy-task/" + encodeURIComponent(taskIdToPoll), {
-                    method: "GET",
-                    headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
-                  });
-                  if (pollRes.status === 404) {
-                    return null;
-                  }
-                  if (pollRes.ok) {
-                    const taskData = await pollRes.json();
-                    if (taskData && taskData.status === "done") {
-                      return taskData;
-                    }
-                  }
-                } catch (_) {}
-                await (typeof window.waitDelay === "function"
-                  ? window.waitDelay(1500)
-                  : new Promise((r) => setTimeout(r, 1500)));
-              }
-              return null;
-            };
-
             const executeUpstreamFetch = async (activeBodyObj, forceDirectOnly = false) => {
               let currentRes = null;
               let currentDirectErr = null;
               let usedProxyHeartbeat = false;
-              let polledTaskData = null;
               const currentPayload = method !== "GET" && method !== "HEAD"
                 ? (typeof activeBodyObj === "string" ? activeBodyObj : JSON.stringify(activeBodyObj))
                 : undefined;
 
-              // 非流式请求且非手机本地回环地址时，走后端 /api/proxy 的任务池与 2KB 实时冲刷保活通道，严禁重发第二次上游请求
-              if (!forceDirectOnly && !isLocalTarget && method === "POST" && !isStreamReq) {
-                const proxyStartTs = Date.now();
+              // 优先对非流式请求走后端 /api/proxy 的 3 秒空白换行符心跳保活通道，防止长耗时等待期间连接静默中断
+              if (!forceDirectOnly && method === "POST" && !isStreamReq) {
                 try {
                   ensureBackgroundKeepAlive();
                   resetTimeout();
@@ -22657,93 +22638,50 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       method,
                       headers,
                       body: activeBodyObj !== undefined ? activeBodyObj : body,
-                      keepAliveHeartbeat: !(
-                        (window.state && window.state.apiConfig && window.state.apiConfig.gatewayKeepAliveEnabled === false) ||
-                        localStorage.getItem("api_gateway_keepalive_enabled") === "false"
-                      ),
-                      taskId: currentTaskId,
+                      keepAliveHeartbeat: true,
                     }),
                     signal: controller.signal,
                   });
                   if (proxyRes && proxyRes.ok) {
                     currentRes = proxyRes;
                     usedProxyHeartbeat = true;
-                  } else if (proxyRes && proxyRes.status >= 500 && Date.now() - proxyStartTs >= 3000) {
-                    const recovered = await pollProxyTaskResult(currentTaskId);
-                    if (recovered) {
-                      polledTaskData = recovered;
-                      usedProxyHeartbeat = true;
-                    }
                   }
                 } catch (proxyFetchErr) {
-                  if (options.signal && options.signal.aborted) {
+                  if (proxyFetchErr && (proxyFetchErr.name === "AbortError" || controller.signal.aborted)) {
                     currentDirectErr = proxyFetchErr;
-                  } else if (Date.now() - proxyStartTs >= 2000) {
-                    // 手机切后台或网络闪断导致 /api/proxy 连接中断时，后端仍在等待同一个上游请求完成，直接轮询取回结果，绝不重发请求
-                    const recovered = await pollProxyTaskResult(currentTaskId);
-                    if (recovered) {
-                      polledTaskData = recovered;
-                      usedProxyHeartbeat = true;
-                    } else {
-                      currentDirectErr = proxyFetchErr;
+                  }
+                }
+              }
+
+              if (!currentRes && !controller.signal.aborted) {
+                for (let attempt = 0; attempt < 2; attempt++) {
+                  try {
+                    ensureBackgroundKeepAlive();
+                    resetTimeout();
+                    currentRes = await origFetch(finalUrl, {
+                      method,
+                      headers,
+                      body: currentPayload,
+                      signal: controller.signal,
+                    });
+                    currentDirectErr = null;
+                    break;
+                  } catch (err) {
+                    currentDirectErr = err;
+                    if (err && (err.name === "AbortError" || controller.signal.aborted)) {
+                      break;
+                    }
+                    if (attempt === 0) {
+                      await (typeof window.waitDelay === "function" ? window.waitDelay(500) : new Promise((r) => setTimeout(r, 500)));
                     }
                   }
                 }
               }
 
-              // 仅当是本地地址、流式请求、或 /api/proxy 在最初 2 秒内根本未建立时，才直连发起 1 次请求，严禁循环重试连发多次请求
-              if (!currentRes && !polledTaskData && !controller.signal.aborted) {
-                try {
-                  ensureBackgroundKeepAlive();
-                  resetTimeout();
-                  currentRes = await origFetch(finalUrl, {
-                    method,
-                    headers,
-                    body: currentPayload,
-                    signal: controller.signal,
-                  });
-                  currentDirectErr = null;
-                } catch (err) {
-                  currentDirectErr = err;
-                }
-              }
-
-              return { res: currentRes, directErr: currentDirectErr, usedProxyHeartbeat, polledTaskData };
+              return { res: currentRes, directErr: currentDirectErr, usedProxyHeartbeat };
             };
 
-            let { res, directErr, usedProxyHeartbeat, polledTaskData } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, false);
-
-            if (polledTaskData) {
-              if (timeoutId) clearTimeout(timeoutId);
-              if (!polledTaskData.ok) {
-                if (polledTaskData.isNetFail && (polledTaskData.elapsedMs || 0) < 15000 && !controller.signal.aborted) {
-                  const directFallback = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, true);
-                  res = directFallback.res;
-                  directErr = directFallback.directErr;
-                  usedProxyHeartbeat = false;
-                  polledTaskData = null;
-                } else {
-                  const upStatus = Number(polledTaskData.httpStatus) || 502;
-                  const rawUpErr = polledTaskData.bodyText || polledTaskData.errorMessage || ("HTTP " + upStatus);
-                  const simplifiedMsg = extractApiErrorMessage(upStatus, rawUpErr);
-                  return {
-                    ok: false,
-                    status: upStatus,
-                    text: typeof rawUpErr === "string" ? rawUpErr : JSON.stringify(rawUpErr),
-                    error: simplifiedMsg,
-                    headers: new Headers({ "Content-Type": "application/json" }),
-                  };
-                }
-              } else {
-                const cleanPolledText = stripLeadingKeepAliveNoise(polledTaskData.bodyText || "");
-                return {
-                  ok: true,
-                  status: polledTaskData.httpStatus || 200,
-                  text: cleanPolledText,
-                  headers: new Headers({ "Content-Type": "application/json" }),
-                };
-              }
-            }
+            let { res, directErr, usedProxyHeartbeat } = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, false);
 
             if (!res) {
               if (timeoutId) clearTimeout(timeoutId);
@@ -22944,7 +22882,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     }
                   } catch (_) {}
                 }
-                const strippedComments = stripLeadingKeepAliveNoise(trimmedRaw);
+                const strippedComments = trimmedRaw.replace(/^:\s*[^\n\r]*$/gm, "").trim();
                 if (strippedComments) {
                   fullText = strippedComments;
                 }
@@ -22984,7 +22922,40 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               };
             }
 
-            // 强制铁律：无论什么情况下都不能把非流式改成流式，非流式完整读取响应文本到流结束为止，严禁中途 cancel 或用多行正则破坏 JSON 内容
+            // 强制铁律：无论什么情况下都不能把非流式改成流式，非流式完整读取响应文本
+            const isCompleteNonStreamBody = (rawStr) => {
+              const stripped = String(rawStr || "").replace(/^\s*:[^\r\n]*$/gm, "").trim();
+              if (!stripped) return false;
+              if (stripped.startsWith("{")) {
+                if (!stripped.endsWith("}")) return false;
+                try {
+                  const obj = JSON.parse(stripped);
+                  if (
+                    obj &&
+                    typeof obj === "object" &&
+                    (obj._proxy_error ||
+                      Array.isArray(obj.choices) ||
+                      Array.isArray(obj.candidates) ||
+                      Array.isArray(obj.content) ||
+                      typeof obj.content === "string" ||
+                      obj.error)
+                  ) {
+                    return true;
+                  }
+                } catch (_) {}
+                return false;
+              }
+              if (
+                /^\s*data:/m.test(stripped) &&
+                (stripped.includes("data: [DONE]") ||
+                  stripped.includes("data:[DONE]") ||
+                  stripped.includes('"message_stop"'))
+              ) {
+                return true;
+              }
+              return false;
+            };
+
             const readNonStreamResponseText = async (targetRes) => {
               let accText = "";
               let readErrCaught = null;
@@ -23004,6 +22975,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       }
                       if (value && value.byteLength > 0) {
                         accText += decoder.decode(value, { stream: true });
+                        if (isCompleteNonStreamBody(accText)) {
+                          const tail = decoder.decode();
+                          if (tail) accText += tail;
+                          try { await reader.cancel(); } catch (_) {}
+                          break;
+                        }
                       }
                     }
                   } catch (readErr) {
@@ -23025,43 +23002,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             let { accText: resText, readErrCaught: nonStreamReadErr } = await readNonStreamResponseText(res);
 
-            // 如果 /api/proxy 的流在手机切后台或网络波动时提前断开且尚未拿到正体，直接从后端任务池轮询取回同一个请求的结果，绝不重发请求
-            if (usedProxyHeartbeat && (!stripLeadingKeepAliveNoise(resText) || nonStreamReadErr)) {
-              const trimmedCheck = stripLeadingKeepAliveNoise(resText);
-              let hasCompleteJson = false;
-              if (trimmedCheck.startsWith("{") && trimmedCheck.endsWith("}")) {
-                try {
-                  JSON.parse(trimmedCheck);
-                  hasCompleteJson = true;
-                } catch (_) {}
-              }
-              if (!hasCompleteJson && !(options.signal && options.signal.aborted)) {
-                const recoveredTask = await pollProxyTaskResult(currentTaskId);
-                if (recoveredTask && recoveredTask.status === "done") {
-                  if (recoveredTask.ok) {
-                    resText = recoveredTask.bodyText || "";
-                    nonStreamReadErr = null;
-                  } else {
-                    resText = JSON.stringify({
-                      _proxy_error: true,
-                      _proxy_net_fail: Boolean(recoveredTask.isNetFail),
-                      _proxy_status: recoveredTask.httpStatus || 502,
-                      _proxy_elapsed_ms: recoveredTask.elapsedMs || 0,
-                      error: {
-                        message: recoveredTask.bodyText || recoveredTask.errorMessage || ("HTTP " + (recoveredTask.httpStatus || 502)),
-                        code: recoveredTask.httpStatus || 502
-                      },
-                      message: recoveredTask.bodyText || recoveredTask.errorMessage || ("HTTP " + (recoveredTask.httpStatus || 502))
-                    });
-                    nonStreamReadErr = null;
-                  }
-                }
-              }
-            }
-
-            // 若后端代理返回了 _proxy_error，仅当是最初 15 秒内的连接不可达才直连回退一次；若已等待模型生成，直接返回错误绝不重发第二次请求
+            // 若后端代理返回了 _proxy_error（例如本地局域网地址后端不可达，或上游返回 HTTP 状态码错误），进行精准解包或直连回退
             if (usedProxyHeartbeat) {
-              const trimmedProxyOut = stripLeadingKeepAliveNoise(resText);
+              const trimmedProxyOut = String(resText || "").replace(/^\s*:[^\r\n]*$/gm, "").trim();
               let proxyErrObj = null;
               if (trimmedProxyOut.startsWith("{")) {
                 try {
@@ -23072,8 +23015,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 } catch (_) {}
               }
               if (proxyErrObj) {
-                const proxyElapsed = Number(proxyErrObj._proxy_elapsed_ms) || 0;
-                if (proxyErrObj._proxy_net_fail && proxyElapsed < 15000 && !controller.signal.aborted) {
+                if (proxyErrObj._proxy_net_fail && !controller.signal.aborted) {
                   const directFallback = await executeUpstreamFetch(parsedBody !== undefined ? parsedBody : body, true);
                   if (directFallback.res) {
                     res = directFallback.res;
@@ -23115,46 +23057,29 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
             if (timeoutId) clearTimeout(timeoutId);
 
-            const strippedNonStream = stripLeadingKeepAliveNoise(resText);
+            const strippedNonStream = String(resText || "").replace(/^\s*:[^\r\n]*$/gm, "").trim();
             let hasValidNonStreamData = false;
             if (strippedNonStream) {
-              if (strippedNonStream.startsWith("{") || strippedNonStream.startsWith("[")) {
-                resText = strippedNonStream;
-                try {
-                  JSON.parse(resText);
-                  hasValidNonStreamData = true;
-                } catch (_) {
-                  const firstBrace = resText.indexOf("{");
-                  const lastBrace = resText.lastIndexOf("}");
-                  if (firstBrace !== -1 && lastBrace > firstBrace) {
-                    const candidateJson = resText.slice(firstBrace, lastBrace + 1);
-                    try {
-                      JSON.parse(candidateJson);
-                      resText = candidateJson;
-                      hasValidNonStreamData = true;
-                    } catch (_e2) {}
-                  }
-                }
-              } else if (/^data:\s*/i.test(strippedNonStream)) {
+              if (/^\s*data:\s*/m.test(strippedNonStream)) {
                 const salvagedNonStreamSse = parseSseTextToSynthesized(strippedNonStream);
                 if (salvagedNonStreamSse) {
                   resText = JSON.stringify(salvagedNonStreamSse);
                   hasValidNonStreamData = true;
                 }
               } else {
-                const firstBrace = strippedNonStream.indexOf("{");
-                const lastBrace = strippedNonStream.lastIndexOf("}");
-                if (firstBrace !== -1 && lastBrace > firstBrace) {
-                  const candidateJson = strippedNonStream.slice(firstBrace, lastBrace + 1);
-                  try {
-                    JSON.parse(candidateJson);
-                    resText = candidateJson;
-                    hasValidNonStreamData = true;
-                  } catch (_) {}
-                }
-                if (!hasValidNonStreamData) {
-                  resText = strippedNonStream;
+                resText = strippedNonStream;
+                if (isCompleteNonStreamBody(resText)) {
                   hasValidNonStreamData = true;
+                } else {
+                  const firstBrace = resText.indexOf("{");
+                  const lastBrace = resText.lastIndexOf("}");
+                  if (firstBrace !== -1 && lastBrace > firstBrace) {
+                    const candidateJson = resText.slice(firstBrace, lastBrace + 1);
+                    if (isCompleteNonStreamBody(candidateJson)) {
+                      resText = candidateJson;
+                      hasValidNonStreamData = true;
+                    }
+                  }
                 }
               }
             }
@@ -41374,18 +41299,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             cleanBotSwitch.checked = !!state.apiConfig.cleanBotTextEnabled;
             cleanBotSwitch.onchange = () => {
               state.apiConfig.cleanBotTextEnabled = cleanBotSwitch.checked;
-              if (typeof db !== "undefined" && db.apiConfig) {
-                db.apiConfig.put(state.apiConfig);
-              }
-            };
-          }
-
-          const gatewayKeepAliveSwitch = document.getElementById("gateway-keepalive-switch");
-          if (gatewayKeepAliveSwitch) {
-            gatewayKeepAliveSwitch.checked = state.apiConfig.gatewayKeepAliveEnabled !== false && localStorage.getItem("api_gateway_keepalive_enabled") !== "false";
-            gatewayKeepAliveSwitch.onchange = () => {
-              state.apiConfig.gatewayKeepAliveEnabled = gatewayKeepAliveSwitch.checked;
-              localStorage.setItem("api_gateway_keepalive_enabled", gatewayKeepAliveSwitch.checked ? "true" : "false");
               if (typeof db !== "undefined" && db.apiConfig) {
                 db.apiConfig.put(state.apiConfig);
               }
@@ -100263,9 +100176,6 @@ ${specificRules}`;
               localStorage.setItem("api_stream_enabled", state.apiConfig.streamEnabled ? "true" : "false");
               const cleanBotSwitch = document.getElementById("clean-bot-text-switch");
               state.apiConfig.cleanBotTextEnabled = cleanBotSwitch ? cleanBotSwitch.checked : false;
-              const gatewayKeepAliveSwitch = document.getElementById("gateway-keepalive-switch");
-              state.apiConfig.gatewayKeepAliveEnabled = gatewayKeepAliveSwitch ? gatewayKeepAliveSwitch.checked : true;
-              localStorage.setItem("api_gateway_keepalive_enabled", state.apiConfig.gatewayKeepAliveEnabled ? "true" : "false");
               const cognitionSwitch = document.getElementById("real-time-cognition-switch");
               state.apiConfig.realTimeCognitionEnabled = cognitionSwitch ? cognitionSwitch.checked : true;
               const globalMusicSwitch = document.getElementById("global-ai-music-switch");

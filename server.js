@@ -1,7 +1,5 @@
 import fs from 'fs';
 import http from 'http';
-import https from 'https';
-import zlib from 'zlib';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -1133,189 +1131,10 @@ try {
   }, 50);
 } catch (_) {}
 
-// In-memory task store for non-streaming AI requests so mobile tab switches or connection drops never lose a completed response or trigger duplicate upstream requests
-const proxyTasks = new Map();
-
-function cleanupOldProxyTasks() {
-  const now = Date.now();
-  for (const [id, task] of proxyTasks.entries()) {
-    const maxAge = task.status === 'pending' ? 660000 : 300000;
-    if (now - task.createdAt > maxAge) {
-      proxyTasks.delete(id);
-    }
-  }
-  if (proxyTasks.size > 30) {
-    const oldestKey = proxyTasks.keys().next().value;
-    if (oldestKey) proxyTasks.delete(oldestKey);
-  }
-}
-
-function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, timeoutMs = 600000, redirectCount = 0) {
-  return new Promise((resolve) => {
-    const startTs = Date.now();
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(targetUrl);
-    } catch (urlErr) {
-      return resolve({
-        ok: false,
-        httpStatus: 400,
-        contentType: 'application/json',
-        bodyText: JSON.stringify({ error: { message: 'Invalid URL: ' + urlErr.message } }),
-        isNetFail: true,
-        elapsedMs: Date.now() - startTs
-      });
-    }
-
-    const isHttps = parsedUrl.protocol === 'https:';
-    const transport = isHttps ? https : http;
-    const reqHeaders = { ...headers };
-    delete reqHeaders['host'];
-    delete reqHeaders['origin'];
-    delete reqHeaders['referer'];
-    delete reqHeaders['content-length'];
-    delete reqHeaders['Content-Length'];
-    if (!reqHeaders['accept-encoding'] && !reqHeaders['Accept-Encoding']) {
-      reqHeaders['Accept-Encoding'] = 'gzip, deflate, br';
-    }
-    if (bodyBuffer && bodyBuffer.length > 0) {
-      reqHeaders['Content-Length'] = Buffer.byteLength(bodyBuffer);
-    }
-
-    const reqOptions = {
-      protocol: parsedUrl.protocol,
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || (isHttps ? 443 : 80),
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: method || 'POST',
-      headers: reqHeaders,
-      timeout: timeoutMs
-    };
-
-    let settled = false;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      resolve(result);
-    };
-
-    const upReq = transport.request(reqOptions, (upRes) => {
-      const statusCode = upRes.statusCode || 502;
-      const location = upRes.headers['location'];
-      if ([301, 302, 303, 307, 308].includes(statusCode) && location && redirectCount < 5) {
-        upRes.resume();
-        const nextUrl = new URL(location, targetUrl).toString();
-        const nextMethod = statusCode === 303 ? 'GET' : method;
-        const nextBody = statusCode === 303 ? null : bodyBuffer;
-        performNativeUpstreamRequest(nextUrl, nextMethod, headers, nextBody, timeoutMs, redirectCount + 1).then(finish);
-        return;
-      }
-
-      const chunks = [];
-      upRes.on('data', (chunk) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      });
-      upRes.on('end', () => {
-        let rawBuf = Buffer.concat(chunks);
-        const encoding = String(upRes.headers['content-encoding'] || '').toLowerCase();
-        try {
-          if (encoding.includes('br')) {
-            rawBuf = zlib.brotliDecompressSync(rawBuf);
-          } else if (encoding.includes('gzip')) {
-            rawBuf = zlib.gunzipSync(rawBuf);
-          } else if (encoding.includes('deflate')) {
-            rawBuf = zlib.inflateSync(rawBuf);
-          }
-        } catch (_) {}
-        const bodyText = rawBuf.toString('utf-8');
-        finish({
-          ok: statusCode >= 200 && statusCode < 300,
-          httpStatus: statusCode,
-          contentType: String(upRes.headers['content-type'] || 'application/json'),
-          bodyText,
-          isNetFail: false,
-          elapsedMs: Date.now() - startTs
-        });
-      });
-      upRes.on('error', (resErr) => {
-        const partialBuf = Buffer.concat(chunks);
-        const partialText = partialBuf.length > 0 ? partialBuf.toString('utf-8') : '';
-        finish({
-          ok: statusCode >= 200 && statusCode < 300 && partialText.length > 0,
-          httpStatus: statusCode || 502,
-          contentType: String(upRes.headers['content-type'] || 'application/json'),
-          bodyText: partialText || JSON.stringify({ error: { message: resErr.message || 'Upstream response stream error' } }),
-          isNetFail: partialText.length === 0,
-          elapsedMs: Date.now() - startTs
-        });
-      });
-    });
-
-    upReq.on('socket', (socket) => {
-      try {
-        socket.setKeepAlive(true, 10000);
-        socket.setNoDelay(true);
-      } catch (_) {}
-    });
-
-    upReq.on('timeout', () => {
-      upReq.destroy(new Error('Upstream request timeout after ' + Math.round(timeoutMs / 1000) + 's'));
-    });
-
-    upReq.on('error', (reqErr) => {
-      const elapsed = Date.now() - startTs;
-      finish({
-        ok: false,
-        httpStatus: 502,
-        contentType: 'application/json',
-        bodyText: JSON.stringify({ error: { message: reqErr.message || 'Upstream connection failed' } }),
-        isNetFail: elapsed < 15000,
-        errorMessage: reqErr.message || 'Upstream connection failed',
-        elapsedMs: elapsed
-      });
-    });
-
-    if (bodyBuffer && bodyBuffer.length > 0 && method !== 'GET' && method !== 'HEAD') {
-      upReq.write(bodyBuffer);
-    }
-    upReq.end();
-  });
-}
-
-app.get('/api/proxy-task/:taskId', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  const { taskId } = req.params;
-  const task = taskId ? proxyTasks.get(taskId) : null;
-  if (!task) {
-    return res.status(404).json({ status: 'not_found' });
-  }
-  if (task.status === 'pending') {
-    return res.json({
-      status: 'pending',
-      elapsedMs: Date.now() - task.createdAt
-    });
-  }
-  const result = task.result;
-  setTimeout(() => {
-    proxyTasks.delete(taskId);
-  }, 30000);
-  return res.json({
-    status: 'done',
-    ok: result.ok,
-    httpStatus: result.httpStatus,
-    contentType: result.contentType,
-    bodyText: result.bodyText,
-    isNetFail: result.isNetFail,
-    errorMessage: result.errorMessage || '',
-    elapsedMs: result.elapsedMs || 0
-  });
-});
-
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
   req.setTimeout(600000);
   res.setTimeout(600000);
-  cleanupOldProxyTasks();
 
   const proxyCtrl = new AbortController();
   let proxyTimer = null;
@@ -1344,91 +1163,10 @@ app.post('/api/proxy', async (req, res) => {
   });
 
   try {
-    const { url, method = 'POST', headers = {}, body, keepAliveHeartbeat = false, taskId = '' } = req.body;
+    const { url, method = 'POST', headers = {}, body, keepAliveHeartbeat = false } = req.body;
     if (!url) {
       clearAllTimers();
       return res.status(400).json({ error: 'Missing target url' });
-    }
-
-    // Non-streaming requests with taskId or keepAliveHeartbeat use native http/https + proxyTasks so 255s+ responses never get dropped or duplicated
-    if (keepAliveHeartbeat || taskId) {
-      res.status(200);
-      res.setHeader('Content-Type', keepAliveHeartbeat ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no');
-      if (typeof res.flushHeaders === 'function') {
-        res.flushHeaders();
-      }
-      if (keepAliveHeartbeat) {
-        heartbeatStarted = true;
-        // Send 2KB whitespace chunk immediately and every 5s to force cloud proxy / mobile network buffer flush
-        const heartbeatChunk = ' '.repeat(2048) + '\n';
-        try {
-          res.write(heartbeatChunk);
-        } catch (_) {}
-        heartbeatTimer = setInterval(() => {
-          try {
-            if (!res.writableEnded && !res.destroyed) {
-              res.write(heartbeatChunk);
-            }
-          } catch (_) {}
-        }, 5000);
-      }
-
-      let taskEntry = taskId ? proxyTasks.get(taskId) : null;
-      if (!taskEntry) {
-        let bodyBuffer = null;
-        if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
-          const bodyStr = typeof body === 'object' ? JSON.stringify(body) : String(body);
-          bodyBuffer = Buffer.from(bodyStr, 'utf-8');
-        }
-        const upstreamPromise = performNativeUpstreamRequest(url, method, headers, bodyBuffer, 600000);
-        taskEntry = {
-          status: 'pending',
-          createdAt: Date.now(),
-          result: null,
-          promise: upstreamPromise
-        };
-        if (taskId) {
-          proxyTasks.set(taskId, taskEntry);
-        }
-        upstreamPromise.then((result) => {
-          taskEntry.status = 'done';
-          taskEntry.result = result;
-        });
-      }
-
-      const result = await taskEntry.promise;
-      clearAllTimers();
-
-      if (res.writableEnded || res.destroyed) {
-        return;
-      }
-
-      if (!result.ok) {
-        const errPayload = {
-          _proxy_error: true,
-          _proxy_net_fail: Boolean(result.isNetFail),
-          _proxy_status: result.httpStatus || 502,
-          _proxy_elapsed_ms: result.elapsedMs || 0,
-          error: {
-            message: result.bodyText || result.errorMessage || ('HTTP ' + (result.httpStatus || 502)),
-            code: result.httpStatus || 502
-          },
-          message: result.bodyText || result.errorMessage || ('HTTP ' + (result.httpStatus || 502))
-        };
-        res.write(JSON.stringify(errPayload));
-        return res.end();
-      }
-
-      if (taskId) {
-        setTimeout(() => {
-          proxyTasks.delete(taskId);
-        }, 30000);
-      }
-      res.write(result.bodyText);
-      return res.end();
     }
 
     const fetchHeaders = { ...headers };
@@ -1446,8 +1184,69 @@ app.post('/api/proxy', async (req, res) => {
       fetchOptions.body = typeof body === 'object' ? JSON.stringify(body) : body;
     }
 
+    if (keepAliveHeartbeat) {
+      heartbeatStarted = true;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+      res.write('\n');
+      heartbeatTimer = setInterval(() => {
+        try {
+          if (!res.writableEnded) {
+            res.write('\n');
+          }
+        } catch (_) {}
+      }, 10000);
+    }
+
     const response = await fetch(url, fetchOptions);
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
     resetProxyTimeout();
+
+    if (heartbeatStarted) {
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        clearAllTimers();
+        res.write(JSON.stringify({
+          _proxy_error: true,
+          _proxy_status: response.status,
+          error: { message: errText || ('HTTP ' + response.status), code: response.status },
+          message: errText || ('HTTP ' + response.status)
+        }));
+        return res.end();
+      }
+      if (response.body && typeof response.body.getReader === 'function') {
+        const reader = response.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            resetProxyTimeout();
+            if (done) break;
+            if (value && value.byteLength > 0) {
+              res.write(Buffer.from(value));
+            }
+          }
+        } catch (hbStreamErr) {
+          console.warn('[Proxy Heartbeat Stream] Reading error:', hbStreamErr.message);
+        } finally {
+          clearAllTimers();
+          res.end();
+        }
+        return;
+      }
+      const text = await response.text();
+      clearAllTimers();
+      res.write(text);
+      return res.end();
+    }
 
     const contentType = response.headers.get('content-type') || '';
     res.status(response.status);
