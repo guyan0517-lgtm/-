@@ -174,11 +174,117 @@ function writeAllLocalMashuStickersFiles(payload) {
   } catch (_) {}
 }
 
+async function healStickerUrlOnServer(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('data:image/')) return trimmed;
+
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  const extMimeMap = {
+    png: 'image/png',
+    gif: 'image/gif',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp'
+  };
+
+  if (trimmed.startsWith('/mashu-stickers-assets/')) {
+    const fileName = trimmed.replace(/^\/mashu-stickers-assets\//, '').split('?')[0].trim();
+    if (fileName) {
+      const candidates = [
+        path.join(MASHU_PUBLIC_ASSETS_DIR, fileName),
+        path.join(MASHU_STICKER_FILES_DIR, fileName)
+      ];
+      for (const fp of candidates) {
+        try {
+          if (fs.existsSync(fp)) {
+            const buf = fs.readFileSync(fp);
+            if (buf && buf.length > 0) {
+              const ext = (fileName.split('.').pop() || 'png').toLowerCase();
+              const mime = extMimeMap[ext] || 'image/png';
+              return `data:${mime};base64,${buf.toString('base64')}`;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+    return trimmed;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      let targetUrl = trimmed;
+      if (/^https?:\/\/(www\.)?postimg\.cc\//i.test(targetUrl) && !/^https?:\/\/i\.postimg\.cc\//i.test(targetUrl)) {
+        const pageRes = await fetch(targetUrl, { headers: { 'User-Agent': ua } });
+        if (pageRes.ok) {
+          const html = await pageRes.text();
+          const ogMatch = html.match(/property=["']og:image["']\s+content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']/i)
+            || html.match(/content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']\s+property=["']og:image["']/i)
+            || html.match(/(https:\/\/i\.postimg\.cc\/[^\s"'<>)\]]+)/i);
+          if (ogMatch && ogMatch[1]) {
+            targetUrl = ogMatch[1];
+          }
+        }
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const imgRes = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (imgRes.ok) {
+        const ct = String(imgRes.headers.get('content-type') || '').toLowerCase();
+        const arrBuf = await imgRes.arrayBuffer();
+        const buf = Buffer.from(arrBuf);
+        if (buf.length > 32 && buf.length <= 2 * 1024 * 1024) {
+          let mime = '';
+          if (ct.startsWith('image/')) {
+            mime = ct.split(';')[0].trim();
+          } else if (buf[0] === 0x89 && buf[1] === 0x50) {
+            mime = 'image/png';
+          } else if (buf[0] === 0xff && buf[1] === 0xd8) {
+            mime = 'image/jpeg';
+          } else if (buf[0] === 0x47 && buf[1] === 0x49) {
+            mime = 'image/gif';
+          } else if (buf.length > 12 && buf.toString('ascii', 8, 12) === 'WEBP') {
+            mime = 'image/webp';
+          }
+          if (mime) {
+            return `data:${mime};base64,${buf.toString('base64')}`;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  return trimmed;
+}
+
 app.post('/api/upload-image-bed', async (req, res) => {
   try {
-    const { dataUrl, filename = 'sticker.png' } = req.body || {};
+    const { dataUrl, healUrl, filename = 'sticker.png' } = req.body || {};
+
+    if (healUrl && typeof healUrl === 'string') {
+      const healed = await healStickerUrlOnServer(healUrl);
+      if (healed && healed.startsWith('data:image/')) {
+        return res.json({ success: true, url: healed });
+      }
+      return res.status(422).json({ error: '无法修复该外链图片' });
+    }
+
     if (!dataUrl || typeof dataUrl !== 'string') {
       return res.status(400).json({ error: '缺少图片数据' });
+    }
+
+    if (/^https?:\/\//i.test(dataUrl) || dataUrl.startsWith('/mashu-stickers-assets/')) {
+      const healed = await healStickerUrlOnServer(dataUrl);
+      return res.json({ success: true, url: healed || dataUrl });
     }
 
     let mimeType = 'image/png';
@@ -199,137 +305,23 @@ app.post('/api/upload-image-bed', async (req, res) => {
       'image/webp': 'webp'
     };
     const ext = extMap[mimeType] || 'png';
-    let safeName = String(filename || 'sticker').replace(/[^a-zA-Z0-9._-]/g, '_');
-    if (!/\.[a-zA-Z0-9]+$/.test(safeName)) {
-      safeName += '.' + ext;
-    }
-
     const buffer = Buffer.from(base64Data, 'base64');
-    const blob = new Blob([buffer], { type: mimeType });
-    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-    let finalUrl = '';
-
-    // 1. Try postimages.org (returns permanent global https://i.postimg.cc/... URL)
+    // 同时在本地静态目录保存一份备份文件
     try {
-      const form = new FormData();
-      form.append('gallery', '');
-      form.append('optsize', '0');
-      form.append('expire', '0');
-      form.append('numfiles', '1');
-      form.append('upload_session', String(Date.now()) + Math.random().toString().substring(1));
-      form.append('file', blob, safeName);
-
-      const upRes = await fetch('https://postimages.org/json', {
-        method: 'POST',
-        headers: {
-          'User-Agent': ua,
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Referer': 'https://postimages.org/'
-        },
-        body: form
-      });
-
-      if (upRes.ok) {
-        const upJson = await upRes.json();
-        const pageUrl = upJson && (upJson.url || upJson.image);
-        if (pageUrl) {
-          const galRes = await fetch(pageUrl, { headers: { 'User-Agent': ua } });
-          const galHtml = await galRes.text();
-          const ogMatch = galHtml.match(/property=["']og:image["']\s+content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']/i)
-            || galHtml.match(/content=["'](https:\/\/i\.postimg\.cc\/[^"']+)["']\s+property=["']og:image["']/i);
-          const directMatch = ogMatch ? [null, ogMatch[1]] : galHtml.match(/(https:\/\/i\.postimg\.cc\/[^\s"'<>)\]]+)/i);
-          finalUrl = directMatch && directMatch[1] ? directMatch[1] : pageUrl;
-        }
+      const uniqueFileName = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      if (!fs.existsSync(MASHU_PUBLIC_ASSETS_DIR)) {
+        fs.mkdirSync(MASHU_PUBLIC_ASSETS_DIR, { recursive: true });
       }
+      fs.writeFileSync(path.join(MASHU_PUBLIC_ASSETS_DIR, uniqueFileName), buffer);
+      if (!fs.existsSync(MASHU_STICKER_FILES_DIR)) {
+        fs.mkdirSync(MASHU_STICKER_FILES_DIR, { recursive: true });
+      }
+      fs.writeFileSync(path.join(MASHU_STICKER_FILES_DIR, uniqueFileName), buffer);
     } catch (_) {}
 
-    // 2. Fallback to Imgur anonymous API
-    if (!finalUrl) {
-      try {
-        const imgurForm = new FormData();
-        imgurForm.append('image', base64Data);
-        imgurForm.append('type', 'base64');
-        const imgurRes = await fetch('https://api.imgur.com/3/image', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Client-ID 546c25a59c58ad7',
-            'User-Agent': ua
-          },
-          body: imgurForm
-        });
-        if (imgurRes.ok) {
-          const imgurJson = await imgurRes.json();
-          if (imgurJson && imgurJson.data && imgurJson.data.link) {
-            finalUrl = imgurJson.data.link;
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 3. Fallback to uguu.se
-    if (!finalUrl) {
-      try {
-        const ugForm = new FormData();
-        ugForm.append('files[]', blob, safeName);
-        const ugRes = await fetch('https://uguu.se/upload', {
-          method: 'POST',
-          headers: { 'User-Agent': ua },
-          body: ugForm
-        });
-        if (ugRes.ok) {
-          const ugJson = await ugRes.json();
-          const ugUrl = ugJson && Array.isArray(ugJson.files) && ugJson.files[0] && ugJson.files[0].url;
-          if (ugUrl && /^https?:\/\//i.test(ugUrl)) {
-            finalUrl = ugUrl;
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 4. Fallback to catbox.moe
-    if (!finalUrl) {
-      try {
-        const catForm = new FormData();
-        catForm.append('reqtype', 'fileupload');
-        catForm.append('fileToUpload', blob, safeName);
-        const catRes = await fetch('https://catbox.moe/user/api.php', {
-          method: 'POST',
-          headers: { 'User-Agent': ua },
-          body: catForm
-        });
-        if (catRes.ok) {
-          const catText = (await catRes.text()).trim();
-          if (/^https?:\/\/files\.catbox\.moe\//i.test(catText)) {
-            finalUrl = catText;
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 5. Fallback to public/mashu-stickers-assets and EPhoneVault/stickers
-    if (!finalUrl) {
-      try {
-        const uniqueFileName = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        if (!fs.existsSync(MASHU_PUBLIC_ASSETS_DIR)) {
-          fs.mkdirSync(MASHU_PUBLIC_ASSETS_DIR, { recursive: true });
-        }
-        fs.writeFileSync(path.join(MASHU_PUBLIC_ASSETS_DIR, uniqueFileName), buffer);
-        if (!fs.existsSync(MASHU_STICKER_FILES_DIR)) {
-          fs.mkdirSync(MASHU_STICKER_FILES_DIR, { recursive: true });
-        }
-        fs.writeFileSync(path.join(MASHU_STICKER_FILES_DIR, uniqueFileName), buffer);
-        finalUrl = `/mashu-stickers-assets/${uniqueFileName}`;
-      } catch (_) {}
-    }
-
-    if (!finalUrl) {
-      return res.status(502).json({ error: '图床上传失败' });
-    }
-
-    return res.json({ success: true, url: finalUrl });
+    const selfContainedUrl = `data:${mimeType};base64,${base64Data}`;
+    return res.json({ success: true, url: selfContainedUrl });
   } catch (err) {
     console.error('图床上传错误:', err);
     return res.status(500).json({ error: err.message || '图床上传失败' });
@@ -341,7 +333,7 @@ app.get('/api/mashu-stickers', async (req, res) => {
     let best = readBestLocalMashuStickersPayload();
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2800);
+      const timer = setTimeout(() => controller.abort(), 3500);
       const ntfyRes = await fetch(`https://ntfy.sh/${MASHU_GLOBAL_CLOUD_TOPIC}/json?poll=1&since=all`, {
         signal: controller.signal
       });
@@ -352,21 +344,54 @@ app.get('/api/mashu-stickers', async (req, res) => {
         for (let i = lines.length - 1; i >= 0; i--) {
           try {
             const evt = JSON.parse(lines[i]);
-            if (evt && evt.event === 'message' && typeof evt.message === 'string') {
-              const payload = JSON.parse(evt.message);
-              if (payload && Array.isArray(payload.stickers)) {
-                const remoteTs = Number(payload.updatedAt) || (Number(evt.time) * 1000) || 0;
-                if (remoteTs > best.updatedAt || (best.stickers.length === 0 && payload.stickers.length > 0)) {
-                  best = { updatedAt: remoteTs, stickers: payload.stickers };
-                  writeAllLocalMashuStickersFiles(best);
+            if (!evt || evt.event !== 'message') continue;
+            let payload = null;
+            if (evt.attachment && typeof evt.attachment.url === 'string') {
+              const attCtrl = new AbortController();
+              const attTimer = setTimeout(() => attCtrl.abort(), 3500);
+              const attRes = await fetch(evt.attachment.url, { signal: attCtrl.signal });
+              clearTimeout(attTimer);
+              if (attRes.ok) {
+                const attText = await attRes.text();
+                if (attText && attText.trim().startsWith('{')) {
+                  payload = JSON.parse(attText);
                 }
-                break;
               }
+            } else if (typeof evt.message === 'string' && evt.message.trim().startsWith('{')) {
+              payload = JSON.parse(evt.message);
+            }
+            if (payload && Array.isArray(payload.stickers)) {
+              const remoteTs = Number(payload.updatedAt) || (Number(evt.time) * 1000) || 0;
+              if (remoteTs > best.updatedAt || (best.stickers.length === 0 && payload.stickers.length > 0)) {
+                best = { updatedAt: remoteTs, stickers: payload.stickers };
+                writeAllLocalMashuStickersFiles(best);
+              }
+              break;
             }
           } catch (_) {}
         }
       }
     } catch (_) {}
+
+    let healedAny = false;
+    if (Array.isArray(best.stickers) && best.stickers.length > 0) {
+      for (let i = 0; i < best.stickers.length; i++) {
+        const item = best.stickers[i];
+        if (!item || typeof item.url !== 'string') continue;
+        if (!item.url.startsWith('data:image/')) {
+          const healed = await healStickerUrlOnServer(item.url);
+          if (healed && healed.startsWith('data:image/') && healed !== item.url) {
+            item.url = healed;
+            healedAny = true;
+          }
+        }
+      }
+      if (healedAny) {
+        best.updatedAt = Math.max(best.updatedAt || 0, Date.now());
+        writeAllLocalMashuStickersFiles(best);
+      }
+    }
+
     return res.json({ ok: true, updatedAt: best.updatedAt, stickers: best.stickers });
   } catch (err) {
     return res.json({ ok: true, updatedAt: 0, stickers: [] });
@@ -377,18 +402,30 @@ app.post('/api/mashu-stickers', async (req, res) => {
   try {
     const incoming = req.body && Array.isArray(req.body.stickers) ? req.body.stickers : [];
     const updatedAt = Number(req.body?.updatedAt) || Date.now();
-    const cleaned = incoming
-      .filter(s => s && typeof s.name === 'string' && typeof s.url === 'string' && s.name.trim() && s.url.trim())
-      .map(s => ({
+    const cleaned = [];
+    for (const s of incoming) {
+      if (!s || typeof s.name !== 'string' || typeof s.url !== 'string' || !s.name.trim() || !s.url.trim()) continue;
+      let finalUrl = s.url.trim();
+      if (!finalUrl.startsWith('data:image/')) {
+        const healed = await healStickerUrlOnServer(finalUrl);
+        if (healed && healed.startsWith('data:image/')) {
+          finalUrl = healed;
+        }
+      }
+      cleaned.push({
         id: String(s.id || ('ms_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
         name: s.name.trim(),
-        url: s.url.trim(),
+        url: finalUrl,
         enabled: s.enabled !== false
-      }));
+      });
+    }
     const payload = { updatedAt, stickers: cleaned };
     writeAllLocalMashuStickersFiles(payload);
     fetch(`https://ntfy.sh/${MASHU_GLOBAL_CLOUD_TOPIC}`, {
       method: 'POST',
+      headers: {
+        'Filename': 'mashu-stickers.json'
+      },
       body: JSON.stringify(payload)
     }).catch(() => {});
     return res.json({ ok: true, updatedAt, stickers: cleaned });
