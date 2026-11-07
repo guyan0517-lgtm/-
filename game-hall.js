@@ -2774,7 +2774,10 @@ code, pre {
               if (!rawHtml || isHostAppHtmlFallback(rawHtml)) return;
               const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
               const shouldDark = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
-              const rawProxiedHtml = String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, window.location.origin + '/api/raw-gh/');
+              const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
+                ? window.location.origin
+                : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
+              const rawProxiedHtml = String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, hostOrigin + '/api/raw-gh/');
               const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawProxiedHtml) : rawProxiedHtml;
               for (const el of arr) {
                 if (!el) continue;
@@ -2803,7 +2806,42 @@ code, pre {
                     .replace(
                       'let item = unlockedIngredients[id];',
                       'let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
+                    )
+                    .replace(
+                      /return\s+a\.id\.localeCompare\(b\.id\);/g,
+                      'return String(a.id || a.name || "").localeCompare(String(b.id || b.name || ""));'
+                    )
+                    .replace(
+                      'if (layerId === "layer-currency") {',
+                      'if (layerId === "layer-menu") { setTimeout(() => { if (typeof initShowcaseKey === "function" && !currentShowcaseKey) initShowcaseKey(); if (typeof updateShowcaseDisplay === "function") updateShowcaseDisplay(); if (typeof refreshRecipeList === "function") refreshRecipeList(); }, 30); }\n          if (layerId === "layer-currency") {'
+                    )
+                    .replace(
+                      'const scale = canvas.clientWidth / 650;',
+                      'const scale = (canvas.clientWidth || 460) / 650;'
+                    )
+                    .replace(
+                      'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || "";',
+                      'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || Object.keys(shopMenu)[0] || "";'
+                    )
+                    .replace(
+                      'function parseShortCode(code) {',
+                      'function buildFallbackCodeFromItem(drinkObj) { try { if (!drinkObj) return null; const ingNames = Array.isArray(drinkObj.ingredients) ? drinkObj.ingredients : (Array.isArray(drinkObj.Components) ? drinkObj.Components : []); const masterList = getMasterIngredientList(); if (!Array.isArray(masterList) || !masterList.length) return null; const layers = []; const bw = masterList.find(i => i.id === "wall_back"); if (bw) layers.push(createDefaultLayer(bw, 1)); const matched = []; ingNames.forEach(n => { const found = Object.values(unlockedIngredients || {}).find(u => u && (u.name === n || u.id === n || u.baseImageName === n)) || masterList.find(i => i.name === n || i.id === n); if (found && !found.isFixed) matched.push(found); }); if (!matched.length) { const defBase = masterList.find(i => i.id === "classic_full" || (i.type === "base" && !i.isFixed)); if (defBase) matched.push(defBase); } matched.sort((a, b) => (a.z || 10) - (b.z || 10)).forEach((it, idx) => layers.push(createDefaultLayer(it, 10 + idx))); const fw = masterList.find(i => i.id === "wall_front"); if (fw) layers.push(createDefaultLayer(fw, 999)); const raw = layers.map(l => { const lookup = (getIngredientById(l.id) || l).baseImageName || l.name; const dbIdx = masterList.findIndex(db => db.name === lookup || db.id === l.id); if (dbIdx === -1) return null; const tint = l.tintColor ? String(l.tintColor).replace("#", "") : ""; return [dbIdx, 0, 0, l.zIndex, 100, 100, 100, 100, tint].join(","); }).filter(Boolean).join(";"); return raw ? btoa(raw) : null; } catch (e) { return null; } }\nfunction parseShortCode(code) {\n    if (!code) { try { const bk = JSON.parse(localStorage.getItem("milktea_dev_backup") || "null"); if (bk && bk.code) code = bk.code; } catch (e) {} }'
+                    )
+                    .replace(
+                      'renderThumbnailFromCode(canvas, item.code, scale, false);',
+                      'if (!item.code && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); renderThumbnailFromCode(canvas, item.code, scale, false);'
+                    )
+                    .replace(
+                      'setTimeout(() => renderThumbnail(index, key, item.code, 361 / 650), 0);',
+                      'if (!item.code && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); setTimeout(() => renderThumbnail(index, key, item.code, 361 / 650), 0);'
                     );
+                  if (ownerWin.frameElement && /scale-container/i.test(patchedHtml)) {
+                    const fEl = ownerWin.frameElement;
+                    const fW = fEl.clientWidth || ownerDoc.documentElement.clientWidth || 360;
+                    const initH = Math.round(Math.min(Math.max(fW, 300), 736) * (1312 / 736)) + 8;
+                    fEl.style.height = initH + 'px';
+                    fEl.style.minHeight = '600px';
+                  }
                   const parser = new DOMParser();
                   const parsedDoc = parser.parseFromString(patchedHtml, 'text/html');
                   if (ownerDoc.head && parsedDoc.head) {
@@ -2827,7 +2865,7 @@ code, pre {
                     const newScript = ownerDoc.createElement('script');
                     Array.from(oldScript.attributes).forEach(attr => {
                       if (attr.name.toLowerCase() === 'src' && /cdn\.tailwindcss\.com/i.test(attr.value)) {
-                        newScript.setAttribute('src', window.location.origin + '/public/vendor/tailwindcss.js');
+                        newScript.setAttribute('src', hostOrigin + '/public/vendor/tailwindcss.js');
                       } else {
                         newScript.setAttribute(attr.name, attr.value);
                       }
@@ -2857,15 +2895,18 @@ code, pre {
                   if (ownerDoc.documentElement) {
                     ownerDoc.documentElement.classList.add('tw-ready');
                   }
+                  if (typeof ownerWin.syncFrameHeight === 'function') {
+                    ownerWin.syncFrameHeight();
+                  }
                   if (ownerDoc.readyState !== 'loading' && typeof ownerWin.onload === 'function' && !ownerWin._tavernLoadOnloadFired) {
                     ownerWin._tavernLoadOnloadFired = true;
                     ownerWin.onload(new Event('load'));
                   }
                   ownerWin.dispatchEvent(new Event('resize'));
                   if (typeof ownerWin.syncFrameHeight === 'function') {
-                    ownerWin.syncFrameHeight();
-                    setTimeout(() => ownerWin.syncFrameHeight(), 180);
-                    setTimeout(() => ownerWin.syncFrameHeight(), 500);
+                    setTimeout(() => ownerWin.syncFrameHeight(), 60);
+                    setTimeout(() => ownerWin.syncFrameHeight(), 220);
+                    setTimeout(() => ownerWin.syncFrameHeight(), 550);
                   }
                 } catch (_) {}
               }
@@ -10502,11 +10543,14 @@ code, pre {
     const allowAudioInFrame = isFullModal || isLastFloor;
     const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
     const shouldAdaptDarkHtml = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
+    const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
+      ? window.location.origin
+      : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
     let cleaned = String(rawHtmlDoc || '')
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
       .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '')
-      .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + window.location.origin + '/public/vendor/tailwindcss.js$2')
-      .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, window.location.origin + '/api/raw-gh/')
+      .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + hostOrigin + '/public/vendor/tailwindcss.js$2')
+      .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, hostOrigin + '/api/raw-gh/')
       .replace(
         'Object.values(unlockedIngredients).forEach((item) => {',
         'Object.entries(unlockedIngredients || {}).forEach(([uKey, item]) => { if (!item || typeof item !== "object") return; const dbRef = ingredientsDB.find(i => i.id === uKey || i.id === item.id || i.name === item.name || (item.baseImageName && i.name === item.baseImageName)); if (!item.id || item.id === "default") item.id = (dbRef && dbRef.id) || uKey || item.name; if (dbRef) { if (!item.z || item.z === 10) item.z = dbRef.z; if (!item.type) item.type = dbRef.type; }'
@@ -10514,6 +10558,22 @@ code, pre {
       .replace(
         'let item = unlockedIngredients[id];',
         'let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
+      )
+      .replace(
+        /return\s+a\.id\.localeCompare\(b\.id\);/g,
+        'return String(a.id || a.name || "").localeCompare(String(b.id || b.name || ""));'
+      )
+      .replace(
+        'if (layerId === "layer-currency") {',
+        'if (layerId === "layer-menu") { setTimeout(() => { if (typeof initShowcaseKey === "function" && !currentShowcaseKey) initShowcaseKey(); if (typeof updateShowcaseDisplay === "function") updateShowcaseDisplay(); if (typeof refreshRecipeList === "function") refreshRecipeList(); }, 30); }\n          if (layerId === "layer-currency") {'
+      )
+      .replace(
+        'const scale = canvas.clientWidth / 650;',
+        'const scale = (canvas.clientWidth || 460) / 650;'
+      )
+      .replace(
+        'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || "";',
+        'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || Object.keys(shopMenu)[0] || "";'
       );
 
     if (!allowAudioInFrame) {
@@ -10540,8 +10600,6 @@ code, pre {
         padding: 0;
         width: 100%;
         max-width: 100%;
-        height: auto !important;
-        min-height: 0 !important;
         overflow-x: hidden !important;
         overflow-y: ${isFullModal ? 'auto' : 'hidden'} !important;
         box-sizing: border-box;
@@ -10727,9 +10785,39 @@ code, pre {
     e.preventDefault();
     e.stopPropagation();
   }, true);
+  window.addEventListener('error', function(e) {
+    try {
+      var t = e && e.target;
+      if (!t || t.tagName !== 'IMG') return;
+      if (t.getAttribute('data-gh-cdn-fallback') === '1') return;
+      var s = t.getAttribute('src') || '';
+      var sub = '';
+      if (s.indexOf('/api/raw-gh/') !== -1) {
+        sub = s.split('/api/raw-gh/')[1] || '';
+      } else if (s.indexOf('raw.githubusercontent.com/') !== -1) {
+        sub = s.split('raw.githubusercontent.com/')[1] || '';
+      }
+      if (sub) {
+        var cleanSub = sub.split('?')[0].split('#')[0];
+        var parts = cleanSub.split('/');
+        if (parts.length >= 4) {
+          var owner = parts[0];
+          var repo = parts[1];
+          var branchIdx = (parts[2] === 'refs' && parts[3] === 'heads') ? 4 : 2;
+          if (parts.length > branchIdx + 1) {
+            var branch = parts[branchIdx];
+            var filePath = parts.slice(branchIdx + 1).join('/');
+            t.setAttribute('data-gh-cdn-fallback', '1');
+            t.src = 'https://testingcf.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
+          }
+        }
+      }
+    } catch (err) {}
+  }, true);
   function syncAvatarCssVars() {
     try {
       if (!window.parent) return;
+      var pOrigin = (window.parent.location && window.parent.location.origin && window.parent.location.origin !== 'null') ? window.parent.location.origin : '';
       var uUrl = typeof window.parent.__getTavernUserAvatarUrl === 'function' ? window.parent.__getTavernUserAvatarUrl() : '';
       var cUrl = typeof window.parent.__getTavernCharAvatarUrl === 'function' ? window.parent.__getTavernCharAvatarUrl() : '';
       if (uUrl) {
@@ -10742,10 +10830,13 @@ code, pre {
       for (var i = 0; i < imgs.length; i++) {
         var im = imgs[i];
         var rawSrc = im.getAttribute('src') || '';
-        if (rawSrc.indexOf('https://raw.githubusercontent.com/') === 0 || rawSrc.indexOf('http://raw.githubusercontent.com/') === 0) {
-          var ghSub = rawSrc.replace(/^https?:\/\/raw\.githubusercontent\.com\//i, '');
-          im.src = window.parent.location.origin + '/api/raw-gh/' + ghSub;
-        } else if (uUrl && (/User%20Avatars|User Avatars|user-avatar|\x7b\x7buser\x7d\x7d/i.test(rawSrc))) {
+        var lowSrc = rawSrc.toLowerCase();
+        if (lowSrc.indexOf('https://raw.githubusercontent.com/') === 0 || lowSrc.indexOf('http://raw.githubusercontent.com/') === 0) {
+          var ghSub = rawSrc.split('raw.githubusercontent.com/')[1] || '';
+          im.src = pOrigin + '/api/raw-gh/' + ghSub;
+        } else if (rawSrc.indexOf('null/api/raw-gh/') === 0) {
+          im.src = pOrigin + rawSrc.slice(4);
+        } else if (uUrl && (lowSrc.indexOf('user%20avatars') !== -1 || lowSrc.indexOf('user avatars') !== -1 || lowSrc.indexOf('user-avatar') !== -1 || lowSrc.indexOf('{{user}}') !== -1 || lowSrc.indexOf('%7b%7buser%7d%7d') !== -1)) {
           im.src = uUrl;
         } else if (rawSrc.indexOf('vault://') === 0 && typeof window.parent.resolveVaultRefToUrl === 'function') {
           (function(imgEl, vRef) {
@@ -10980,9 +11071,9 @@ code, pre {
       var outerC = document.getElementById('outerContainer');
       var rootCard = document.getElementById('statusRoot') || outerC || document.getElementById('app-root') || document.querySelector('.gourmet-main-frame');
       if (scaleContainer && (document.getElementById('sim-scaler') || document.querySelector('.outer-container'))) {
-        var scRect = scaleContainer.getBoundingClientRect();
-        if (scRect.width > 40) {
-          contentH = Math.round(scRect.width * (1312 / 736)) + 12;
+        var availW = d.clientWidth || window.innerWidth || frame.clientWidth || 360;
+        if (availW > 40) {
+          contentH = Math.round(Math.min(availW, 736) * (1312 / 736)) + 8;
         }
       } else if (rootCard) {
         var rcRect = rootCard.getBoundingClientRect();
@@ -10993,9 +11084,11 @@ code, pre {
         if (children && children.length > 0) {
           var maxBottom = 0;
           var hasVisibleChild = false;
+          var hasScriptChild = false;
           for (var i = 0; i < children.length; i++) {
             var ch = children[i];
-            if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') continue;
+            if (ch.tagName === 'SCRIPT') { hasScriptChild = true; continue; }
+            if (ch.tagName === 'STYLE') continue;
             var cs = window.getComputedStyle(ch);
             if (cs.display === 'none' || cs.visibility === 'hidden') continue;
             var r = ch.getBoundingClientRect();
@@ -11004,6 +11097,7 @@ code, pre {
             if (bot > maxBottom) maxBottom = bot;
           }
           if (!hasVisibleChild && maxBottom <= 12 && !(b.innerText || '').trim()) {
+            if (hasScriptChild) return;
             frame.style.height = '0px';
             frame.style.minHeight = '0px';
             frame.style.margin = '0px';
@@ -11317,8 +11411,22 @@ code, pre {
     const activeThemeForMsg = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
     const shouldAdaptDarkInline = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeThemeForMsg));
     let cleanedForDisplay = String(rawText);
-    if (!/<(?:think|thinking|thought|reasoning|cot|antThinking)\b/i.test(cleanedForDisplay)) {
-      cleanedForDisplay = cleanedForDisplay.replace(/<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
+    cleanedForDisplay = cleanedForDisplay.replace(/<(?:think|thinking|thought|reasoning|cot|antThinking)(?:\s[^>]*)?>[\s\S]*?<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
+    const orphanCloseMatch = cleanedForDisplay.match(/^([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/i);
+    if (orphanCloseMatch && !/<(?:think|thinking|thought|reasoning|cot|antThinking)\b/i.test(orphanCloseMatch[1])) {
+      const afterClose = cleanedForDisplay.slice(orphanCloseMatch[0].length);
+      if (afterClose.trim().length > 0) {
+        cleanedForDisplay = afterClose;
+      } else {
+        cleanedForDisplay = cleanedForDisplay.replace(/<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
+      }
+    }
+    const cotChecklistRenderMatch = cleanedForDisplay.match(/^([\s\S]*?Scan against\s*&\s*Global Replacement:[\s\S]*?All checks CLEAR\.[ \t]*\r?\n*)/i);
+    if (cotChecklistRenderMatch) {
+      const afterChecklist = cleanedForDisplay.slice(cotChecklistRenderMatch[0].length);
+      if (afterChecklist.trim().length > 0) {
+        cleanedForDisplay = afterChecklist;
+      }
     }
     cleanedForDisplay = cleanedForDisplay.trim();
     if (!cleanedForDisplay) return '';
@@ -13409,13 +13517,19 @@ code, pre {
     const lastMsg = messages[messages.length - 1];
     if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.content) return false;
     const txt = String(lastMsg.content).trim();
-    if (/<(?:think|thinking|thought|reasoning|cot)>\s*$/i.test(txt)) return true;
+    if (/<(?:think|thinking|thought|reasoning|cot|antThinking)\b[^>]*>(?![\s\S]*<\/(?:think|thinking|thought|reasoning|cot|antThinking)>)/i.test(txt)) return true;
     const pairs = getActiveReasoningTagPairs();
     for (const pair of pairs) {
       const startTag = String(pair?.start || '').trim();
+      const endTag = String(pair?.end || '').trim();
       if (startTag) {
         const escStart = startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (new RegExp(escStart + '\\s*$', 'i').test(txt)) return true;
+        const escEnd = endTag ? endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+        if (escEnd) {
+          if (new RegExp(escStart + '(?![\\s\\S]*' + escEnd + ')', 'i').test(txt)) return true;
+        } else if (new RegExp(escStart + '\\s*$', 'i').test(txt)) {
+          return true;
+        }
       }
     }
     return false;
@@ -13443,37 +13557,47 @@ code, pre {
       });
     }
 
-    // 2. Standard reasoning tags (paired: <think>, <thinking>, <thought>, <reasoning>, <cot>)
-    text = text.replace(/<(?:think|thinking|thought|reasoning|cot)>([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot)>/gi, (_, inner) => {
+    // 2. Standard reasoning tags (paired: <think>, <thinking>, <thought>, <reasoning>, <cot>, <antThinking>)
+    text = text.replace(/<(?:think|thinking|thought|reasoning|cot|antThinking)(?:\s[^>]*)?>([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, (_, inner) => {
       if (inner && inner.trim()) reasoningChunks.push(inner.trim());
       return '';
     });
 
-    // 3. Prefill closing tag without opening tag
-    if (options && options.hasPrefill) {
-      for (const pair of pairs) {
-        const startTag = String(pair?.start || '').trim();
-        const endTag = String(pair?.end || '').trim();
-        if (!endTag) continue;
-        const escStart = startTag ? startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
-        const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const prefillCustomRx = new RegExp('^([\\s\\S]*?)' + escEnd, 'i');
-        const mCustom = text.match(prefillCustomRx);
-        if (mCustom && (!escStart || !new RegExp(escStart, 'i').test(mCustom[1]))) {
+    // 3. Prefill closing tag without opening tag (SillyTavern reasoning.js 1-to-1)
+    for (const pair of pairs) {
+      const startTag = String(pair?.start || '').trim();
+      const endTag = String(pair?.end || '').trim();
+      if (!endTag) continue;
+      const escStart = startTag ? startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+      const escEnd = endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const prefillCustomRx = new RegExp('^([\\s\\S]*?)' + escEnd, 'i');
+      const mCustom = text.match(prefillCustomRx);
+      if (mCustom && (!escStart || !new RegExp(escStart, 'i').test(mCustom[1]))) {
+        const remCustom = text.slice(mCustom[0].length);
+        if ((options && options.hasPrefill) || remCustom.trim().length > 0) {
           if (mCustom[1].trim()) reasoningChunks.push(mCustom[1].trim());
-          text = text.slice(mCustom[0].length);
+          text = remCustom;
         }
       }
     }
-    const prefillStdMatch = text.match(/^([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot)>/i);
-    if (prefillStdMatch && !/<(?:think|thinking|thought|reasoning|cot)>/i.test(prefillStdMatch[1])) {
-      if (options && options.hasPrefill) {
-        const remAfterStd = text.slice(prefillStdMatch[0].length);
+    const prefillStdMatch = text.match(/^([\s\S]*?)<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/i);
+    if (prefillStdMatch && !/<(?:think|thinking|thought|reasoning|cot|antThinking)\b/i.test(prefillStdMatch[1])) {
+      const remAfterStd = text.slice(prefillStdMatch[0].length);
+      if ((options && options.hasPrefill) || remAfterStd.trim().length > 0) {
         if (prefillStdMatch[1].trim()) reasoningChunks.push(prefillStdMatch[1].trim());
         text = remAfterStd;
       } else {
-        // Without prefill, remove only the stray orphan closing tag so story text before it is never deleted
-        text = text.replace(/<\/(?:think|thinking|thought|reasoning|cot)>/gi, '');
+        text = text.replace(/<\/(?:think|thinking|thought|reasoning|cot|antThinking)>/gi, '');
+      }
+    }
+
+    // 3b. Structured CoT checklist block where closing tag was absent or previously stripped
+    const cotChecklistMatch = text.match(/^([\s\S]*?Scan against\s*&\s*Global Replacement:[\s\S]*?All checks CLEAR\.[ \t]*\r?\n*)/i);
+    if (cotChecklistMatch) {
+      const remAfterChecklist = text.slice(cotChecklistMatch[0].length);
+      if (remAfterChecklist.trim().length > 0) {
+        if (cotChecklistMatch[1].trim()) reasoningChunks.push(cotChecklistMatch[1].trim());
+        text = remAfterChecklist;
       }
     }
 
@@ -13491,7 +13615,7 @@ code, pre {
           text = text.slice(0, uCustom.index);
         }
       }
-      const unclosedStdMatch = text.match(/<(?:think|thinking|thought|reasoning|cot)>([\s\S]*)$/i);
+      const unclosedStdMatch = text.match(/<(?:think|thinking|thought|reasoning|cot|antThinking)(?:\s[^>]*)?>([\s\S]*)$/i);
       if (unclosedStdMatch) {
         if (unclosedStdMatch[1].trim()) reasoningChunks.push(unclosedStdMatch[1].trim());
         text = text.slice(0, unclosedStdMatch.index);
