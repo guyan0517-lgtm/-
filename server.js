@@ -520,9 +520,44 @@ app.get('/api/local-vault/list', (req, res) => {
     const files = fs.existsSync(LOCAL_VAULT_MEDIA_DIR)
       ? fs.readdirSync(LOCAL_VAULT_MEDIA_DIR).filter((f) => f !== '.nomedia')
       : [];
-    return res.json({ ok: true, files });
+    const fileDetails = files.map((f) => {
+      let size = 0;
+      try {
+        const st = fs.statSync(path.join(LOCAL_VAULT_MEDIA_DIR, f));
+        size = Math.max(0, st.size - 8);
+      } catch (_) {}
+      return { name: f, size };
+    });
+    return res.json({ ok: true, files, fileDetails });
   } catch (err) {
-    return res.status(500).json({ ok: false, files: [] });
+    return res.status(500).json({ ok: false, files: [], fileDetails: [] });
+  }
+});
+
+app.post('/api/local-vault/media-delete', (req, res) => {
+  try {
+    const targetFiles = Array.isArray(req.body?.files) ? req.body.files : [];
+    let deleted = 0;
+    let freedBytes = 0;
+    for (const rawName of targetFiles) {
+      const safeName = path.basename(String(rawName || '')).replace(/[^a-zA-Z0-9._-]/g, '_');
+      if (!safeName || safeName === '.nomedia') continue;
+      const stealthName = toStealthDiskFileName(safeName);
+      for (const candidate of new Set([safeName, stealthName])) {
+        const p = path.join(LOCAL_VAULT_MEDIA_DIR, candidate);
+        if (fs.existsSync(p)) {
+          try {
+            const st = fs.statSync(p);
+            freedBytes += st.size;
+            fs.unlinkSync(p);
+            deleted++;
+          } catch (_) {}
+        }
+      }
+    }
+    return res.json({ ok: true, deleted, freedBytes });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
