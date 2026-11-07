@@ -2770,14 +2770,21 @@ code, pre {
             const parts = urlOrFn.trim().split(/\s+/);
             const fetchUrl = parts[0];
             const subSel = parts.slice(1).join(' ');
-            fetch(fetchUrl).then(r => r.ok ? r.text() : '').then(async rawHtml => {
+            const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
+              ? window.location.origin
+              : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
+            const primaryFetchUrl = /^https?:\/\/trrtty\.github\.io\/milktea\/?$/i.test(fetchUrl)
+              ? ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/trrtty/milktea/main/index.html')
+              : fetchUrl;
+            fetch(primaryFetchUrl).then(r => r.ok ? r.text() : '').catch(() => '').then(async firstHtml => {
+              let rawHtml = firstHtml;
+              if ((!rawHtml || isHostAppHtmlFallback(rawHtml)) && primaryFetchUrl !== fetchUrl) {
+                rawHtml = await fetch(fetchUrl).then(r => r.ok ? r.text() : '').catch(() => '');
+              }
               if (!rawHtml || isHostAppHtmlFallback(rawHtml)) return;
               const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
               const shouldDark = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
-              const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
-                ? window.location.origin
-                : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
-              const rawProxiedHtml = String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, hostOrigin + '/api/raw-gh/');
+              const rawProxiedHtml = String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, (hostOrigin ? hostOrigin : '') + '/api/raw-gh/');
               const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawProxiedHtml) : rawProxiedHtml;
               for (const el of arr) {
                 if (!el) continue;
@@ -2790,51 +2797,7 @@ code, pre {
                   const matched = tmp.querySelector(subSel);
                   el.innerHTML = matched ? matched.innerHTML : '';
                 } else if (/<!doctype\s+html|<html[\s>]/i.test(finalHtml)) {
-                  const patchedHtml = finalHtml
-                    .replace(
-                      'if (customersDB[key].name === speakerName) {',
-                      'if (key === targetId || customersDB[key].id === targetId || customersDB[key].name === speakerName || (speakerName && customersDB[key].name && String(speakerName).includes(customersDB[key].name))) {'
-                    )
-                    .replace(
-                      'if (descEl) descEl.innerText = targetDesc;',
-                      'if (descEl) descEl.innerText = targetDesc || (customersDB[targetId] && (customersDB[targetId].desc || customersDB[targetId].shortDesc)) || "";'
-                    )
-                    .replace(
-                      'Object.values(unlockedIngredients).forEach((item) => {',
-                      'Object.entries(unlockedIngredients || {}).forEach(([uKey, item]) => { if (!item || typeof item !== "object") return; const dbRef = ingredientsDB.find(i => i.id === uKey || i.id === item.id || i.name === item.name || (item.baseImageName && i.name === item.baseImageName)); if (!item.id || item.id === "default") item.id = (dbRef && dbRef.id) || uKey || item.name; if (dbRef) { if (!item.z || item.z === 10) item.z = dbRef.z; if (!item.type) item.type = dbRef.type; }'
-                    )
-                    .replace(
-                      'let item = unlockedIngredients[id];',
-                      'let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
-                    )
-                    .replace(
-                      /return\s+a\.id\.localeCompare\(b\.id\);/g,
-                      'return String(a.id || a.name || "").localeCompare(String(b.id || b.name || ""));'
-                    )
-                    .replace(
-                      'if (layerId === "layer-currency") {',
-                      'if (layerId === "layer-menu") { setTimeout(() => { if (typeof initShowcaseKey === "function" && !currentShowcaseKey) initShowcaseKey(); if (typeof updateShowcaseDisplay === "function") updateShowcaseDisplay(); if (typeof refreshRecipeList === "function") refreshRecipeList(); }, 30); }\n          if (layerId === "layer-currency") {'
-                    )
-                    .replace(
-                      'const scale = canvas.clientWidth / 650;',
-                      'const scale = (canvas.clientWidth || 460) / 650;'
-                    )
-                    .replace(
-                      'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || "";',
-                      'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || Object.keys(shopMenu)[0] || "";'
-                    )
-                    .replace(
-                      'function parseShortCode(code) {',
-                      'function buildFallbackCodeFromItem(drinkObj) { try { if (!drinkObj) return null; const ingNames = Array.isArray(drinkObj.ingredients) ? drinkObj.ingredients : (Array.isArray(drinkObj.Components) ? drinkObj.Components : []); const masterList = getMasterIngredientList(); if (!Array.isArray(masterList) || !masterList.length) return null; const layers = []; const bw = masterList.find(i => i.id === "wall_back"); if (bw) layers.push(createDefaultLayer(bw, 1)); const matched = []; ingNames.forEach(n => { const found = Object.values(unlockedIngredients || {}).find(u => u && (u.name === n || u.id === n || u.baseImageName === n)) || masterList.find(i => i.name === n || i.id === n); if (found && !found.isFixed) matched.push(found); }); if (!matched.length) { const defBase = masterList.find(i => i.id === "classic_full" || (i.type === "base" && !i.isFixed)); if (defBase) matched.push(defBase); } matched.sort((a, b) => (a.z || 10) - (b.z || 10)).forEach((it, idx) => layers.push(createDefaultLayer(it, 10 + idx))); const fw = masterList.find(i => i.id === "wall_front"); if (fw) layers.push(createDefaultLayer(fw, 999)); const raw = layers.map(l => { const lookup = (getIngredientById(l.id) || l).baseImageName || l.name; const dbIdx = masterList.findIndex(db => db.name === lookup || db.id === l.id); if (dbIdx === -1) return null; const tint = l.tintColor ? String(l.tintColor).replace("#", "") : ""; return [dbIdx, 0, 0, l.zIndex, 100, 100, 100, 100, tint].join(","); }).filter(Boolean).join(";"); return raw ? btoa(raw) : null; } catch (e) { return null; } }\nfunction parseShortCode(code) {\n    if (!code) { try { const bk = JSON.parse(localStorage.getItem("milktea_dev_backup") || "null"); if (bk && bk.code) code = bk.code; } catch (e) {} }'
-                    )
-                    .replace(
-                      'renderThumbnailFromCode(canvas, item.code, scale, false);',
-                      'if (!item.code && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); renderThumbnailFromCode(canvas, item.code, scale, false);'
-                    )
-                    .replace(
-                      'setTimeout(() => renderThumbnail(index, key, item.code, 361 / 650), 0);',
-                      'if (!item.code && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); setTimeout(() => renderThumbnail(index, key, item.code, 361 / 650), 0);'
-                    );
+                  const patchedHtml = patchMilkteaCardHtml(finalHtml);
                   if (ownerWin.frameElement && /scale-container/i.test(patchedHtml)) {
                     const fEl = ownerWin.frameElement;
                     const fW = fEl.clientWidth || ownerDoc.documentElement.clientWidth || 360;
@@ -10537,27 +10500,143 @@ code, pre {
     return output;
   }
 
-  function buildSandboxIframeHtml(rawHtmlDoc, options = {}) {
-    const isFullModal = Boolean(options && options.isModal);
-    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
-    const allowAudioInFrame = isFullModal || isLastFloor;
-    const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
-    const shouldAdaptDarkHtml = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
-    const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
-      ? window.location.origin
-      : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
-    let cleaned = String(rawHtmlDoc || '')
-      .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
-      .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '')
-      .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + hostOrigin + '/public/vendor/tailwindcss.js$2')
-      .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, hostOrigin + '/api/raw-gh/')
+  function patchMilkteaCardHtml(htmlStr) {
+    let out = String(htmlStr || '').replace(/\r\n/g, '\n');
+    if (!out.includes('unlockedIngredients') && !out.includes('parseShortCode')) {
+      return out;
+    }
+    const milkteaHelpers = `
+function normalizeMilkteaIngredients() {
+  try {
+    if (typeof unlockedIngredients !== "object" || !unlockedIngredients) unlockedIngredients = {};
+    const dbList = typeof ingredientsDB !== "undefined" && Array.isArray(ingredientsDB) ? ingredientsDB : [];
+    Object.entries(unlockedIngredients).forEach(([uKey, item]) => {
+      if (!item || typeof item !== "object") return;
+      const dbRef = dbList.find(i => i.id === uKey || i.id === item.id || i.name === uKey || i.name === item.name || (item.baseImageName && i.name === item.baseImageName));
+      if (!item.id || item.id === "default") item.id = (dbRef && dbRef.id) || uKey || item.name || ("ing_" + Math.random().toString(36).slice(2, 7));
+      if (!item.name || item.name === "未知原料") item.name = (dbRef && dbRef.name) || uKey || item.id;
+      if (dbRef) {
+        if (!item.z || item.z === 10) item.z = dbRef.z;
+        if (!item.type) item.type = dbRef.type;
+        if (!item.baseImageName) item.baseImageName = dbRef.baseImageName || dbRef.name;
+      }
+      const targetImg = item.baseImageName || item.name;
+      if (dbList.length && !dbList.some(d => d.name === targetImg || d.baseImageName === targetImg)) {
+        const fuzzy = dbList.find(d => !d.isFixed && (String(targetImg).includes(d.name) || String(d.name).includes(targetImg)));
+        if (fuzzy) {
+          item.baseImageName = fuzzy.baseImageName || fuzzy.name;
+        } else {
+          item.baseImageName = item.type === "topping" ? "珍珠" : (String(item.name).includes("中层") ? "经典_中层" : (String(item.name).includes("上层") ? "经典_上层" : "经典_全层"));
+        }
+      }
+      if (item.defaultTint) {
+        const tStr = String(item.defaultTint).trim();
+        if (!/^#?[0-9A-Fa-f]{3,6}$/.test(tStr) || /^(none|null|undefined)$/i.test(tStr)) {
+          item.defaultTint = null;
+        }
+      }
+    });
+    if (Object.keys(unlockedIngredients).length === 0 && dbList.length) {
+      dbList.filter(i => !i.isFixed).slice(0, 12).forEach(i => {
+        unlockedIngredients[i.id] = Object.assign({}, i);
+      });
+    }
+  } catch (e) {}
+}
+function buildFallbackLayersFromDrink(drinkOrCode) {
+  try {
+    normalizeMilkteaIngredients();
+    const masterList = typeof getMasterIngredientList === "function" ? getMasterIngredientList() : (typeof ingredientsDB !== "undefined" ? ingredientsDB : []);
+    if (!Array.isArray(masterList) || !masterList.length) return [];
+    let drinkObj = null;
+    if (drinkOrCode && typeof drinkOrCode === "object") {
+      drinkObj = drinkOrCode;
+    } else if (typeof drinkOrCode === "string" && typeof shopMenu === "object" && shopMenu) {
+      drinkObj = shopMenu[drinkOrCode] || Object.values(shopMenu).find(d => d && (d.name === drinkOrCode || d.code === drinkOrCode));
+    }
+    if (!drinkObj && typeof editorState === "object" && editorState && editorState.tempStats && (editorState.tempStats.ingredients || editorState.tempStats.Components)) {
+      drinkObj = editorState.tempStats;
+    }
+    if (!drinkObj && typeof shopMenu === "object" && shopMenu) {
+      const k = (typeof currentShowcaseKey === "string" && currentShowcaseKey && shopMenu[currentShowcaseKey]) ? currentShowcaseKey : Object.keys(shopMenu)[0];
+      if (k) drinkObj = shopMenu[k];
+    }
+    const ingNames = drinkObj ? (Array.isArray(drinkObj.ingredients) ? drinkObj.ingredients : (Array.isArray(drinkObj.Components) ? drinkObj.Components : [])) : [];
+    const layers = [];
+    const bw = masterList.find(i => i.id === "wall_back" || i.name === "后壁");
+    if (bw) layers.push(createDefaultLayer(bw, 1));
+    const matched = [];
+    ingNames.forEach(n => {
+      const found = Object.values(unlockedIngredients || {}).find(u => u && (u.name === n || u.id === n || u.baseImageName === n))
+        || masterList.find(i => i.name === n || i.id === n)
+        || masterList.find(i => !i.isFixed && (String(n).includes(i.name) || String(i.name).includes(n)));
+      if (found && !found.isFixed) matched.push(found);
+    });
+    if (!matched.some(m => m.type === "base")) {
+      const unlBases = Object.values(unlockedIngredients || {}).filter(u => u && u.type === "base" && !u.isFixed);
+      const defBase = unlBases.find(u => String(u.name).includes("全层")) || unlBases[0] || masterList.find(i => i.name === "经典_全层" || (i.type === "base" && !i.isFixed));
+      if (defBase) matched.unshift(defBase);
+    }
+    matched.sort((a, b) => (a.z || 10) - (b.z || 10)).forEach((it, idx) => {
+      const lyr = createDefaultLayer(it, 10 + idx);
+      if (lyr.tintColor && !/^#?[0-9A-Fa-f]{3,6}$/.test(String(lyr.tintColor).trim())) lyr.tintColor = null;
+      layers.push(lyr);
+    });
+    const fw = masterList.find(i => i.id === "wall_front" || i.name === "前壁");
+    if (fw) layers.push(createDefaultLayer(fw, 999));
+    return layers;
+  } catch (e) {
+    return [];
+  }
+}
+function buildFallbackCodeFromItem(drinkObj) {
+  try {
+    const layers = buildFallbackLayersFromDrink(drinkObj);
+    const masterList = typeof getMasterIngredientList === "function" ? getMasterIngredientList() : (typeof ingredientsDB !== "undefined" ? ingredientsDB : []);
+    if (!layers.length || !masterList.length) return null;
+    const raw = layers.map(l => {
+      const ref = (typeof getIngredientById === "function" && getIngredientById(l.id)) || l;
+      const lookup = ref.baseImageName || ref.name || l.name;
+      let dbIdx = masterList.findIndex(db => db.name === lookup || db.id === l.id);
+      if (dbIdx === -1) dbIdx = masterList.findIndex(db => !db.isFixed && db.type === (ref.type || "base"));
+      if (dbIdx === -1) return null;
+      const tint = (l.tintColor && /^#?[0-9A-Fa-f]{3,6}$/.test(String(l.tintColor).trim())) ? String(l.tintColor).trim().replace("#", "") : "";
+      return [dbIdx, 0, 0, l.zIndex, 100, 100, 100, 100, tint].join(",");
+    }).filter(Boolean).join(";");
+    return raw ? btoa(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+`;
+    out = out
+      .replace(
+        'if (customersDB[key].name === speakerName) {',
+        'if (key === targetId || customersDB[key].id === targetId || customersDB[key].name === speakerName || (speakerName && customersDB[key].name && String(speakerName).includes(customersDB[key].name))) {'
+      )
+      .replace(
+        'if (descEl) descEl.innerText = targetDesc;',
+        'if (descEl) descEl.innerText = targetDesc || (customersDB[targetId] && (customersDB[targetId].desc || customersDB[targetId].shortDesc)) || "";'
+      )
+      .replace(
+        'function initDevInterface() {',
+        'function initDevInterface() {\n        if (typeof normalizeMilkteaIngredients === "function") normalizeMilkteaIngredients();'
+      )
       .replace(
         'Object.values(unlockedIngredients).forEach((item) => {',
-        'Object.entries(unlockedIngredients || {}).forEach(([uKey, item]) => { if (!item || typeof item !== "object") return; const dbRef = ingredientsDB.find(i => i.id === uKey || i.id === item.id || i.name === item.name || (item.baseImageName && i.name === item.baseImageName)); if (!item.id || item.id === "default") item.id = (dbRef && dbRef.id) || uKey || item.name; if (dbRef) { if (!item.z || item.z === 10) item.z = dbRef.z; if (!item.type) item.type = dbRef.type; }'
+        'normalizeMilkteaIngredients(); Object.values(unlockedIngredients || {}).forEach((item) => { if (!item || typeof item !== "object") return;'
+      )
+      .replace(
+        '        updateCanvas();\n      }\n\n      function handleIngredientClick(id) {',
+        '        if (!Array.from(selectedIngredients).some(sid => { const it = getIngredientById(sid); return it && !it.isFixed; })) {\n          const firstBase = Object.values(unlockedIngredients || {}).find(u => u && u.type === "base" && !u.isFixed && String(u.name).includes("全层")) || Object.values(unlockedIngredients || {}).find(u => u && u.type === "base" && !u.isFixed);\n          if (firstBase && firstBase.id) {\n            selectedIngredients.add(firstBase.id);\n            const bEl = document.getElementById("btn-" + firstBase.id);\n            if (bEl) bEl.classList.add("active");\n          }\n        }\n        updateCanvas();\n      }\n\n      function handleIngredientClick(id) {'
+      )
+      .replace(
+        'function randomizeIngredients() {',
+        'function randomizeIngredients() {\n    if (typeof normalizeMilkteaIngredients === "function") normalizeMilkteaIngredients();'
       )
       .replace(
         'let item = unlockedIngredients[id];',
-        'let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
+        'if (typeof normalizeMilkteaIngredients === "function") normalizeMilkteaIngredients();\n        let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
       )
       .replace(
         /return\s+a\.id\.localeCompare\(b\.id\);/g,
@@ -10574,7 +10653,57 @@ code, pre {
       .replace(
         'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || "";',
         'currentShowcaseKey = Object.keys(shopMenu).find(key => shopMenu[key].isShowcase === true) || Object.keys(shopMenu)[0] || "";'
+      )
+      .replace(
+        'if (sd.tempDrinkStats) editorState.tempStats = sd.tempDrinkStats;',
+        'if (sd.tempDrinkStats) { const bk = JSON.parse(localStorage.getItem("milktea_dev_backup") || "{}"); editorState.tempStats = Object.assign({}, sd.tempDrinkStats, { code: sd.tempDrinkStats.code || bk.code || null, ingredients: (Array.isArray(sd.tempDrinkStats.ingredients) && sd.tempDrinkStats.ingredients.length) ? sd.tempDrinkStats.ingredients : (bk.ingredients || []) }); }'
+      )
+      .replace(
+        'if (sd.tempDrinkStats) {\n                editorState.tempStats = sd.tempDrinkStats;',
+        'if (sd.tempDrinkStats) {\n                const bk = JSON.parse(localStorage.getItem("milktea_dev_backup") || "{}");\n                editorState.tempStats = Object.assign({}, sd.tempDrinkStats, { code: sd.tempDrinkStats.code || bk.code || null, ingredients: (Array.isArray(sd.tempDrinkStats.ingredients) && sd.tempDrinkStats.ingredients.length) ? sd.tempDrinkStats.ingredients : (bk.ingredients || []) });'
+      )
+      .replace(
+        'function applyTintFilter(imgEl, hexColor) {\n    if (!hexColor || !imgEl) return;',
+        'function applyTintFilter(imgEl, hexColor) {\n    if (!hexColor || !imgEl || typeof hexColor !== "string") return;\n    if (!/^#?[0-9A-Fa-f]{3,6}$/.test(hexColor.trim())) return;'
+      )
+      .replace(
+        'svg.setAttribute("width", "0");\n    svg.setAttribute("height", "0");\n    svg.style.cssText = "position:absolute; pointer-events:none; visibility:hidden;";',
+        'svg.setAttribute("width", "1");\n    svg.setAttribute("height", "1");\n    svg.style.cssText = "position:fixed; left:-9999px; top:-9999px; pointer-events:none; opacity:0.01;";'
+      )
+      .replace(
+        'function parseShortCode(code) {',
+        milkteaHelpers + '\nfunction parseShortCode(code) {\n    const origCode = code;\n    if (!code) { try { const bk = JSON.parse(localStorage.getItem("milktea_dev_backup") || "null"); if (bk && bk.code) code = bk.code; } catch (e) {} }\n    const _rawParseShortCode = function(code) {'
+      )
+      .replace(
+        '    } catch (e) { return null; }\n  }\n// 辅助函数：创建一个标准状态的图层',
+        '    } catch (e) { return null; }\n    };\n    let parsed = _rawParseShortCode(code);\n    if (Array.isArray(parsed)) {\n      parsed.forEach(l => { if (l && l.tintColor && !/^#?[0-9A-Fa-f]{3,6}$/.test(String(l.tintColor).trim())) l.tintColor = null; });\n    }\n    if (!Array.isArray(parsed) || !parsed.some(l => l && l.id !== "wall_back" && l.id !== "wall_front")) {\n      const fb = buildFallbackLayersFromDrink(origCode);\n      if (fb && fb.length) return fb;\n    }\n    return parsed;\n  }\n// 辅助函数：创建一个标准状态的图层'
+      )
+      .replace(
+        'renderThumbnailFromCode(canvas, item.code, scale, false);',
+        'if ((!item.code || !/^v2\\||^[A-Za-z0-9+/=]{12,}$/.test(String(item.code))) && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); renderThumbnailFromCode(canvas, item.code || item, scale, false);'
+      )
+      .replace(
+        'setTimeout(() => renderThumbnail(index, key, item.code, 361 / 650), 0);',
+        'if ((!item.code || !/^v2\\||^[A-Za-z0-9+/=]{12,}$/.test(String(item.code))) && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); setTimeout(() => renderThumbnail(index, key, item.code || item, 361 / 650), 0);'
       );
+    return out;
+  }
+
+  function buildSandboxIframeHtml(rawHtmlDoc, options = {}) {
+    const isFullModal = Boolean(options && options.isModal);
+    const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
+    const allowAudioInFrame = isFullModal || isLastFloor;
+    const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
+    const shouldAdaptDarkHtml = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
+    const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
+      ? window.location.origin
+      : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
+    let cleaned = String(rawHtmlDoc || '')
+      .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
+      .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '')
+      .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + hostOrigin + '/public/vendor/tailwindcss.js$2')
+      .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, (hostOrigin ? hostOrigin : '') + '/api/raw-gh/');
+    cleaned = patchMilkteaCardHtml(cleaned);
 
     if (!allowAudioInFrame) {
       cleaned = cleaned.replace(/<audio\b([^>]*?)\bautoplay\b([^>]*)>/gi, '<audio$1$2>');
@@ -10789,13 +10918,23 @@ code, pre {
     try {
       var t = e && e.target;
       if (!t || t.tagName !== 'IMG') return;
-      if (t.getAttribute('data-gh-cdn-fallback') === '1') return;
+      var fbStage = t.getAttribute('data-gh-cdn-fallback') || '0';
+      if (fbStage === '2') return;
       var s = t.getAttribute('src') || '';
       var sub = '';
       if (s.indexOf('/api/raw-gh/') !== -1) {
         sub = s.split('/api/raw-gh/')[1] || '';
       } else if (s.indexOf('raw.githubusercontent.com/') !== -1) {
         sub = s.split('raw.githubusercontent.com/')[1] || '';
+      } else if (s.indexOf('testingcf.jsdelivr.net/gh/') !== -1) {
+        var jSub = s.split('testingcf.jsdelivr.net/gh/')[1] || '';
+        var jParts = jSub.split('/');
+        if (jParts.length >= 3 && jParts[1].indexOf('@') !== -1) {
+          var repoAndBranch = jParts[1].split('@');
+          t.setAttribute('data-gh-cdn-fallback', '2');
+          t.src = 'https://' + jParts[0] + '.github.io/' + repoAndBranch[0] + '/' + jParts.slice(2).join('/');
+          return;
+        }
       }
       if (sub) {
         var cleanSub = sub.split('?')[0].split('#')[0];
@@ -10807,8 +10946,13 @@ code, pre {
           if (parts.length > branchIdx + 1) {
             var branch = parts[branchIdx];
             var filePath = parts.slice(branchIdx + 1).join('/');
-            t.setAttribute('data-gh-cdn-fallback', '1');
-            t.src = 'https://testingcf.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
+            if (fbStage === '0') {
+              t.setAttribute('data-gh-cdn-fallback', '1');
+              t.src = 'https://' + owner + '.github.io/' + repo + '/' + filePath;
+            } else {
+              t.setAttribute('data-gh-cdn-fallback', '2');
+              t.src = 'https://testingcf.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
+            }
           }
         }
       }
@@ -10817,7 +10961,6 @@ code, pre {
   function syncAvatarCssVars() {
     try {
       if (!window.parent) return;
-      var pOrigin = (window.parent.location && window.parent.location.origin && window.parent.location.origin !== 'null') ? window.parent.location.origin : '';
       var uUrl = typeof window.parent.__getTavernUserAvatarUrl === 'function' ? window.parent.__getTavernUserAvatarUrl() : '';
       var cUrl = typeof window.parent.__getTavernCharAvatarUrl === 'function' ? window.parent.__getTavernCharAvatarUrl() : '';
       if (uUrl) {
@@ -10832,10 +10975,9 @@ code, pre {
         var rawSrc = im.getAttribute('src') || '';
         var lowSrc = rawSrc.toLowerCase();
         if (lowSrc.indexOf('https://raw.githubusercontent.com/') === 0 || lowSrc.indexOf('http://raw.githubusercontent.com/') === 0) {
-          var ghSub = rawSrc.split('raw.githubusercontent.com/')[1] || '';
-          im.src = pOrigin + '/api/raw-gh/' + ghSub;
-        } else if (rawSrc.indexOf('null/api/raw-gh/') === 0) {
-          im.src = pOrigin + rawSrc.slice(4);
+          var pOrig = (window.parent && window.parent.location && window.parent.location.origin && window.parent.location.origin !== 'null') ? window.parent.location.origin : '';
+          var subPath = rawSrc.slice(rawSrc.indexOf('raw.githubusercontent.com/') + 26);
+          im.src = pOrig + '/api/raw-gh/' + subPath;
         } else if (uUrl && (lowSrc.indexOf('user%20avatars') !== -1 || lowSrc.indexOf('user avatars') !== -1 || lowSrc.indexOf('user-avatar') !== -1 || lowSrc.indexOf('{{user}}') !== -1 || lowSrc.indexOf('%7b%7buser%7d%7d') !== -1)) {
           im.src = uUrl;
         } else if (rawSrc.indexOf('vault://') === 0 && typeof window.parent.resolveVaultRefToUrl === 'function') {

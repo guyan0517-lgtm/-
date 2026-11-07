@@ -175,10 +175,16 @@ app.get('/api/raw-gh/*', async (req, res) => {
     if (!upstream || !upstream.ok) {
       const jsdMatch = encodedPath.match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
       if (jsdMatch) {
-        const fallbackUrl = `https://testingcf.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`;
-        upstream = await fetch(fallbackUrl, {
+        const ghPagesUrl = `https://${jsdMatch[1]}.github.io/${jsdMatch[2]}/${jsdMatch[4]}`;
+        upstream = await fetch(ghPagesUrl, {
           headers: { 'User-Agent': 'Mozilla/5.0' }
         }).catch(() => null);
+        if (!upstream || !upstream.ok) {
+          const fallbackUrl = `https://testingcf.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`;
+          upstream = await fetch(fallbackUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+          }).catch(() => null);
+        }
       }
     }
 
