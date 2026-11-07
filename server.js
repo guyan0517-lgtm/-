@@ -1160,7 +1160,7 @@ function cleanupOldProxyTasks() {
   }
 }
 
-function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, timeoutMs = 900000, redirectCount = 0) {
+function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, timeoutMs = 900000, redirectCount = 0, abortSignal = null) {
   return new Promise((resolve) => {
     const startTs = Date.now();
     let parsedUrl;
@@ -1230,7 +1230,7 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
         const nextUrl = new URL(location, targetUrl).toString();
         const nextMethod = statusCode === 303 ? 'GET' : method;
         const nextBody = statusCode === 303 ? null : bodyBuffer;
-        performNativeUpstreamRequest(nextUrl, nextMethod, headers, nextBody, timeoutMs, redirectCount + 1).then(finish);
+        performNativeUpstreamRequest(nextUrl, nextMethod, headers, nextBody, timeoutMs, redirectCount + 1, abortSignal).then(finish);
         return;
       }
 
@@ -1273,6 +1273,16 @@ function performNativeUpstreamRequest(targetUrl, method, headers, bodyBuffer, ti
         });
       });
     });
+
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        upReq.destroy(new Error('Upstream request aborted'));
+      } else {
+        abortSignal.addEventListener('abort', () => {
+          upReq.destroy(new Error('Upstream request aborted'));
+        }, { once: true });
+      }
+    }
 
     upReq.on('socket', (socket) => {
       try {
@@ -1319,9 +1329,7 @@ app.get('/api/proxy-task/:taskId', (req, res) => {
     });
   }
   const result = task.result;
-  setTimeout(() => {
-    proxyTasks.delete(taskId);
-  }, 120000);
+  proxyTasks.delete(taskId);
   return res.json({
     status: 'done',
     ok: result.ok,
@@ -1334,6 +1342,21 @@ app.get('/api/proxy-task/:taskId', (req, res) => {
   });
 });
 
+app.post('/api/proxy-abort/:taskId', (req, res) => {
+  const { taskId } = req.params;
+  const task = taskId ? proxyTasks.get(taskId) : null;
+  if (task) {
+    if (task.abortCtrl) {
+      try { task.abortCtrl.abort(); } catch (_) {}
+    }
+    if (task.fingerprint && inFlightProxyFingerprints.get(task.fingerprint) === task) {
+      inFlightProxyFingerprints.delete(task.fingerprint);
+    }
+    proxyTasks.delete(taskId);
+  }
+  return res.json({ ok: true });
+});
+
 // Forward proxy for AI requests to prevent browser CORS and network failures
 app.post('/api/proxy', async (req, res) => {
   req.setTimeout(900000);
@@ -1343,7 +1366,6 @@ app.post('/api/proxy', async (req, res) => {
   const proxyCtrl = new AbortController();
   let proxyTimer = null;
   let heartbeatTimer = null;
-  let heartbeatStarted = false;
   const clearAllTimers = () => {
     if (proxyTimer) {
       clearTimeout(proxyTimer);
@@ -1367,7 +1389,7 @@ app.post('/api/proxy', async (req, res) => {
   });
 
   try {
-    const { url, method = 'POST', headers = {}, body, keepAliveHeartbeat = false, taskId = '' } = req.body;
+    const { url, method = 'POST', headers = {}, body, keepAliveHeartbeat = false, asyncTask = false, taskId: rawTaskId = '' } = req.body;
     if (!url) {
       clearAllTimers();
       return res.status(400).json({ error: 'Missing target url' });
@@ -1378,8 +1400,35 @@ app.post('/api/proxy', async (req, res) => {
       forwardHeaders['User-Agent'] = req.headers['user-agent'];
     }
 
+    // Asynchronous task mode: start one native upstream request in background and return taskId immediately
+    if (asyncTask) {
+      clearAllTimers();
+      const taskId = rawTaskId || ('pt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
+      const bodyStr = (body !== undefined && method !== 'GET' && method !== 'HEAD')
+        ? (typeof body === 'object' ? JSON.stringify(body) : String(body))
+        : '';
+      const taskAbortCtrl = new AbortController();
+      const bodyBuffer = bodyStr ? Buffer.from(bodyStr, 'utf-8') : null;
+      const upstreamPromise = performNativeUpstreamRequest(url, method, forwardHeaders, bodyBuffer, 900000, 0, taskAbortCtrl.signal);
+      const taskEntry = {
+        status: 'pending',
+        createdAt: Date.now(),
+        fingerprint: '',
+        abortCtrl: taskAbortCtrl,
+        result: null,
+        promise: upstreamPromise
+      };
+      proxyTasks.set(taskId, taskEntry);
+      upstreamPromise.then((result) => {
+        taskEntry.status = 'done';
+        taskEntry.result = result;
+      });
+      return res.status(200).json({ ok: true, status: 'pending', taskId });
+    }
+
     // Non-streaming requests with taskId or keepAliveHeartbeat use native http/https + proxyTasks so 255s+ responses never get dropped or duplicated
-    if (keepAliveHeartbeat || taskId) {
+    if (keepAliveHeartbeat || rawTaskId) {
+      const taskId = rawTaskId;
       res.status(200);
       res.setHeader('Content-Type', keepAliveHeartbeat ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -1389,8 +1438,6 @@ app.post('/api/proxy', async (req, res) => {
         res.flushHeaders();
       }
       if (keepAliveHeartbeat) {
-        heartbeatStarted = true;
-        // Send 2KB whitespace chunk immediately and every 3s to force cloud proxy / mobile network buffer flush
         const heartbeatChunk = ' '.repeat(2048) + '\n';
         try {
           res.write(heartbeatChunk);
@@ -1421,12 +1468,14 @@ app.post('/api/proxy', async (req, res) => {
       }
 
       if (!taskEntry) {
+        const taskAbortCtrl = new AbortController();
         const bodyBuffer = bodyStr ? Buffer.from(bodyStr, 'utf-8') : null;
-        const upstreamPromise = performNativeUpstreamRequest(url, method, forwardHeaders, bodyBuffer, 900000);
+        const upstreamPromise = performNativeUpstreamRequest(url, method, forwardHeaders, bodyBuffer, 900000, 0, taskAbortCtrl.signal);
         taskEntry = {
           status: 'pending',
           createdAt: Date.now(),
           fingerprint,
+          abortCtrl: taskAbortCtrl,
           result: null,
           promise: upstreamPromise
         };

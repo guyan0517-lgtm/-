@@ -4178,29 +4178,17 @@ code, pre {
       } catch (_) {}
 
       if (proxyErrObj) {
-        if (proxyErrObj._proxy_net_fail && typeof resObj._directFallbackFn === 'function') {
-          const directRes = await resObj._directFallbackFn();
-          if (!directRes.ok) {
-            const errTxt = await directRes.text().catch(() => '');
-            throw new Error('API请求失败 HTTP ' + directRes.status + ': ' + (errTxt.slice(0, 200) || directRes.statusText));
+        const upStatus = Number(proxyErrObj._proxy_status) || 502;
+        let detail = proxyErrObj.error?.message || proxyErrObj.message || ('HTTP ' + upStatus);
+        try {
+          const innerJson = JSON.parse(detail);
+          if (innerJson && innerJson.error) {
+            detail = innerJson.error.message || innerJson.error.code || JSON.stringify(innerJson.error);
+          } else if (innerJson && innerJson.message) {
+            detail = innerJson.message;
           }
-          const directRead = await readSingleRes(directRes);
-          accText = directRead.accText;
-          readErrCaught = directRead.readErrCaught;
-          stripped = String(accText || '').replace(/^\s*:[^\r\n]*$/gm, '').trim();
-        } else {
-          const upStatus = Number(proxyErrObj._proxy_status) || 502;
-          let detail = proxyErrObj.error?.message || proxyErrObj.message || ('HTTP ' + upStatus);
-          try {
-            const innerJson = JSON.parse(detail);
-            if (innerJson && innerJson.error) {
-              detail = innerJson.error.message || innerJson.error.code || JSON.stringify(innerJson.error);
-            } else if (innerJson && innerJson.message) {
-              detail = innerJson.message;
-            }
-          } catch (_) {}
-          throw new Error('API请求失败 HTTP ' + upStatus + ': ' + String(detail).slice(0, 200));
-        }
+        } catch (_) {}
+        throw new Error('API请求失败 HTTP ' + upStatus + ': ' + String(detail).slice(0, 200));
       }
     }
 
@@ -4235,59 +4223,26 @@ code, pre {
     };
 
     if (method === 'POST' && !isStreamReq) {
-      try {
-        return await doDirectFetchOnce();
-      } catch (directErr) {
-        if (directErr && directErr.name === 'AbortError') throw directErr;
-        try {
-          const proxyRes = await rawFetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              url,
-              method: 'POST',
-              headers: options.headers || {},
-              body: parsedBody !== undefined ? parsedBody : options.body,
-              keepAliveHeartbeat: true
-            }),
-            signal: options.signal
-          });
-          if (proxyRes && proxyRes.ok) {
-            proxyRes._usedProxyHeartbeat = true;
-            return proxyRes;
-          }
-        } catch (proxyErr) {
-          if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
+      if (
+        typeof window.isLocalBackendSwitchEnabled === 'function' &&
+        window.isLocalBackendSwitchEnabled() &&
+        typeof window.executeLocalBackendProxyFetch === 'function'
+      ) {
+        const localProxyRes = await window.executeLocalBackendProxyFetch(
+          url,
+          method,
+          options.headers || {},
+          parsedBody !== undefined ? parsedBody : options.body,
+          options.signal
+        );
+        if (localProxyRes) {
+          return localProxyRes;
         }
-        throw directErr;
       }
+      return await doDirectFetchOnce();
     }
 
-    const doDirectFetchWithRetry = doDirectFetchOnce;
-
-    if (method === 'POST' && isStreamReq) {
-      try {
-        return await doDirectFetchWithRetry();
-      } catch (directStreamErr) {
-        if (directStreamErr && directStreamErr.name === 'AbortError') throw directStreamErr;
-        const proxyStreamRes = await rawFetch('/api/proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            method: 'POST',
-            headers: options.headers || {},
-            body: parsedBody !== undefined ? parsedBody : options.body,
-            keepAliveHeartbeat: false
-          }),
-          signal: options.signal
-        });
-        if (proxyStreamRes) return proxyStreamRes;
-        throw directStreamErr;
-      }
-    }
-
-    return await doDirectFetchWithRetry();
+    return await doDirectFetchOnce();
   }
 
   function setupSillyTavernGlobalBridge() {
@@ -4410,7 +4365,7 @@ code, pre {
               if (!base) {
                 return new Response(JSON.stringify({ error: true, message: '请先填写API地址' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
               }
-              const modelsEndpoints = [base + '/v1/models', base + '/models'];
+              const modelsEndpoints = [base.endsWith('/v1') ? (base + '/models') : (base + '/v1/models')];
               let lastStatus = 500;
               let lastText = '';
               for (const mUrl of modelsEndpoints) {

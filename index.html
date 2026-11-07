@@ -1301,15 +1301,12 @@
               </div>
               <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color, #eee);">
                 <label class="toggle-switch-label" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 4px;">
-                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">网关保活</span>
+                  <span class="toggle-switch-text" style="font-weight: bold; font-size: 14px; color: var(--text-primary);">本地</span>
                   <label class="toggle-switch">
                     <input type="checkbox" id="gateway-keepalive-switch" checked />
                     <span class="slider"></span>
                   </label>
                 </label>
-                <p style="font-size: 12px; color: var(--text-secondary, #888); margin-top: 4px; line-height: 1.4;">
-                  非流式请求定时发送空白心跳防止网关超时断连
-                </p>
               </div>
             </div>
           </div>
@@ -2528,7 +2525,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22047,6 +22044,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             u = (isLocal ? "http://" : "https://") + cleanHost;
           }
           u = u.replace(/\/+$/, "");
+          if (/\/chat\/completions$/i.test(u)) {
+            return u;
+          }
           let prev = "";
           while (u !== prev) {
             prev = u;
@@ -22063,6 +22063,222 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return u + "/v1/chat/completions";
         }
         window.formatChatCompletionUrl = formatChatCompletionUrl;
+
+        function isLocalBackendSwitchEnabled() {
+          const sw = document.getElementById("gateway-keepalive-switch");
+          if (sw && typeof sw.checked === "boolean") {
+            return sw.checked;
+          }
+          const savedStr = localStorage.getItem("api_gateway_keepalive_enabled");
+          if (savedStr === "true" || savedStr === "false") {
+            return savedStr === "true";
+          }
+          const cfg = (typeof state !== "undefined" && state && state.apiConfig) || (window.state && window.state.apiConfig) || null;
+          if (cfg && typeof cfg.gatewayKeepAliveEnabled === "boolean") {
+            return cfg.gatewayKeepAliveEnabled;
+          }
+          return true;
+        }
+        window.isLocalBackendSwitchEnabled = isLocalBackendSwitchEnabled;
+
+        function resolveTermuxLocalProxyBase() {
+          try {
+            const urlInput = document.getElementById("local-vault-url-input");
+            if (urlInput && urlInput.value && urlInput.value.trim()) {
+              return urlInput.value.trim().replace(/\/+$/, "");
+            }
+            const rawSaved = localStorage.getItem("ephone_local_vault_config_v1");
+            if (rawSaved) {
+              const parsed = JSON.parse(rawSaved);
+              if (parsed && typeof parsed.url === "string" && parsed.url.trim()) {
+                return parsed.url.trim().replace(/\/+$/, "");
+              }
+            }
+          } catch (_) {}
+          return "http://127.0.0.1:8765";
+        }
+
+        async function executeLocalBackendProxyFetch(targetUrl, method, headers, bodyObj, callerSignal, onProgressTick) {
+          if (!isLocalBackendSwitchEnabled() || String(method || "POST").toUpperCase() !== "POST") {
+            return null;
+          }
+          const sleepOneSec = () => new Promise((r) => setTimeout(r, 1000));
+          const makeAbortErr = () => {
+            const e = new Error("Aborted");
+            e.name = "AbortError";
+            return e;
+          };
+
+          // 1. Try Android Termux / iOS a-Shell local backend on 127.0.0.1:8765/proxy
+          const termuxBase = resolveTermuxLocalProxyBase();
+          const termuxCandidates = [termuxBase];
+          if (termuxBase.includes("127.0.0.1")) {
+            termuxCandidates.push(termuxBase.replace("127.0.0.1", "localhost"));
+          }
+          for (const tBase of termuxCandidates) {
+            if (callerSignal && callerSignal.aborted) throw makeAbortErr();
+            let createRes = null;
+            let createTxt = "";
+            try {
+              const initCtrl = new AbortController();
+              const initTimer = setTimeout(() => initCtrl.abort(), 1400);
+              createRes = await origFetch(tBase + "/proxy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: targetUrl,
+                  method: "POST",
+                  headers: headers || {},
+                  body: bodyObj,
+                  asyncTask: true,
+                }),
+                signal: initCtrl.signal,
+              });
+              clearTimeout(initTimer);
+              if (createRes && createRes.ok) {
+                createTxt = (await createRes.text()).trim();
+              }
+            } catch (_) {
+              createRes = null;
+            }
+            if (createTxt && createTxt.startsWith("{")) {
+              let createData = null;
+              try { createData = JSON.parse(createTxt); } catch (_) {}
+              if (createData && createData.taskId) {
+                const tid = createData.taskId;
+                window._localProxyBackendVerified = true;
+                while (true) {
+                  if (callerSignal && callerSignal.aborted) {
+                    origFetch(tBase + "/proxy-abort?id=" + encodeURIComponent(tid), { method: "POST" }).catch(() => {});
+                    throw makeAbortErr();
+                  }
+                  await sleepOneSec();
+                  if (typeof onProgressTick === "function") {
+                    try { onProgressTick(); } catch (_) {}
+                  }
+                  if (callerSignal && callerSignal.aborted) {
+                    origFetch(tBase + "/proxy-abort?id=" + encodeURIComponent(tid), { method: "POST" }).catch(() => {});
+                    throw makeAbortErr();
+                  }
+                  try {
+                    const pollCtrl = new AbortController();
+                    const pollTimer = setTimeout(() => pollCtrl.abort(), 4000);
+                    const pollRes = await origFetch(tBase + "/proxy-task?id=" + encodeURIComponent(tid), {
+                      method: "GET",
+                      cache: "no-store",
+                      signal: pollCtrl.signal,
+                    });
+                    clearTimeout(pollTimer);
+                    if (pollRes && pollRes.status === 404) {
+                      throw new Error("本地后台任务已丢失，请检查 Termux 是否被重启");
+                    }
+                    if (pollRes && pollRes.ok) {
+                      const pollData = await pollRes.json();
+                      if (pollData && pollData.status === "done") {
+                        const statusCode = Number(pollData.httpStatus) || (pollData.ok ? 200 : 502);
+                        const respText = typeof pollData.bodyText === "string" ? pollData.bodyText : "";
+                        return new Response(respText, {
+                          status: statusCode,
+                          headers: { "Content-Type": pollData.contentType || "application/json" },
+                        });
+                      }
+                    }
+                  } catch (pollErr) {
+                    if (pollErr && (pollErr.name === "AbortError" || String(pollErr.message || "").includes("本地后台任务已丢失"))) {
+                      if (callerSignal && callerSignal.aborted) throw makeAbortErr();
+                      if (String(pollErr.message || "").includes("本地后台任务已丢失")) throw pollErr;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // 2. Try built-in Node server /api/proxy asyncTask (if not on static pages host)
+          const hostName = (window.location && window.location.hostname ? window.location.hostname : "").toLowerCase();
+          const isStaticHost = !hostName || window.location.protocol === "file:" || hostName.endsWith(".github.io") || hostName.endsWith(".pages.dev") || hostName.endsWith(".netlify.app") || hostName.endsWith(".vercel.app");
+          if (!isStaticHost && window._nodeProxyAvailable !== false) {
+            if (callerSignal && callerSignal.aborted) throw makeAbortErr();
+            let nodeCreateData = null;
+            try {
+              const nodeInitCtrl = new AbortController();
+              const nodeInitTimer = setTimeout(() => nodeInitCtrl.abort(), 2500);
+              const nodeRes = await origFetch("/api/proxy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: targetUrl,
+                  method: "POST",
+                  headers: headers || {},
+                  body: bodyObj,
+                  asyncTask: true,
+                }),
+                signal: nodeInitCtrl.signal,
+              });
+              clearTimeout(nodeInitTimer);
+              if (nodeRes && nodeRes.status === 404) {
+                window._nodeProxyAvailable = false;
+              } else if (nodeRes && nodeRes.ok) {
+                const ct = String(nodeRes.headers.get("content-type") || "").toLowerCase();
+                if (ct.includes("application/json")) {
+                  nodeCreateData = await nodeRes.json();
+                }
+              }
+            } catch (_) {
+              nodeCreateData = null;
+            }
+            if (nodeCreateData && nodeCreateData.taskId) {
+              const tid = nodeCreateData.taskId;
+              window._localProxyBackendVerified = true;
+              while (true) {
+                if (callerSignal && callerSignal.aborted) {
+                  origFetch("/api/proxy-abort/" + encodeURIComponent(tid), { method: "POST" }).catch(() => {});
+                  throw makeAbortErr();
+                }
+                await sleepOneSec();
+                if (typeof onProgressTick === "function") {
+                  try { onProgressTick(); } catch (_) {}
+                }
+                if (callerSignal && callerSignal.aborted) {
+                  origFetch("/api/proxy-abort/" + encodeURIComponent(tid), { method: "POST" }).catch(() => {});
+                  throw makeAbortErr();
+                }
+                try {
+                  const pollCtrl = new AbortController();
+                  const pollTimer = setTimeout(() => pollCtrl.abort(), 5000);
+                  const pollRes = await origFetch("/api/proxy-task/" + encodeURIComponent(tid), {
+                    method: "GET",
+                    cache: "no-store",
+                    signal: pollCtrl.signal,
+                  });
+                  clearTimeout(pollTimer);
+                  if (pollRes && pollRes.status === 404) {
+                    throw new Error("后台转发任务已丢失");
+                  }
+                  if (pollRes && pollRes.ok) {
+                    const pollData = await pollRes.json();
+                    if (pollData && pollData.status === "done") {
+                      const statusCode = Number(pollData.httpStatus) || (pollData.ok ? 200 : 502);
+                      const respText = typeof pollData.bodyText === "string" ? pollData.bodyText : "";
+                      return new Response(respText, {
+                        status: statusCode,
+                        headers: { "Content-Type": pollData.contentType || "application/json" },
+                      });
+                    }
+                  }
+                } catch (pollErr) {
+                  if (pollErr && String(pollErr.message || "").includes("后台转发任务已丢失")) {
+                    throw pollErr;
+                  }
+                }
+              }
+            }
+          }
+
+          window._localProxyBackendVerified = false;
+          return null;
+        }
+        window.executeLocalBackendProxyFetch = executeLocalBackendProxyFetch;
 
         function extractApiErrorMessage(status, text) {
           const raw = String(text || "").trim();
@@ -22296,6 +22512,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         function ensureBackgroundKeepAlive(evt, force) {
+          if (isLocalBackendSwitchEnabled() && window._localProxyBackendVerified) {
+            return;
+          }
           const now = Date.now();
           if (!force && evt && evt.type === "keydown" && now - _lastKeepAliveCheckTs < 4000) {
             return;
@@ -22639,6 +22858,19 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 try {
                   ensureBackgroundKeepAlive();
                   resetTimeout();
+                  if (method === "POST" && !isStreamReq && isLocalBackendSwitchEnabled()) {
+                    const localProxyRes = await executeLocalBackendProxyFetch(
+                      finalUrl,
+                      method,
+                      headers,
+                      activeBodyObj,
+                      controller.signal,
+                      resetTimeout
+                    );
+                    if (localProxyRes) {
+                      return { res: localProxyRes, directErr: null };
+                    }
+                  }
                   currentRes = await origFetch(finalUrl, {
                     method,
                     headers,
@@ -119009,7 +119241,7 @@ ${specificRules}`;
 
           window.copyVaultStartupCmd = async function (platform) {
             const pyScript = [
-              "import os,sys,time,urllib.request,http.server,socketserver",
+              "import os,sys,time,json,uuid,gzip,zlib,ssl,threading,urllib.request,urllib.error,http.server,socketserver",
               "force='--force' in sys.argv",
               "if not force:",
               " try:",
@@ -119026,23 +119258,102 @@ ${specificRules}`;
               "open(os.path.join(root,'.nomedia'),'a').close()",
               "open(os.path.join(mdir,'.nomedia'),'a').close()",
               "qstore=os.path.join(root,'qqbot_store.json')",
+              "tasks={}",
+              "tlock=threading.Lock()",
+              "sctx=ssl._create_unverified_context()",
+              "def run_ptask(tid,req_obj):",
+              " t0=time.time()",
+              " try:",
+              "  u=str(req_obj.get('url','')).strip()",
+              "  m=str(req_obj.get('method','POST')).upper()",
+              "  rh=req_obj.get('headers') or {}",
+              "  bd=req_obj.get('body')",
+              "  raw_b=None",
+              "  if bd is not None and m not in ('GET','HEAD'):",
+              "   raw_b=(bd if isinstance(bd,str) else json.dumps(bd,ensure_ascii=False)).encode('utf-8')",
+              "  hdrs={}",
+              "  for k,v in rh.items():",
+              "   if k.lower() not in ('host','origin','referer','content-length','connection','accept-encoding'):",
+              "    hdrs[k]=str(v)",
+              "  if 'user-agent' not in [k.lower() for k in hdrs]:",
+              "   hdrs['User-Agent']='Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36'",
+              "  hdrs['Accept-Encoding']='gzip, deflate'",
+              "  req=urllib.request.Request(u,data=raw_b,headers=hdrs,method=m)",
+              "  with urllib.request.urlopen(req,timeout=600,context=sctx) as resp:",
+              "   code=resp.getcode() or 200",
+              "   ct=resp.headers.get('Content-Type','application/json')",
+              "   enc=(resp.headers.get('Content-Encoding') or '').lower()",
+              "   chunks=[]",
+              "   while True:",
+              "    with tlock:",
+              "     if tasks.get(tid,{}).get('aborted'): return",
+              "    ch=resp.read(16384)",
+              "    if not ch: break",
+              "    chunks.append(ch)",
+              "   raw_res=b''.join(chunks)",
+              "   if 'gzip' in enc:",
+              "    try: raw_res=gzip.decompress(raw_res)",
+              "    except Exception: pass",
+              "   elif 'deflate' in enc:",
+              "    try: raw_res=zlib.decompress(raw_res)",
+              "    except Exception:",
+              "     try: raw_res=zlib.decompress(raw_res,-zlib.MAX_WBITS)",
+              "     except Exception: pass",
+              "   txt=raw_res.decode('utf-8','replace')",
+              "   with tlock:",
+              "    if tid in tasks:",
+              "     tasks[tid]={'status':'done','ok':200<=code<300,'httpStatus':code,'contentType':ct,'bodyText':txt,'elapsedMs':int((time.time()-t0)*1000),'created':time.time()}",
+              " except urllib.error.HTTPError as e:",
+              "  try:",
+              "   eb=e.read()",
+              "   enc=(e.headers.get('Content-Encoding') or '').lower() if e.headers else ''",
+              "   if 'gzip' in enc:",
+              "    try: eb=gzip.decompress(eb)",
+              "    except Exception: pass",
+              "   etxt=eb.decode('utf-8','replace')",
+              "  except Exception: etxt=str(e)",
+              "  with tlock:",
+              "   if tid in tasks:",
+              "    tasks[tid]={'status':'done','ok':False,'httpStatus':e.code or 502,'contentType':'application/json','bodyText':etxt,'errorMessage':etxt,'elapsedMs':int((time.time()-t0)*1000),'created':time.time()}",
+              " except Exception as e:",
+              "  msg=str(e)",
+              "  with tlock:",
+              "   if tid in tasks:",
+              "    tasks[tid]={'status':'done','ok':False,'httpStatus':502,'contentType':'application/json','bodyText':json.dumps({'error':{'message':msg}},ensure_ascii=False),'errorMessage':msg,'elapsedMs':int((time.time()-t0)*1000),'created':time.time()}",
               "class H(http.server.BaseHTTPRequestHandler):",
               " protocol_version='HTTP/1.1'",
               " def log_message(s,*a): pass",
-              " def _c(s,n=0):",
+              " def _c(s,n=0,ct='text/plain; charset=utf-8'):",
               "  s.send_header('Access-Control-Allow-Origin','*')",
               "  s.send_header('Access-Control-Allow-Methods','GET,PUT,POST,OPTIONS')",
               "  s.send_header('Access-Control-Allow-Headers','*')",
               "  s.send_header('Access-Control-Allow-Private-Network','true')",
               "  s.send_header('Cache-Control','no-cache')",
+              "  s.send_header('Content-Type',ct)",
               "  s.send_header('Content-Length',str(n))",
               " def do_OPTIONS(s): s.send_response(200); s._c(0); s.end_headers()",
               " def do_GET(s):",
               "  if s.path.startswith('/ping'):",
               "   s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  if s.path.startswith('/proxy-task'):",
+              "   qs=s.path.split('?',1)[1] if '?' in s.path else ''",
+              "   tid=''",
+              "   for kv in qs.split('&'):",
+              "    if kv.startswith('id='): tid=urllib.request.unquote(kv[3:]); break",
+              "   with tlock:",
+              "    t=tasks.get(tid)",
+              "    if not t:",
+              "     out=b'{\"status\":\"not_found\"}'",
+              "     s.send_response(404); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
+              "    if t.get('status')=='pending':",
+              "     out=json.dumps({'status':'pending','elapsedMs':int((time.time()-t.get('created',time.time()))*1000)}).encode('utf-8')",
+              "     s.send_response(200); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
+              "    tasks.pop(tid,None)",
+              "   out=json.dumps(t,ensure_ascii=False).encode('utf-8')",
+              "   s.send_response(200); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
               "  if s.path.startswith('/load'):",
               "   d=open(qstore,'rb').read() if os.path.isfile(qstore) else b'{}'",
-              "   s.send_response(200); s._c(len(d)); s.end_headers(); s.wfile.write(d); return",
+              "   s.send_response(200); s._c(len(d),'application/json'); s.end_headers(); s.wfile.write(d); return",
               "  rel=urllib.request.unquote(s.path.split('?')[0].lstrip('/'))",
               "  fn=os.path.basename(rel)",
               "  stem=os.path.splitext(fn)[0]",
@@ -119052,13 +119363,34 @@ ${specificRules}`;
               "    p=os.path.join(base,nm)",
               "    if os.path.isfile(p):",
               "     with open(p,'rb') as f: data=f.read()",
-              "     s.send_response(200); s._c(len(data)); s.end_headers(); s.wfile.write(data); return",
+              "     s.send_response(200); s._c(len(data),'application/octet-stream'); s.end_headers(); s.wfile.write(data); return",
               "  s.send_response(404); s._c(0); s.end_headers()",
               " def do_POST(s):",
               "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
               "  if s.path.startswith('/save'):",
               "   with open(qstore,'wb') as f: f.write(b)",
               "   s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  if s.path.startswith('/proxy-abort'):",
+              "   qs=s.path.split('?',1)[1] if '?' in s.path else ''",
+              "   tid=''",
+              "   for kv in qs.split('&'):",
+              "    if kv.startswith('id='): tid=urllib.request.unquote(kv[3:]); break",
+              "   with tlock:",
+              "    if tid in tasks: tasks[tid]['aborted']=True; tasks.pop(tid,None)",
+              "   out=b'{\"ok\":true}'",
+              "   s.send_response(200); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
+              "  if s.path.startswith('/proxy'):",
+              "   try: req_obj=json.loads(b.decode('utf-8','replace'))",
+              "   except Exception: req_obj={}",
+              "   now=time.time()",
+              "   with tlock:",
+              "    for k in list(tasks.keys()):",
+              "     if now-tasks[k].get('created',now)>600: tasks.pop(k,None)",
+              "    tid='pt_'+str(uuid.uuid4()).replace('-','')[:12]",
+              "    tasks[tid]={'status':'pending','created':now}",
+              "   threading.Thread(target=run_ptask,args=(tid,req_obj),daemon=True).start()",
+              "   out=json.dumps({'ok':True,'status':'pending','taskId':tid}).encode('utf-8')",
+              "   s.send_response(200); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
               "  s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok')",
               " def do_PUT(s):",
               "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
@@ -119076,7 +119408,7 @@ ${specificRules}`;
               "  srv=S(('127.0.0.1',8765),H); break",
               " except Exception: time.sleep(0.2)",
               "if srv:",
-              " print('Vault Ready on 127.0.0.1:8765 ->',root)",
+              " print('Vault & Local Proxy Ready on 127.0.0.1:8765 ->',root)",
               " srv.serve_forever()",
             ].join("\n");
 
@@ -119141,9 +119473,9 @@ ${specificRules}`;
                 "  fi",
                 "  sleep 0.3",
                 "  echo '----------------------------------------'",
-                "  echo '  [EPhone 本地存储与群控启动面板]'",
-                "  echo '  状态: 本地存储已在后台运行 127.0.0.1:8765'",
-                "  echo '  输入 1 回车: 立即重启图片与群控存储服务'",
+                "  echo '  [EPhone 本地后台与群控启动面板]'",
+                "  echo '  状态: 本地存储与对话转发已运行 127.0.0.1:8765'",
+                "  echo '  输入 1 回车: 立即重启本地存储与对话转发服务'",
                 "  echo '  输入 2 回车: 直接打开 NapCat QQ'",
                 "  echo '  输入 3 回车: 查看 6099 登录密钥与 3001 链接'",
                 "  echo '  输入 4 回车: 查看 QQ 实时收发日志'",
