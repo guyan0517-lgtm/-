@@ -2525,7 +2525,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -39956,7 +39956,73 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          * @param {string} content - AI返回的原始字符串
          * @returns {Array} - 一个标准化的消息对象数组
          */
+        function unwrapToolCallEnvelope(rawStr) {
+          if (!rawStr || typeof rawStr !== "string") return rawStr || "";
+          let s = rawStr.trim();
+          const fenceMatch = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+          if (fenceMatch && fenceMatch[1]) {
+            s = fenceMatch[1].trim();
+          }
+          const outerToolRegex = /^\{\s*"(?:call:[^"]+|emit_answer|final_answer|respond|send_answer)"\s*:/i;
+          if (!outerToolRegex.test(s)) {
+            return rawStr;
+          }
+          for (let pass = 0; pass < 2; pass++) {
+            if (!outerToolRegex.test(s)) break;
+            let unwrapped = null;
+            try {
+              const parsedOuter = JSON.parse(s);
+              if (parsedOuter && typeof parsedOuter === "object") {
+                const firstVal = Object.values(parsedOuter)[0];
+                if (typeof firstVal === "string" && firstVal.trim()) {
+                  unwrapped = firstVal.trim();
+                } else if (firstVal && typeof firstVal === "object") {
+                  const innerPayload =
+                    firstVal.content ??
+                    firstVal.answer ??
+                    firstVal.text ??
+                    firstVal.response ??
+                    firstVal.result ??
+                    firstVal.output ??
+                    firstVal.arguments;
+                  if (typeof innerPayload === "string" && innerPayload.trim()) {
+                    unwrapped = innerPayload.trim();
+                  } else if (innerPayload && typeof innerPayload === "object") {
+                    unwrapped = JSON.stringify(innerPayload);
+                  }
+                }
+              }
+            } catch (_) {}
+
+            if (unwrapped === null) {
+              const prefixRegex = /^\{\s*"(?:call:[^"]+|emit_answer|final_answer|respond|send_answer)"\s*:\s*\{\s*"(?:content|answer|text|response|result|output|arguments)"\s*:\s*"/i;
+              if (prefixRegex.test(s)) {
+                unwrapped = s.replace(prefixRegex, "").replace(/"\s*\}\s*\}\s*$/, "").trim();
+              }
+            }
+
+            if (unwrapped !== null && unwrapped !== s) {
+              if (/^\{\s*(?:\\n|\s)*\\"(?:thinking|chatResponse|messages|type|name|content)\\"\s*:/i.test(unwrapped)) {
+                unwrapped = unwrapped
+                  .replace(/\\r\\n/g, "\n")
+                  .replace(/\\n/g, "\n")
+                  .replace(/\\t/g, "\t")
+                  .replace(/\\"/g, '"')
+                  .replace(/\\\\/g, "\\");
+              } else if (/\\n/.test(unwrapped)) {
+                unwrapped = unwrapped.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+              }
+              s = unwrapped.trim();
+            } else {
+              break;
+            }
+          }
+          return s;
+        }
+        window.unwrapToolCallEnvelope = unwrapToolCallEnvelope;
+
         function parseAiResponse(content) {
+          content = unwrapToolCallEnvelope(content || "");
           let trimmedContent = (content || "").trim();
           // 移除思维链标签
           trimmedContent = trimmedContent.replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "").trim();
@@ -40297,7 +40363,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (arrayKeyMatch) {
               const bracketOpenIdx = trimmedContent.indexOf("[", arrayKeyMatch.index);
               const beforeArrayStr = trimmedContent.substring(0, arrayKeyMatch.index);
-              const thMatch = beforeArrayStr.match(/"thinking"\s*:\s*"([\s\S]*)"\s*,?\s*$/i);
+              const thMatch = beforeArrayStr.match(/"thinking"\s*:\s*"([\s\S]*?)(?:"\s*,?\s*|\s*,?\s*)$/i);
               if (thMatch && thMatch[1]) {
                 preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
               }
@@ -40308,6 +40374,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } else if (bracketOpenIdx !== -1) {
                 trimmedContent = trimmedContent.substring(bracketOpenIdx + 1).replace(/\]\s*\}\s*$/, "").trim();
               }
+            }
+          } else if (
+            trimmedContent.startsWith("{") &&
+            /^\{\s*"thinking"\s*:\s*"/i.test(trimmedContent) &&
+            /(?:["”]\s*\}\s*,\s*|\n\s*)\{\s*"(?:type|name|sender|senderName|speaker|content|message)"\s*:\s*"/i.test(trimmedContent)
+          ) {
+            const msgBoundaryMatch = trimmedContent.match(/(?:["”]\s*\}\s*,\s*|\n\s*)(\{\s*"(?:type|name|sender|senderName|speaker|content|message)"\s*:\s*")/i);
+            if (msgBoundaryMatch && msgBoundaryMatch.index !== undefined) {
+              const firstMsgStart = msgBoundaryMatch.index + msgBoundaryMatch[0].length - msgBoundaryMatch[1].length;
+              const beforeMsgStr = trimmedContent.substring(0, firstMsgStart);
+              const thMatch = beforeMsgStr.match(/"thinking"\s*:\s*"([\s\S]*?)(?:"\s*\}\s*,?\s*|"\s*,?\s*|\s*)$/i);
+              if (thMatch && thMatch[1]) {
+                preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+              }
+              trimmedContent = trimmedContent.substring(firstMsgStart).replace(/\]\s*\}\s*$/, "").trim();
             }
           }
 
@@ -40465,7 +40546,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // 方案4：最终备用文本消息
-          return [{ type: "text", content: content }];
+          const fallbackItems = [];
+          if (preExtractedThinking) {
+            fallbackItems.push({ type: "thinking", content: preExtractedThinking });
+          }
+          const cleanFallback = (trimmedContent || content || "").trim();
+          if (cleanFallback) {
+            fallbackItems.push({ type: "text", content: cleanFallback });
+          }
+          return fallbackItems.length > 0 ? fallbackItems : [{ type: "text", content: content }];
         }
         /**
          * “拉取”并填充Minimax语音模型的下拉框
@@ -56051,7 +56140,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               throw new Error("收到空回复，原始返回前200字: " + rawText.slice(0, 200));
             }
 
-            let aiResponseContent = fullContent;
+            let aiResponseContent = typeof window.unwrapToolCallEnvelope === "function"
+              ? window.unwrapToolCallEnvelope(fullContent)
+              : fullContent;
 
             // 更新调试台日志（写入完整返回字段）
             if (typeof recordChatDebugLog === "function") {

@@ -12280,7 +12280,9 @@ code, pre {
 
   function extractReasoningAndCleanReply(rawReply, options = {}) {
     if (!rawReply) return { reasoning: '', cleanReply: '' };
-    let text = String(rawReply);
+    let text = typeof window.unwrapToolCallEnvelope === 'function'
+      ? String(window.unwrapToolCallEnvelope(String(rawReply)))
+      : String(rawReply);
     const reasoningChunks = [];
     const pairs = getActiveReasoningTagPairs();
 
