@@ -4222,26 +4222,6 @@ code, pre {
       return await rawFetch(url, options);
     };
 
-    if (method === 'POST' && !isStreamReq) {
-      if (
-        typeof window.isLocalBackendSwitchEnabled === 'function' &&
-        window.isLocalBackendSwitchEnabled() &&
-        typeof window.executeLocalBackendProxyFetch === 'function'
-      ) {
-        const localProxyRes = await window.executeLocalBackendProxyFetch(
-          url,
-          method,
-          options.headers || {},
-          parsedBody !== undefined ? parsedBody : options.body,
-          options.signal
-        );
-        if (localProxyRes) {
-          return localProxyRes;
-        }
-      }
-      return await doDirectFetchOnce();
-    }
-
     return await doDirectFetchOnce();
   }
 

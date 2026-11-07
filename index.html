@@ -2256,7 +2256,7 @@
                 <div class="moe-btn-group" style="margin-top: 2px;">
                   <button type="button" class="moe-btn-secondary" id="local-vault-connect-btn" style="font-size: 12px; padding: 6px 0;">连接</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-offload-btn" style="font-size: 12px; padding: 6px 0;">分离</button>
-                  <button type="button" class="moe-btn-secondary" id="local-vault-hide-btn" style="font-size: 12px; padding: 6px 0;">隐图</button>
+                  <button type="button" class="moe-btn-secondary" id="local-vault-hide-btn" style="font-size: 12px; padding: 6px 0;">清理</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-backup-btn" style="font-size: 12px; padding: 6px 0;">备份</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-restore-btn" style="font-size: 12px; padding: 6px 0;">恢复</button>
                 </div>
@@ -2525,7 +2525,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22847,6 +22847,44 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               return s.trim();
             };
 
+            const isPureKeepAliveSseNoise = (rawStr) => {
+              const s = String(rawStr || "").trim();
+              if (!s || !/(?:^|\n)\s*data:\s*/i.test(s)) return false;
+              const lines = s.split(/\r?\n/);
+              let sawDataLine = false;
+              for (const line of lines) {
+                const t = line.trim();
+                if (!t || t.startsWith(":")) continue;
+                if (!t.startsWith("data:")) return false;
+                sawDataLine = true;
+                const payload = t.slice(5).trim();
+                if (!payload || payload === "[DONE]") continue;
+                try {
+                  const obj = JSON.parse(payload);
+                  if (obj && obj.error) return false;
+                  const ch = Array.isArray(obj?.choices) ? obj.choices : null;
+                  if (ch && ch.length === 0) continue;
+                  const first = ch && ch[0];
+                  const hasText = Boolean(
+                    first?.delta?.content ||
+                    first?.delta?.reasoning_content ||
+                    first?.delta?.reasoning ||
+                    first?.delta?.thinking ||
+                    first?.message?.content ||
+                    first?.message?.reasoning_content ||
+                    obj?.delta?.text ||
+                    obj?.content_block?.text ||
+                    obj?.content?.[0]?.text
+                  );
+                  if (hasText) return false;
+                } catch (_) {
+                  return false;
+                }
+              }
+              return sawDataLine;
+            };
+            window.isPureKeepAliveSseNoise = isPureKeepAliveSseNoise;
+
             const executeUpstreamFetch = async (activeBodyObj) => {
               let currentRes = null;
               let currentDirectErr = null;
@@ -23071,9 +23109,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     headers: new Headers({ "Content-Type": "application/json" }),
                   };
                 }
+                if (isPureKeepAliveSseNoise(trimmedRaw)) {
+                  throw new Error("上游抗截断通道仅返回空心跳包，未生成有效正文，请重试");
+                }
                 const firstBraceIdx = trimmedRaw.indexOf("{");
                 const lastBraceIdx = trimmedRaw.lastIndexOf("}");
-                if (firstBraceIdx !== -1 && lastBraceIdx > firstBraceIdx) {
+                if (!/(?:^|\n)\s*data:\s*/i.test(trimmedRaw) && firstBraceIdx !== -1 && lastBraceIdx > firstBraceIdx) {
                   const candidateJson = trimmedRaw.slice(firstBraceIdx, lastBraceIdx + 1);
                   try {
                     const parsedCandidate = JSON.parse(candidateJson);
@@ -23088,7 +23129,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   } catch (_) {}
                 }
                 const strippedComments = stripLeadingKeepAliveNoise(trimmedRaw);
-                if (strippedComments) {
+                if (strippedComments && !/(?:^|\n)\s*data:\s*\{/i.test(strippedComments)) {
                   fullText = strippedComments;
                 }
               }
@@ -23195,6 +23236,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 if (salvagedNonStreamSse) {
                   resText = JSON.stringify(salvagedNonStreamSse);
                   hasValidNonStreamData = true;
+                } else if (isPureKeepAliveSseNoise(strippedNonStream)) {
+                  throw new Error("上游抗截断通道仅返回空心跳包，未生成有效正文，请重试");
                 }
               } else {
                 const firstBrace = strippedNonStream.indexOf("{");
@@ -23207,7 +23250,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     hasValidNonStreamData = true;
                   } catch (_) {}
                 }
-                if (!hasValidNonStreamData) {
+                if (!hasValidNonStreamData && !/(?:^|\n)\s*data:\s*\{/i.test(strippedNonStream)) {
                   resText = strippedNonStream;
                   hasValidNonStreamData = true;
                 }
@@ -23985,17 +24028,25 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 data = salvagedFromSse;
               } else {
                 const rawTrim = typeof res.text === "string" ? res.text.trim() : "";
+                if (typeof window.isPureKeepAliveSseNoise === "function" && window.isPureKeepAliveSseNoise(rawTrim)) {
+                  const keepAliveErr = "上游抗截断通道仅返回空心跳包，未生成有效正文，请重试";
+                  return new Response(
+                    JSON.stringify({ error: { message: keepAliveErr }, message: keepAliveErr }),
+                    { status: 502, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                const isMultiLineSseRaw = /(?:^|\n)\s*data:\s*\{/i.test(rawTrim);
                 const fbIdx = rawTrim.indexOf("{");
                 const lbIdx = rawTrim.lastIndexOf("}");
                 let recoveredObj = null;
-                if (fbIdx !== -1 && lbIdx > fbIdx) {
+                if (!isMultiLineSseRaw && fbIdx !== -1 && lbIdx > fbIdx) {
                   try {
                     recoveredObj = JSON.parse(rawTrim.slice(fbIdx, lbIdx + 1));
                   } catch (_e2) {}
                 }
                 if (recoveredObj && typeof recoveredObj === "object") {
                   data = recoveredObj;
-                } else if (res.ok && rawTrim && !/^<(!DOCTYPE|html)\b/i.test(rawTrim)) {
+                } else if (res.ok && rawTrim && !isMultiLineSseRaw && !/^<(!DOCTYPE|html)\b/i.test(rawTrim)) {
                   data = {
                     choices: [
                       {
@@ -80199,11 +80250,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (!imageDataUrl) throw new Error("无法解析生成得到的图片数据");
 
+            const prevRerollImageUrl = message.imageUrl || "";
             message.imageUrl = imageDataUrl;
             message.prompt = customPrompt || message.prompt;
             message.fullPrompt = finalPositivePrompt;
             delete message.content;
+            if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+              try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(message); } catch (_) {}
+            }
             await db.chats.put(chat);
+            if (
+              prevRerollImageUrl &&
+              typeof prevRerollImageUrl === "string" &&
+              prevRerollImageUrl.startsWith("vault://") &&
+              prevRerollImageUrl !== message.imageUrl &&
+              typeof window.deleteVaultMediaRefIfUnreferenced === "function"
+            ) {
+              window.deleteVaultMediaRefIfUnreferenced(prevRerollImageUrl).catch(() => {});
+            }
             renderChatInterface(state.activeChatId);
             await showCustomAlert("成功", "图片已重新渲染！");
           } catch (err) {
@@ -85504,6 +85568,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return new Blob([str]).size;
           };
 
+          const vaultSizeMap = typeof window.fetchVaultMediaSizeMap === "function"
+            ? await window.fetchVaultMediaSizeMap().catch(() => new Map())
+            : new Map();
+          const isAnyImgUrl = (v) => typeof v === "string" && (v.startsWith("data:image") || v.startsWith("vault://"));
+          const getImgRealBytes = (v) => {
+            if (!v || typeof v !== "string") return 0;
+            if (v.startsWith("vault://")) {
+              const fn = v.slice("vault://".length).split("?")[0].trim();
+              const stem = fn.replace(/\.[^.]+$/, "");
+              return vaultSizeMap.get(fn) || vaultSizeMap.get(stem + ".epdat") || 184320;
+            }
+            return new Blob([v]).size;
+          };
+
           if (dbInstance) {
             // 1. 聊天对话中的图片（包含主线与密友群聊单线，排除头像、道具与战斗配图）
             try {
@@ -85517,18 +85595,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     let hasPart = false;
                     if (Array.isArray(msg.content)) {
                       msg.content.forEach(part => {
-                        if (part && part.type === "image_url" && part.image_url?.url && typeof part.image_url.url === "string" && part.image_url.url.startsWith("data:image")) {
+                        if (part && part.type === "image_url" && isAnyImgUrl(part.image_url?.url)) {
                           categories.images.count++;
-                          categories.images.bytes += new Blob([part.image_url.url]).size;
+                          categories.images.bytes += getImgRealBytes(part.image_url.url);
                           hasPart = true;
                         }
                       });
                     }
                     if (!hasPart) {
-                      const mImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && msg.content.startsWith("data:image") ? msg.content : "") || msg.image;
-                      if (mImg && typeof mImg === "string" && mImg.startsWith("data:image")) {
+                      const mImg = msg.imageUrl || msg.url || (typeof msg.content === "string" && isAnyImgUrl(msg.content) ? msg.content : "") || msg.image;
+                      if (isAnyImgUrl(mImg)) {
                         categories.images.count++;
-                        categories.images.bytes += new Blob([mImg]).size;
+                        categories.images.bytes += getImgRealBytes(mImg);
                       }
                     }
                   });
@@ -85705,7 +85783,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (dbInstance.chats) {
                 const chats = await dbInstance.chats.toArray();
                 const isStoredImg = (v) => typeof v === "string" && (v.startsWith("data:image") || v.startsWith("vault://"));
-                const estimateImgSize = (v) => v.startsWith("vault://") ? 184320 : new Blob([v]).size;
+                const estimateImgSize = (v) => getImgRealBytes(v);
                 chats.forEach(c => {
                   if (isStoredImg(c.settings?.aiAvatar)) {
                     categories.avatars.count++;
@@ -85744,14 +85822,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const pAvs = await dbInstance.passerbyAvatars.toArray();
                 pAvs.forEach(p => {
                   categories.avatars.count++;
-                  categories.avatars.bytes += getStrBytes(p);
+                  categories.avatars.bytes += isAnyImgUrl(p.avatar) ? getImgRealBytes(p.avatar) : getStrBytes(p);
                 });
               }
               if (dbInstance.customAvatarFrames) {
                 const frames = await dbInstance.customAvatarFrames.toArray();
                 frames.forEach(f => {
                   categories.avatars.count++;
-                  categories.avatars.bytes += getStrBytes(f);
+                  categories.avatars.bytes += isAnyImgUrl(f.dataUrl) ? getImgRealBytes(f.dataUrl) : getStrBytes(f);
                 });
               }
               if (dbInstance.photos) {
@@ -85760,7 +85838,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const dUrl = p.dataUrl || p.url;
                   if (dUrl) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([dUrl]).size;
+                    categories.avatars.bytes += getImgRealBytes(dUrl);
                   }
                 });
               }
@@ -85770,7 +85848,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const dUrl = p.dataUrl || p.url;
                   if (dUrl) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += getStrBytes(p);
+                    categories.avatars.bytes += isAnyImgUrl(dUrl) ? getImgRealBytes(dUrl) : getStrBytes(p);
                   }
                 });
               }
@@ -85785,9 +85863,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const stickers = await dbInstance.userStickers.toArray();
                 stickers.forEach(s => {
                   const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                  if (isAnyImgUrl(dUrl)) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([dUrl]).size;
+                    categories.avatars.bytes += getImgRealBytes(dUrl);
                   }
                 });
               }
@@ -85795,18 +85873,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const charStickers = await dbInstance.charStickers.toArray();
                 charStickers.forEach(s => {
                   const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                  if (isAnyImgUrl(dUrl)) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([dUrl]).size;
+                    categories.avatars.bytes += getImgRealBytes(dUrl);
                   }
                 });
               }
               if (dbInstance.datingSprites) {
                 const datingSprites = await dbInstance.datingSprites.toArray();
                 datingSprites.forEach(sp => {
-                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
+                  if (isAnyImgUrl(sp.dataUrl)) {
                     categories.avatars.count++;
-                    categories.avatars.bytes += new Blob([sp.dataUrl]).size;
+                    categories.avatars.bytes += getImgRealBytes(sp.dataUrl);
                   }
                 });
               }
@@ -86170,6 +86248,61 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                 }
 
+                const compressedVaultSet = new Set();
+                try {
+                  const rawSaved = localStorage.getItem("ephone_compressed_vault_refs_v1");
+                  if (rawSaved) {
+                    JSON.parse(rawSaved).forEach((r) => compressedVaultSet.add(r));
+                  }
+                } catch (_) {}
+                const saveCompressedVaultSet = () => {
+                  try {
+                    localStorage.setItem("ephone_compressed_vault_refs_v1", JSON.stringify(Array.from(compressedVaultSet)));
+                  } catch (_) {}
+                };
+
+                const compressSingleDataOrVaultUrl = async (urlVal, maxDim) => {
+                  if (!urlVal || typeof urlVal !== "string") return { changed: false, url: urlVal };
+                  if (urlVal.startsWith("vault://")) {
+                    if (!includeCompressed && compressedVaultSet.has(urlVal)) {
+                      return { changed: false, skippedOptimal: true, url: urlVal };
+                    }
+                    if (typeof window.resolveVaultRefToDataUrl !== "function" || typeof window.overwriteVaultMediaWithDataUrl !== "function") {
+                      return { changed: false, url: urlVal };
+                    }
+                    const rawDataUrl = await window.resolveVaultRefToDataUrl(urlVal);
+                    if (!rawDataUrl || !rawDataUrl.startsWith("data:image")) {
+                      return { changed: false, url: urlVal };
+                    }
+                    if (rawDataUrl.startsWith("data:image/gif")) {
+                      compressedVaultSet.add(urlVal);
+                      return { changed: false, skippedOptimal: true, url: urlVal };
+                    }
+                    const origBytes = getBase64Size(rawDataUrl);
+                    const compDataUrl = await compressImage(rawDataUrl, quality, maxDim, true, includeCompressed);
+                    if (compDataUrl && compDataUrl.startsWith("data:image")) {
+                      const newBytes = getBase64Size(compDataUrl);
+                      if (newBytes > 0 && (includeCompressed || newBytes < origBytes)) {
+                        const savedBytes = await window.overwriteVaultMediaWithDataUrl(urlVal, compDataUrl);
+                        if (savedBytes > 0) {
+                          compressedVaultSet.add(urlVal);
+                          return { changed: true, url: urlVal, newSize: savedBytes };
+                        }
+                      }
+                    }
+                    compressedVaultSet.add(urlVal);
+                    return { changed: false, skippedOptimal: true, url: urlVal };
+                  }
+                  if (urlVal.startsWith("data:image")) {
+                    const comp = await compressImage(urlVal, quality, maxDim, true, includeCompressed);
+                    if (comp && comp.startsWith("data:image") && (includeCompressed || comp.length < urlVal.length)) {
+                      return { changed: true, url: comp, newSize: new Blob([comp]).size };
+                    }
+                    return { changed: false, skippedOptimal: true, url: urlVal };
+                  }
+                  return { changed: false, url: urlVal };
+                };
+
                 // 批量处理聊天记录中的图片
                 for (const [chatId, items] of chatGroups.entries()) {
                   try {
@@ -86180,10 +86313,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     for (const item of items) {
                       try {
                         const targetDim = includeCompressed ? 960 : 1280;
-                        let compressed = await compressImage(item.dataUrl, quality, targetDim, true, includeCompressed);
-                        if (compressed && compressed.startsWith("data:image")) {
+                        const compRes = await compressSingleDataOrVaultUrl(item.dataUrl, targetDim);
+                        if (compRes.changed) {
+                          const compressed = compRes.url;
                           item.dataUrl = compressed;
-                          item.size = new Blob([compressed]).size;
+                          item.size = compRes.newSize || item.size;
                           item.isCompressed = true;
 
                           const targetHistory = (item.soloKey && chat.soloLines && chat.soloLines[item.soloKey] && Array.isArray(chat.soloLines[item.soloKey].history))
@@ -86220,18 +86354,40 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             chat.settings.miniMapSvg = compressed;
                             chatChanged = true;
                             successCount++;
+                          } else if (item.field === "aiAvatar" && chat.settings) {
+                            chat.settings.aiAvatar = compressed;
+                            chatChanged = true;
+                            successCount++;
+                          } else if (item.field === "userAvatar" && chat.settings) {
+                            chat.settings.userAvatar = compressed;
+                            chatChanged = true;
+                            successCount++;
+                          } else if (item.field === "avatar") {
+                            chat.avatar = compressed;
+                            chatChanged = true;
+                            successCount++;
+                          } else if (item.memberId && Array.isArray(chat.members)) {
+                            const mem = chat.members.find(m => m.id === item.memberId);
+                            if (mem) {
+                              mem.avatar = compressed;
+                              chatChanged = true;
+                              successCount++;
+                            }
                           } else if (Array.isArray(targetHistory)) {
                             const msg = (item.timestamp ? targetHistory.find(m => m.timestamp === item.timestamp) : null) || targetHistory[item.msgIndex];
                             if (msg) {
                               if (msg.imageUrl) msg.imageUrl = compressed;
                               if (msg.url) msg.url = compressed;
-                              if (typeof msg.content === "string" && msg.content.startsWith("data:image/")) msg.content = compressed;
+                              if (typeof msg.content === "string" && (msg.content.startsWith("data:image/") || msg.content.startsWith("vault://"))) msg.content = compressed;
                               if (msg.image) msg.image = compressed;
                               msg._compressed = true;
                               chatChanged = true;
                               successCount++;
                             }
                           }
+                        } else if (compRes.skippedOptimal) {
+                          item.isCompressed = true;
+                          optimalCount++;
                         } else {
                           optimalCount++;
                         }
@@ -86262,11 +86418,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                         if (Array.isArray(chat.history)) {
                           for (const msg of chat.history) {
                             if (msg._compressed && !includeCompressed) continue;
-                            if (msg.imageUrl && typeof msg.imageUrl === "string" && msg.imageUrl.startsWith("data:image")) {
+                            const mUrl = msg.imageUrl || msg.url || (typeof msg.content === "string" && (msg.content.startsWith("data:image") || msg.content.startsWith("vault://")) ? msg.content : "");
+                            if (mUrl) {
                               try {
-                                const comp = await compressImage(msg.imageUrl, quality, 1280, true, includeCompressed);
-                                if (comp && comp.startsWith("data:image")) {
-                                  msg.imageUrl = comp;
+                                const cRes = await compressSingleDataOrVaultUrl(mUrl, 1280);
+                                if (cRes.changed) {
+                                  if (msg.imageUrl) msg.imageUrl = cRes.url;
+                                  if (msg.url) msg.url = cRes.url;
+                                  if (typeof msg.content === "string" && (msg.content.startsWith("data:image") || msg.content.startsWith("vault://"))) msg.content = cRes.url;
                                   msg._compressed = true;
                                   chatCompCount++;
                                 }
@@ -86283,17 +86442,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     } catch(e) {
                       failCount++;
                     }
-                  } else if (item.dataUrl && item.dataUrl.startsWith("data:image")) {
+                  } else if (item.dataUrl && (item.dataUrl.startsWith("data:image") || item.dataUrl.startsWith("vault://"))) {
                     try {
                       const maxDim = item.table === "inventory_items" ? 640 : (includeCompressed ? 960 : 1280);
-                      let compressed = await compressImage(item.dataUrl, quality, maxDim, true, includeCompressed);
-                      if (compressed && compressed.startsWith("data:image")) {
-                        item.dataUrl = compressed;
-                        item.size = new Blob([compressed]).size;
+                      const compRes = await compressSingleDataOrVaultUrl(item.dataUrl, maxDim);
+                      if (compRes.changed) {
+                        item.dataUrl = compRes.url;
+                        item.size = compRes.newSize || item.size;
                         item.isCompressed = true;
-                        await saveCompressedItemToDB(item, compressed, dbInstance);
+                        if (compRes.url.startsWith("data:image")) {
+                          await saveCompressedItemToDB(item, compRes.url, dbInstance);
+                        }
                         successCount++;
                       } else {
+                        item.isCompressed = true;
                         optimalCount++;
                       }
                     } catch (e) {
@@ -86303,6 +86465,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     failCount++;
                   }
                 }
+                saveCompressedVaultSet();
 
                 let summaryMsg = `已成功压缩 ${successCount} 张图片`;
                 if (optimalCount > 0) summaryMsg += `，${optimalCount} 张跳过已压缩或无需再压`;
@@ -86478,10 +86641,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else if (item.table === "datingSprites" && item.recordId && dbInstance?.datingSprites) {
               await dbInstance.datingSprites.delete(item.recordId);
             } else {
-              if (item.dataUrl && typeof item.dataUrl === "string" && item.dataUrl.startsWith("vault://") && typeof window.deleteVaultMediaRef === "function") {
+              await saveCompressedItemToDB(item, "", dbInstance);
+            }
+            if (item.dataUrl && typeof item.dataUrl === "string" && item.dataUrl.startsWith("vault://")) {
+              if (typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+                try { await window.deleteVaultMediaRefIfUnreferenced(item.dataUrl); } catch (_) {}
+              } else if (typeof window.deleteVaultMediaRef === "function") {
                 try { await window.deleteVaultMediaRef(item.dataUrl); } catch (_) {}
               }
-              await saveCompressedItemToDB(item, "", dbInstance);
             }
           } catch (e) {
             console.warn("删除细分数据失败:", e);
@@ -86890,7 +87057,40 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           // 2. 图片分类扫描（包含主线对话、单线与本地vault://图片，排除头像、道具、战斗与地图）
           const isValidScanImageUrl = (u) => typeof u === "string" && (u.startsWith("data:image") || u.startsWith("vault://"));
-          const calcScanImageBytes = (u) => (typeof u === "string" && u.startsWith("vault://")) ? 184320 : new Blob([u || ""]).size;
+          const vaultSizeMapForList =
+            typeof window.fetchVaultMediaSizeMap === "function"
+              ? await window.fetchVaultMediaSizeMap()
+              : null;
+          let compressedVaultRefsSet = new Set();
+          try {
+            const rawComp = localStorage.getItem("ephone_compressed_vault_refs_v1");
+            if (rawComp) {
+              const arrComp = JSON.parse(rawComp);
+              if (Array.isArray(arrComp)) compressedVaultRefsSet = new Set(arrComp);
+            }
+          } catch (_) {}
+          const calcScanImageBytes = (u) => {
+            if (typeof u === "string" && u.startsWith("vault://")) {
+              const fn = u.slice("vault://".length).split("?")[0].trim();
+              const stem = fn.replace(/\.[a-zA-Z0-9]+$/, "");
+              if (vaultSizeMapForList) {
+                const exact =
+                  vaultSizeMapForList.get(fn) ||
+                  vaultSizeMapForList.get(stem + ".epdat") ||
+                  vaultSizeMapForList.get(stem);
+                if (typeof exact === "number" && exact > 0) return exact;
+              }
+              return 184320;
+            }
+            return new Blob([u || ""]).size;
+          };
+          const isScanUrlCompressed = (u, flag = false) => {
+            if (flag) return true;
+            if (typeof u === "string" && u.startsWith("vault://")) {
+              return compressedVaultRefsSet.has(u.split("?")[0].trim());
+            }
+            return false;
+          };
           if (currentStorageCategory === "images" || currentStorageCategory === "all") {
             try {
               if (dbInstance.chats) {
@@ -86919,7 +87119,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             origin: `${originPrefix}消息配图`,
                             size: calcScanImageBytes(part.image_url.url),
                             dataUrl: part.image_url.url,
-                            isCompressed: !!(msg._compressed || part._compressed),
+                            isCompressed: isScanUrlCompressed(part.image_url.url, !!(msg._compressed || part._compressed)),
                             selected: false
                           });
                           hasPartImage = true;
@@ -86942,7 +87142,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           origin: `${originPrefix}消息配图`,
                           size: calcScanImageBytes(msgImg),
                           dataUrl: msgImg,
-                          isCompressed: !!msg._compressed,
+                          isCompressed: isScanUrlCompressed(msgImg, !!msg._compressed),
                           selected: false
                         });
                       }
@@ -86971,7 +87171,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (dbInstance.taobaoProducts) {
                 const taobaoProducts = await dbInstance.taobaoProducts.toArray();
                 taobaoProducts.forEach(prod => {
-                  if (prod.image && typeof prod.image === "string" && prod.image.startsWith("data:image")) {
+                  if (isValidScanImageUrl(prod.image)) {
                     loadedStorageImagesList.push({
                       id: "taobao_prod_" + prod.id,
                       type: "inventory",
@@ -86979,8 +87179,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: prod.id,
                       name: prod.name || "商品配图",
                       origin: `商品配图: ${prod.name || '未命名'}`,
-                      size: new Blob([prod.image]).size,
+                      size: calcScanImageBytes(prod.image),
                       dataUrl: prod.image,
+                      isCompressed: isScanUrlCompressed(prod.image, !!prod._compressed),
                       selected: false
                     });
                   }
@@ -86992,7 +87193,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const checkInv = (list, tag) => {
                     if (Array.isArray(list)) {
                       list.forEach(it => {
-                        if (it && it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("data:image")) {
+                        if (it && isValidScanImageUrl(it.avatar)) {
                           loadedStorageImagesList.push({
                             id: "inv_item_" + chat.id + "_" + it.id,
                             type: "inventory",
@@ -87001,8 +87202,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             itemId: it.id,
                             name: `道具配图: ${it.name || "未命名"}`,
                             origin: `《${chat.name}》${tag}: ${it.name}`,
-                            size: new Blob([it.avatar]).size,
+                            size: calcScanImageBytes(it.avatar),
                             dataUrl: it.avatar,
+                            isCompressed: isScanUrlCompressed(it.avatar, !!it._compressed),
                             selected: false
                           });
                         }
@@ -87092,8 +87294,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: p.id,
                       name: p.title || "空间相册照片",
                       origin: `相册照片: ${p.title || '未命名'}`,
-                      size: new Blob([dUrl]).size,
+                      size: calcScanImageBytes(dUrl),
                       dataUrl: dUrl,
+                      isCompressed: isScanUrlCompressed(dUrl, !!p._compressed),
                       selected: false
                     });
                   }
@@ -87103,7 +87306,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const qPhotos = await dbInstance.qzonePhotos.toArray();
                 qPhotos.forEach(p => {
                   const dUrl = p.dataUrl || p.url;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                  if (isValidScanImageUrl(dUrl)) {
                     loadedStorageImagesList.push({
                       id: "qzone_photo_" + p.id,
                       type: "avatar",
@@ -87111,8 +87314,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: p.id,
                       name: p.title || "空间相册图片",
                       origin: `空间相册: ${p.title || '照片'}`,
-                      size: new Blob([dUrl]).size,
+                      size: calcScanImageBytes(dUrl),
                       dataUrl: dUrl,
+                      isCompressed: isScanUrlCompressed(dUrl, !!p._compressed),
                       selected: false
                     });
                   }
@@ -87123,7 +87327,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 qPosts.forEach(post => {
                   if (Array.isArray(post.images)) {
                     post.images.forEach((imgStr, imgIdx) => {
-                      if (imgStr && typeof imgStr === "string" && imgStr.startsWith("data:image")) {
+                      if (isValidScanImageUrl(imgStr)) {
                         loadedStorageImagesList.push({
                           id: "qzone_post_img_" + post.id + "_" + imgIdx,
                           type: "avatar",
@@ -87132,13 +87336,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           imgIndex: imgIdx,
                           name: "空间动态配图",
                           origin: `空间动态配图: ${(post.text || post.content || '动态').slice(0, 14)}`,
-                          size: new Blob([imgStr]).size,
+                          size: calcScanImageBytes(imgStr),
                           dataUrl: imgStr,
+                          isCompressed: isScanUrlCompressed(imgStr, !!post._compressed),
                           selected: false
                         });
                       }
                     });
-                  } else if (post.imageUrl && typeof post.imageUrl === "string" && post.imageUrl.startsWith("data:image")) {
+                  } else if (isValidScanImageUrl(post.imageUrl)) {
                     loadedStorageImagesList.push({
                       id: "qzone_post_single_" + post.id,
                       type: "avatar",
@@ -87146,8 +87351,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: post.id,
                       name: "空间动态配图",
                       origin: `空间动态配图: ${(post.text || post.content || '动态').slice(0, 14)}`,
-                      size: new Blob([post.imageUrl]).size,
+                      size: calcScanImageBytes(post.imageUrl),
                       dataUrl: post.imageUrl,
+                      isCompressed: isScanUrlCompressed(post.imageUrl, !!post._compressed),
                       selected: false
                     });
                   }
@@ -87157,7 +87363,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const stickers = await dbInstance.userStickers.toArray();
                 stickers.forEach(s => {
                   const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                  if (isValidScanImageUrl(dUrl)) {
                     loadedStorageImagesList.push({
                       id: "sticker_" + s.id,
                       type: "avatar",
@@ -87165,8 +87371,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: s.id,
                       name: s.name || "用户表情",
                       origin: `用户表情: ${s.name || '未命名'}`,
-                      size: new Blob([dUrl]).size,
+                      size: calcScanImageBytes(dUrl),
                       dataUrl: dUrl,
+                      isCompressed: isScanUrlCompressed(dUrl, !!s._compressed),
                       selected: false
                     });
                   }
@@ -87176,7 +87383,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const charStickers = await dbInstance.charStickers.toArray();
                 charStickers.forEach(s => {
                   const dUrl = s.url || s.dataUrl;
-                  if (dUrl && typeof dUrl === "string" && dUrl.startsWith("data:image")) {
+                  if (isValidScanImageUrl(dUrl)) {
                     loadedStorageImagesList.push({
                       id: "char_sticker_" + s.id,
                       type: "avatar",
@@ -87184,8 +87391,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: s.id,
                       name: s.name || "角色表情",
                       origin: `角色表情: ${s.name || '未命名'}`,
-                      size: new Blob([dUrl]).size,
+                      size: calcScanImageBytes(dUrl),
                       dataUrl: dUrl,
+                      isCompressed: isScanUrlCompressed(dUrl, !!s._compressed),
                       selected: false
                     });
                   }
@@ -87194,7 +87402,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (dbInstance.datingSprites) {
                 const datingSprites = await dbInstance.datingSprites.toArray();
                 datingSprites.forEach(sp => {
-                  if (sp.dataUrl && typeof sp.dataUrl === "string" && sp.dataUrl.startsWith("data:image")) {
+                  if (isValidScanImageUrl(sp.dataUrl)) {
                     loadedStorageImagesList.push({
                       id: "dating_sprite_" + sp.id,
                       type: "avatar",
@@ -87202,8 +87410,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: sp.id,
                       name: "约会立绘",
                       origin: `约会立绘: ${sp.name || '未命名'}`,
-                      size: new Blob([sp.dataUrl]).size,
+                      size: calcScanImageBytes(sp.dataUrl),
                       dataUrl: sp.dataUrl,
+                      isCompressed: isScanUrlCompressed(sp.dataUrl, !!sp._compressed),
                       selected: false
                     });
                   }
@@ -87212,7 +87421,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (dbInstance.passerbyAvatars) {
                 const pAvs = await dbInstance.passerbyAvatars.toArray();
                 pAvs.forEach(p => {
-                  if (p.avatar && typeof p.avatar === "string" && p.avatar.startsWith("data:image")) {
+                  if (isValidScanImageUrl(p.avatar)) {
                     loadedStorageImagesList.push({
                       id: "passerby_avatar_" + p.id,
                       type: "avatar",
@@ -87220,8 +87429,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: p.id,
                       name: p.name || "路人头像",
                       origin: `路人头像: ${p.name || '未命名'}`,
-                      size: new Blob([p.avatar]).size,
+                      size: calcScanImageBytes(p.avatar),
                       dataUrl: p.avatar,
+                      isCompressed: isScanUrlCompressed(p.avatar, !!p._compressed),
                       selected: false
                     });
                   }
@@ -87230,7 +87440,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (dbInstance.customAvatarFrames) {
                 const frames = await dbInstance.customAvatarFrames.toArray();
                 frames.forEach(f => {
-                  if (f.dataUrl && typeof f.dataUrl === "string" && f.dataUrl.startsWith("data:image")) {
+                  if (isValidScanImageUrl(f.dataUrl)) {
                     loadedStorageImagesList.push({
                       id: "avatar_frame_" + f.id,
                       type: "avatar",
@@ -87238,8 +87448,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: f.id,
                       name: f.name || "头像挂件",
                       origin: `头像框: ${f.name || '未命名'}`,
-                      size: new Blob([f.dataUrl]).size,
+                      size: calcScanImageBytes(f.dataUrl),
                       dataUrl: f.dataUrl,
+                      isCompressed: isScanUrlCompressed(f.dataUrl, !!f._compressed),
                       selected: false
                     });
                   }
@@ -87259,6 +87470,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       origin: `聊天《${c.name}》对方头像`,
                       size: calcScanImageBytes(c.settings.aiAvatar),
                       dataUrl: c.settings.aiAvatar,
+                      isCompressed: isScanUrlCompressed(c.settings.aiAvatar, !!c._aiAvatarCompressed),
                       selected: false
                     });
                   }
@@ -87273,6 +87485,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       origin: `聊天《${c.name}》用户头像`,
                       size: calcScanImageBytes(c.settings.userAvatar),
                       dataUrl: c.settings.userAvatar,
+                      isCompressed: isScanUrlCompressed(c.settings.userAvatar, !!c._userAvatarCompressed),
                       selected: false
                     });
                   }
@@ -87287,6 +87500,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       origin: `聊天《${c.name}》群头像`,
                       size: calcScanImageBytes(c.avatar),
                       dataUrl: c.avatar,
+                      isCompressed: isScanUrlCompressed(c.avatar, !!c._avatarCompressed),
                       selected: false
                     });
                   }
@@ -87303,6 +87517,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           origin: `《${c.name}》群成员头像: ${m.groupNickname || m.name}`,
                           size: calcScanImageBytes(m.avatar),
                           dataUrl: m.avatar,
+                          isCompressed: isScanUrlCompressed(m.avatar, !!m._compressed),
                           selected: false
                         });
                       }
@@ -87328,8 +87543,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       recordId: img.id,
                       name: img.name || "模组配图",
                       origin: `模组配图: ${img.name || '未命名'}`,
-                      size: new Blob([dUrl]).size,
+                      size: calcScanImageBytes(dUrl),
                       dataUrl: dUrl,
+                      isCompressed: isScanUrlCompressed(dUrl, !!img._compressed),
                       selected: false
                     });
                   }
@@ -119222,6 +119438,502 @@ ${specificRules}`;
             }
           };
 
+          async function fetchVaultMediaSizeMap() {
+            const sizeMap = new Map();
+            const recordFileSize = (name, size) => {
+              if (!name || typeof size !== "number" || size <= 0) return;
+              const base = String(name).split("/").pop().trim();
+              const cleanSize = Math.max(1, size > 8 ? size - 8 : size);
+              sizeMap.set(base, cleanSize);
+              const stem = base.replace(/\.[a-zA-Z0-9]+$/, "");
+              if (stem) {
+                sizeMap.set(stem, cleanSize);
+                sizeMap.set(stem + ".epdat", cleanSize);
+              }
+            };
+            const cfg = loadVaultConfig();
+            const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+            try {
+              if (cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl))) {
+                const res = await fetch(baseUrl + "/media-list", { cache: "no-store" });
+                if (res && res.ok) {
+                  const data = await res.json();
+                  if (data && Array.isArray(data.fileDetails)) {
+                    data.fileDetails.forEach((f) => {
+                      if (f && f.name) recordFileSize(f.name, Number(f.size) || 0);
+                    });
+                    if (sizeMap.size > 0) return sizeMap;
+                  }
+                }
+              }
+            } catch (_) {}
+            try {
+              const savedHandle = await getSavedDirectoryHandle();
+              if (savedHandle && typeof savedHandle.entries === "function") {
+                const mDir = await savedHandle.getDirectoryHandle("media", { create: false }).catch(() => null);
+                const dirs = mDir ? [mDir, savedHandle] : [savedHandle];
+                for (const d of dirs) {
+                  for await (const [eName, eHandle] of d.entries()) {
+                    if (eHandle && eHandle.kind === "file" && eName !== ".nomedia") {
+                      try {
+                        const f = await eHandle.getFile();
+                        recordFileSize(eName, f.size);
+                      } catch (_) {}
+                    }
+                  }
+                }
+              }
+            } catch (_) {}
+            try {
+              const opfsRoot = await getAutoOpfsDirectoryHandle();
+              if (opfsRoot && typeof opfsRoot.entries === "function") {
+                const omDir = await opfsRoot.getDirectoryHandle("media", { create: false }).catch(() => null);
+                const dirs = omDir ? [omDir, opfsRoot] : [opfsRoot];
+                for (const d of dirs) {
+                  for await (const [eName, eHandle] of d.entries()) {
+                    if (eHandle && eHandle.kind === "file" && eName !== ".nomedia") {
+                      try {
+                        const f = await eHandle.getFile();
+                        recordFileSize(eName, f.size);
+                      } catch (_) {}
+                    }
+                  }
+                }
+              }
+            } catch (_) {}
+            if (!isStaticPagesHost() && _builtInServerAvailable === true) {
+              try {
+                const res = await fetch("/api/local-vault/list", { cache: "no-store" });
+                if (res && res.ok) {
+                  const data = await res.json();
+                  if (data && Array.isArray(data.fileDetails)) {
+                    data.fileDetails.forEach((f) => {
+                      if (f && f.name) recordFileSize(f.name, Number(f.size) || 0);
+                    });
+                  }
+                }
+              } catch (_) {}
+            }
+            return sizeMap;
+          }
+          window.fetchVaultMediaSizeMap = fetchVaultMediaSizeMap;
+
+          async function overwriteVaultMediaWithDataUrl(vaultRef, newDataUrl) {
+            if (typeof vaultRef !== "string" || !vaultRef.startsWith("vault://")) return false;
+            if (typeof newDataUrl !== "string" || !newDataUrl.startsWith("data:image")) return false;
+            const fileName = vaultRef.slice("vault://".length).split("?")[0].trim();
+            if (!fileName) return false;
+            const stealthName = toStealthVaultFileName(fileName);
+            const parts = parseDataUrlToParts(newDataUrl, "url");
+            if (!parts || !parts.b64) return false;
+            const rawBytes = base64ToUint8Array(parts.b64);
+            const wrappedBytes = wrapVaultBinary(rawBytes);
+            const cfg = loadVaultConfig();
+            const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+            let savedOk = false;
+            if (cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl))) {
+              savedOk = await uploadToTermuxWithRetry(baseUrl, stealthName, wrappedBytes);
+            }
+            if (!savedOk) {
+              try {
+                const savedHandle = await getSavedDirectoryHandle();
+                if (savedHandle) {
+                  const mediaDir = await savedHandle.getDirectoryHandle("media", { create: true });
+                  const fh = await mediaDir.getFileHandle(stealthName, { create: true });
+                  const w = await fh.createWritable();
+                  await w.write(wrappedBytes);
+                  await w.close();
+                  savedOk = true;
+                }
+              } catch (_) {}
+            }
+            if (!savedOk && !isStaticPagesHost() && _builtInServerAvailable === true) {
+              try {
+                const sRes = await fetch("/api/local-vault/media", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    fileName: stealthName,
+                    contentBase64: parts.b64,
+                    contentType: parts.mime,
+                  }),
+                });
+                if (sRes && sRes.ok) savedOk = true;
+              } catch (_) {}
+            }
+            if (!savedOk) {
+              try {
+                const opfsRoot = await getAutoOpfsDirectoryHandle();
+                if (opfsRoot) {
+                  const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: true });
+                  const fh = await opfsMedia.getFileHandle(stealthName, { create: true });
+                  const w = await fh.createWritable();
+                  await w.write(wrappedBytes);
+                  await w.close();
+                  savedOk = true;
+                }
+              } catch (_) {}
+            }
+            if (savedOk) {
+              writtenVaultFiles.add(fileName);
+              const newObjUrl = URL.createObjectURL(new Blob([rawBytes], { type: parts.mime }));
+              setVaultBlobCache(fileName, newObjUrl);
+              try {
+                const domImgs = document.querySelectorAll(`img[data-vault-ref="${vaultRef}"]`);
+                domImgs.forEach((img) => {
+                  img.setAttribute("data-vault-hydrated-src", newObjUrl);
+                  img.setAttribute("src", newObjUrl);
+                });
+              } catch (_) {}
+            }
+            return savedOk;
+          }
+          window.overwriteVaultMediaWithDataUrl = overwriteVaultMediaWithDataUrl;
+
+          async function collectAllReferencedVaultMediaStems() {
+            const refNames = new Set();
+            const refStems = new Set();
+            const addVaultStr = (str) => {
+              if (typeof str !== "string" || !str.includes("vault://")) return;
+              const matches = str.match(/vault:\/\/([a-zA-Z0-9._-]+)/g);
+              if (!matches) return;
+              for (const m of matches) {
+                const fn = m.slice("vault://".length).split("?")[0].trim();
+                if (!fn) continue;
+                refNames.add(fn);
+                refNames.add(toStealthVaultFileName(fn));
+                const stem = fn.replace(/\.[a-zA-Z0-9]+$/, "");
+                if (stem) {
+                  refStems.add(stem);
+                  refNames.add(stem + ".epdat");
+                }
+              }
+            };
+            const walkAny = (val, visited = new WeakSet()) => {
+              if (!val) return;
+              if (typeof val === "string") {
+                if (val.startsWith("blob:")) {
+                  const mapped = blobUrlToVaultRefMap.get(val);
+                  if (mapped) addVaultStr(mapped);
+                } else if (val.includes("vault://")) {
+                  addVaultStr(val);
+                }
+                return;
+              }
+              if (typeof val !== "object" || visited.has(val)) return;
+              visited.add(val);
+              if (Array.isArray(val)) {
+                for (let i = 0; i < val.length; i++) walkAny(val[i], visited);
+                return;
+              }
+              for (const k of Object.keys(val)) {
+                walkAny(val[k], visited);
+              }
+            };
+            if (typeof db !== "undefined" && Array.isArray(db.tables)) {
+              for (const table of db.tables) {
+                try {
+                  const rows = await table.toArray();
+                  walkAny(rows);
+                } catch (_) {}
+              }
+            }
+            try {
+              for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (!k) continue;
+                const v = localStorage.getItem(k);
+                if (v && v.includes("vault://")) addVaultStr(v);
+              }
+            } catch (_) {}
+            if (typeof window.getTavernStateForFullBackup === "function") {
+              try {
+                const tv = await window.getTavernStateForFullBackup();
+                if (tv) walkAny(tv);
+              } catch (_) {}
+            }
+            return { refNames, refStems };
+          }
+
+          async function deleteVaultMediaFilesBatch(fileNames) {
+            if (!Array.isArray(fileNames) || fileNames.length === 0) return 0;
+            const allTargets = new Set();
+            for (const raw of fileNames) {
+              const fn = String(raw || "")
+                .replace(/^vault:\/\//, "")
+                .split("?")[0]
+                .split("/")
+                .pop()
+                .trim();
+              if (!fn || fn === ".nomedia") continue;
+              const stealth = toStealthVaultFileName(fn);
+              allTargets.add(fn);
+              allTargets.add(stealth);
+              writtenVaultFiles.delete(fn);
+              writtenVaultFiles.delete(stealth);
+              if (blobUrlMemoryCache.has(fn)) {
+                blobUrlMemoryCache.delete(fn);
+              }
+              if (blobUrlMemoryCache.has(stealth)) {
+                blobUrlMemoryCache.delete(stealth);
+              }
+            }
+            const targetList = Array.from(allTargets);
+            if (targetList.length === 0) return 0;
+            let deletedCount = 0;
+            const cfg = loadVaultConfig();
+            const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+            try {
+              if (cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl))) {
+                const res = await fetch(baseUrl + "/media-delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ files: targetList }),
+                });
+                if (res && res.ok) {
+                  const data = await res.json();
+                  if (data && typeof data.deleted === "number") {
+                    deletedCount = Math.max(deletedCount, data.deleted);
+                  }
+                }
+              }
+            } catch (_) {}
+            try {
+              const savedHandle = await getSavedDirectoryHandle();
+              if (savedHandle) {
+                const mDir = await savedHandle.getDirectoryHandle("media", { create: false }).catch(() => null);
+                const dirs = mDir ? [mDir, savedHandle] : [savedHandle];
+                for (const d of dirs) {
+                  if (typeof d.removeEntry !== "function") continue;
+                  for (const nm of targetList) {
+                    try {
+                      await d.removeEntry(nm);
+                      deletedCount++;
+                    } catch (_) {}
+                  }
+                }
+              }
+            } catch (_) {}
+            try {
+              const opfsRoot = await getAutoOpfsDirectoryHandle();
+              if (opfsRoot) {
+                const omDir = await opfsRoot.getDirectoryHandle("media", { create: false }).catch(() => null);
+                const dirs = omDir ? [omDir, opfsRoot] : [opfsRoot];
+                for (const d of dirs) {
+                  if (typeof d.removeEntry !== "function") continue;
+                  for (const nm of targetList) {
+                    try {
+                      await d.removeEntry(nm);
+                      deletedCount++;
+                    } catch (_) {}
+                  }
+                }
+              }
+            } catch (_) {}
+            if (!isStaticPagesHost() && _builtInServerAvailable === true) {
+              try {
+                const sRes = await fetch("/api/local-vault/media-delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ files: targetList }),
+                });
+                if (sRes && sRes.ok) {
+                  const sData = await sRes.json();
+                  if (sData && typeof sData.deleted === "number") {
+                    deletedCount = Math.max(deletedCount, sData.deleted);
+                  }
+                }
+              } catch (_) {}
+            }
+            return deletedCount;
+          }
+
+          window.deleteVaultMediaRef = async function (vaultRef) {
+            if (!vaultRef || typeof vaultRef !== "string") return 0;
+            return await deleteVaultMediaFilesBatch([vaultRef]);
+          };
+
+          window.deleteVaultMediaRefIfUnreferenced = async function (vaultRef) {
+            if (!vaultRef || typeof vaultRef !== "string" || !vaultRef.startsWith("vault://")) return false;
+            const fn = vaultRef.slice("vault://".length).split("?")[0].trim();
+            if (!fn) return false;
+            const stem = fn.replace(/\.[a-zA-Z0-9]+$/, "");
+            const { refNames, refStems } = await collectAllReferencedVaultMediaStems();
+            if (refNames.has(fn) || refNames.has(toStealthVaultFileName(fn)) || (stem && refStems.has(stem))) {
+              return false;
+            }
+            await deleteVaultMediaFilesBatch([fn]);
+            return true;
+          };
+
+          async function runVaultCleanupOrphanMedia() {
+            setVaultInfoText("正在全表扫描被引用的图片与本地残留文件...");
+            try {
+              await runVaultHideGalleryImages(true);
+              const { refNames, refStems } = await collectAllReferencedVaultMediaStems();
+              const diskFilesMap = new Map();
+              const recordDiskFile = (name, size) => {
+                const base = String(name || "").split("/").pop().trim();
+                if (!base || base === ".nomedia" || base.endsWith(".json") || base.endsWith(".log")) return;
+                const prev = diskFilesMap.get(base) || 0;
+                diskFilesMap.set(base, Math.max(prev, Number(size) || 0));
+              };
+
+              const cfg = loadVaultConfig();
+              const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              if (cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl))) {
+                try {
+                  const res = await fetch(baseUrl + "/media-list", { cache: "no-store" });
+                  if (res && res.ok) {
+                    const data = await res.json();
+                    if (data && Array.isArray(data.fileDetails)) {
+                      data.fileDetails.forEach((f) => {
+                        if (f && f.name) recordDiskFile(f.name, Number(f.size) || 0);
+                      });
+                    }
+                  }
+                } catch (_) {}
+              }
+              try {
+                const savedHandle = await getSavedDirectoryHandle();
+                if (savedHandle && typeof savedHandle.entries === "function") {
+                  const mDir = await savedHandle.getDirectoryHandle("media", { create: false }).catch(() => null);
+                  if (mDir) {
+                    for await (const [eName, eHandle] of mDir.entries()) {
+                      if (eHandle && eHandle.kind === "file") {
+                        const f = await eHandle.getFile().catch(() => null);
+                        recordDiskFile(eName, f ? f.size : 0);
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+              try {
+                const opfsRoot = await getAutoOpfsDirectoryHandle();
+                if (opfsRoot && typeof opfsRoot.entries === "function") {
+                  const omDir = await opfsRoot.getDirectoryHandle("media", { create: false }).catch(() => null);
+                  if (omDir) {
+                    for await (const [eName, eHandle] of omDir.entries()) {
+                      if (eHandle && eHandle.kind === "file") {
+                        const f = await eHandle.getFile().catch(() => null);
+                        recordDiskFile(eName, f ? f.size : 0);
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+              if (!isStaticPagesHost() && _builtInServerAvailable === true) {
+                try {
+                  const sRes = await fetch("/api/local-vault/list", { cache: "no-store" });
+                  if (sRes && sRes.ok) {
+                    const sData = await sRes.json();
+                    if (sData && Array.isArray(sData.fileDetails)) {
+                      sData.fileDetails.forEach((f) => {
+                        if (f && f.name) recordDiskFile(f.name, Number(f.size) || 0);
+                      });
+                    }
+                  }
+                } catch (_) {}
+              }
+
+              const orphanFiles = [];
+              let orphanBytes = 0;
+              for (const [fName, fSize] of diskFilesMap.entries()) {
+                const stem = fName.replace(/\.[a-zA-Z0-9]+$/, "");
+                const isReferenced =
+                  refNames.has(fName) ||
+                  refNames.has(toStealthVaultFileName(fName)) ||
+                  (stem && refStems.has(stem));
+                if (!isReferenced) {
+                  orphanFiles.push(fName);
+                  orphanBytes += fSize > 0 ? fSize : 184320;
+                }
+              }
+
+              // 检查数据库中残留的无主模组章节或无主地点导航
+              const orphanChapterIds = [];
+              const orphanNavIds = [];
+              if (typeof db !== "undefined" && db.modules) {
+                try {
+                  const mods = await db.modules.toArray();
+                  const validModIds = new Set(mods.map((m) => String(m.id)));
+                  if (db.moduleChapters) {
+                    const chs = await db.moduleChapters.toArray();
+                    chs.forEach((ch) => {
+                      if (ch && ch.moduleId !== undefined && !validModIds.has(String(ch.moduleId))) {
+                        orphanChapterIds.push(ch.id);
+                      }
+                    });
+                  }
+                  if (db.moduleLocationNav) {
+                    const navs = await db.moduleLocationNav.toArray();
+                    navs.forEach((nv) => {
+                      if (nv && nv.moduleId !== undefined && !validModIds.has(String(nv.moduleId))) {
+                        orphanNavIds.push(nv.id);
+                      }
+                    });
+                  }
+                } catch (_) {}
+              }
+              const orphanDbCount = orphanChapterIds.length + orphanNavIds.length;
+
+              if (orphanFiles.length === 0 && orphanDbCount === 0) {
+                setVaultInfoText("清理扫描完成 · 当前没有发现未被引用的残留废图或无主残留数据");
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "扫描完成，当前所有本地图片均在正常使用中，没有发现任何残留废图或无主垃圾数据");
+                }
+                return;
+              }
+
+              const mbStr = (orphanBytes / (1024 * 1024)).toFixed(2);
+              const confirmDesc =
+                `共扫描到 ${orphanFiles.length} 张已被替换或删除的残留废图，占用约 ${mbStr} MB` +
+                (orphanDbCount > 0 ? `，以及 ${orphanDbCount} 条无主残留数据` : "") +
+                "。正常使用中的头像、表情包、壁纸与聊天配图均受保护不会被删除。确定立即清理吗？";
+              const confirmed =
+                typeof window.showCustomConfirm === "function"
+                  ? await window.showCustomConfirm("确认清理残留数据", confirmDesc)
+                  : confirm(confirmDesc);
+              if (!confirmed) {
+                setVaultInfoText("已取消清理操作");
+                return;
+              }
+
+              if (orphanFiles.length > 0) {
+                await deleteVaultMediaFilesBatch(orphanFiles);
+              }
+              if (orphanChapterIds.length > 0 && db.moduleChapters) {
+                for (const cid of orphanChapterIds) {
+                  try { await db.moduleChapters.delete(cid); } catch (_) {}
+                }
+              }
+              if (orphanNavIds.length > 0 && db.moduleLocationNav) {
+                for (const nid of orphanNavIds) {
+                  try { await db.moduleLocationNav.delete(nid); } catch (_) {}
+                }
+              }
+
+              setVaultInfoText(`已完成清理 · 共清除 ${orphanFiles.length} 张残留废图，释放约 ${mbStr} MB 空间`);
+              if (typeof calculateAndRenderStorageBreakdown === "function") {
+                try { await calculateAndRenderStorageBreakdown(); } catch (_) {}
+              }
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert(
+                  "清理完成",
+                  `已安全清除 ${orphanFiles.length} 张未被引用的残留废图` +
+                    (orphanDbCount > 0 ? `与 ${orphanDbCount} 条无主残留记录` : "") +
+                    `，释放约 ${mbStr} MB 存储空间`
+                );
+              }
+            } catch (err) {
+              setVaultInfoText("清理失败: " + (err && err.message ? err.message : "请重试"));
+              if (typeof window.showCustomAlert === "function") {
+                window.showCustomAlert("提示", "清理未成功: " + (err && err.message ? err.message : "请稍后重试"));
+              }
+            }
+          }
+          window.runVaultCleanupOrphanMedia = runVaultCleanupOrphanMedia;
+
           function refreshAllVaultImagesAfterTermuxConnected() {
             try {
               failedVaultResolveTimestamps.clear();
@@ -119258,11 +119970,21 @@ ${specificRules}`;
               "open(os.path.join(root,'.nomedia'),'a').close()",
               "open(os.path.join(mdir,'.nomedia'),'a').close()",
               "qstore=os.path.join(root,'qqbot_store.json')",
+              "lfile=os.path.expanduser('~/ephone_vault.log')",
               "tasks={}",
               "tlock=threading.Lock()",
               "sctx=ssl._create_unverified_context()",
+              "def plog(msg):",
+              " ts=time.strftime('%H:%M:%S',time.localtime())",
+              " ln=f'[{ts}] {msg}'",
+              " try: print(ln,flush=True)",
+              " except Exception: pass",
+              " try:",
+              "  with open(lfile,'a',encoding='utf-8') as lf: lf.write(ln+'\\n')",
+              " except Exception: pass",
               "def run_ptask(tid,req_obj):",
               " t0=time.time()",
+              " mdl='默认接口'",
               " try:",
               "  u=str(req_obj.get('url','')).strip()",
               "  m=str(req_obj.get('method','POST')).upper()",
@@ -119270,7 +119992,14 @@ ${specificRules}`;
               "  bd=req_obj.get('body')",
               "  raw_b=None",
               "  if bd is not None and m not in ('GET','HEAD'):",
+              "   if isinstance(bd,dict): mdl=str(bd.get('model') or mdl)",
+              "   elif isinstance(bd,str):",
+              "    try:",
+              "     jb=json.loads(bd)",
+              "     if isinstance(jb,dict) and jb.get('model'): mdl=str(jb.get('model'))",
+              "    except Exception: pass",
               "   raw_b=(bd if isinstance(bd,str) else json.dumps(bd,ensure_ascii=False)).encode('utf-8')",
+              "  plog(f'收到请求 -> 模型: {mdl}')",
               "  hdrs={}",
               "  for k,v in rh.items():",
               "   if k.lower() not in ('host','origin','referer','content-length','connection','accept-encoding'):",
@@ -119286,7 +120015,9 @@ ${specificRules}`;
               "   chunks=[]",
               "   while True:",
               "    with tlock:",
-              "     if tasks.get(tid,{}).get('aborted'): return",
+              "     if tasks.get(tid,{}).get('aborted'):",
+              "      plog(f'请求已取消 <- 模型: {mdl} | 耗时: {time.time()-t0:.1f}s')",
+              "      return",
               "    ch=resp.read(16384)",
               "    if not ch: break",
               "    chunks.append(ch)",
@@ -119300,9 +120031,12 @@ ${specificRules}`;
               "     try: raw_res=zlib.decompress(raw_res,-zlib.MAX_WBITS)",
               "     except Exception: pass",
               "   txt=raw_res.decode('utf-8','replace')",
+              "   el=time.time()-t0",
+              "   if 200<=code<300: plog(f'成功返回 <- 状态: {code} | 耗时: {el:.1f}s')",
+              "   else: plog(f'接口失败 <- 状态: {code} | 耗时: {el:.1f}s')",
               "   with tlock:",
               "    if tid in tasks:",
-              "     tasks[tid]={'status':'done','ok':200<=code<300,'httpStatus':code,'contentType':ct,'bodyText':txt,'elapsedMs':int((time.time()-t0)*1000),'created':time.time()}",
+              "     tasks[tid]={'status':'done','ok':200<=code<300,'httpStatus':code,'contentType':ct,'bodyText':txt,'elapsedMs':int(el*1000),'created':time.time()}",
               " except urllib.error.HTTPError as e:",
               "  try:",
               "   eb=e.read()",
@@ -119312,14 +120046,19 @@ ${specificRules}`;
               "    except Exception: pass",
               "   etxt=eb.decode('utf-8','replace')",
               "  except Exception: etxt=str(e)",
+              "  el=time.time()-t0",
+              "  ec=e.code or 502",
+              "  plog(f'接口失败 <- 状态: {ec} | 耗时: {el:.1f}s')",
               "  with tlock:",
               "   if tid in tasks:",
-              "    tasks[tid]={'status':'done','ok':False,'httpStatus':e.code or 502,'contentType':'application/json','bodyText':etxt,'errorMessage':etxt,'elapsedMs':int((time.time()-t0)*1000),'created':time.time()}",
+              "    tasks[tid]={'status':'done','ok':False,'httpStatus':ec,'contentType':'application/json','bodyText':etxt,'errorMessage':etxt,'elapsedMs':int(el*1000),'created':time.time()}",
               " except Exception as e:",
               "  msg=str(e)",
+              "  el=time.time()-t0",
+              "  plog(f'接口失败 <- 状态: 502 | 耗时: {el:.1f}s')",
               "  with tlock:",
               "   if tid in tasks:",
-              "    tasks[tid]={'status':'done','ok':False,'httpStatus':502,'contentType':'application/json','bodyText':json.dumps({'error':{'message':msg}},ensure_ascii=False),'errorMessage':msg,'elapsedMs':int((time.time()-t0)*1000),'created':time.time()}",
+              "    tasks[tid]={'status':'done','ok':False,'httpStatus':502,'contentType':'application/json','bodyText':json.dumps({'error':{'message':msg}},ensure_ascii=False),'errorMessage':msg,'elapsedMs':int(el*1000),'created':time.time()}",
               "class H(http.server.BaseHTTPRequestHandler):",
               " protocol_version='HTTP/1.1'",
               " def log_message(s,*a): pass",
@@ -119335,6 +120074,20 @@ ${specificRules}`;
               " def do_GET(s):",
               "  if s.path.startswith('/ping'):",
               "   s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  if s.path.startswith('/media-list'):",
+              "   fmap={}",
+              "   for base in [root]+([d for d in cands if os.path.isdir(d) and d!=root]):",
+              "    md=os.path.join(base,'media')",
+              "    if os.path.isdir(md):",
+              "     for fn in os.listdir(md):",
+              "      if fn=='.nomedia': continue",
+              "      fp=os.path.join(md,fn)",
+              "      if os.path.isfile(fp) and fn not in fmap:",
+              "       try: fmap[fn]=max(1,os.path.getsize(fp)-8)",
+              "       except Exception: pass",
+              "   flist=[{'name':k,'size':v} for k,v in fmap.items()]",
+              "   out=json.dumps({'ok':True,'files':list(fmap.keys()),'fileDetails':flist}).encode('utf-8')",
+              "   s.send_response(200); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
               "  if s.path.startswith('/proxy-task'):",
               "   qs=s.path.split('?',1)[1] if '?' in s.path else ''",
               "   tid=''",
@@ -119370,6 +120123,23 @@ ${specificRules}`;
               "  if s.path.startswith('/save'):",
               "   with open(qstore,'wb') as f: f.write(b)",
               "   s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok'); return",
+              "  if s.path.startswith('/media-delete'):",
+              "   try: dobj=json.loads(b.decode('utf-8','replace'))",
+              "   except Exception: dobj={}",
+              "   fl=dobj.get('files') or []",
+              "   dc=0",
+              "   for raw in fl:",
+              "    fn=os.path.basename(str(raw or '').strip())",
+              "    if not fn or fn=='.nomedia': continue",
+              "    stem=os.path.splitext(fn)[0]",
+              "    for base in [root]+([d for d in cands if os.path.isdir(d) and d!=root]):",
+              "     for cand in (fn,stem+'.epdat'):",
+              "      for sub in (os.path.join(base,'media',cand),os.path.join(base,cand)):",
+              "       if os.path.isfile(sub):",
+              "        try: os.remove(sub); dc+=1",
+              "        except Exception: pass",
+              "   out=json.dumps({'ok':True,'deleted':dc}).encode('utf-8')",
+              "   s.send_response(200); s._c(len(out),'application/json'); s.end_headers(); s.wfile.write(out); return",
               "  if s.path.startswith('/proxy-abort'):",
               "   qs=s.path.split('?',1)[1] if '?' in s.path else ''",
               "   tid=''",
@@ -119408,7 +120178,7 @@ ${specificRules}`;
               "  srv=S(('127.0.0.1',8765),H); break",
               " except Exception: time.sleep(0.2)",
               "if srv:",
-              " print('Vault & Local Proxy Ready on 127.0.0.1:8765 ->',root)",
+              " plog('本地后台服务已就绪 127.0.0.1:8765 -> '+root)",
               " srv.serve_forever()",
             ].join("\n");
 
@@ -119454,16 +120224,17 @@ ${specificRules}`;
               "print('========================================')",
             ].join("\n");
 
-            const b64Script = btoa(pyScript);
+            const b64Script = btoa(unescape(encodeURIComponent(pyScript)));
             const b64Info = btoa(unescape(encodeURIComponent(infoPyScript)));
             let cmd = "";
             if (platform === "ios") {
-              cmd = `python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w').write(base64.b64decode('${b64Script}').decode())" && python3 ~/.ephone_vault.py --force`;
+              cmd = `python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'))" && python3 ~/.ephone_vault.py --force`;
             } else {
               const bashPanel = [
                 "# === EPhoneVault Auto Panel ===",
                 "ephone_vault_start() {",
                 "  termux-wake-lock 2>/dev/null || true",
+                "  touch ~/ephone_vault.log 2>/dev/null || true",
                 "  if [ \"$1\" = \"restart\" ]; then",
                 "    pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
                 "    sleep 0.3",
@@ -119475,11 +120246,15 @@ ${specificRules}`;
                 "  echo '----------------------------------------'",
                 "  echo '  [EPhone 本地后台与群控启动面板]'",
                 "  echo '  状态: 本地存储与对话转发已运行 127.0.0.1:8765'",
-                "  echo '  输入 1 回车: 立即重启本地存储与对话转发服务'",
+                "  echo '  输入 1 回车: 重启本地后台并查看实时请求耗时状态'",
                 "  echo '  输入 2 回车: 直接打开 NapCat QQ'",
                 "  echo '  输入 3 回车: 查看 6099 登录密钥与 3001 链接'",
                 "  echo '  输入 4 回车: 查看 QQ 实时收发日志'",
                 "  echo '----------------------------------------'",
+                "  if [ \"$1\" = \"restart\" ]; then",
+                "    echo '  [正在实时显示本地后台收发状态，按 Ctrl+C 可退回菜单]'",
+                "    tail -n 25 -f ~/ephone_vault.log",
+                "  fi",
                 "}",
                 "ephone_napcat_start() {",
                 "  proot-distro login napcat -- bash -c 'xvfb-run -a /root/Napcat/opt/QQ/qq --no-sandbox'",
@@ -119498,7 +120273,7 @@ ${specificRules}`;
                 "# === End EPhoneVault ===",
               ].join("\n");
               const b64Panel = btoa(unescape(encodeURIComponent(bashPanel)));
-              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w').write(base64.b64decode('${b64Script}').decode());open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w').write(base64.b64decode('${b64Info}').decode('utf-8'));rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt=base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && ephone_vault_start restart`;
+              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'));open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Info}').decode('utf-8'));rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt=base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && ephone_vault_start restart`;
             }
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -120086,10 +120861,11 @@ ${specificRules}`;
             }
             if (connBtn) connBtn.addEventListener("click", async () => {
               refreshAllVaultImagesAfterTermuxConnected();
+              await runVaultHideGalleryImages(true);
               await testVaultConnection(false);
             });
             if (offloadBtn) offloadBtn.addEventListener("click", () => runVaultImageOffload());
-            if (hideBtn) hideBtn.addEventListener("click", () => runVaultHideGalleryImages(false));
+            if (hideBtn) hideBtn.addEventListener("click", () => runVaultCleanupOrphanMedia());
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
 
