@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import http from 'http';
 import https from 'https';
 import zlib from 'zlib';
@@ -138,6 +139,72 @@ try {
 app.use('/api/mashu-sticker-files', express.static(MASHU_STICKER_FILES_DIR));
 app.use('/mashu-stickers-assets', express.static(MASHU_PUBLIC_ASSETS_DIR));
 
+const CARD_ASSETS_DIR = path.join(os.tmpdir(), 'ephone-card-assets');
+try {
+  if (!fs.existsSync(CARD_ASSETS_DIR)) {
+    fs.mkdirSync(CARD_ASSETS_DIR, { recursive: true });
+  }
+} catch (_) {}
+app.use('/card-assets', express.static(CARD_ASSETS_DIR, {
+  maxAge: '7d',
+  setHeaders(res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
+
+function getLocalMimeType(filePath) {
+  const ext = path.extname(String(filePath || '')).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.gif') return 'image/gif';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.html' || ext === '.htm') return 'text/html; charset=utf-8';
+  if (ext === '.js') return 'application/javascript; charset=utf-8';
+  if (ext === '.css') return 'text/css; charset=utf-8';
+  if (ext === '.json') return 'application/json; charset=utf-8';
+  return 'application/octet-stream';
+}
+
+function resolveLocalCardAssetFile(owner, repo, decodedRelPath) {
+  if (!owner || !repo || !decodedRelPath || decodedRelPath.includes('..')) return null;
+  const repoDir = path.join(CARD_ASSETS_DIR, owner, repo);
+  if (!fs.existsSync(repoDir)) return null;
+  // Prefer lightweight .webp in ingredient/ when available so mobile 4G/5G loads 20x faster
+  if (/^ingredient\/.+\.png$/i.test(decodedRelPath)) {
+    const webpRel = decodedRelPath.replace(/\.png$/i, '.webp');
+    const webpFull = path.join(repoDir, webpRel);
+    if (fs.existsSync(webpFull) && fs.statSync(webpFull).size > 10) {
+      return webpFull;
+    }
+  }
+  const exactFull = path.join(repoDir, decodedRelPath);
+  if (fs.existsSync(exactFull) && fs.statSync(exactFull).size > 0) {
+    return exactFull;
+  }
+  const dirPart = path.dirname(decodedRelPath);
+  const baseName = path.basename(decodedRelPath);
+  const targetDir = path.join(repoDir, dirPart);
+  if (fs.existsSync(targetDir)) {
+    try {
+      const entries = fs.readdirSync(targetDir);
+      const lowerBase = baseName.toLowerCase();
+      const ciMatch = entries.find(e => e.toLowerCase() === lowerBase);
+      if (ciMatch) {
+        const ciFull = path.join(targetDir, ciMatch);
+        if (fs.statSync(ciFull).isFile()) return ciFull;
+      }
+      const stem = baseName.replace(/\.[^.]+$/, '').toLowerCase();
+      const extMatch = entries.find(e => e.replace(/\.[^.]+$/, '').toLowerCase() === stem && /\.(webp|png|jpg|jpeg)$/i.test(e));
+      if (extMatch) {
+        const extFull = path.join(targetDir, extMatch);
+        if (fs.statSync(extFull).isFile()) return extFull;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
 const rawGhAssetCache = new Map();
 let rawGhAssetCacheBytes = 0;
 const RAW_GH_CACHE_MAX_BYTES = 25 * 1024 * 1024;
@@ -148,16 +215,22 @@ app.get('/api/raw-gh/*', async (req, res) => {
     if (!subPath || subPath.includes('..')) {
       return res.status(400).end();
     }
-    const encodedPath = subPath
-      .split('/')
-      .map(seg => {
-        try {
-          return encodeURIComponent(decodeURIComponent(seg));
-        } catch (_) {
-          return encodeURIComponent(seg);
-        }
-      })
-      .join('/');
+    const decodedSegments = subPath.split('/').map(seg => {
+      try { return decodeURIComponent(seg); } catch (_) { return seg; }
+    });
+    const encodedPath = decodedSegments.map(seg => encodeURIComponent(seg)).join('/');
+
+    // 1. Check local disk (/public/card-assets/) first!
+    const parsedMatch = decodedSegments.join('/').match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
+    if (parsedMatch) {
+      const localFile = resolveLocalCardAssetFile(parsedMatch[1], parsedMatch[2], parsedMatch[4]);
+      if (localFile) {
+        res.setHeader('Content-Type', getLocalMimeType(localFile));
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.sendFile(localFile);
+      }
+    }
 
     if (rawGhAssetCache.has(encodedPath)) {
       const cached = rawGhAssetCache.get(encodedPath);
@@ -175,15 +248,16 @@ app.get('/api/raw-gh/*', async (req, res) => {
     if (!upstream || !upstream.ok) {
       const jsdMatch = encodedPath.match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
       if (jsdMatch) {
-        const ghPagesUrl = `https://${jsdMatch[1]}.github.io/${jsdMatch[2]}/${jsdMatch[4]}`;
-        upstream = await fetch(ghPagesUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        }).catch(() => null);
-        if (!upstream || !upstream.ok) {
-          const fallbackUrl = `https://testingcf.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`;
-          upstream = await fetch(fallbackUrl, {
+        const mirrors = [
+          `https://testingcf.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`,
+          `https://fastly.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`,
+          `https://cdn.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`
+        ];
+        for (const mirrorUrl of mirrors) {
+          upstream = await fetch(mirrorUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0' }
           }).catch(() => null);
+          if (upstream && upstream.ok) break;
         }
       }
     }
@@ -195,6 +269,17 @@ app.get('/api/raw-gh/*', async (req, res) => {
     const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
     const arrBuf = await upstream.arrayBuffer();
     const buffer = Buffer.from(arrBuf);
+
+    // Save to local disk (/public/card-assets/) so subsequent requests are 100% local!
+    if (parsedMatch && buffer.length > 0) {
+      try {
+        const savePath = path.join(CARD_ASSETS_DIR, parsedMatch[1], parsedMatch[2], parsedMatch[4]);
+        if (!savePath.includes('..')) {
+          fs.mkdirSync(path.dirname(savePath), { recursive: true });
+          fs.writeFileSync(savePath, buffer);
+        }
+      } catch (_) {}
+    }
 
     if (buffer.length > 0 && buffer.length <= 2 * 1024 * 1024) {
       while (rawGhAssetCacheBytes + buffer.length > RAW_GH_CACHE_MAX_BYTES && rawGhAssetCache.size > 0) {
@@ -213,6 +298,98 @@ app.get('/api/raw-gh/*', async (req, res) => {
     return res.end(buffer);
   } catch (err) {
     return res.status(500).end();
+  }
+});
+
+app.post('/api/pull-card-assets', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const repos = Array.isArray(body.repos) && body.repos.length > 0
+      ? body.repos
+      : [{ owner: 'trrtty', repo: 'milktea', branch: 'main' }];
+    let downloadedCount = 0;
+    let totalLocalCount = 0;
+
+    for (const rInfo of repos) {
+      const owner = String(rInfo.owner || 'trrtty').replace(/[^a-zA-Z0-9_.-]/g, '');
+      const repo = String(rInfo.repo || 'milktea').replace(/[^a-zA-Z0-9_.-]/g, '');
+      const branch = String(rInfo.branch || 'main').replace(/[^a-zA-Z0-9_.-]/g, '');
+      if (!owner || !repo) continue;
+      const baseDir = path.join(CARD_ASSETS_DIR, owner, repo);
+      fs.mkdirSync(baseDir, { recursive: true });
+
+      const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      }).catch(() => null);
+      if (treeRes && treeRes.ok) {
+        const treeData = await treeRes.json().catch(() => ({}));
+        const allBlobs = (treeData.tree || []).filter(x => x.type === 'blob' && x.size > 10);
+        const webpPathSet = new Set(
+          allBlobs
+            .filter(x => /\.webp$/i.test(x.path || ''))
+            .map(x => String(x.path).replace(/\.webp$/i, '').toLowerCase())
+        );
+        const blobs = allBlobs.filter(x => {
+          if (/^ingredient\/.+\.png$/i.test(x.path || '')) {
+            const stem = String(x.path).replace(/\.png$/i, '').toLowerCase();
+            if (webpPathSet.has(stem)) return false;
+          }
+          return true;
+        });
+        const queue = [...blobs];
+        const workers = Array.from({ length: 10 }, async () => {
+          while (queue.length > 0) {
+            const item = queue.shift();
+            if (!item || !item.path || item.path.includes('..')) continue;
+            const destPath = path.join(baseDir, item.path);
+            if (fs.existsSync(destPath) && fs.statSync(destPath).size > 10) {
+              totalLocalCount++;
+              continue;
+            }
+            fs.mkdirSync(path.dirname(destPath), { recursive: true });
+            const encPath = item.path.split('/').map(encodeURIComponent).join('/');
+            const candidates = [
+              `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encPath}`,
+              `https://testingcf.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encPath}`,
+              `https://fastly.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encPath}`
+            ];
+            for (const cUrl of candidates) {
+              const up = await fetch(cUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }).catch(() => null);
+              if (up && up.ok) {
+                const buf = Buffer.from(await up.arrayBuffer());
+                if (buf.length > 0) {
+                  fs.writeFileSync(destPath, buf);
+                  downloadedCount++;
+                  totalLocalCount++;
+                  break;
+                }
+              }
+            }
+          }
+        });
+        await Promise.all(workers);
+      } else {
+        // Count existing local files if GitHub API rate-limited
+        const countFiles = (dir) => {
+          if (!fs.existsSync(dir)) return 0;
+          let c = 0;
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.isDirectory()) c += countFiles(path.join(dir, entry.name));
+            else if (entry.isFile()) c++;
+          }
+          return c;
+        };
+        totalLocalCount += countFiles(baseDir);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      downloaded: downloadedCount,
+      totalLocal: totalLocalCount
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err && err.message ? err.message : '拉取失败' });
   }
 });
 

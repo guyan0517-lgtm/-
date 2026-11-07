@@ -10427,10 +10427,14 @@ code, pre {
       if (!rx) continue;
 
       try {
+        const rawRepTemplate = String(script.replaceString ?? '');
+        // Guard against wipe-all regex (like RX 5 '/.+/s' -> '') erasing HTML UI already injected by an earlier regex (like RX 1 on depth 1)
+        if (rawRepTemplate === '' && /^\s*\/\.\+\/[a-z]*\s*$/i.test(String(patternStr || '')) && /(?:<!doctype\s+html|<html\b|<body\b|trrtty\.github\.io\/milktea)/i.test(output)) {
+          continue;
+        }
         rx.lastIndex = 0;
         if (!rx.test(output)) continue;
         rx.lastIndex = 0;
-        const rawRepTemplate = String(script.replaceString ?? '');
         const resolvedTrimStrings = (Array.isArray(script.trimStrings) && script.trimStrings.length > 0)
           ? script.trimStrings.map(t => t ? replaceTavernMacros(String(t), card) : '').filter(Boolean)
           : [];
@@ -10663,12 +10667,58 @@ function buildFallbackCodeFromItem(drinkObj) {
         'if (sd.tempDrinkStats) {\n                const bk = JSON.parse(localStorage.getItem("milktea_dev_backup") || "{}");\n                editorState.tempStats = Object.assign({}, sd.tempDrinkStats, { code: sd.tempDrinkStats.code || bk.code || null, ingredients: (Array.isArray(sd.tempDrinkStats.ingredients) && sd.tempDrinkStats.ingredients.length) ? sd.tempDrinkStats.ingredients : (bk.ingredients || []) });'
       )
       .replace(
-        'function applyTintFilter(imgEl, hexColor) {\n    if (!hexColor || !imgEl) return;',
-        'function applyTintFilter(imgEl, hexColor) {\n    if (!hexColor || !imgEl || typeof hexColor !== "string") return;\n    if (!/^#?[0-9A-Fa-f]{3,6}$/.test(hexColor.trim())) return;'
-      )
-      .replace(
-        'svg.setAttribute("width", "0");\n    svg.setAttribute("height", "0");\n    svg.style.cssText = "position:absolute; pointer-events:none; visibility:hidden;";',
-        'svg.setAttribute("width", "1");\n    svg.setAttribute("height", "1");\n    svg.style.cssText = "position:fixed; left:-9999px; top:-9999px; pointer-events:none; opacity:0.01;";'
+        /function\s+applyTintFilter\s*\(\s*imgEl\s*,\s*hexColor\s*\)\s*\{[\s\S]*?requestAnimationFrame\(\(\)\s*=>\s*\{[\s\S]*?\}\);\s*\}/,
+        `function applyTintFilter(imgEl, hexColor) {
+    if (!hexColor || !imgEl || typeof hexColor !== "string") return;
+    let finalColor = hexColor.trim();
+    if (!finalColor.startsWith("#") && /^[0-9A-Fa-f]{3,6}$/.test(finalColor)) {
+      finalColor = "#" + finalColor;
+    }
+    if (!/^#[0-9A-Fa-f]{3,6}$/.test(finalColor)) return;
+    const runCanvasTint = () => {
+      try {
+        const w = imgEl.naturalWidth || 650;
+        const h = imgEl.naturalHeight || 650;
+        if (!w || !h) return;
+        const origSrc = imgEl.getAttribute("data-orig-tint-src") || imgEl.src || "";
+        if (!origSrc || origSrc.startsWith("data:image/")) return;
+        imgEl.setAttribute("data-orig-tint-src", origSrc);
+        const cacheKey = origSrc + "::" + finalColor;
+        if (window.__milkteaTintCache && window.__milkteaTintCache.has(cacheKey)) {
+          imgEl.style.filter = (imgEl.style.filter || "").replace(/url\\([^)]+\\)/g, "").trim();
+          imgEl.src = window.__milkteaTintCache.get(cacheKey);
+          return;
+        }
+        const cvs = document.createElement("canvas");
+        cvs.width = w;
+        cvs.height = h;
+        const ctx = cvs.getContext("2d");
+        ctx.drawImage(imgEl, 0, 0, w, h);
+        ctx.globalCompositeOperation = "multiply";
+        ctx.fillStyle = finalColor;
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = "destination-in";
+        ctx.drawImage(imgEl, 0, 0, w, h);
+        const tintedDataUrl = cvs.toDataURL("image/png");
+        if (!window.__milkteaTintCache) window.__milkteaTintCache = new Map();
+        if (window.__milkteaTintCache.size > 60) {
+          const oldestK = window.__milkteaTintCache.keys().next().value;
+          window.__milkteaTintCache.delete(oldestK);
+        }
+        window.__milkteaTintCache.set(cacheKey, tintedDataUrl);
+        imgEl.style.filter = (imgEl.style.filter || "").replace(/url\\([^)]+\\)/g, "").trim();
+        imgEl.src = tintedDataUrl;
+      } catch (err) {}
+    };
+    if (imgEl.complete && imgEl.naturalWidth > 0) {
+      runCanvasTint();
+    } else {
+      imgEl.addEventListener("load", function onTintLoad() {
+        imgEl.removeEventListener("load", onTintLoad);
+        runCanvasTint();
+      });
+    }
+  }`
       )
       .replace(
         'function parseShortCode(code) {',
@@ -10685,8 +10735,43 @@ function buildFallbackCodeFromItem(drinkObj) {
       .replace(
         'setTimeout(() => renderThumbnail(index, key, item.code, 361 / 650), 0);',
         'if ((!item.code || !/^v2\\||^[A-Za-z0-9+/=]{12,}$/.test(String(item.code))) && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); setTimeout(() => renderThumbnail(index, key, item.code || item, 361 / 650), 0);'
+      )
+      .replace(
+        /if\s*\(\s*layerId\s*===\s*['"]layer-settings['"]\s*\)/g,
+        'if (typeof layerId !== "undefined" && layerId === "layer-settings")'
+      )
+      .replace(
+        'const name = shopConfig.identity.name;',
+        'const name = (shopConfig && shopConfig.identity && shopConfig.identity.name) ? shopConfig.identity.name : "未命名奶茶店";'
       );
     return out;
+  }
+
+  let localMilkteaHtmlCache = '';
+  function preloadLocalMilkteaHtml() {
+    fetch('/api/raw-gh/trrtty/milktea/main/index.html')
+      .then(r => (r && r.ok) ? r.text() : '')
+      .then(txt => {
+        if (txt && txt.includes('unlockedIngredients') && !isHostAppHtmlFallback(txt)) {
+          localMilkteaHtmlCache = txt;
+        }
+      })
+      .catch(() => {});
+  }
+  preloadLocalMilkteaHtml();
+
+  function resolveMilkteaFullHtmlFromCardOrCache() {
+    if (localMilkteaHtmlCache && localMilkteaHtmlCache.includes('unlockedIngredients')) {
+      return localMilkteaHtmlCache;
+    }
+    const c = getActiveCard();
+    if (c && Array.isArray(c.regexScripts)) {
+      const rx2 = c.regexScripts.find(r => r && String(r.replaceString || '').includes('unlockedIngredients'));
+      if (rx2 && rx2.replaceString) {
+        return String(rx2.replaceString).replace(/^\s*```(?:html|HTML)?\s*/, '').replace(/\s*```\s*$/, '');
+      }
+    }
+    return '';
   }
 
   function buildSandboxIframeHtml(rawHtmlDoc, options = {}) {
@@ -10698,7 +10783,14 @@ function buildFallbackCodeFromItem(drinkObj) {
     const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
       ? window.location.origin
       : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
-    let cleaned = String(rawHtmlDoc || '')
+    let sourceDoc = String(rawHtmlDoc || '');
+    if (/trrtty\.github\.io\/milktea/i.test(sourceDoc) && /\.load\s*\(/i.test(sourceDoc)) {
+      const preloaded = resolveMilkteaFullHtmlFromCardOrCache();
+      if (preloaded) {
+        sourceDoc = preloaded;
+      }
+    }
+    let cleaned = sourceDoc
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
       .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '')
       .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + hostOrigin + '/public/vendor/tailwindcss.js$2')
@@ -10921,19 +11013,12 @@ function buildFallbackCodeFromItem(drinkObj) {
       var fbStage = t.getAttribute('data-gh-cdn-fallback') || '0';
       if (fbStage === '2') return;
       var s = t.getAttribute('src') || '';
-      var sub = '';
-      if (s.indexOf('/api/raw-gh/') !== -1) {
-        sub = s.split('/api/raw-gh/')[1] || '';
-      } else if (s.indexOf('raw.githubusercontent.com/') !== -1) {
-        sub = s.split('raw.githubusercontent.com/')[1] || '';
-      } else if (s.indexOf('testingcf.jsdelivr.net/gh/') !== -1) {
-        var jSub = s.split('testingcf.jsdelivr.net/gh/')[1] || '';
-        var jParts = jSub.split('/');
-        if (jParts.length >= 3 && jParts[1].indexOf('@') !== -1) {
-          var repoAndBranch = jParts[1].split('@');
-          t.setAttribute('data-gh-cdn-fallback', '2');
-          t.src = 'https://' + jParts[0] + '.github.io/' + repoAndBranch[0] + '/' + jParts.slice(2).join('/');
-          return;
+      var sub = t.getAttribute('data-raw-gh-sub') || '';
+      if (!sub) {
+        if (s.indexOf('/api/raw-gh/') !== -1) {
+          sub = s.split('/api/raw-gh/')[1] || '';
+        } else if (s.indexOf('raw.githubusercontent.com/') !== -1) {
+          sub = s.split('raw.githubusercontent.com/')[1] || '';
         }
       }
       if (sub) {
@@ -10948,10 +11033,12 @@ function buildFallbackCodeFromItem(drinkObj) {
             var filePath = parts.slice(branchIdx + 1).join('/');
             if (fbStage === '0') {
               t.setAttribute('data-gh-cdn-fallback', '1');
-              t.src = 'https://' + owner + '.github.io/' + repo + '/' + filePath;
+              t.removeAttribute('data-raw-gh-sub');
+              t.src = 'https://testingcf.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
             } else {
               t.setAttribute('data-gh-cdn-fallback', '2');
-              t.src = 'https://testingcf.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
+              t.removeAttribute('data-raw-gh-sub');
+              t.src = 'https://fastly.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
             }
           }
         }
@@ -19231,9 +19318,12 @@ function buildFallbackCodeFromItem(drinkObj) {
               </div>
             `;
           })() : ''}
-          <div class="tavern-btn-grid" style="margin-top:4px;margin-bottom:0;">
-            <button type="button" class="tavern-btn small" data-action="sync-card-greetings-to-floor0">同步开场白至0层</button>
-            <button type="button" class="tavern-btn small primary" data-action="save-card-edits">保存角色卡修改</button>
+          <div style="display:flex;gap:8px;margin-top:4px;margin-bottom:0;">
+            <button type="button" class="tavern-btn small" style="flex:1;" data-action="sync-card-greetings-to-floor0">同步开场白至0层</button>
+            <button type="button" class="tavern-btn small" style="flex-shrink:0;" data-action="pull-card-local-assets">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>拉取
+            </button>
+            <button type="button" class="tavern-btn small primary" style="flex:1;" data-action="save-card-edits">保存角色卡修改</button>
           </div>
         </div>
       </div>
@@ -22767,6 +22857,39 @@ function buildFallbackCodeFromItem(drinkObj) {
           refreshOpenDrawerOnly();
           renderTavernChatFloors(false);
           showTavernToast('玩家人设已保存');
+        }
+        return;
+      }
+      if (action === 'pull-card-local-assets') {
+        const activeCard = getActiveCard();
+        showTavernToast('正在拉取卡片图片至本地目录...');
+        try {
+          const reposMap = new Map();
+          reposMap.set('trrtty/milktea', { owner: 'trrtty', repo: 'milktea', branch: 'main' });
+          if (activeCard) {
+            const rawCardStr = JSON.stringify(activeCard);
+            const ghMatches = rawCardStr.matchAll(/raw\.githubusercontent\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/(?:refs\/heads\/)?([a-zA-Z0-9_.-]+)\//g);
+            for (const m of ghMatches) {
+              reposMap.set(m[1] + '/' + m[2], { owner: m[1], repo: m[2], branch: m[3] || 'main' });
+            }
+          }
+          const resp = await fetch('/api/pull-card-assets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repos: Array.from(reposMap.values()) })
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (data && data.ok) {
+            preloadLocalMilkteaHtml();
+            setTimeout(() => {
+              try { renderTavernChatFloors(true); } catch (_) {}
+            }, 150);
+            showTavernToast('本地已就绪 ' + (data.totalLocal || 0) + ' 个卡片资源文件');
+          } else {
+            showTavernToast('拉取失败，请稍后重试');
+          }
+        } catch (err) {
+          showTavernToast('拉取异常: ' + (err && err.message ? err.message : '未知错误'));
         }
         return;
       }
