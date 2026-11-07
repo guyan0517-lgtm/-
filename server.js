@@ -138,6 +138,78 @@ try {
 app.use('/api/mashu-sticker-files', express.static(MASHU_STICKER_FILES_DIR));
 app.use('/mashu-stickers-assets', express.static(MASHU_PUBLIC_ASSETS_DIR));
 
+const rawGhAssetCache = new Map();
+let rawGhAssetCacheBytes = 0;
+const RAW_GH_CACHE_MAX_BYTES = 25 * 1024 * 1024;
+
+app.get('/api/raw-gh/*', async (req, res) => {
+  try {
+    const subPath = String(req.params[0] || '').replace(/^\/+/, '');
+    if (!subPath || subPath.includes('..')) {
+      return res.status(400).end();
+    }
+    const encodedPath = subPath
+      .split('/')
+      .map(seg => {
+        try {
+          return encodeURIComponent(decodeURIComponent(seg));
+        } catch (_) {
+          return encodeURIComponent(seg);
+        }
+      })
+      .join('/');
+
+    if (rawGhAssetCache.has(encodedPath)) {
+      const cached = rawGhAssetCache.get(encodedPath);
+      res.setHeader('Content-Type', cached.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.end(cached.buffer);
+    }
+
+    const primaryUrl = 'https://raw.githubusercontent.com/' + encodedPath;
+    let upstream = await fetch(primaryUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    }).catch(() => null);
+
+    if (!upstream || !upstream.ok) {
+      const jsdMatch = encodedPath.match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
+      if (jsdMatch) {
+        const fallbackUrl = `https://testingcf.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`;
+        upstream = await fetch(fallbackUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        }).catch(() => null);
+      }
+    }
+
+    if (!upstream || !upstream.ok) {
+      return res.status(upstream ? upstream.status : 502).end();
+    }
+
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const arrBuf = await upstream.arrayBuffer();
+    const buffer = Buffer.from(arrBuf);
+
+    if (buffer.length > 0 && buffer.length <= 2 * 1024 * 1024) {
+      while (rawGhAssetCacheBytes + buffer.length > RAW_GH_CACHE_MAX_BYTES && rawGhAssetCache.size > 0) {
+        const oldestKey = rawGhAssetCache.keys().next().value;
+        const oldest = rawGhAssetCache.get(oldestKey);
+        rawGhAssetCache.delete(oldestKey);
+        if (oldest) rawGhAssetCacheBytes -= oldest.buffer.length;
+      }
+      rawGhAssetCache.set(encodedPath, { contentType, buffer });
+      rawGhAssetCacheBytes += buffer.length;
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.end(buffer);
+  } catch (err) {
+    return res.status(500).end();
+  }
+});
+
 function readBestLocalMashuStickersPayload() {
   const candidates = [MASHU_STICKERS_FILE, MASHU_PUBLIC_STICKERS_FILE, MASHU_ROOT_STICKERS_FILE];
   let best = { updatedAt: 0, stickers: [] };

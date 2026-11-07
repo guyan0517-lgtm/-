@@ -35273,7 +35273,10 @@ select,
   border: 1px solid var(--border-color);
   box-sizing: border-box !important;
   width: 100% !important;
-  overflow: hidden !important;
+  height: auto !important;
+  min-height: 68px !important;
+  flex-shrink: 0 !important;
+  overflow: visible !important;
   text-align: left !important;
 }
 
@@ -35298,7 +35301,9 @@ select,
   display: flex !important;
   flex-direction: column !important;
   align-items: flex-start !important;
-  gap: 4px !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  padding: 2px 0 !important;
   overflow: hidden !important;
   text-align: left !important;
 }
@@ -35307,24 +35312,28 @@ select,
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
-  gap: 6px !important;
+  gap: 5px !important;
   width: 100% !important;
   min-width: 0 !important;
+  line-height: 1.35 !important;
 }
 
 .regex-rule-name {
   font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.35 !important;
   color: var(--text-primary);
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
   text-align: left !important;
+  max-width: 100% !important;
 }
 
 .regex-scope-badge {
   font-size: 10.5px;
-  padding: 1px 6px;
+  line-height: 1.3 !important;
+  padding: 2px 6px;
   border-radius: 6px;
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
@@ -35336,6 +35345,7 @@ select,
 .regex-rule-preview {
   width: 100% !important;
   font-size: 11.5px;
+  line-height: 1.35 !important;
   color: var(--text-secondary);
   overflow: hidden !important;
   text-overflow: ellipsis !important;
@@ -35350,6 +35360,17 @@ select,
   gap: 6px !important;
   flex-shrink: 0 !important;
   margin-left: auto !important;
+}
+
+.regex-rule-actions .moe-btn-mini {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  width: auto !important;
+  min-width: 42px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
 }
 
 /* 伏笔状态栏面板样式 */

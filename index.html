@@ -1,6 +1,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta name="referrer" content="no-referrer" />
 
     <meta
       name="viewport"
@@ -48,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=16.1" defer></script>
+    <script src="game-hall.js?v=17.4" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2525,7 +2526,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v17.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22098,8 +22099,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return "http://127.0.0.1:8765";
         }
 
-        async function executeLocalBackendProxyFetch(targetUrl, method, headers, bodyObj, callerSignal, onProgressTick) {
-          if (!isLocalBackendSwitchEnabled() || String(method || "POST").toUpperCase() !== "POST") {
+        async function executeLocalBackendProxyFetch(targetUrl, method, headers, bodyObj, callerSignal, onProgressTick, forceEnable = false) {
+          if ((!forceEnable && !isLocalBackendSwitchEnabled()) || String(method || "POST").toUpperCase() !== "POST") {
             return null;
           }
           const sleepOneSec = () => new Promise((r) => setTimeout(r, 1000));
@@ -22896,14 +22897,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 try {
                   ensureBackgroundKeepAlive();
                   resetTimeout();
-                  if (method === "POST" && !isStreamReq && isLocalBackendSwitchEnabled()) {
+                  if (method === "POST" && !isStreamReq && !options._forceDirectFetch && (options._forceLocalProxy || isLocalBackendSwitchEnabled())) {
                     const localProxyRes = await executeLocalBackendProxyFetch(
                       finalUrl,
                       method,
                       headers,
                       activeBodyObj,
                       controller.signal,
-                      resetTimeout
+                      resetTimeout,
+                      Boolean(options._forceLocalProxy)
                     );
                     if (localProxyRes) {
                       return { res: localProxyRes, directErr: null };

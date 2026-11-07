@@ -251,6 +251,7 @@ code, pre {
       useExternalPhoneApi: true,
       useExternalNovelAi: true,
       streamEnabled: true,
+      transportMode: 'auto',
       customUrl: '',
       customKey: '',
       customModel: '',
@@ -1868,11 +1869,108 @@ code, pre {
     return target;
   }
 
+  function applyJsonPatchOperationsToTarget(patchArr, targetObj) {
+    if (!Array.isArray(patchArr) || !targetObj || typeof targetObj !== 'object') return false;
+    let mutated = false;
+    const decodePointerSeg = (seg) => String(seg || '').replace(/~1/g, '/').replace(/~0/g, '~');
+    for (const item of patchArr) {
+      if (!item || typeof item !== 'object' || typeof item.path !== 'string') continue;
+      const op = String(item.op || 'replace').toLowerCase();
+      const rawSegs = item.path.replace(/^\/+/, '').split('/').filter(Boolean).map(decodePointerSeg);
+      if (rawSegs.length === 0) continue;
+      if (rawSegs[0] === 'stat_data') rawSegs.shift();
+      if (rawSegs.length === 0) continue;
+      const dotPath = rawSegs.join('.');
+      if (op === 'remove') {
+        const lastSeg = rawSegs[rawSegs.length - 1];
+        const parentPath = rawSegs.slice(0, -1).join('.');
+        const parentRef = parentPath ? getDeepVarByPath(targetObj, parentPath) : targetObj;
+        if (Array.isArray(parentRef) && /^\d+$/.test(lastSeg)) {
+          const idx = Number(lastSeg);
+          if (idx >= 0 && idx < parentRef.length) {
+            parentRef.splice(idx, 1);
+            mutated = true;
+          }
+        } else {
+          deleteDeepVarByPath(targetObj, dotPath);
+          mutated = true;
+        }
+      } else if (op === 'add' || op === 'replace') {
+        const lastSeg = rawSegs[rawSegs.length - 1];
+        const parentPath = rawSegs.slice(0, -1).join('.');
+        const parentRef = parentPath ? getDeepVarByPath(targetObj, parentPath) : targetObj;
+        const valClone = item.value !== undefined && item.value !== null && typeof item.value === 'object'
+          ? JSON.parse(JSON.stringify(item.value))
+          : item.value;
+        if (op === 'add' && Array.isArray(parentRef) && (lastSeg === '-' || /^\d+$/.test(lastSeg))) {
+          if (lastSeg === '-') {
+            parentRef.push(valClone);
+          } else {
+            const idx = Number(lastSeg);
+            parentRef.splice(idx, 0, valClone);
+          }
+          mutated = true;
+        } else {
+          setDeepVarByPath(targetObj, dotPath, valClone);
+          mutated = true;
+        }
+      }
+    }
+    return mutated;
+  }
+
+  function parseAndApplyJsonPatchBlocks(rawStr, targetObj) {
+    if (!rawStr || typeof rawStr !== 'string' || !targetObj || typeof targetObj !== 'object') return false;
+    let mutated = false;
+    const patchRx = /<JSONPatch>([\s\S]*?)<\/JSONPatch>/gi;
+    let pm;
+    while ((pm = patchRx.exec(rawStr)) !== null) {
+      const inner = String(pm[1] || '')
+        .replace(/```(?:json|js|javascript)?/gi, '')
+        .replace(/,\s*([\]}])/g, '$1')
+        .trim();
+      if (!inner) continue;
+      const firstBracket = inner.indexOf('[');
+      const lastBracket = inner.lastIndexOf(']');
+      const jsonSlice = (firstBracket !== -1 && lastBracket > firstBracket)
+        ? inner.slice(firstBracket, lastBracket + 1)
+        : inner;
+      try {
+        const parsed = JSON.parse(jsonSlice);
+        const arr = Array.isArray(parsed) ? parsed : [parsed];
+        if (applyJsonPatchOperationsToTarget(arr, targetObj)) {
+          mutated = true;
+        }
+      } catch (_) {}
+    }
+    return mutated;
+  }
+
+  function cardUsesStatusPlaceHolderImpl(cardObj) {
+    const card = cardObj || getActiveCard();
+    if (!card) return false;
+    const rxList = getActiveRegexScriptsForCard(card);
+    if (Array.isArray(rxList) && rxList.some(r => r && String(r.findRegex || '').includes('StatusPlaceHolderImpl'))) {
+      return true;
+    }
+    if (String(card.first_mes || '').includes('StatusPlaceHolderImpl')) return true;
+    if (Array.isArray(card.alternate_greetings) && card.alternate_greetings.some(g => String(g || '').includes('StatusPlaceHolderImpl'))) {
+      return true;
+    }
+    return false;
+  }
+
   function parseAndApplyMvuUpdateVariableText(rawText, statDataObj) {
     if (!rawText || typeof rawText !== 'string' || !statDataObj || typeof statDataObj !== 'object') return false;
     const blockMatch = rawText.match(/<(?:UpdateVariable|Update|update_variable)>([\s\S]*?)<\/(?:UpdateVariable|Update|update_variable)>/i);
     const body = blockMatch ? blockMatch[1] : rawText;
     let changed = false;
+
+    if (/<JSONPatch>/i.test(body)) {
+      if (parseAndApplyJsonPatchBlocks(body, statDataObj)) {
+        changed = true;
+      }
+    }
 
     const lodashMutator = {
       set: (path, val) => {
@@ -1932,7 +2030,7 @@ code, pre {
       } catch (_) {}
     }
 
-    if (!changed && blockMatch) {
+    if (!changed && blockMatch && !/<JSONPatch>/i.test(body)) {
       const cleanJsonCandidate = body
         .replace(/<Analysis>[\s\S]*?<\/Analysis>/gi, '')
         .replace(/```(?:json|js|javascript)?/gi, '')
@@ -1942,7 +2040,7 @@ code, pre {
       if (firstBrace !== -1 && lastBrace > firstBrace) {
         try {
           const parsedObj = JSON.parse(cleanJsonCandidate.slice(firstBrace, lastBrace + 1));
-          if (parsedObj && typeof parsedObj === 'object') {
+          if (parsedObj && typeof parsedObj === 'object' && !('op' in parsedObj && 'path' in parsedObj)) {
             deepMergeVariables(statDataObj, parsedObj);
             changed = true;
           }
@@ -1961,6 +2059,7 @@ code, pre {
     const parts = splitSlashCommandPipeline(trimmedInput);
     let lastResult = '';
     let sentUserMessageInBatch = false;
+    let sentAssistantMessageInBatch = false;
     let triggeredGenerationInBatch = false;
     let suppressAutoTrigger = Boolean(execOptions && execOptions.suppressAutoTrigger);
 
@@ -2193,19 +2292,31 @@ code, pre {
         }
         if (msg) {
           const sess = getActiveChatSession();
+          const prevFloorVars = sess.messages.length > 0 && typeof window.getVariables === 'function'
+            ? window.getVariables({ type: 'message', message_id: sess.messages.length - 1 })
+            : getChatVariablesStore();
+          const clonedVars = prevFloorVars ? JSON.parse(JSON.stringify(prevFloorVars)) : {};
+          if (!isSys && !msg.includes('<StatusPlaceHolderImpl/>') && cardUsesStatusPlaceHolderImpl(getActiveCard())) {
+            msg = msg + '\n<StatusPlaceHolderImpl/>';
+          }
+          const nowTs = Date.now();
           sess.messages.push({
             mesid: sess.messages.length,
             name: senderName,
             is_user: false,
             is_system: isSys,
-            send_date: Date.now(),
+            send_date: nowTs,
             mes: msg,
             swipes: [msg],
             swipe_id: 0,
+            swipe_info: [{ send_date: nowTs, gen_time: '', reasoning: '', token_count: estimateTokens(msg) }],
             reasoning: '',
             gen_time: '',
-            token_count: estimateTokens(msg)
+            token_count: estimateTokens(msg),
+            data: { variables: clonedVars },
+            variables: [clonedVars]
           });
+          sentAssistantMessageInBatch = true;
           lastResult = msg;
         }
       } else if (/^\/send\b/i.test(line)) {
@@ -2372,6 +2483,14 @@ code, pre {
 
     await saveTavernStore();
 
+    if (sentAssistantMessageInBatch && !sentUserMessageInBatch && !triggeredGenerationInBatch) {
+      const sess = getActiveChatSession();
+      renderTavernChatFloors(false, { scrollToBottom: true });
+      if (sess && sess.messages.length > 0) {
+        await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, sess.messages.length - 1);
+      }
+    }
+
     if (sentUserMessageInBatch) {
       const sess = getActiveChatSession();
       appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: true });
@@ -2469,26 +2588,54 @@ code, pre {
       return [];
     }
 
-    function wrapElements(elements) {
+    function wrapElements(elements, scopedOwnerCardId = null) {
       const arr = Array.from(elements || []).filter(Boolean);
+      const getEffectiveOwnerId = () => scopedOwnerCardId || window.__currentExecutingCardOwnerId || null;
+      const isTopMountTarget = (node) => Boolean(
+        node && (node === document.body || node === document.head || node.id === 'tavern-stage-root')
+      );
+      const canMountForOwner = (ownerId) => !ownerId || (getActiveCard()?.id === ownerId);
+      const stampNewChildrenWithOwner = (container, prevSet, ownerId) => {
+        if (!ownerId || !container || !container.children) return;
+        Array.from(container.children).forEach(ch => {
+          if (ch && !prevSet.has(ch) && ch.setAttribute) {
+            ch.setAttribute('data-tavern-card-owner', ownerId);
+          }
+        });
+      };
       const api = {
         _isTavernJq: true,
+        _ownerCardId: scopedOwnerCardId || null,
         elements: arr,
         length: arr.length,
         get(idx) { return idx === undefined ? arr : arr[idx]; },
-        eq(idx) { return wrapElements(arr[idx] ? [arr[idx]] : []); },
-        first() { return wrapElements(arr[0] ? [arr[0]] : []); },
-        last() { return wrapElements(arr.length ? [arr[arr.length - 1]] : []); },
+        eq(idx) { return wrapElements(arr[idx] ? [arr[idx]] : [], getEffectiveOwnerId()); },
+        first() { return wrapElements(arr[0] ? [arr[0]] : [], getEffectiveOwnerId()); },
+        last() { return wrapElements(arr.length ? [arr[arr.length - 1]] : [], getEffectiveOwnerId()); },
+        clone() {
+          return wrapElements(arr.map(el => (el && el.cloneNode) ? el.cloneNode(true) : null).filter(Boolean), getEffectiveOwnerId());
+        },
         each(fn) {
           arr.forEach((el, i) => fn.call(el, i, el));
           return api;
         },
         ready(fn) {
+          const ownerId = getEffectiveOwnerId();
           if (typeof fn === 'function') {
+            const runReady = () => {
+              if (ownerId && getActiveCard()?.id !== ownerId) return;
+              const prev = window.__currentExecutingCardOwnerId;
+              if (ownerId) window.__currentExecutingCardOwnerId = ownerId;
+              try {
+                fn(jq);
+              } finally {
+                if (ownerId) window.__currentExecutingCardOwnerId = prev;
+              }
+            };
             if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', () => fn(jq));
+              document.addEventListener('DOMContentLoaded', runReady);
             } else {
-              setTimeout(() => fn(jq), 0);
+              setTimeout(runReady, 0);
             }
           }
           return api;
@@ -2500,59 +2647,93 @@ code, pre {
               try { found.push(...el.querySelectorAll(subSel)); } catch (_) {}
             }
           });
-          return wrapElements(found);
+          return wrapElements(found, getEffectiveOwnerId());
         },
         closest(subSel) {
           const found = arr.map(el => (el && el.closest) ? el.closest(subSel) : null).filter(Boolean);
-          return wrapElements(found);
+          return wrapElements(found, getEffectiveOwnerId());
         },
         parent() {
-          return wrapElements(arr.map(el => el && el.parentElement).filter(Boolean));
+          return wrapElements(arr.map(el => el && el.parentElement).filter(Boolean), getEffectiveOwnerId());
         },
         children() {
           const ch = [];
           arr.forEach(el => { if (el && el.children) ch.push(...el.children); });
-          return wrapElements(ch);
+          return wrapElements(ch, getEffectiveOwnerId());
         },
         append(...items) {
+          const ownerId = getEffectiveOwnerId();
           arr.forEach(el => {
             if (!el || !el.appendChild) return;
+            const topTarget = isTopMountTarget(el);
+            if (topTarget && !canMountForOwner(ownerId)) return;
+            const prevSet = (topTarget && ownerId && el.children) ? new Set(Array.from(el.children)) : null;
             items.forEach(item => {
               if (typeof item === 'string') {
                 if (isHostAppHtmlFallback(item)) return;
                 el.insertAdjacentHTML('beforeend', item);
               } else if (item && item._isTavernJq) {
-                item.elements.forEach(child => el.appendChild(child));
+                item.elements.forEach(child => {
+                  if (topTarget && ownerId && child && child.setAttribute) {
+                    child.setAttribute('data-tavern-card-owner', ownerId);
+                  }
+                  el.appendChild(child);
+                });
               } else if (item instanceof Node) {
+                if (topTarget && ownerId && item.setAttribute) {
+                  item.setAttribute('data-tavern-card-owner', ownerId);
+                }
                 el.appendChild(item);
               }
             });
+            if (prevSet) stampNewChildrenWithOwner(el, prevSet, ownerId);
           });
           return api;
         },
         appendTo(target) {
+          const ownerId = getEffectiveOwnerId();
           const targets = resolveSelectorElements(target);
           targets.forEach(t => {
             if (!t || !t.appendChild) return;
+            const topTarget = isTopMountTarget(t);
+            if (topTarget && !canMountForOwner(ownerId)) return;
             arr.forEach(el => {
-              if (el instanceof Node) t.appendChild(el);
+              if (el instanceof Node) {
+                if (topTarget && ownerId && el.setAttribute) {
+                  el.setAttribute('data-tavern-card-owner', ownerId);
+                }
+                t.appendChild(el);
+              }
             });
           });
           return api;
         },
         prepend(...items) {
+          const ownerId = getEffectiveOwnerId();
           arr.forEach(el => {
             if (!el) return;
+            const topTarget = isTopMountTarget(el);
+            if (topTarget && !canMountForOwner(ownerId)) return;
+            const prevSet = (topTarget && ownerId && el.children) ? new Set(Array.from(el.children)) : null;
             items.forEach(item => {
               if (typeof item === 'string') {
                 if (isHostAppHtmlFallback(item)) return;
                 el.insertAdjacentHTML('afterbegin', item);
               } else if (item && item._isTavernJq) {
-                item.elements.forEach(child => el.insertBefore(child, el.firstChild));
+                item.elements.forEach(child => {
+                  if (topTarget && ownerId && child && child.setAttribute) {
+                    child.setAttribute('data-tavern-card-owner', ownerId);
+                  }
+                  el.insertBefore(child, el.firstChild);
+                });
               } else if (item instanceof Node) {
+                if (topTarget && ownerId && item.setAttribute) {
+                  item.setAttribute('data-tavern-card-owner', ownerId);
+                }
                 el.insertBefore(item, el.firstChild);
               }
             });
+            if (prevSet) stampNewChildrenWithOwner(el, prevSet, ownerId);
           });
           return api;
         },
@@ -2563,7 +2744,6 @@ code, pre {
         remove() {
           arr.forEach(el => {
             if (!el || !el.remove) return;
-            if (el.classList && el.classList.contains('mes') && el.parentElement && el.parentElement.id === 'chat') return;
             el.remove();
           });
           return api;
@@ -2594,7 +2774,8 @@ code, pre {
               if (!rawHtml || isHostAppHtmlFallback(rawHtml)) return;
               const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
               const shouldDark = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
-              const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawHtml) : rawHtml;
+              const rawProxiedHtml = String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, window.location.origin + '/api/raw-gh/');
+              const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawProxiedHtml) : rawProxiedHtml;
               for (const el of arr) {
                 if (!el) continue;
                 const ownerDoc = el.ownerDocument || document;
@@ -2614,6 +2795,14 @@ code, pre {
                     .replace(
                       'if (descEl) descEl.innerText = targetDesc;',
                       'if (descEl) descEl.innerText = targetDesc || (customersDB[targetId] && (customersDB[targetId].desc || customersDB[targetId].shortDesc)) || "";'
+                    )
+                    .replace(
+                      'Object.values(unlockedIngredients).forEach((item) => {',
+                      'Object.entries(unlockedIngredients || {}).forEach(([uKey, item]) => { if (!item || typeof item !== "object") return; const dbRef = ingredientsDB.find(i => i.id === uKey || i.id === item.id || i.name === item.name || (item.baseImageName && i.name === item.baseImageName)); if (!item.id || item.id === "default") item.id = (dbRef && dbRef.id) || uKey || item.name; if (dbRef) { if (!item.z || item.z === 10) item.z = dbRef.z; if (!item.type) item.type = dbRef.type; }'
+                    )
+                    .replace(
+                      'let item = unlockedIngredients[id];',
+                      'let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
                     );
                   const parser = new DOMParser();
                   const parsedDoc = parser.parseFromString(patchedHtml, 'text/html');
@@ -2636,9 +2825,15 @@ code, pre {
                 for (const oldScript of scripts) {
                   await new Promise(resolveScript => {
                     const newScript = ownerDoc.createElement('script');
-                    Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-                    if (oldScript.src) {
-                      const timer = setTimeout(resolveScript, 4000);
+                    Array.from(oldScript.attributes).forEach(attr => {
+                      if (attr.name.toLowerCase() === 'src' && /cdn\.tailwindcss\.com/i.test(attr.value)) {
+                        newScript.setAttribute('src', window.location.origin + '/public/vendor/tailwindcss.js');
+                      } else {
+                        newScript.setAttribute(attr.name, attr.value);
+                      }
+                    });
+                    if (newScript.src) {
+                      const timer = setTimeout(resolveScript, 15000);
                       newScript.onload = () => { clearTimeout(timer); resolveScript(); };
                       newScript.onerror = () => { clearTimeout(timer); resolveScript(); };
                       if (oldScript.parentNode) {
@@ -2656,6 +2851,12 @@ code, pre {
                   });
                 }
                 try {
+                  if (ownerWin.tailwind && ownerWin.tailwind.config) {
+                    ownerWin.tailwind.config = Object.assign({}, ownerWin.tailwind.config);
+                  }
+                  if (ownerDoc.documentElement) {
+                    ownerDoc.documentElement.classList.add('tw-ready');
+                  }
                   if (ownerDoc.readyState !== 'loading' && typeof ownerWin.onload === 'function' && !ownerWin._tavernLoadOnloadFired) {
                     ownerWin._tavernLoadOnloadFired = true;
                     ownerWin.onload(new Event('load'));
@@ -2663,6 +2864,8 @@ code, pre {
                   ownerWin.dispatchEvent(new Event('resize'));
                   if (typeof ownerWin.syncFrameHeight === 'function') {
                     ownerWin.syncFrameHeight();
+                    setTimeout(() => ownerWin.syncFrameHeight(), 180);
+                    setTimeout(() => ownerWin.syncFrameHeight(), 500);
                   }
                 } catch (_) {}
               }
@@ -2941,7 +3144,247 @@ code, pre {
               }
             });
           });
-          return wrapElements(out);
+          return wrapElements(out, getEffectiveOwnerId());
+        },
+        prev(sel) {
+          const out = arr.map(el => el && el.previousElementSibling).filter(el => el && (!sel || (el.matches && el.matches(sel))));
+          return wrapElements(out, getEffectiveOwnerId());
+        },
+        next(sel) {
+          const out = arr.map(el => el && el.nextElementSibling).filter(el => el && (!sel || (el.matches && el.matches(sel))));
+          return wrapElements(out, getEffectiveOwnerId());
+        },
+        index(sel) {
+          const el = arr[0];
+          if (!el || !el.parentElement) return -1;
+          if (!sel) return Array.from(el.parentElement.children).indexOf(el);
+          const targets = resolveSelectorElements(sel);
+          return arr.indexOf(targets[0]);
+        },
+        position() {
+          const el = arr[0];
+          if (!el) return { top: 0, left: 0 };
+          if (typeof el.offsetTop === 'number' && (el.offsetTop !== 0 || el.offsetLeft !== 0)) {
+            return { top: el.offsetTop, left: el.offsetLeft };
+          }
+          if (typeof el.getBoundingClientRect === 'function') {
+            const r = el.getBoundingClientRect();
+            return { top: r.top || 0, left: r.left || 0 };
+          }
+          return { top: 0, left: 0 };
+        },
+        offset(coords) {
+          const el = arr[0];
+          if (coords !== undefined && coords && typeof coords === 'object') {
+            arr.forEach(node => {
+              if (!node || !node.style) return;
+              if (coords.top !== undefined) node.style.top = typeof coords.top === 'number' ? `${coords.top}px` : String(coords.top);
+              if (coords.left !== undefined) node.style.left = typeof coords.left === 'number' ? `${coords.left}px` : String(coords.left);
+            });
+            return api;
+          }
+          if (!el || typeof el.getBoundingClientRect !== 'function') return { top: 0, left: 0 };
+          const r = el.getBoundingClientRect();
+          return {
+            top: (r.top || 0) + (window.scrollY || 0),
+            left: (r.left || 0) + (window.scrollX || 0)
+          };
+        },
+        width(val) {
+          if (val !== undefined) {
+            arr.forEach(el => {
+              if (el && el.style) el.style.width = typeof val === 'number' ? `${val}px` : String(val);
+            });
+            return api;
+          }
+          const el = arr[0];
+          if (!el) return 0;
+          if (el === window || el === document) return window.innerWidth || 0;
+          return el.offsetWidth || (el.getBoundingClientRect ? el.getBoundingClientRect().width : 0) || 0;
+        },
+        height(val) {
+          if (val !== undefined) {
+            arr.forEach(el => {
+              if (el && el.style) el.style.height = typeof val === 'number' ? `${val}px` : String(val);
+            });
+            return api;
+          }
+          const el = arr[0];
+          if (!el) return 0;
+          if (el === window || el === document) return window.innerHeight || 0;
+          return el.offsetHeight || (el.getBoundingClientRect ? el.getBoundingClientRect().height : 0) || 0;
+        },
+        innerWidth() { return api.width(); },
+        innerHeight() { return api.height(); },
+        outerWidth(includeMargin) {
+          const el = arr[0];
+          if (!el) return 0;
+          if (el === window || el === document) return window.innerWidth || 0;
+          let w = el.offsetWidth || (el.getBoundingClientRect ? el.getBoundingClientRect().width : 0) || 0;
+          if (includeMargin && window.getComputedStyle) {
+            const cs = window.getComputedStyle(el);
+            w += (parseFloat(cs.marginLeft) || 0) + (parseFloat(cs.marginRight) || 0);
+          }
+          return w;
+        },
+        outerHeight(includeMargin) {
+          const el = arr[0];
+          if (!el) return 0;
+          if (el === window || el === document) return window.innerHeight || 0;
+          let h = el.offsetHeight || (el.getBoundingClientRect ? el.getBoundingClientRect().height : 0) || 0;
+          if (includeMargin && window.getComputedStyle) {
+            const cs = window.getComputedStyle(el);
+            h += (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+          }
+          return h;
+        },
+        scrollTop(val) {
+          if (val === undefined) return arr[0] ? (arr[0].scrollTop || 0) : 0;
+          arr.forEach(el => { if (el) el.scrollTop = Number(val) || 0; });
+          return api;
+        },
+        scrollLeft(val) {
+          if (val === undefined) return arr[0] ? (arr[0].scrollLeft || 0) : 0;
+          arr.forEach(el => { if (el) el.scrollLeft = Number(val) || 0; });
+          return api;
+        },
+        data(key, val) {
+          const el = arr[0];
+          if (key === undefined) {
+            if (!el) return {};
+            return Object.assign({}, el.dataset || {}, el._tavernJqData || {});
+          }
+          if (typeof key === 'object' && key) {
+            arr.forEach(node => {
+              if (!node) return;
+              if (!node._tavernJqData) node._tavernJqData = {};
+              Object.assign(node._tavernJqData, key);
+            });
+            return api;
+          }
+          const camelKey = String(key).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+          if (val === undefined) {
+            if (!el) return undefined;
+            if (el._tavernJqData && Object.prototype.hasOwnProperty.call(el._tavernJqData, camelKey)) {
+              return el._tavernJqData[camelKey];
+            }
+            if (el._tavernJqData && Object.prototype.hasOwnProperty.call(el._tavernJqData, key)) {
+              return el._tavernJqData[key];
+            }
+            const rawAttr = (el.dataset && el.dataset[camelKey] !== undefined)
+              ? el.dataset[camelKey]
+              : el.getAttribute?.('data-' + key);
+            if (rawAttr === undefined || rawAttr === null) return undefined;
+            if (rawAttr === 'true') return true;
+            if (rawAttr === 'false') return false;
+            if (rawAttr !== '' && !Number.isNaN(Number(rawAttr))) return Number(rawAttr);
+            return rawAttr;
+          }
+          arr.forEach(node => {
+            if (!node) return;
+            if (!node._tavernJqData) node._tavernJqData = {};
+            node._tavernJqData[camelKey] = val;
+            node._tavernJqData[key] = val;
+          });
+          return api;
+        },
+        removeData(key) {
+          arr.forEach(node => {
+            if (!node || !node._tavernJqData) return;
+            if (key === undefined) {
+              node._tavernJqData = {};
+            } else {
+              const camelKey = String(key).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+              delete node._tavernJqData[camelKey];
+              delete node._tavernJqData[key];
+            }
+          });
+          return api;
+        },
+        slideDown(dur, cb) { return api.fadeIn(dur, cb); },
+        slideUp(dur, cb) { return api.fadeOut(dur, cb); },
+        slideToggle(dur, cb) {
+          api.toggle();
+          const fn = typeof dur === 'function' ? dur : cb;
+          if (typeof fn === 'function') setTimeout(fn, 20);
+          return api;
+        },
+        fadeToggle(dur, cb) { return api.slideToggle(dur, cb); },
+        stop() { return api; },
+        one(evtNames, selectorOrFn, maybeFn) {
+          const isDelegated = typeof selectorOrFn === 'string' && typeof maybeFn === 'function';
+          const origFn = isDelegated ? maybeFn : selectorOrFn;
+          if (typeof origFn !== 'function') return api;
+          const onceWrapper = function (e) {
+            api.off(evtNames, onceWrapper);
+            return origFn.call(this, e);
+          };
+          return isDelegated ? api.on(evtNames, selectorOrFn, onceWrapper) : api.on(evtNames, onceWrapper);
+        },
+        hover(fnIn, fnOut) {
+          if (typeof fnIn === 'function') api.on('mouseenter', fnIn);
+          if (typeof fnOut === 'function') api.on('mouseleave', fnOut);
+          else if (typeof fnIn === 'function') api.on('mouseleave', fnIn);
+          return api;
+        },
+        focus(fn) {
+          if (typeof fn === 'function') return api.on('focus', fn);
+          arr[0]?.focus?.();
+          return api;
+        },
+        blur(fn) {
+          if (typeof fn === 'function') return api.on('blur', fn);
+          arr[0]?.blur?.();
+          return api;
+        },
+        map(fn) {
+          const mapped = arr.map((el, i) => fn.call(el, i, el)).filter(v => v !== null && v !== undefined);
+          return {
+            _isTavernJq: true,
+            elements: mapped,
+            length: mapped.length,
+            get(idx) { return idx === undefined ? mapped : mapped[idx]; },
+            toArray() { return mapped.slice(); }
+          };
+        },
+        before(...items) {
+          arr.forEach(el => {
+            if (!el || !el.parentNode) return;
+            items.forEach(item => {
+              if (typeof item === 'string') {
+                el.insertAdjacentHTML('beforebegin', item);
+              } else if (item && item._isTavernJq) {
+                item.elements.forEach(ch => el.parentNode.insertBefore(ch, el));
+              } else if (item instanceof Node) {
+                el.parentNode.insertBefore(item, el);
+              }
+            });
+          });
+          return api;
+        },
+        after(...items) {
+          arr.forEach(el => {
+            if (!el || !el.parentNode) return;
+            items.forEach(item => {
+              if (typeof item === 'string') {
+                el.insertAdjacentHTML('afterend', item);
+              } else if (item && item._isTavernJq) {
+                item.elements.forEach(ch => el.parentNode.insertBefore(ch, el.nextSibling));
+              } else if (item instanceof Node) {
+                el.parentNode.insertBefore(item, el.nextSibling);
+              }
+            });
+          });
+          return api;
+        },
+        insertBefore(target) {
+          const targets = resolveSelectorElements(target);
+          if (targets[0] && targets[0].parentNode) {
+            arr.forEach(el => {
+              if (el) targets[0].parentNode.insertBefore(el, targets[0]);
+            });
+          }
+          return api;
         },
         insertAfter(target) {
           const targets = resolveSelectorElements(target);
@@ -2952,21 +3395,36 @@ code, pre {
           }
           return api;
         },
+        replaceWith(content) {
+          arr.forEach(el => {
+            if (!el || !el.parentNode) return;
+            if (typeof content === 'string') {
+              el.insertAdjacentHTML('beforebegin', content);
+              el.remove();
+            } else if (content && content._isTavernJq) {
+              content.elements.forEach(ch => el.parentNode.insertBefore(ch, el));
+              el.remove();
+            } else if (content instanceof Node) {
+              el.replaceWith(content);
+            }
+          });
+          return api;
+        },
         filter(selOrFn) {
           if (typeof selOrFn === 'function') {
-            return wrapElements(arr.filter((el, idx) => Boolean(selOrFn.call(el, idx, el))));
+            return wrapElements(arr.filter((el, idx) => Boolean(selOrFn.call(el, idx, el))), getEffectiveOwnerId());
           }
           if (typeof selOrFn === 'string') {
-            return wrapElements(arr.filter(el => el && el.matches && el.matches(selOrFn)));
+            return wrapElements(arr.filter(el => el && el.matches && el.matches(selOrFn)), getEffectiveOwnerId());
           }
           return api;
         },
         not(selOrFn) {
           if (typeof selOrFn === 'function') {
-            return wrapElements(arr.filter((el, idx) => !selOrFn.call(el, idx, el)));
+            return wrapElements(arr.filter((el, idx) => !selOrFn.call(el, idx, el)), getEffectiveOwnerId());
           }
           if (typeof selOrFn === 'string') {
-            return wrapElements(arr.filter(el => !(el && el.matches && el.matches(selOrFn))));
+            return wrapElements(arr.filter(el => !(el && el.matches && el.matches(selOrFn))), getEffectiveOwnerId());
           }
           return api;
         }
@@ -2975,8 +3433,35 @@ code, pre {
       return api;
     }
 
-    function jq(sel, context) {
-      return wrapElements(resolveSelectorElements(sel, context));
+    function jq(sel, context, scopedOwnerCardId = null) {
+      const ownerId = scopedOwnerCardId || window.__currentExecutingCardOwnerId || null;
+      if (typeof sel === 'function') {
+        const runReady = () => {
+          if (ownerId && getActiveCard()?.id !== ownerId) return;
+          const prev = window.__currentExecutingCardOwnerId;
+          if (ownerId) window.__currentExecutingCardOwnerId = ownerId;
+          try {
+            sel(jq);
+          } finally {
+            if (ownerId) window.__currentExecutingCardOwnerId = prev;
+          }
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', runReady);
+        } else {
+          try {
+            runReady();
+          } catch (err) {
+            if (err instanceof ReferenceError) {
+              setTimeout(runReady, 0);
+            } else {
+              console.error('jQuery ready callback error:', err);
+            }
+          }
+        }
+        return wrapElements([], ownerId);
+      }
+      return wrapElements(resolveSelectorElements(sel, context), ownerId);
     }
 
     jq.fn = {};
@@ -4222,6 +4707,31 @@ code, pre {
       return await rawFetch(url, options);
     };
 
+    const transportMode = tavernState.apiConfig?.transportMode || 'auto';
+    const shouldTryLocalProxy =
+      method === 'POST' &&
+      !isStreamReq &&
+      transportMode !== 'direct' &&
+      typeof window.executeLocalBackendProxyFetch === 'function' &&
+      (transportMode === 'local' || (typeof window.isLocalBackendSwitchEnabled === 'function' && window.isLocalBackendSwitchEnabled()));
+
+    if (shouldTryLocalProxy) {
+      try {
+        const localRes = await window.executeLocalBackendProxyFetch(
+          url,
+          method,
+          options.headers || {},
+          parsedBody,
+          options.signal,
+          null,
+          transportMode === 'local'
+        );
+        if (localRes) return localRes;
+      } catch (proxyErr) {
+        if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
+      }
+    }
+
     return await doDirectFetchOnce();
   }
 
@@ -5434,6 +5944,11 @@ code, pre {
         return s;
       };
       for (const block of blocks) {
+        if (/<JSONPatch>/i.test(block)) {
+          if (parseAndApplyJsonPatchBlocks(block, statDataTarget)) {
+            mutated = true;
+          }
+        }
         const callRx = /_\.(set|assign|insert|merge|add|remove|unset|delete)\s*\(([\s\S]*?)\)\s*;?/g;
         let cm;
         while ((cm = callRx.exec(block)) !== null) {
@@ -5531,6 +6046,38 @@ code, pre {
             });
           }
         } catch (_) {}
+      }
+      const isMilkTeaCard = String(activeCard.name || '').includes('奶茶店') ||
+        Boolean(statData.shopConfig || statData.worldConfig || statData.shopFinancials);
+      if (isMilkTeaCard) {
+        if (!statData.worldConfig || typeof statData.worldConfig !== 'object') statData.worldConfig = {};
+        if (!statData.worldConfig.year) statData.worldConfig.year = '2026年';
+        if (!statData.worldConfig.season) statData.worldConfig.season = '春天';
+        if (!statData.worldConfig.time) statData.worldConfig.time = '白天';
+        if (!statData.worldConfig.weather) statData.worldConfig.weather = '晴天';
+        if (!statData.shopFinancials || typeof statData.shopFinancials !== 'object') statData.shopFinancials = {};
+        if (statData.shopFinancials.currentBalance === undefined || statData.shopFinancials.currentBalance === null) statData.shopFinancials.currentBalance = 500;
+        if (statData.shopFinancials.totalIncome === undefined || statData.shopFinancials.totalIncome === null) statData.shopFinancials.totalIncome = 0;
+        if (statData.shopFinancials.totalExpense === undefined || statData.shopFinancials.totalExpense === null) statData.shopFinancials.totalExpense = 0;
+        if (statData.shopFinancials.lastUpdate === undefined || statData.shopFinancials.lastUpdate === null) statData.shopFinancials.lastUpdate = '';
+        if (!Array.isArray(statData.shopFinancials.records)) statData.shopFinancials.records = [];
+        if (!statData.shopConfig || typeof statData.shopConfig !== 'object') statData.shopConfig = {};
+        if (!statData.shopConfig.identity || typeof statData.shopConfig.identity !== 'object') statData.shopConfig.identity = {};
+        if (!statData.shopConfig.identity.name) statData.shopConfig.identity.name = '微风茶舍';
+        if (statData.shopConfig.identity.level === undefined) statData.shopConfig.identity.level = 1;
+        if (statData.shopConfig.identity.xp === undefined) statData.shopConfig.identity.xp = 0;
+        if (statData.shopConfig.identity.xpNext === undefined) statData.shopConfig.identity.xpNext = 100;
+        if (!statData.shopConfig.identity.reputation) statData.shopConfig.identity.reputation = '默默无闻';
+        if (statData.shopConfig.identity.address === undefined) statData.shopConfig.identity.address = '未知';
+        if (statData.shopConfig.identity.establishedDate === undefined) statData.shopConfig.identity.establishedDate = '';
+        if (!statData.shopConfig.stats || typeof statData.shopConfig.stats !== 'object') statData.shopConfig.stats = {};
+        if (statData.shopConfig.stats.popularity === undefined) statData.shopConfig.stats.popularity = 10;
+        if (statData.shopConfig.stats.hygiene === undefined) statData.shopConfig.stats.hygiene = 80;
+        if (statData.shopConfig.stats.service === undefined) statData.shopConfig.stats.service = 80;
+        if (statData.shopConfig.stats.seatingCapacity === undefined) statData.shopConfig.stats.seatingCapacity = 4;
+        if (statData.shopConfig.stats.staffCount === undefined) statData.shopConfig.stats.staffCount = 1;
+        if (statData.shopConfig.stats.dailyRent === undefined) statData.shopConfig.stats.dailyRent = 50;
+        if (!statData.shopConfig.stats.avgWaitTime) statData.shopConfig.stats.avgWaitTime = '10min';
       }
     };
 
@@ -5813,9 +6360,13 @@ code, pre {
               ? rawArr.map(it => node._itemSchema.safeParse(it).data)
               : rawArr;
           } else {
-            merged = (input !== undefined && input !== null)
-              ? deepCloneSafe(input)
-              : (node._default !== undefined ? deepCloneSafe(node._default) : input);
+            let rawPrimitive = input;
+            if (Array.isArray(rawPrimitive) && rawPrimitive.length === 2 && typeof rawPrimitive[1] === 'string' && !Array.isArray(node._default)) {
+              rawPrimitive = rawPrimitive[0];
+            }
+            merged = (rawPrimitive !== undefined && rawPrimitive !== null)
+              ? deepCloneSafe(rawPrimitive)
+              : (node._default !== undefined ? deepCloneSafe(node._default) : rawPrimitive);
             if (node._coerceType === 'number' && merged !== undefined) {
               const num = Number(merged);
               merged = Number.isNaN(num) ? (typeof node._default === 'number' ? node._default : 0) : num;
@@ -6164,7 +6715,7 @@ code, pre {
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
         return Math.max(0, msgs.length - 1);
       },
-      getChatMessages: (rangeOrId) => {
+      getChatMessages: (rangeOrId, filterOpts = {}) => {
         const sess = getActiveChatSession();
         const msgs = sess && Array.isArray(sess.messages) ? sess.messages : [];
         const wrapMsg = (m, idx) => {
@@ -6194,23 +6745,42 @@ code, pre {
             extra: (m.extra && typeof m.extra === 'object') ? m.extra : {}
           });
         };
+        const applyFilter = (arr) => {
+          if (!filterOpts || typeof filterOpts !== 'object') return arr;
+          let res = arr;
+          if (filterOpts.role) {
+            res = res.filter(item => item && item.role === filterOpts.role);
+          }
+          if (filterOpts.hide_state === 'unhidden') {
+            res = res.filter(item => item && !item.is_hidden);
+          } else if (filterOpts.hide_state === 'hidden') {
+            res = res.filter(item => item && item.is_hidden);
+          }
+          return res;
+        };
         if (Array.isArray(rangeOrId)) {
-          return rangeOrId.flatMap(item => window.TavernHelper.getChatMessages(item));
+          return applyFilter(rangeOrId.flatMap(item => window.TavernHelper.getChatMessages(item)));
         }
         if (typeof rangeOrId === 'number') {
+          if (rangeOrId === -1 && filterOpts && filterOpts.role) {
+            return applyFilter(msgs.map((m, idx) => wrapMsg(m, idx)));
+          }
           const idx = rangeOrId < 0 ? msgs.length + rangeOrId : rangeOrId;
-          return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
+          return applyFilter(msgs[idx] ? [wrapMsg(msgs[idx], idx)] : []);
         }
         if (typeof rangeOrId === 'string') {
           const trimmed = rangeOrId.trim();
           if (trimmed === '\x7b\x7blastMessageId\x7d\x7d' || trimmed === 'last' || trimmed === 'current') {
             const lastIdx = Math.max(0, msgs.length - 1);
-            return msgs[lastIdx] ? [wrapMsg(msgs[lastIdx], lastIdx)] : [];
+            return applyFilter(msgs[lastIdx] ? [wrapMsg(msgs[lastIdx], lastIdx)] : []);
           }
           if (/^-?\d+$/.test(trimmed)) {
             const num = Number(trimmed);
+            if (num === -1 && filterOpts && filterOpts.role) {
+              return applyFilter(msgs.map((m, idx) => wrapMsg(m, idx)));
+            }
             const idx = num < 0 ? msgs.length + num : num;
-            return msgs[idx] ? [wrapMsg(msgs[idx], idx)] : [];
+            return applyFilter(msgs[idx] ? [wrapMsg(msgs[idx], idx)] : []);
           }
           const rangeMatch = trimmed.match(/^(-?\d+)\s*-\s*(-?\d+)$/);
           if (rangeMatch) {
@@ -6224,10 +6794,10 @@ code, pre {
             for (let i = start; i <= end && i < msgs.length; i++) {
               if (msgs[i]) out.push(wrapMsg(msgs[i], i));
             }
-            return out;
+            return applyFilter(out);
           }
         }
-        return msgs.map((m, idx) => wrapMsg(m, idx));
+        return applyFilter(msgs.map((m, idx) => wrapMsg(m, idx)));
       },
       getChatMessage: (messageId) => {
         const list = window.TavernHelper.getChatMessages(messageId ?? -1);
@@ -6342,15 +6912,22 @@ code, pre {
           const prevFloorVars = sess.messages.length > 0
             ? window.getVariables({ type: 'message', message_id: sess.messages.length - 1 })
             : getChatVariablesStore();
+          const activeCard = getActiveCard();
+          const needsPlaceholder = cardUsesStatusPlaceHolderImpl(activeCard);
           newMsgs.forEach(m => {
-            const text = m.message || m.mes || m.content || '';
+            const isUserMsg = Boolean(m.is_user || m.role === 'user');
+            const isSysMsg = Boolean(m.is_system || m.role === 'system');
+            let text = m.message || m.mes || m.content || '';
+            if (!isUserMsg && !isSysMsg && needsPlaceholder && !String(text).includes('<StatusPlaceHolderImpl/>')) {
+              text = String(text) + '\n<StatusPlaceHolderImpl/>';
+            }
             const nowTs = Date.now();
             const clonedVars = prevFloorVars ? JSON.parse(JSON.stringify(prevFloorVars)) : {};
             sess.messages.push({
               mesid: sess.messages.length,
-              name: m.name || (m.role === 'user' || m.is_user ? getUserDisplayName() : (getActiveCard()?.name || '角色')),
-              is_user: Boolean(m.is_user || m.role === 'user'),
-              is_system: Boolean(m.is_system || m.role === 'system'),
+              name: m.name || (isUserMsg ? getUserDisplayName() : (activeCard?.name || '角色')),
+              is_user: isUserMsg,
+              is_system: isSysMsg,
               send_date: nowTs,
               mes: text,
               swipes: [text],
@@ -6365,6 +6942,14 @@ code, pre {
           });
           await saveTavernStore();
           renderTavernChatFloors(false, { scrollToBottom: true });
+          if (sess.messages.length > 0) {
+            const lastIdx = sess.messages.length - 1;
+            const lastMsg = sess.messages[lastIdx];
+            await tavernEventSource.emit(
+              lastMsg && lastMsg.is_user ? TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED : TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED,
+              lastIdx
+            );
+          }
         }
       },
       generate: async (opts = {}) => {
@@ -6660,6 +7245,38 @@ code, pre {
     window.checkWorldInfo = runTavernCheckWorldInfo;
     window.getWorldInfoPrompt = runTavernCheckWorldInfo;
     window.doNewChat = async () => { await startNewChatForActiveCard(); };
+    window.reloadIframe = () => { renderTavernChatFloors(false); };
+    if (window.TavernHelper) {
+      window.TavernHelper.reloadIframe = window.reloadIframe;
+    }
+    window.EjsTemplate = {
+      getFeatures: () => {
+        const cfg = getStPromptTemplateConfig();
+        return Object.assign({
+          enabled: cfg.enabled !== false,
+          render_enabled: cfg.render_enabled !== false,
+          render_loader_enabled: cfg.render_loader_enabled !== false,
+          code_blocks_enabled: cfg.code_blocks_enabled !== false
+        }, cfg);
+      },
+      setFeatures: (patch = {}) => {
+        const cfg = getStPromptTemplateConfig();
+        if (patch && typeof patch === 'object') {
+          Object.assign(cfg, patch);
+          saveTavernStore();
+        }
+        return window.EjsTemplate.getFeatures();
+      },
+      evalTemplate: async (tmpl) => evaluateStPromptTemplate(String(tmpl ?? ''), getActiveCard()),
+      prepareContext: async () => ({
+        variables: getChatVariablesStore(),
+        global: getGlobalVariablesStore(),
+        user: getUserDisplayName(),
+        char: getActiveCard()?.name || '角色'
+      }),
+      allVariables: () => Object.assign({}, getGlobalVariablesStore(), getChatVariablesStore()),
+      getVariables: window.getVariables
+    };
     if (!window._) {
       window._ = {
         get: (obj, path, defVal) => {
@@ -6821,6 +7438,8 @@ code, pre {
           if (typeof window.pushMobileBackGuard === 'function') {
             window.pushMobileBackGuard('tavern_iframe');
           }
+        } else if (data.type === 'TAVERN_IFRAME_RELOAD_CHAT') {
+          renderTavernChatFloors(false, { scrollToBottom: true });
         }
       });
     }
@@ -7514,6 +8133,127 @@ code, pre {
     } catch (_) {}
   }
 
+  function relaxTopLevelConstLetDeclarations(code) {
+    const str = String(code || '');
+    let out = '';
+    let i = 0;
+    const n = str.length;
+    let braceDepth = 0;
+    let parenDepth = 0;
+    while (i < n) {
+      const ch = str[i];
+      const next = str[i + 1];
+      if (ch === '/' && next === '/') {
+        const end = str.indexOf('\n', i + 2);
+        if (end === -1) {
+          out += str.slice(i);
+          break;
+        }
+        out += str.slice(i, end + 1);
+        i = end + 1;
+        continue;
+      }
+      if (ch === '/' && next === '*') {
+        const end = str.indexOf('*/', i + 2);
+        if (end === -1) {
+          out += str.slice(i);
+          break;
+        }
+        out += str.slice(i, end + 2);
+        i = end + 2;
+        continue;
+      }
+      if (ch === "'" || ch === '"') {
+        const quote = ch;
+        let j = i + 1;
+        while (j < n) {
+          if (str[j] === '\\') {
+            j += 2;
+            continue;
+          }
+          if (str[j] === quote) {
+            j++;
+            break;
+          }
+          j++;
+        }
+        out += str.slice(i, j);
+        i = j;
+        continue;
+      }
+      if (ch === '`') {
+        let j = i + 1;
+        let tplDepth = 0;
+        while (j < n) {
+          if (str[j] === '\\') {
+            j += 2;
+            continue;
+          }
+          if (str[j] === '$' && str[j + 1] === '{') {
+            tplDepth++;
+            j += 2;
+            continue;
+          }
+          if (str[j] === '}' && tplDepth > 0) {
+            tplDepth--;
+            j++;
+            continue;
+          }
+          if (str[j] === '`' && tplDepth === 0) {
+            j++;
+            break;
+          }
+          j++;
+        }
+        out += str.slice(i, j);
+        i = j;
+        continue;
+      }
+      if (ch === '{') {
+        braceDepth++;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (ch === '}') {
+        if (braceDepth > 0) braceDepth--;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (ch === '(') {
+        parenDepth++;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (ch === ')') {
+        if (parenDepth > 0) parenDepth--;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (braceDepth === 0 && parenDepth === 0) {
+        const prevCh = i > 0 ? str[i - 1] : '';
+        if (!/[a-zA-Z0-9_$.]/.test(prevCh)) {
+          if (str.startsWith('const', i) && /[\s{[]/.test(str[i + 5] || '')) {
+            out += 'var';
+            i += 5;
+            continue;
+          }
+          if (str.startsWith('let', i) && /[\s{[]/.test(str[i + 3] || '')) {
+            out += 'var';
+            i += 3;
+            continue;
+          }
+        }
+      }
+      out += ch;
+      i++;
+    }
+    return out;
+  }
+
   function transpilePluginImports(codeStr, plugin = null) {
     const metaUrlVal = resolvePluginMetaUrl(plugin);
     window.__ST_META_URL__ = metaUrlVal;
@@ -7524,26 +8264,31 @@ code, pre {
         window.__ST_BRIDGE__.registerMvuSchema = window.registerMvuSchema;
         window.__ST_BRIDGE__.Mvu = window.Mvu;
         window.__ST_BRIDGE__.waitGlobalInitialized = window.waitGlobalInitialized;
+        window.__ST_BRIDGE__.EjsTemplate = window.EjsTemplate;
+        window.__ST_BRIDGE__.reloadIframe = window.reloadIframe;
       } catch (_) {}
     }
-    return String(codeStr || '')
+    const transpiled = String(codeStr || '')
+      .replace(/\bwindow\.(?:top|parent)\b/g, 'window')
       .replace(/\bimport\.meta\.url\b/g, 'window.__ST_META_URL__')
       .replace(/\bimport\.meta\b/g, 'window.__ST_META__')
       .replace(/(?<![.\w$'"])import\s*\((?!\s*\))(?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s*,\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, defName, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
-        return `const ${defName} = window.__ST_BRIDGE__; const { ${mapped} } = window.__ST_BRIDGE__;`;
+        return `var ${defName} = window.__ST_BRIDGE__; var { ${mapped} } = window.__ST_BRIDGE__;`;
       })
-      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\*\s*as\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\*\s*as\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'var $1 = window.__ST_BRIDGE__;')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]+['"]\s*;?/gm, (_, inner) => {
         const mapped = inner.replace(/\b([a-zA-Z0-9_$]+)\s+as\s+([a-zA-Z0-9_$]+)\b/g, '$1: $2');
-        return `const { ${mapped} } = window.__ST_BRIDGE__;`;
+        return `var { ${mapped} } = window.__ST_BRIDGE__;`;
       })
-      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'const $1 = window.__ST_BRIDGE__;')
+      .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s+([a-zA-Z0-9_$]+)\s+from\s*['"][^'"]+['"]\s*;?/gm, 'var $1 = window.__ST_BRIDGE__;')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*import\s*['"][^'"]+['"]\s*;?/gm, '')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+default\s+/gm, '')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s*\{[^}]*\}\s*;?/gm, '')
       .replace(/(?:^|(?<=[;\n\r\}]))\s*export\s+(?=(?:async\s+)?function\b|const\b|let\b|var\b|class\b)/gm, '')
+      .replace(/\b(?:const|let)\s+(\{[^}]*\b(?:extension_settings|getContext|eventSource|event_types|extension_prompt_types|saveSettingsDebounced)\b[^}]*\}\s*=)/g, 'var $1')
+      .replace(/\b(?:const|let)\s+\b(extension_settings|getContext|eventSource|event_types|extension_prompt_types|saveSettingsDebounced)\b(\s*=)/g, 'var $1$2')
       // Prevent helper scripts (such as Gourmet handbook) from auto-pausing playing music when opening the panel or scanning floors without a new STATUS tag
       .replace(
         /if\s*\(\s*!target\s*\)\s*\{\s*if\s*\(\s*!audio\.paused\s*\)\s*audio\.pause\(\)\s*;\s*statusMusicUrl\s*=\s*['"]['"]\s*;\s*statusMusicMessageId\s*=\s*null\s*;\s*statusMusicInitialized\s*=\s*true\s*;\s*return\s*;\s*\}/g,
@@ -7554,6 +8299,7 @@ code, pre {
         'if(o.length>1){console.log("[柏宝书] 多个摘要缺口,停止自动补摘,交由用户手动处理:",o);return}const i=Ox(s,e);if(i<0)return;const a=ni(s).find(c=>c<=i);',
         'const i=Ox(s,e);if(i<0)return;const _uns=ni(s).filter(c=>c<=i);const a=_uns.length?_uns[_uns.length-1]:void 0;'
       );
+    return relaxTopLevelConstLetDeclarations(transpiled);
   }
 
   function extractEmbeddedHtmlFromPluginCode(codeStr) {
@@ -7592,6 +8338,23 @@ code, pre {
     }
     if (isBookExcerptPlugin(plugin)) {
       plugin.uiHtml = '';
+      plugin.repoBaseUrl = 'https://raw.githubusercontent.com/Mshiyuan/book-excerpt/main';
+      plugin.jsEntryPath = 'index.js';
+      if ((!plugin.code || !String(plugin.code).includes('scanForStatusBarFrames')) && !window._bookExcerptUpgradeInFlight) {
+        window._bookExcerptUpgradeInFlight = true;
+        fetch('https://raw.githubusercontent.com/Mshiyuan/book-excerpt/main/index.js')
+          .then(r => (r.ok ? r.text() : ''))
+          .then(async jsTxt => {
+            if (jsTxt && jsTxt.includes('scanForStatusBarFrames')) {
+              plugin.code = jsTxt;
+              await saveTavernStore();
+              executeUserPluginScript(plugin, { forceRerun: true });
+            }
+          })
+          .catch(() => {})
+          .finally(() => { window._bookExcerptUpgradeInFlight = false; });
+        return;
+      }
       if (window.BookExcerpt && document.getElementById('be-menu-entry') && !execOpts.forceRerun) {
         return;
       }
@@ -7675,51 +8438,18 @@ code, pre {
     if (isJsSlashRunnerPlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main';
       plugin.jsEntryPath = 'dist/index.js';
-      if ((!plugin.code || String(plugin.code).includes('Native Built-in') || plugin.code.length < 500) && !window._jssrBundleUpgradeInFlight) {
-        window._jssrBundleUpgradeInFlight = true;
-        Promise.all([
-          fetch('https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main/dist/index.js').then(r => (r.ok ? r.text() : '')),
-          fetch('https://raw.githubusercontent.com/N0VI028/JS-Slash-Runner/main/dist/index.css').then(r => (r.ok ? r.text() : ''))
-        ]).then(async ([jsTxt, cssTxt]) => {
-          if (jsTxt && jsTxt.length > 1000) {
-            const cssInject = cssTxt
-              ? `try{if(!document.getElementById('jssr-official-css')){const s=document.createElement('style');s.id='jssr-official-css';s.textContent=${JSON.stringify(cssTxt)};document.head.appendChild(s);}}catch(_){}\n`
-              : '';
-            plugin.code = cssInject + jsTxt;
-            await saveTavernStore();
-            executeUserPluginScript(plugin, { forceRerun: true });
-          }
-        }).catch(() => {}).finally(() => { window._jssrBundleUpgradeInFlight = false; });
-        return;
+      if (plugin.code && plugin.code.length > 200) {
+        plugin.code = '/* Native Built-in JS-Slash-Runner Engine Active */';
       }
-      if (document.getElementById('tavern_helper') && !execOpts.forceRerun) {
-        return;
-      }
+      return;
     }
     if (isStPromptTemplatePlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main';
       plugin.jsEntryPath = 'dist/index.js';
-      if ((!plugin.code || String(plugin.code).includes('Native Built-in') || plugin.code.length < 500) && !window._stptBundleUpgradeInFlight) {
-        window._stptBundleUpgradeInFlight = true;
-        Promise.all([
-          fetch('https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main/dist/index.js').then(r => (r.ok ? r.text() : '')),
-          fetch('https://raw.githubusercontent.com/zonde306/ST-Prompt-Template/main/settings.html').then(r => (r.ok ? r.text() : ''))
-        ]).then(async ([jsTxt, htmlTxt]) => {
-          if (jsTxt && jsTxt.length > 1000) {
-            plugin.code = jsTxt;
-            if (htmlTxt) {
-              if (!plugin.htmlTemplates) plugin.htmlTemplates = {};
-              plugin.htmlTemplates['settings.html'] = translateStTemplateHtmlToZh(htmlTxt);
-            }
-            await saveTavernStore();
-            executeUserPluginScript(plugin, { forceRerun: true });
-          }
-        }).catch(() => {}).finally(() => { window._stptBundleUpgradeInFlight = false; });
-        return;
+      if (plugin.code && plugin.code.length > 200) {
+        plugin.code = '/* Native Built-in ST-Prompt-Template Engine Active */';
       }
-      if (document.getElementById('prompt_template_settings') && !execOpts.forceRerun) {
-        return;
-      }
+      return;
     }
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
@@ -7754,46 +8484,39 @@ code, pre {
       return;
     }
 
+    const wrapOwnerCallback = (cb) => {
+      if (!ownerCardId || typeof cb !== 'function') return cb;
+      const wrappedCb = async (...args) => {
+        if (getActiveCard()?.id !== ownerCardId) return;
+        const prev = window.__currentExecutingCardOwnerId;
+        window.__currentExecutingCardOwnerId = ownerCardId;
+        try {
+          return await cb(...args);
+        } finally {
+          window.__currentExecutingCardOwnerId = prev;
+        }
+      };
+      wrappedCb._ownerCardId = ownerCardId;
+      wrappedCb.toString = () => cb.toString();
+      return wrappedCb;
+    };
+
     const effectiveEventSource = ownerCardId ? {
       on(evt, cb) {
         if (!evt || typeof cb !== 'function') return;
-        const wrappedCb = async (...args) => {
-          if (getActiveCard()?.id !== ownerCardId) return;
-          return await cb(...args);
-        };
-        wrappedCb._ownerCardId = ownerCardId;
-        wrappedCb.toString = () => cb.toString();
-        tavernEventSource.on(evt, wrappedCb);
+        tavernEventSource.on(evt, wrapOwnerCallback(cb));
       },
       makeFirst(evt, cb) {
         if (!evt || typeof cb !== 'function') return;
-        const wrappedCb = async (...args) => {
-          if (getActiveCard()?.id !== ownerCardId) return;
-          return await cb(...args);
-        };
-        wrappedCb._ownerCardId = ownerCardId;
-        wrappedCb.toString = () => cb.toString();
-        tavernEventSource.makeFirst(evt, wrappedCb);
+        tavernEventSource.makeFirst(evt, wrapOwnerCallback(cb));
       },
       makeLast(evt, cb) {
         if (!evt || typeof cb !== 'function') return;
-        const wrappedCb = async (...args) => {
-          if (getActiveCard()?.id !== ownerCardId) return;
-          return await cb(...args);
-        };
-        wrappedCb._ownerCardId = ownerCardId;
-        wrappedCb.toString = () => cb.toString();
-        tavernEventSource.makeLast(evt, wrappedCb);
+        tavernEventSource.makeLast(evt, wrapOwnerCallback(cb));
       },
       once(evt, cb) {
         if (!evt || typeof cb !== 'function') return;
-        const wrappedCb = async (...args) => {
-          if (getActiveCard()?.id !== ownerCardId) return;
-          return await cb(...args);
-        };
-        wrappedCb._ownerCardId = ownerCardId;
-        wrappedCb.toString = () => cb.toString();
-        tavernEventSource.once(evt, wrappedCb);
+        tavernEventSource.once(evt, wrapOwnerCallback(cb));
       },
       removeListener(evt, cb) {
         tavernEventSource.off(evt, cb);
@@ -7805,6 +8528,56 @@ code, pre {
         return tavernEventSource.emit(evt, ...args);
       }
     } : tavernEventSource;
+
+    const effectiveEventOn = ownerCardId
+      ? (evt, cb) => effectiveEventSource.on(evt, cb)
+      : window.eventOn;
+    const effectiveEventOnce = ownerCardId
+      ? (evt, cb) => effectiveEventSource.once(evt, cb)
+      : window.eventOnce;
+
+    const effectiveSetTimeout = ownerCardId
+      ? (fn, delay, ...args) => window.setTimeout(() => {
+          if (getActiveCard()?.id !== ownerCardId) return;
+          const prev = window.__currentExecutingCardOwnerId;
+          window.__currentExecutingCardOwnerId = ownerCardId;
+          try {
+            if (typeof fn === 'function') fn(...args);
+          } finally {
+            window.__currentExecutingCardOwnerId = prev;
+          }
+        }, delay)
+      : window.setTimeout.bind(window);
+
+    const effectiveSetInterval = ownerCardId
+      ? (fn, delay, ...args) => {
+          const timerId = window.setInterval(() => {
+            if (getActiveCard()?.id !== ownerCardId) {
+              window.clearInterval(timerId);
+              return;
+            }
+            const prev = window.__currentExecutingCardOwnerId;
+            window.__currentExecutingCardOwnerId = ownerCardId;
+            try {
+              if (typeof fn === 'function') fn(...args);
+            } finally {
+              window.__currentExecutingCardOwnerId = prev;
+            }
+          }, delay);
+          return timerId;
+        }
+      : window.setInterval.bind(window);
+
+    const effectiveJq = ownerCardId
+      ? Object.assign((sel, ctx) => window.$(sel, ctx, ownerCardId), window.$)
+      : window.$;
+
+    const effectiveTavernHelper = ownerCardId
+      ? Object.assign({}, window.TavernHelper || {}, {
+          eventOn: effectiveEventOn,
+          eventOnce: effectiveEventOnce
+        })
+      : window.TavernHelper;
 
     const effectiveGetContext = ownerCardId ? () => {
       const ctx = buildSillyTavernContextObject();
@@ -7819,14 +8592,22 @@ code, pre {
       : window.SillyTavern;
 
     inFlightPluginExecutionSet.add(pluginRunKey);
+    const prevOwnerCtx = window.__currentExecutingCardOwnerId;
+    if (ownerCardId) window.__currentExecutingCardOwnerId = ownerCardId;
     try {
-      const transformedCode = transpilePluginImports(codeStr, plugin);
+      let transformedCode = transpilePluginImports(codeStr, plugin);
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-      const runner = new AsyncFunction(
+      const runnerParamNames = [
         'SillyTavern',
         'TavernHelper',
+        'EjsTemplate',
+        'reloadIframe',
         'getContext',
         'eventSource',
+        'eventOn',
+        'eventOnce',
+        'setTimeout',
+        'setInterval',
         'event_types',
         'extension_prompt_types',
         'extension_settings',
@@ -7835,14 +8616,40 @@ code, pre {
         'executeSlashCommands',
         'toastr',
         'jQuery',
-        '$',
-        transformedCode
-      );
+        '$'
+      ];
+      let runner = null;
+      for (let attempt = 0; attempt < 25; attempt++) {
+        try {
+          runner = new AsyncFunction(...runnerParamNames, transformedCode);
+          break;
+        } catch (synErr) {
+          const dupMatch = synErr && synErr.message && String(synErr.message).match(/Identifier\s+['"]([^'"]+)['"]\s+has already been declared/);
+          if (dupMatch && dupMatch[1]) {
+            const escId = dupMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const nextCode = transformedCode
+              .replace(new RegExp(`\\b(?:const|let)\\s+(?=\\b${escId}\\b)`, 'g'), 'var ')
+              .replace(new RegExp(`\\b(?:const|let)\\s+(\\{[^}]*\\b${escId}\\b[^}]*\\}\\s*=)`, 'g'), 'var $1')
+              .replace(new RegExp(`\\bclass\\s+(${escId})\\b`, 'g'), 'var $1 = class $1');
+            if (nextCode !== transformedCode) {
+              transformedCode = nextCode;
+              continue;
+            }
+          }
+          throw synErr;
+        }
+      }
       runner(
         effectiveSillyTavern,
-        window.TavernHelper,
+        effectiveTavernHelper,
+        window.EjsTemplate,
+        window.reloadIframe,
         effectiveGetContext,
         effectiveEventSource,
+        effectiveEventOn,
+        effectiveEventOnce,
+        effectiveSetTimeout,
+        effectiveSetInterval,
         TAVERN_EVENT_TYPES,
         TAVERN_EXT_PROMPT_TYPES,
         tavernState.extensionSettings,
@@ -7850,8 +8657,8 @@ code, pre {
         executeTavernSlashCommand,
         executeTavernSlashCommand,
         window.toastr,
-        window.jQuery,
-        window.$
+        effectiveJq,
+        effectiveJq
       ).then(() => {
         mountedCustomPluginCodeMap.set(pluginRunKey, codeSignature);
         if (isBaiBaiBookPlugin(plugin)) {
@@ -7875,9 +8682,11 @@ code, pre {
       }).catch(err => {
         console.warn('Async plugin script warning:', plugin.name, err);
       }).finally(() => {
+        if (ownerCardId) window.__currentExecutingCardOwnerId = prevOwnerCtx;
         inFlightPluginExecutionSet.delete(pluginRunKey);
       });
     } catch (err) {
+      if (ownerCardId) window.__currentExecutingCardOwnerId = prevOwnerCtx;
       inFlightPluginExecutionSet.delete(pluginRunKey);
       console.error('Plugin script execution error:', plugin.name, err);
     }
@@ -8267,7 +9076,7 @@ code, pre {
   }
 
   function enhanceFloatingHelperWidgets() {
-    const ballIds = ['gourmet-fixed-ball-ui', 'adv-codex-toggle'];
+    const ballIds = ['gourmet-fixed-ball-ui', 'th-fixed-ball-ui', 'adv-codex-toggle'];
     ballIds.forEach(id => {
       const ballEl = document.getElementById(id);
       if (!ballEl) return;
@@ -8282,7 +9091,7 @@ code, pre {
       });
     });
 
-    const panelIds = ['gourmet-fixed-panel-ui', 'adv-codex-panel'];
+    const panelIds = ['gourmet-fixed-panel-ui', 'th-fixed-panel-ui', 'adv-codex-panel'];
     panelIds.forEach(id => {
       const panelEl = document.getElementById(id);
       if (!panelEl || panelEl._tavernDragEnhanced) return;
@@ -8299,7 +9108,7 @@ code, pre {
 
       const canStartPanelDrag = (target) => {
         if (!target || !target.closest) return false;
-        if (target.closest('#gourmet-main-close-btn, input, select, textarea, button, #gourmet-scale-minus, #gourmet-scale-plus, #gourmet-theme-toggle, .gourmet-settings-row.clickable, .achieve-item')) {
+        if (target.closest('#gourmet-main-close-btn, #th-main-close-btn, input, select, textarea, button, #gourmet-scale-minus, #gourmet-scale-plus, #gourmet-theme-toggle, #th-scale-minus, #th-scale-plus, #th-night-toggle, .gourmet-settings-row.clickable, .achieve-item')) {
           return false;
         }
         return Boolean(
@@ -8406,22 +9215,55 @@ code, pre {
 
   function syncCardScopedFloatingWidgets() {
     const activeCard = getActiveCard();
-    if (!activeCard || !cardHasFloatingWidgetScript(activeCard)) {
-      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+    const activeCardId = activeCard ? String(activeCard.id) : '';
+    document.querySelectorAll('[data-tavern-card-owner]').forEach(el => {
+      if (el.getAttribute('data-tavern-card-owner') !== activeCardId) {
+        el.remove();
+      }
+    });
+    const enabledHelperCode = (activeCard && Array.isArray(activeCard.helperScripts))
+      ? activeCard.helperScripts
+          .filter(hs => hs && hs.enabled !== false)
+          .map(hs => String(hs.content || hs.code || ''))
+          .join('\n')
+      : '';
+    const hasGourmet = Boolean(
+      activeCard && (
+        enabledHelperCode.includes('gourmet-fixed-ball-ui') ||
+        String(activeCard.name || '').includes('美食物语') ||
+        (Array.isArray(activeCard.regexScripts) && activeCard.regexScripts.some(r => String(r.findRegex || '').includes('gourmet_journal')))
+      )
+    );
+    const hasTh = Boolean(activeCard && enabledHelperCode.includes('th-fixed-ball-ui'));
+    const hasAdvCodex = Boolean(activeCard && enabledHelperCode.includes('adv-codex-toggle'));
+
+    if (!hasGourmet) {
+      document.querySelectorAll('[id^="gourmet-fixed-"]').forEach(el => el.remove());
+    }
+    if (!hasTh) {
+      document.querySelectorAll('[id^="th-fixed-"], #th-detail-popup-ui, #th-infra-room-edit-mask, #th-export-fallback-ui, #th-input-measure').forEach(el => el.remove());
+    }
+    if (!hasAdvCodex) {
+      document.querySelectorAll('#adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
     }
   }
 
   function executeCardHelperScripts(cardObj, forceRun = false) {
     const card = cardObj || getActiveCard();
     if (!card) return;
+    syncCardScopedFloatingWidgets();
     const scripts = (Array.isArray(card.helperScripts) ? card.helperScripts : []).filter(hs => hs && hs.enabled !== false && (hs.content || hs.code));
     if (scripts.length === 0) {
       lastExecutedHelperCardId = card.id;
-      syncCardScopedFloatingWidgets();
       return;
     }
-    const usesFloatingBall = scripts.some(hs => /gourmet-fixed-ball-ui|adv-codex-toggle/.test(String(hs.content || hs.code || '')));
-    const ballInDom = document.getElementById('gourmet-fixed-ball-ui') || document.getElementById('adv-codex-toggle');
+    const usesFloatingBall = scripts.some(hs => /gourmet-fixed-ball-ui|th-fixed-ball-ui|adv-codex-toggle|appendTo\(\s*['"]body['"]\s*\)|\$\(\s*['"]body['"]\s*\)\.append/.test(String(hs.content || hs.code || '')));
+    const ballInDom = Boolean(
+      document.querySelector(`[data-tavern-card-owner="${card.id}"]`) ||
+      document.getElementById('gourmet-fixed-ball-ui') ||
+      document.getElementById('th-fixed-ball-ui') ||
+      document.getElementById('adv-codex-toggle')
+    );
     if (!forceRun && lastExecutedHelperCardId === card.id && (!usesFloatingBall || ballInDom)) {
       enhanceFloatingHelperWidgets();
       return;
@@ -8430,7 +9272,7 @@ code, pre {
       window.__mvuActiveSchema = null;
       window.__mvuDefaultStatData = null;
       window.__mvuActiveSchemaCardId = null;
-      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+      syncCardScopedFloatingWidgets();
     }
     lastExecutedHelperCardId = card.id;
     scripts.forEach(hs => {
@@ -8460,18 +9302,30 @@ code, pre {
     const hasHelpers = Array.isArray(card.helperScripts) && card.helperScripts.length > 0;
     const isGourmetCard = String(card.name || '').includes('美食物语') ||
       (hasRegexes && card.regexScripts.some(r => String(r.findRegex || '').includes('gourmet_journal')));
-    if (hasRegexes && (hasHelpers || (!isGourmetCard && card._checkedPngEmbeddedAssets))) return;
+    const isMilkTeaCard = String(card.name || '').includes('开家奶茶店') || String(card.name || '').includes('奶茶店');
+    const isFrontierCard = String(card.name || '').includes('边境酒馆');
+    if (hasRegexes && (hasHelpers || (!isGourmetCard && !isMilkTeaCard && !isFrontierCard && card._checkedPngEmbeddedAssets))) return;
 
     cardBackfillInFlightSet.add(card.id);
     try {
+      let rawJson = null;
+      if (isMilkTeaCard || isFrontierCard) {
+        const jsonAssetUrl = isMilkTeaCard
+          ? '/assets/aistudio/______4c6bacde.json'
+          : '/assets/aistudio/________V2.1_6cfcfe2b.json';
+        try {
+          const jRes = await fetch(jsonAssetUrl);
+          if (jRes.ok) rawJson = await jRes.json();
+        } catch (_) {}
+      }
       let buf = null;
-      if (isGourmetCard) {
+      if (!rawJson && isGourmetCard) {
         try {
           const res = await fetch('/assets/aistudio/2_1_cb1723ff.png');
           if (res.ok) buf = await res.arrayBuffer();
         } catch (_) {}
       }
-      if (!buf && card.avatar) {
+      if (!rawJson && !buf && card.avatar) {
         let avUrl = card.avatar;
         if (String(avUrl).startsWith('vault://')) {
           if (typeof window.resolveVaultRefToUrl === 'function') {
@@ -8492,8 +9346,9 @@ code, pre {
         }
       }
       card._checkedPngEmbeddedAssets = true;
-      if (!buf) return;
-      const rawJson = await extractCharacterJsonFromPngBuffer(buf);
+      if (!rawJson && buf) {
+        rawJson = await extractCharacterJsonFromPngBuffer(buf);
+      }
       if (!rawJson || typeof rawJson !== 'object') return;
       const data = (rawJson.data && typeof rawJson.data === 'object') ? rawJson.data : rawJson;
       const ext = (data && data.extensions) || rawJson.extensions || {};
@@ -9561,6 +10416,9 @@ code, pre {
       if (Number(script.substituteRegex) === 1) {
         patternStr = replaceTavernMacros(patternStr, card);
       }
+      if (!isPrompt && !isUser && String(patternStr || '').includes('StatusPlaceHolderImpl') && !output.includes('<StatusPlaceHolderImpl/>')) {
+        output = output + '\n<StatusPlaceHolderImpl/>';
+      }
       const rx = parseFindRegexString(patternStr);
       if (!rx) continue;
 
@@ -9619,7 +10477,7 @@ code, pre {
                   return applyTrim(gVal !== undefined ? String(gVal) : '') + numStr[1];
                 }
               }
-              return '';
+              return token;
             }
             return token;
           });
@@ -9632,6 +10490,9 @@ code, pre {
       }
     }
 
+    if (!isPrompt && output.includes('<StatusPlaceHolderImpl/>')) {
+      output = output.replace(/\s*<StatusPlaceHolderImpl\s*\/>\s*/g, '');
+    }
     return output;
   }
 
@@ -9643,7 +10504,17 @@ code, pre {
     const shouldAdaptDarkHtml = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
     let cleaned = String(rawHtmlDoc || '')
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
-      .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '');
+      .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '')
+      .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + window.location.origin + '/public/vendor/tailwindcss.js$2')
+      .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, window.location.origin + '/api/raw-gh/')
+      .replace(
+        'Object.values(unlockedIngredients).forEach((item) => {',
+        'Object.entries(unlockedIngredients || {}).forEach(([uKey, item]) => { if (!item || typeof item !== "object") return; const dbRef = ingredientsDB.find(i => i.id === uKey || i.id === item.id || i.name === item.name || (item.baseImageName && i.name === item.baseImageName)); if (!item.id || item.id === "default") item.id = (dbRef && dbRef.id) || uKey || item.name; if (dbRef) { if (!item.z || item.z === 10) item.z = dbRef.z; if (!item.type) item.type = dbRef.type; }'
+      )
+      .replace(
+        'let item = unlockedIngredients[id];',
+        'let item = unlockedIngredients[id] || Object.values(unlockedIngredients || {}).find(u => u && (u.id === id || u.name === id || u.baseImageName === id)) || ingredientsDB.find(i => i.id === id || i.name === id);'
+      );
 
     if (!allowAudioInFrame) {
       cleaned = cleaned.replace(/<audio\b([^>]*?)\bautoplay\b([^>]*)>/gi, '<audio$1$2>');
@@ -9709,6 +10580,28 @@ code, pre {
         background-image: var(--tavern-char-avatar-bg) !important;
         background-size: cover !important;
         background-position: center !important;
+      }
+      .api-row > div > input, .model-input-wrap > input {
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+        width: 100% !important;
+      }
+      .btn-api-action {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+      }
+      #app-root:has(#page-butler.active) {
+        height: auto !important;
+        min-height: 500px !important;
+      }
+      #page-butler.page-view.active {
+        position: relative !important;
+        height: auto !important;
+        min-height: 500px !important;
+        overflow-y: visible !important;
+      }
+      #page-butler .butler-buttons {
+        padding: 18px 16px 24px 16px !important;
       }
       #outerContainer, .gourmet-outer-container {
         overflow: hidden !important;
@@ -9849,7 +10742,10 @@ code, pre {
       for (var i = 0; i < imgs.length; i++) {
         var im = imgs[i];
         var rawSrc = im.getAttribute('src') || '';
-        if (uUrl && (/User%20Avatars|User Avatars|user-avatar|\x7b\x7buser\x7d\x7d/i.test(rawSrc))) {
+        if (rawSrc.indexOf('https://raw.githubusercontent.com/') === 0 || rawSrc.indexOf('http://raw.githubusercontent.com/') === 0) {
+          var ghSub = rawSrc.replace(/^https?:\/\/raw\.githubusercontent\.com\//i, '');
+          im.src = window.parent.location.origin + '/api/raw-gh/' + ghSub;
+        } else if (uUrl && (/User%20Avatars|User Avatars|user-avatar|\x7b\x7buser\x7d\x7d/i.test(rawSrc))) {
           im.src = uUrl;
         } else if (rawSrc.indexOf('vault://') === 0 && typeof window.parent.resolveVaultRefToUrl === 'function') {
           (function(imgEl, vRef) {
@@ -9934,6 +10830,22 @@ code, pre {
   function wrapJQueryInstance(jqFn) {
     if (!jqFn || jqFn._tavernWrapped) return jqFn;
     var wrapped = function(sel, ctx) {
+      if (typeof sel === 'function') {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            try { sel(wrapped); } catch (e) { console.error(e); }
+          });
+        } else {
+          try {
+            sel(wrapped);
+          } catch (e) {
+            setTimeout(function() {
+              try { sel(wrapped); } catch (err) { console.error(err); }
+            }, 0);
+          }
+        }
+        return jqFn([], document);
+      }
       if (typeof sel === 'string') {
         var s = sel.trim();
         if (s === '#send_textarea' || s === '#send_but' || s === '#send_form' || s.indexOf('swipe_right') !== -1 || s.indexOf('swipe_left') !== -1) {
@@ -10000,12 +10912,33 @@ code, pre {
       window.setChatMessage = window.parent.setChatMessage;
       window.setChatMessages = window.parent.setChatMessages;
       window.createChatMessages = window.parent.createChatMessages;
+      window.deleteChatMessages = window.parent.deleteChatMessages;
+      window.rotateChatMessages = window.parent.rotateChatMessages;
+      window.getWorldbook = window.parent.getWorldbook;
+      window.replaceWorldbook = window.parent.replaceWorldbook;
+      window.updateWorldbookWith = window.parent.updateWorldbookWith;
+      window.getWorldbookNames = window.parent.getWorldbookNames;
+      window.getGlobalWorldbookNames = window.parent.getGlobalWorldbookNames;
+      window.getCharWorldbookNames = window.parent.getCharWorldbookNames;
+      window.getChatWorldbookName = window.parent.getChatWorldbookName;
+      window.getOrCreateChatWorldbook = window.parent.getOrCreateChatWorldbook;
+      window.createOrReplaceWorldbook = window.parent.createOrReplaceWorldbook;
+      window.deleteWorldbook = window.parent.deleteWorldbook;
+      window.createWorldbookEntries = window.parent.createWorldbookEntries;
+      window.deleteWorldbookEntries = window.parent.deleteWorldbookEntries;
       window.getButtonEvent = window.parent.getButtonEvent;
       window.getScriptButtons = window.parent.getScriptButtons;
       window.replaceScriptButtons = window.parent.replaceScriptButtons;
       window.appendInexistentScriptButtons = window.parent.appendInexistentScriptButtons;
       window.injectPrompts = window.parent.injectPrompts;
       window.uninjectPrompts = window.parent.uninjectPrompts;
+      window.substitudeMacros = window.parent.substitudeMacros || function(s) { return String(s ?? ''); };
+      window.substituteMacros = window.parent.substituteMacros || window.substitudeMacros;
+      window.formatAsTavernRegexedString = window.parent.formatAsTavernRegexedString;
+      window.EjsTemplate = window.parent.EjsTemplate;
+      window.reloadIframe = function() {
+        window.parent.postMessage({ type: 'TAVERN_IFRAME_RELOAD_CHAT' }, '*');
+      };
       window.eventOn = window.parent.eventOn;
       window.eventOnce = window.parent.eventOnce;
       window.eventEmit = window.parent.eventEmit;
@@ -10017,6 +10950,13 @@ code, pre {
         window.$ = wrapJQueryInstance(window.parent.$);
         window.jQuery = window.$;
       }
+      try {
+        if (window.location && typeof window.location.reload === 'function') {
+          window.location.reload = function() {
+            window.parent.postMessage({ type: 'TAVERN_IFRAME_RELOAD_CHAT' }, '*');
+          };
+        }
+      } catch (e) {}
     }
   } catch (e) {}
   var lastAppliedH = 0;
@@ -10038,8 +10978,8 @@ code, pre {
       var bRect = b.getBoundingClientRect();
       var scaleContainer = document.querySelector('.scale-container');
       var outerC = document.getElementById('outerContainer');
-      var rootCard = document.getElementById('statusRoot') || outerC || document.querySelector('.gourmet-main-frame');
-      if (scaleContainer && document.getElementById('sim-scaler')) {
+      var rootCard = document.getElementById('statusRoot') || outerC || document.getElementById('app-root') || document.querySelector('.gourmet-main-frame');
+      if (scaleContainer && (document.getElementById('sim-scaler') || document.querySelector('.outer-container'))) {
         var scRect = scaleContainer.getBoundingClientRect();
         if (scRect.width > 40) {
           contentH = Math.round(scRect.width * (1312 / 736)) + 12;
@@ -10082,6 +11022,9 @@ code, pre {
         frame.style.height = targetH + 'px';
         frame.style.minHeight = '0px';
         frame.style.maxHeight = 'none';
+        try {
+          window.dispatchEvent(new Event('resize'));
+        } catch (re) {}
       }
     } catch (e) {}
   }
@@ -10116,15 +11059,207 @@ code, pre {
       window.jQuery = window.$;
     }
     syncFrameHeight();
+    try {
+      if (window.frameElement) {
+        window.frameElement.dispatchEvent(new Event('load'));
+      }
+    } catch (e) {}
   });
+  var isParentBookExcerptActive = function() {
+    try {
+      var pw = window.parent;
+      var pd = pw && pw.document;
+      return Boolean(pw && (pw.BookExcerpt || (pd && (pd.getElementById('be-style') || pd.getElementById('be-menu-entry')))));
+    } catch (e) {
+      return false;
+    }
+  };
+  var getCaretPointInFrame = function(x, y) {
+    try {
+      if (typeof document.caretRangeFromPoint === 'function') {
+        var r = document.caretRangeFromPoint(x, y);
+        if (r && r.startContainer) return { node: r.startContainer, offset: r.startOffset };
+      }
+      if (typeof document.caretPositionFromPoint === 'function') {
+        var p = document.caretPositionFromPoint(x, y);
+        if (p && p.offsetNode) return { node: p.offsetNode, offset: p.offset };
+      }
+    } catch (e) {}
+    return null;
+  };
+  var buildClauseRangeInFrame = function(caret) {
+    if (!caret || !caret.node) return null;
+    var textNode = caret.node;
+    var offset = caret.offset || 0;
+    if (textNode.nodeType !== 3) {
+      var walker = document.createTreeWalker(textNode, NodeFilter.SHOW_TEXT, null);
+      var firstTxt = walker.nextNode();
+      if (!firstTxt) return null;
+      textNode = firstTxt;
+      offset = 0;
+    }
+    var raw = textNode.nodeValue || '';
+    if (!raw.trim()) return null;
+    var stopRx = /[，。！？；：、“”‘’「」『』【】《》\\r\\n]/;
+    var s = Math.max(0, Math.min(offset, raw.length - 1));
+    var e = s;
+    while (s > 0 && !stopRx.test(raw[s - 1]) && (offset - s) < 18) s--;
+    while (e < raw.length && !stopRx.test(raw[e]) && (e - offset) < 18) e++;
+    if (e <= s) {
+      s = Math.max(0, offset - 2);
+      e = Math.min(raw.length, offset + 4);
+    }
+    if (e <= s) return null;
+    var range = document.createRange();
+    range.setStart(textNode, s);
+    range.setEnd(textNode, e);
+    return range;
+  };
+  var notifyFrameBookExcerptSelection = function() {
+    try {
+      if (window.frameElement) {
+        window.frameElement.dispatchEvent(new Event('load'));
+      }
+      document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      document.dispatchEvent(new Event('touchend', { bubbles: true }));
+    } catch (e) {}
+  };
+  var lpFrameTimer = null;
+  var lpFrameActive = false;
+  var lpFrameStartCaret = null;
+  var lpFrameStartX = 0;
+  var lpFrameStartY = 0;
+  var suppressNextClickUntil = 0;
+  var clearLpFrameTimer = function() {
+    if (lpFrameTimer) {
+      clearTimeout(lpFrameTimer);
+      lpFrameTimer = null;
+    }
+  };
+  document.addEventListener('contextmenu', function(e) {
+    var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+    if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (isParentBookExcerptActive()) {
+      var sel = window.getSelection ? window.getSelection() : null;
+      if (sel && sel.isCollapsed && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+        var caret = getCaretPointInFrame(e.clientX, e.clientY);
+        var clauseRange = buildClauseRangeInFrame(caret);
+        if (clauseRange) {
+          try {
+            sel.removeAllRanges();
+            sel.addRange(clauseRange);
+            suppressNextClickUntil = Date.now() + 450;
+            notifyFrameBookExcerptSelection();
+          } catch (err) {}
+        }
+      } else if (sel && !sel.isCollapsed) {
+        suppressNextClickUntil = Date.now() + 450;
+        notifyFrameBookExcerptSelection();
+      }
+    }
+  }, true);
+  document.addEventListener('touchstart', function(e) {
+    clearLpFrameTimer();
+    lpFrameActive = false;
+    lpFrameStartCaret = null;
+    if (!isParentBookExcerptActive()) return;
+    if (!e.touches || e.touches.length !== 1) return;
+    var t = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+    if (!t || !t.closest) return;
+    if (t.closest('button, input, textarea, select, .be-highlight')) return;
+    lpFrameStartX = e.touches[0].clientX;
+    lpFrameStartY = e.touches[0].clientY;
+    lpFrameTimer = setTimeout(function() {
+      lpFrameTimer = null;
+      var sel = window.getSelection ? window.getSelection() : null;
+      if (sel && !sel.isCollapsed) {
+        lpFrameActive = true;
+        suppressNextClickUntil = Date.now() + 500;
+        notifyFrameBookExcerptSelection();
+        return;
+      }
+      var caret = getCaretPointInFrame(lpFrameStartX, lpFrameStartY);
+      if (!caret) return;
+      lpFrameStartCaret = caret;
+      lpFrameActive = true;
+      var clauseRange = buildClauseRangeInFrame(caret);
+      if (clauseRange && sel) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(clauseRange);
+          suppressNextClickUntil = Date.now() + 500;
+          notifyFrameBookExcerptSelection();
+        } catch (err) {}
+      }
+    }, 380);
+  }, { passive: true });
+  document.addEventListener('touchmove', function(e) {
+    if (!e.touches || e.touches.length !== 1) {
+      clearLpFrameTimer();
+      return;
+    }
+    var curX = e.touches[0].clientX;
+    var curY = e.touches[0].clientY;
+    if (lpFrameTimer) {
+      if (Math.abs(curX - lpFrameStartX) > 10 || Math.abs(curY - lpFrameStartY) > 10) {
+        clearLpFrameTimer();
+      }
+      return;
+    }
+    if (lpFrameActive && lpFrameStartCaret) {
+      var endCaret = getCaretPointInFrame(curX, curY);
+      if (endCaret && endCaret.node) {
+        try {
+          var dragRange = document.createRange();
+          var cmp = lpFrameStartCaret.node === endCaret.node
+            ? (lpFrameStartCaret.offset - endCaret.offset)
+            : (lpFrameStartCaret.node.compareDocumentPosition(endCaret.node) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+          if (cmp <= 0) {
+            dragRange.setStart(lpFrameStartCaret.node, lpFrameStartCaret.offset);
+            dragRange.setEnd(endCaret.node, endCaret.offset);
+          } else {
+            dragRange.setStart(endCaret.node, endCaret.offset);
+            dragRange.setEnd(lpFrameStartCaret.node, lpFrameStartCaret.offset);
+          }
+          if (!dragRange.collapsed) {
+            if (e.cancelable) e.preventDefault();
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(dragRange);
+            suppressNextClickUntil = Date.now() + 500;
+            notifyFrameBookExcerptSelection();
+          }
+        } catch (err) {}
+      }
+    }
+  }, { passive: false });
+  var finishLpFrameTouch = function() {
+    clearLpFrameTimer();
+    if (lpFrameActive) {
+      lpFrameActive = false;
+      lpFrameStartCaret = null;
+      suppressNextClickUntil = Date.now() + 450;
+      setTimeout(notifyFrameBookExcerptSelection, 30);
+    }
+  };
   document.addEventListener('touchend', function() {
+    finishLpFrameTouch();
     try {
       if (window.parent && typeof window.parent.replenishMobileBackGuard === 'function') {
         window.parent.replenishMobileBackGuard();
       }
     } catch (e) {}
   }, true);
+  document.addEventListener('touchcancel', finishLpFrameTouch, true);
   document.addEventListener('click', function(ev) {
+    if (Date.now() < suppressNextClickUntil) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     try {
       if (ev && ev.target && ev.target.closest) {
         var linkEl = ev.target.closest('a[href="#"], a[href^="javascript:"]');
@@ -10150,12 +11285,18 @@ code, pre {
 })();
 <\/script>`;
 
-    const headInjection = sandboxClampCss + bridgeScript;
+    const referrerMeta = '<meta name="referrer" content="no-referrer">';
+    const headInjection = referrerMeta + sandboxClampCss + bridgeScript;
 
     if (/<head[^>]*>/i.test(cleaned)) {
-      cleaned = cleaned.replace(/<head([^>]*)>/i, '<head$1>' + headInjection);
+      cleaned = cleaned.replace(/<head([^>]*)>/i, (_, attrs) => '<head' + attrs + '>' + referrerMeta + bridgeScript);
+      if (/<\/head>/i.test(cleaned)) {
+        cleaned = cleaned.replace(/<\/head>/i, () => sandboxClampCss + '</head>');
+      } else {
+        cleaned = cleaned.replace(/<head([^>]*)>/i, (_, attrs) => '<head' + attrs + '>' + sandboxClampCss);
+      }
     } else if (/<html[^>]*>/i.test(cleaned)) {
-      cleaned = cleaned.replace(/<html([^>]*)>/i, '<html$1><head>' + headInjection + '</head>');
+      cleaned = cleaned.replace(/<html([^>]*)>/i, (_, attrs) => '<html' + attrs + '><head>' + headInjection + '</head>');
     } else {
       cleaned = '<!DOCTYPE html><html><head><meta charset="utf-8">' + headInjection + '</head><body style="margin:0;padding:0;background:transparent;">' + cleaned + '</body></html>';
     }
@@ -10187,8 +11328,8 @@ code, pre {
     // 1. JS-Slash-Runner / SillyTavern 1-to-1: Extract fenced HTML blocks (```html ... ``` or ``` ... ```) into isolated sandboxed iframes using non-bridging (?:(?!```)[\s\S])*? so unclosed fences never swallow story text
     const isLastFloor = options && options.isLastFloor !== undefined ? Boolean(options.isLastFloor) : true;
     const protectedBlocks = [];
-    let working = afterRegex.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?((?:(?!```)[\s\S])*?)```/g, (full, inner) => {
-      const trimmed = inner.trim();
+    const handleFencedHtmlCandidate = (full, inner) => {
+      const trimmed = String(inner || '').trim();
       const singleIframeMatch = trimmed.match(/^<iframe\b([^>]*?)srcdoc=(['"])([\s\S]*?)\2([^>]*?)>\s*<\/iframe>$/i);
       if (singleIframeMatch) {
         const unescapedSrcdoc = singleIframeMatch[3]
@@ -10219,7 +11360,9 @@ code, pre {
         return '\n' + token + '\n';
       }
       return full;
-    });
+    };
+    let working = afterRegex.replace(/(?:^|\r?\n)[ \t]*```(?:html|HTML|xml)?[ \t]*\r?\n((?:(?!\r?\n[ \t]*```[ \t]*(?:\r?\n|$))[\s\S])*?)\r?\n[ \t]*```[ \t]*(?=\r?\n|$)/g, handleFencedHtmlCandidate);
+    working = working.replace(/```(?:html|HTML|xml)?[ \t]*\r?\n?((?:(?!```)[\s\S])*?)```/g, handleFencedHtmlCandidate);
 
     // Clean up any stray dangling ```html or ``` fence markers around HTML tags
     working = working
@@ -12580,6 +13723,7 @@ code, pre {
         resetTavernTimeout();
         const extEffCfg = typeof window.getEffectiveApiConfig === 'function' ? window.getEffectiveApiConfig() : null;
         const extEffBase = extEffCfg ? normalizeTavernBaseUrl(extEffCfg.proxyUrl || extEffCfg.url || extEffCfg.apiUrl || '') : '';
+        const transportMode = tavernState.apiConfig?.transportMode || 'auto';
         const canUseExternalPhoneTransport = typeof window.requestLlmapiWithFallback === 'function' &&
           tavernState.apiConfig?.useExternalPhoneApi !== false &&
           (!extEffBase || extEffBase === cleanBase);
@@ -12590,7 +13734,9 @@ code, pre {
             body: JSON.stringify(payload),
             signal: abortCtrl.signal,
             _preserveCallerStream: true,
-            _noAutoRetry: true
+            _noAutoRetry: true,
+            _forceLocalProxy: transportMode === 'local',
+            _forceDirectFetch: transportMode === 'direct'
           });
         } else {
           res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
@@ -13322,7 +14468,14 @@ code, pre {
       body:not(:has(#game-hall-screen.active)) .tm-lightbox,
       body:not(:has(#game-hall-screen.active)) #pa-ball,
       body:not(:has(#game-hall-screen.active)) #pa-root,
-      body:not(:has(#game-hall-screen.active)) #be-float-bar {
+      body:not(:has(#game-hall-screen.active)) #be-float-bar,
+      body:not(:has(#game-hall-screen.active)) [data-tavern-card-owner],
+      body:not(:has(#game-hall-screen.active)) [id^="gourmet-fixed-"],
+      body:not(:has(#game-hall-screen.active)) [id^="th-fixed-"],
+      body:not(:has(#game-hall-screen.active)) #th-detail-popup-ui,
+      body:not(:has(#game-hall-screen.active)) #th-infra-room-edit-mask,
+      body:not(:has(#game-hall-screen.active)) #adv-codex-panel,
+      body:not(:has(#game-hall-screen.active)) #adv-codex-toggle {
         display: none !important;
       }
       #tavern-char-sprite-layer {
@@ -14580,16 +15733,16 @@ code, pre {
     const prevChatEl = document.getElementById('chat');
     // Preserve all third-party plugin menu items mounted inside #extensionsMenu or #tavern-wand-plugins-submenu
     const prevExtMenuNodes = Array.from(document.querySelectorAll('#tavern-wand-plugins-submenu > :not(.tavern-popup-item), #extensionsMenu > :not(.tavern-popup-item):not(style):not(#tavern-wand-plugins-submenu)'));
+    syncCardScopedFloatingWidgets(activeCardForShell);
     const canPreserveFloatingWidgets = Boolean(
       activeCardForShell &&
-      lastExecutedHelperCardId === activeCardForShell.id &&
-      cardHasFloatingWidgetScript(activeCardForShell)
+      lastExecutedHelperCardId === activeCardForShell.id
     );
     const prevFloatingWidgetNodes = canPreserveFloatingWidgets
-      ? Array.from(document.querySelectorAll('#tavern-stage-root > [id^="gourmet-fixed-"], #tavern-stage-root > #adv-codex-panel, #tavern-stage-root > #adv-codex-toggle'))
+      ? Array.from(document.querySelectorAll(`#tavern-stage-root > [data-tavern-card-owner="${activeCardForShell.id}"], #tavern-stage-root > [id^="gourmet-fixed-"], #tavern-stage-root > [id^="th-fixed-"], #tavern-stage-root > #th-detail-popup-ui, #tavern-stage-root > #th-infra-room-edit-mask, #tavern-stage-root > #th-export-fallback-ui, #tavern-stage-root > #th-input-measure, #tavern-stage-root > #adv-codex-panel, #tavern-stage-root > #adv-codex-toggle`))
       : [];
     if (!canPreserveFloatingWidgets) {
-      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
+      document.querySelectorAll('[data-tavern-card-owner], [id^="gourmet-fixed-"], [id^="th-fixed-"], #th-detail-popup-ui, #th-infra-room-edit-mask, #th-export-fallback-ui, #th-input-measure, #adv-codex-panel, #adv-codex-toggle').forEach(el => el.remove());
     }
 
     shell.innerHTML = `
@@ -15319,41 +16472,9 @@ code, pre {
     const p = (tavernState.plugins || []).find(x => x.id === uiRuntime.activePluginModalId);
     if (!p) return '';
     if (isJsSlashRunnerPlugin(p)) {
-      if (!document.getElementById('tavern_helper')) {
-        try { executeUserPluginScript(p); } catch (_) {}
-      }
-      if (document.getElementById('tavern_helper')) {
-        return `
-          <div class="tavern-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
-            <div style="background:#fdfbf7;border-radius:16px;border:1px solid rgba(0,0,0,0.12);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.28);color:#2c2c2e;">
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f5f2eb;flex-shrink:0;">
-                <span style="font-weight:700;font-size:14px;color:#333;">酒馆助手 JS-Slash-Runner</span>
-                <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭</button>
-              </div>
-              <div id="tavern-live-plugin-modal-slot" data-live-mount="tavern_helper" style="flex:1;overflow-y:auto;padding:12px;"></div>
-            </div>
-          </div>
-        `;
-      }
       return renderJsSlashRunnerNativeModal(p);
     }
     if (isStPromptTemplatePlugin(p)) {
-      if (!document.getElementById('prompt_template_settings')) {
-        try { executeUserPluginScript(p); } catch (_) {}
-      }
-      if (document.getElementById('prompt_template_settings')) {
-        return `
-          <div class="tavern-modal-backdrop" style="position:absolute;inset:0;z-index:3500;background:rgba(20,20,24,0.52);backdrop-filter:blur(4px);display:flex;flex-direction:column;padding:10px;box-sizing:border-box;">
-            <div style="background:#fdfbf7;border-radius:16px;border:1px solid rgba(0,0,0,0.12);display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.28);color:#2c2c2e;">
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f5f2eb;flex-shrink:0;">
-                <span style="font-weight:700;font-size:14px;color:#333;">提示词模板 ST-Prompt-Template</span>
-                <button type="button" class="tavern-btn small" data-action="close-plugin-modal">关闭</button>
-              </div>
-              <div id="tavern-live-plugin-modal-slot" data-live-mount="prompt_template_settings" style="flex:1;overflow-y:auto;padding:12px;"></div>
-            </div>
-          </div>
-        `;
-      }
       return renderStPromptTemplateNativeModal(p);
     }
     if (!p.repoBaseUrl && String(p.name || '').includes('柏宝绘')) {
@@ -15948,6 +17069,9 @@ code, pre {
     }
     chatEl.innerHTML = topLazyBarHtml + renderedFloors.join('');
     executeInlineMessageScripts(chatEl);
+    if (card && Array.isArray(card.helperScripts) && card.helperScripts.some(s => s && s.enabled !== false && String(s.content || '').includes("not('.last_mes').remove()"))) {
+      chatEl.querySelectorAll('.mes:not(.last_mes)').forEach(el => el.remove());
+    }
 
     if (keepTopOnSingleFloor && messages.length <= 1) {
       chatEl.scrollTop = 0;
@@ -16414,6 +17538,14 @@ code, pre {
           <input type="checkbox" data-preset-bool="stream_openai" ${isStreamOn ? 'checked' : ''} />
           <span>启用真实流式逐字生成 关闭则为非流式整段直出</span>
         </label>
+        <div class="tavern-field-group" style="margin-top:6px;margin-bottom:4px;">
+          <label>通道</label>
+          <select class="tavern-select" data-api-str="transportMode">
+            <option value="auto" ${(cfg.transportMode || 'auto') === 'auto' ? 'selected' : ''}>跟随外部通道设置</option>
+            <option value="local" ${cfg.transportMode === 'local' ? 'selected' : ''}>优先本地后台代发</option>
+            <option value="direct" ${cfg.transportMode === 'direct' ? 'selected' : ''}>网页原生直连发送</option>
+          </select>
+        </div>
         <div class="tavern-field-group" style="margin-top:6px;margin-bottom:4px;">
           <label>流式打字速度 字每秒: ${tavernState.uiSettings?.streamSpeed ?? 0}</label>
           <div style="display:flex;gap:6px;align-items:center;">
@@ -21805,6 +22937,13 @@ code, pre {
         refreshOpenDrawerOnly();
         return;
       }
+      if (target.hasAttribute('data-api-str')) {
+        const k = target.getAttribute('data-api-str');
+        tavernState.apiConfig[k] = String(target.value || '');
+        await saveTavernStore();
+        refreshOpenDrawerOnly();
+        return;
+      }
       if (target.hasAttribute('data-fmt-bool')) {
         const k = target.getAttribute('data-fmt-bool');
         tavernState.formatting[k] = Boolean(target.checked);
@@ -22731,10 +23870,10 @@ code, pre {
       if (paBall && !isTavernVisible) {
         paBall.setAttribute('hidden', 'hidden');
       }
-      document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => {
+      document.querySelectorAll('[id^="gourmet-fixed-"], [id^="th-fixed-"], #th-detail-popup-ui, #th-infra-room-edit-mask, #adv-codex-panel, #adv-codex-toggle').forEach(el => {
         if (!isTavernVisible) {
           el.style.display = 'none';
-        } else if (el.id === 'gourmet-fixed-ball-ui' || el.id === 'adv-codex-toggle') {
+        } else if (el.id === 'gourmet-fixed-ball-ui' || el.id === 'th-fixed-ball-ui' || el.id === 'adv-codex-toggle') {
           el.style.display = 'flex';
         }
       });
@@ -22789,7 +23928,7 @@ code, pre {
     if (paRoot) paRoot.setAttribute('hidden', 'hidden');
     const paBall = document.getElementById('pa-ball');
     if (paBall) paBall.setAttribute('hidden', 'hidden');
-    document.querySelectorAll('[id^="gourmet-fixed-"], #adv-codex-panel, #adv-codex-toggle').forEach(el => {
+    document.querySelectorAll('[id^="gourmet-fixed-"], [id^="th-fixed-"], #th-detail-popup-ui, #th-infra-room-edit-mask, #adv-codex-panel, #adv-codex-toggle').forEach(el => {
       el.style.display = 'none';
     });
     if (typeof window.showScreen === 'function') {
@@ -22896,8 +24035,8 @@ code, pre {
       errBanner.classList.remove('visible');
       return markSubLayerClosed();
     }
-    // 3. Check floating card helper panels (e.g. gourmet-fixed-panel-ui, adv-codex-panel)
-    for (const panelId of ['gourmet-fixed-panel-ui', 'adv-codex-panel']) {
+    // 3. Check floating card helper panels (e.g. gourmet-fixed-panel-ui, th-fixed-panel-ui, adv-codex-panel)
+    for (const panelId of ['gourmet-fixed-panel-ui', 'th-fixed-panel-ui', 'adv-codex-panel']) {
       const panelEl = document.getElementById(panelId);
       if (panelEl && panelEl.style.display !== 'none' && getComputedStyle(panelEl).display !== 'none') {
         panelEl.style.display = 'none';
