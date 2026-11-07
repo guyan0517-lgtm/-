@@ -2528,7 +2528,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v16.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -22613,6 +22613,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ],
             };
           };
+          window.parseSseTextToSynthesized = parseSseTextToSynthesized;
 
           try {
             const isStreamReq = Boolean((parsedBody && parsedBody.stream === true) || finalUrl.includes("streamGenerateContent"));
@@ -22957,7 +22958,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     } catch (_e2) {}
                   }
                 }
-              } else if (/^data:\s*/i.test(strippedNonStream)) {
+              } else if (/(?:^|\n)\s*data:\s*/i.test(strippedNonStream)) {
                 const salvagedNonStreamSse = parseSseTextToSynthesized(strippedNonStream);
                 if (salvagedNonStreamSse) {
                   resText = JSON.stringify(salvagedNonStreamSse);
@@ -23744,7 +23745,10 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             try {
               data = JSON.parse(res.text);
             } catch (_) {
-              const salvagedFromSse = typeof parseSseTextToSynthesized === "function" ? parseSseTextToSynthesized(res.text) : null;
+              const sseParserFn = typeof parseSseTextToSynthesized === "function"
+                ? parseSseTextToSynthesized
+                : (typeof window.parseSseTextToSynthesized === "function" ? window.parseSseTextToSynthesized : null);
+              const salvagedFromSse = sseParserFn ? sseParserFn(res.text) : null;
               if (salvagedFromSse) {
                 data = salvagedFromSse;
               } else {
@@ -39706,13 +39710,108 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return out;
           }
 
+          // 内部辅助函数：自动修复JSON字符串值内部未转义的英文双引号、真实换行符以及末尾多余逗号
+          function repairMalformedJsonQuotes(str) {
+            if (!str || typeof str !== "string") return str;
+            let out = "";
+            let inStr = false;
+            let strIsKey = false;
+            let expectingKey = false;
+            let esc = false;
+            const len = str.length;
+            for (let i = 0; i < len; i++) {
+              const ch = str[i];
+              if (esc) {
+                out += ch;
+                esc = false;
+                continue;
+              }
+              if (ch === "\\" && inStr) {
+                out += ch;
+                esc = true;
+                continue;
+              }
+              if (!inStr) {
+                if (ch === "{" || ch === ",") {
+                  expectingKey = true;
+                } else if (ch === ":") {
+                  expectingKey = false;
+                } else if (ch === "[" || ch === "}" || ch === "]") {
+                  expectingKey = false;
+                }
+                if (ch === '"') {
+                  inStr = true;
+                  strIsKey = expectingKey;
+                }
+                out += ch;
+                continue;
+              }
+              if (ch === "\n" || ch === "\r") {
+                if (ch === "\r" && str[i + 1] === "\n") i++;
+                out += "\\n";
+                continue;
+              }
+              if (ch === '"') {
+                let j = i + 1;
+                while (j < len && (str[j] === " " || str[j] === "\t" || str[j] === "\r" || str[j] === "\n")) {
+                  j++;
+                }
+                const nextCh = j < len ? str[j] : "";
+                let isClosingQuote = false;
+                if (strIsKey) {
+                  isClosingQuote = nextCh === ":";
+                } else {
+                  if (nextCh === "}" || nextCh === "]" || nextCh === "") {
+                    isClosingQuote = true;
+                  } else if (nextCh === ",") {
+                    let k = j + 1;
+                    while (k < len && (str[k] === " " || str[k] === "\t" || str[k] === "\r" || str[k] === "\n")) {
+                      k++;
+                    }
+                    const afterComma = k < len ? str[k] : "";
+                    if (
+                      afterComma === '"' ||
+                      afterComma === "{" ||
+                      afterComma === "[" ||
+                      afterComma === "}" ||
+                      afterComma === "]" ||
+                      afterComma === "t" ||
+                      afterComma === "f" ||
+                      afterComma === "n" ||
+                      afterComma === "-" ||
+                      (afterComma >= "0" && afterComma <= "9")
+                    ) {
+                      isClosingQuote = true;
+                    }
+                  }
+                }
+                if (isClosingQuote) {
+                  inStr = false;
+                  strIsKey = false;
+                  out += '"';
+                } else {
+                  out += '\\"';
+                }
+                continue;
+              }
+              out += ch;
+            }
+            return out.replace(/,\s*([}\]])/g, "$1");
+          }
+          window.repairMalformedJsonQuotes = repairMalformedJsonQuotes;
+
           // 内部辅助函数：宽容解析单个 JSON 对象（支持未转义换行符、末尾多余逗号、内容中夹杂未转义双引号等）
           function tryParseLooseJsonObject(rawStr) {
             if (!rawStr) return null;
             let s = rawStr.trim();
+            const firstObjBrace = s.indexOf("{");
+            if (firstObjBrace > 0 && /^[\[\],\s]+$/.test(s.slice(0, firstObjBrace))) {
+              s = s.slice(firstObjBrace).trim();
+            }
             if (!s.startsWith("{")) return null;
+            // 剥离末尾可能残留的外层数组/对象闭合符号，如 } ] }
+            s = s.replace(/\}\s*\]\s*\}\s*$/, "}").replace(/\}\s*\]\s*$/, "}").replace(/,\s*$/, "").trim();
             if (!s.endsWith("}")) {
-              // 尝试修复末尾截断的对象
               if ((s.match(/"/g) || []).length % 2 !== 0) {
                 s += '"}';
               } else {
@@ -39729,6 +39828,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const fixedNewlines = escapeNewlinesInsideQuotes(s).replace(/,\s*([}\]])/g, "$1");
               const p2 = JSON.parse(fixedNewlines);
               if (p2 && typeof p2 === "object") return p2;
+            } catch (_) {}
+
+            // 修复内部未转义英文双引号后再试
+            try {
+              const fixedQuotes = repairMalformedJsonQuotes(s);
+              const p3 = JSON.parse(fixedQuotes);
+              if (p3 && typeof p3 === "object") return p3;
             } catch (_) {}
 
             // 如果这是个包含 chatResponse 或 messages 数组的外层大对象，绝对不能用单条正则把它拍扁吞掉，返回 null 让上层走数组剥离
@@ -39758,13 +39864,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (targetMatch) extracted.target_content = targetMatch[1].trim();
             const promptMatch = s.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (promptMatch) extracted.prompt = promptMatch[1].trim();
+            const stickerMatch = s.match(/"(?:sticker_name|stickerName)"\s*:\s*"([^"]+)"/i);
+            if (stickerMatch) extracted.sticker_name = stickerMatch[1].trim();
+            const visMatch = s.match(/"(?:visibleTo|visible_to)"\s*:\s*(\[[^\]]*\])/i);
+            if (visMatch) {
+              try {
+                extracted.visibleTo = JSON.parse(visMatch[1]);
+              } catch (_) {}
+            }
+
+            // 如果包含嵌套的 quote_reply 对象，尝试提取
+            if (/"quote_reply"\s*:\s*\{/i.test(s)) {
+              const qrSubMatch = s.match(/"quote_reply"\s*:\s*(\{[\s\S]*?\})\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
+              if (qrSubMatch) {
+                try {
+                  const qrObj = JSON.parse(repairMalformedJsonQuotes(qrSubMatch[1]));
+                  if (qrObj && typeof qrObj === "object") {
+                    extracted.quote_reply = qrObj;
+                    if (qrObj.reply_content && !extracted.content) {
+                      extracted.content = qrObj.reply_content;
+                      extracted.reply_content = qrObj.reply_content;
+                    }
+                    if (!extracted.type) extracted.type = "quote_reply";
+                  }
+                } catch (_) {}
+              }
+            }
 
             // 如果包含 system_status 的 fields 对象，尝试单独提取 fields
             if (extracted.type === "system_status" || /"fields"\s*:\s*\{/i.test(s)) {
               const fieldsMatch = s.match(/"fields"\s*:\s*(\{[\s\S]*?\})\s*}/);
               if (fieldsMatch) {
                 try {
-                  extracted.fields = JSON.parse(escapeNewlinesInsideQuotes(fieldsMatch[1]).replace(/,\s*([}\]])/g, "$1"));
+                  extracted.fields = JSON.parse(repairMalformedJsonQuotes(fieldsMatch[1]));
                   if (!extracted.type) extracted.type = "system_status";
                   return extracted;
                 } catch (_) {}
@@ -39772,11 +39904,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             const knownKeysPattern = "(?:type|name|sender|senderName|speaker|visibleTo|visible_to|thinking|target_content|targetContent|target_timestamp|targetTimestamp|target_sender|targetSender|quote|quote_reply|quoted_content|status|emotion|avatar)";
-            const contentFieldMatch = s.match(new RegExp(`"(?:content|message|text|reply|reply_content)"\\s*:\\s*"([\\s\\S]*)"\\s*(?:,\\s*"${knownKeysPattern}"[\\s\\S]*|\\s*}$)`, "i"));
+            const contentFieldMatch = s.match(new RegExp(`"(?:content|message|text|reply|reply_content)"\\s*:\\s*"([\\s\\S]*)"\\s*(?:,\\s*"${knownKeysPattern}"[\\s\\S]*|\\s*\\}[\\s\\]\\}]*$)`, "i"));
             if (contentFieldMatch) {
               let val = contentFieldMatch[1];
-              // 剥离尾随的其他已知键值对
+              // 剥离尾随的其他已知键值对与闭合括号
               val = val.replace(new RegExp(`"\\s*,\\s*"${knownKeysPattern}"\\s*:\\s*[\\s\\S]*$`, "i"), "");
+              val = val.replace(/"\s*\}\s*\]?\s*\}?\s*$/, "");
               const cleanVal = val.replace(/\\n/g, "\n").replace(/\\"/g, '"');
               extracted.content = cleanVal;
               if (extracted.type === "quote_reply" || extracted.target_timestamp || extracted.target_content) {
@@ -39787,20 +39920,56 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               return extracted;
             }
-            if (extracted.type || extracted.prompt || extracted.name) {
+            const nonTextAllowedTypes = new Set([
+              "system_status",
+              "status_bar",
+              "naiimag",
+              "sticker",
+              "transfer",
+              "give_item",
+              "gift_item",
+              "obtain_item",
+              "apply_item_effect",
+              "suggest_switch_chapter",
+              "switch_chapter",
+              "suggest_manage_chapters",
+              "manage_chapters",
+              "suggest_combat",
+              "combat_join",
+              "combat_end",
+              "waimai_request",
+              "video_call_response",
+              "group_call_response"
+            ]);
+            if (extracted.prompt || extracted.sticker_name || extracted.fields || (extracted.type && nonTextAllowedTypes.has(extracted.type))) {
               return extracted;
             }
             return null;
           }
 
-          // 方案1：整体包裹在markdown代码块中时，提取内部内容
-          const codeBlockMatch = trimmedContent.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-          if (codeBlockMatch && codeBlockMatch[1]) {
+          // 方案1：包裹在markdown代码块中时，提取内部内容
+          const codeBlockMatch = trimmedContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+          if (codeBlockMatch && codeBlockMatch[1] && (codeBlockMatch[1].includes("{") || codeBlockMatch[1].includes("["))) {
             trimmedContent = codeBlockMatch[1].trim();
           }
 
+          // 如果开头夹杂了诸如 [当前回合计数：...] 等非JSON前缀，但后面紧跟完整的大括号对象，先定位到首个 {
+          if (!trimmedContent.startsWith("{") && !trimmedContent.startsWith("[")) {
+            const firstObjIdx = trimmedContent.indexOf("{");
+            const lastObjIdx = trimmedContent.lastIndexOf("}");
+            if (firstObjIdx !== -1 && lastObjIdx > firstObjIdx) {
+              trimmedContent = trimmedContent.substring(firstObjIdx, lastObjIdx + 1).trim();
+            }
+          } else if (trimmedContent.startsWith("[") && !/^\[\s*\{/.test(trimmedContent)) {
+            const firstObjIdx = trimmedContent.indexOf("{");
+            const lastObjIdx = trimmedContent.lastIndexOf("}");
+            if (firstObjIdx !== -1 && lastObjIdx > firstObjIdx) {
+              trimmedContent = trimmedContent.substring(firstObjIdx, lastObjIdx + 1).trim();
+            }
+          }
+
           // 方案1.5：如果整体是一个带有 thinking 和 chatResponse/messages 的外层对象，但因为内部换行符或未转义双引号导致外层 JSON.parse 失败，
-          // 先尝试把字符串内部真实换行转义后再整体解析一次；若仍失败，则直接剥离出 thinking 和 chatResponse 数组内部的内容进行逐条扫描！
+          // 先尝试把字符串内部真实换行与未转义引号转义后再整体解析一次；若仍失败，则直接剥离出 thinking 和 chatResponse 数组内部的内容进行逐条扫描！
           let preExtractedThinking = "";
           if (trimmedContent.startsWith("{") && /"(?:chatResponse|messages)"\s*:\s*\[/i.test(trimmedContent)) {
             try {
@@ -39819,9 +39988,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   return arr;
                 }
               }
-            } catch (_) {}
+            } catch (_) {
+              try {
+                const fixedOuterQuotes = repairMalformedJsonQuotes(trimmedContent);
+                const parsedOuter2 = JSON.parse(fixedOuterQuotes);
+                if (parsedOuter2 && typeof parsedOuter2 === "object") {
+                  const arr2 = Array.isArray(parsedOuter2.chatResponse)
+                    ? parsedOuter2.chatResponse
+                    : Array.isArray(parsedOuter2.messages)
+                    ? parsedOuter2.messages
+                    : null;
+                  if (arr2) {
+                    if (parsedOuter2.thinking && typeof parsedOuter2.thinking === "string") {
+                      arr2.unshift({ type: "thinking", content: parsedOuter2.thinking.trim() });
+                    }
+                    return arr2;
+                  }
+                }
+              } catch (_2) {}
+            }
 
-            // 外层整体 JSON.parse 依然失败（通常因为 thinking 或某条消息内有未转义双引号）：
+            // 外层整体 JSON.parse 依然失败（通常因为 thinking 或某条消息内有严重语法截断）：
             // 单独提取 thinking 文本，然后把扫描范围精准缩小到 chatResponse / messages 的方括号（保留首尾方括号以便方案2尝试整体数组解析）！
             const arrayKeyMatch = trimmedContent.match(/"(?:chatResponse|messages)"\s*:\s*\[/i);
             if (arrayKeyMatch) {
@@ -39832,12 +40019,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
               }
               const lastBracketIdx = trimmedContent.lastIndexOf("]");
-              const lastBraceInTrimmed = trimmedContent.lastIndexOf("}");
               const lastOpenBraceInTrimmed = trimmedContent.lastIndexOf("{");
-              if (bracketOpenIdx !== -1 && lastBracketIdx > bracketOpenIdx && lastBracketIdx > lastBraceInTrimmed && lastBraceInTrimmed > lastOpenBraceInTrimmed) {
+              if (bracketOpenIdx !== -1 && lastBracketIdx > bracketOpenIdx && lastBracketIdx > lastOpenBraceInTrimmed) {
                 trimmedContent = trimmedContent.substring(bracketOpenIdx, lastBracketIdx + 1).trim();
               } else if (bracketOpenIdx !== -1) {
-                trimmedContent = trimmedContent.substring(bracketOpenIdx + 1).trim();
+                trimmedContent = trimmedContent.substring(bracketOpenIdx + 1).replace(/\]\s*\}\s*$/, "").trim();
               }
             }
           }
@@ -39854,7 +40040,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             } catch (e) {
               try {
-                const fixedArr = escapeNewlinesInsideQuotes(trimmedContent).replace(/,\s*([}\]])/g, "$1");
+                const fixedArr = repairMalformedJsonQuotes(trimmedContent);
                 const parsed2 = JSON.parse(fixedArr);
                 if (Array.isArray(parsed2) && parsed2.length > 0) {
                   if (preExtractedThinking) {
@@ -39867,14 +40053,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // 方案3：深度括号匹配提取所有独立的JSON对象，并保留前后伴随的正文文本
+          const repairedForScan = repairMalformedJsonQuotes(trimmedContent);
+          const scanSource = repairedForScan || trimmedContent;
           const results = [];
           let depth = 0;
           let startIdx = -1;
           let inString = false;
           let escape = false;
 
-          for (let i = 0; i < trimmedContent.length; i++) {
-            const ch = trimmedContent[i];
+          for (let i = 0; i < scanSource.length; i++) {
+            const ch = scanSource[i];
             if (escape) {
               escape = false;
               continue;
@@ -39894,7 +40082,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } else if (ch === '}') {
                 depth--;
                 if (depth === 0 && startIdx !== -1) {
-                  const candidate = trimmedContent.substring(startIdx, i + 1);
+                  const candidate = scanSource.substring(startIdx, i + 1);
                   const parsed = tryParseLooseJsonObject(candidate);
                   if (parsed && typeof parsed === "object") {
                     results.push({ item: parsed, start: startIdx, end: i + 1 });
@@ -39908,22 +40096,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // 如果因为字符串内部未转义引号导致扫描结束时 startIdx 仍未闭合，尝试兜底按行或末尾闭合提取
-          if (startIdx !== -1 && startIdx < trimmedContent.length) {
+          if (startIdx !== -1 && startIdx < scanSource.length) {
             const alreadyCovered = results.some(r => startIdx >= r.start && startIdx < r.end);
             if (!alreadyCovered) {
-              const tailCandidate = trimmedContent.substring(startIdx);
+              const tailCandidate = scanSource.substring(startIdx);
               const tailParsed = tryParseLooseJsonObject(tailCandidate);
               if (tailParsed && typeof tailParsed === "object") {
-                results.push({ item: tailParsed, start: startIdx, end: trimmedContent.length });
+                results.push({ item: tailParsed, start: startIdx, end: scanSource.length });
               }
             }
           }
 
           // 补充扫描：无论前面是否提取到部分对象，都对未覆盖的 `{...}` 块进行补充提取，防止某一条气泡内出现奇数个未转义引号导致后半截气泡漏提
-          if (trimmedContent.includes("{")) {
+          if (scanSource.includes("{")) {
             const blockRegex = /\{[^{}]*\}/g;
             let match;
-            while ((match = blockRegex.exec(trimmedContent)) !== null) {
+            while ((match = blockRegex.exec(scanSource)) !== null) {
               const mStart = match.index;
               const mEnd = match.index + match[0].length;
               const isOverlapping = results.some(r => !(mEnd <= r.start || mStart >= r.end));
@@ -39936,6 +40124,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             results.sort((a, b) => a.start - b.start);
           }
+          trimmedContent = scanSource;
 
           if (results.length > 0) {
             const finalItems = [];
@@ -42222,13 +42411,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
         function isMessageVisibleToCurrentUser(msg, chat) {
           if (!msg || !Array.isArray(msg.visibleTo) || msg.visibleTo.length === 0) return true;
+          // 单人普通群聊（非多真人联机群）或当前用户为守密人KP时，AI生成的所有检定/暗骰/剧情消息均对当前唯一玩家可见
+          const isMultiHumanPeerGroup = Boolean(chat && chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
+          if (!isMultiHumanPeerGroup) return true;
+          if (typeof window.isCurrentUserKeeperInChat === "function" && window.isCurrentUserKeeperInChat(chat)) return true;
           const cleanTarget = (s) => String(s || "").trim().replace(/^[\[【\(（"'「『]+|[\]】\)）"'」』]+$/g, "").trim();
           const targets = msg.visibleTo.map(cleanTarget).filter(Boolean);
           if (targets.length === 0) return true;
-          const myNames = new Set();
+          const myNames = new Set(["我", "用户", "玩家", "调查员", "所有人", "全员", "全体", "全体成员", "公开", "所有人可见", "all", "everyone"]);
           if (chat && chat.settings) {
             if (chat.settings.myNickname) myNames.add(cleanTarget(chat.settings.myNickname));
             if (chat.settings.myName) myNames.add(cleanTarget(chat.settings.myName));
+            if (chat.settings.myCocPanel && chat.settings.myCocPanel.name) {
+              myNames.add(cleanTarget(chat.settings.myCocPanel.name));
+            }
           }
           if (typeof state !== "undefined" && state.qzoneSettings && state.qzoneSettings.nickname) {
             myNames.add(cleanTarget(state.qzoneSettings.nickname));
@@ -42237,7 +42433,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const myCode = window.PeerManager.getOrCreateMyPeerCode();
             if (myCode) myNames.add(cleanTarget(myCode));
           }
-          if (myNames.size === 0) myNames.add("我");
           return targets.some((t) => myNames.has(t));
         }
         window.isMessageVisibleToCurrentUser = isMessageVisibleToCurrentUser;
@@ -52245,6 +52440,28 @@ ${recentHistoryText}
                      (state.chats && state.chats[String(chatId)]) ||
                      (state.chats && state.chats[Number(chatId)]) ||
                      (state.chats && Object.values(state.chats).find(c => String(c.id) === String(chatId)));
+          window.activeGeneratingChats = window.activeGeneratingChats || {};
+          window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
+          if (window.activeGeneratingChats[chatId] || window.activeGeneratingChats[String(chatId)] || (chat && (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)]))) {
+            console.warn("当前聊天正在生成回复中，忽略重复触发");
+            return;
+          }
+          window.activeGeneratingChats[chatId] = true;
+          window.activeGeneratingChats[String(chatId)] = true;
+          if (chat && chat.id !== undefined) {
+            window.activeGeneratingChats[chat.id] = true;
+            window.activeGeneratingChats[String(chat.id)] = true;
+          }
+          const clearActiveGeneratingLock = () => {
+            if (!window.activeGeneratingChats) return;
+            delete window.activeGeneratingChats[chatId];
+            delete window.activeGeneratingChats[String(chatId)];
+            if (chat && chat.id !== undefined) {
+              delete window.activeGeneratingChats[chat.id];
+              delete window.activeGeneratingChats[String(chat.id)];
+            }
+          };
+
           if (typeof db !== "undefined" && db.chats) {
             try {
               if (!chat) {
@@ -52263,7 +52480,12 @@ ${recentHistoryText}
               }
             } catch (e) {}
           }
-          if (!chat) return;
+          if (!chat) {
+            clearActiveGeneratingLock();
+            return;
+          }
+          window.activeGeneratingChats[chat.id] = true;
+          window.activeGeneratingChats[String(chat.id)] = true;
           if (!state.chats) state.chats = {};
           state.chats[chat.id] = chat;
           state.chats[String(chat.id)] = chat;
@@ -52271,6 +52493,7 @@ ${recentHistoryText}
 
           // 骰子角色的消息由本地规则生成，密友为真人对话，均不调用 AI 接口
           if (!chat.isGroup && (chat.roleType === "dice" || chat.roleType === "peer")) {
+            clearActiveGeneratingLock();
             return;
           }
 
@@ -52279,19 +52502,10 @@ ${recentHistoryText}
             const activeThread = typeof window.getActiveSoloThread === "function" ? window.getActiveSoloThread(chat) : null;
             const canSpeak = typeof window.canCurrentUserSpeakInSoloThread === "function" ? window.canCurrentUserSpeakInSoloThread(activeThread, chat) : true;
             if (!canSpeak) {
+              clearActiveGeneratingLock();
               return;
             }
           }
-
-          window.activeGeneratingChats = window.activeGeneratingChats || {};
-          window.chatTurnRenderPromise = window.chatTurnRenderPromise || {};
-          if (window.activeGeneratingChats[chat.id] || window.activeGeneratingChats[String(chat.id)] || window.activeGeneratingChats[chatId]) {
-            console.warn("当前聊天正在生成回复中，忽略重复触发");
-            return;
-          }
-          window.activeGeneratingChats[chat.id] = true;
-          window.activeGeneratingChats[String(chat.id)] = true;
-          window.activeGeneratingChats[chatId] = true;
 
           const releaseBgKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === "function"
             ? window.acquireBackgroundTaskKeepAlive()
@@ -52412,13 +52626,13 @@ ${recentHistoryText}
                 const aiFillableColumns = statusColumns.filter(c => c && c.type !== "weather" && c.type !== "luck");
                 templateFieldLines = aiFillableColumns.map(c => {
                   const cleanLabel = (c.label || '栏目').replace(/^[\[【]|[\]】]$/g, '').trim();
-                  const noteSuffix = (c.note && c.note.trim()) ? ` // 备注：${c.note.trim()}` : "";
+                  const noteSuffix = (c.note && c.note.trim()) ? `（备注：${c.note.trim()}）` : "";
                   if (c.type === "date") return `    "${cleanLabel}": "X年X月X日${noteSuffix}"`;
                   if (c.type === "time") return `    "${cleanLabel}": "时:分${noteSuffix}"`;
                   if (c.type === "location") {
                     if (isPeerGrpForStatus && activeLineHumanPlayers.length > 0) {
-                      const perPlayerExample = activeLineHumanPlayers.map(p => `"${p.name}": "大层级-中层级-小层级"`).join(", ");
-                      return `    "${cleanLabel}": { ${perPlayerExample} }${noteSuffix}`;
+                      const perPlayerExample = activeLineHumanPlayers.map(p => `"${p.name}": "大层级-中层级-小层级${noteSuffix}"`).join(", ");
+                      return `    "${cleanLabel}": { ${perPlayerExample} }`;
                     }
                     return `    "${cleanLabel}": "大层级-中层级-小层级${noteSuffix}"`;
                   }
@@ -52482,6 +52696,7 @@ ${recentHistoryText}
               (m) => m.roleType !== "system_status" && m.roleType !== "dice" && !m.isPeerMember && m.roleType !== "peer" && !m.isMuted
             );
             if (roleplayMembers.length === 0 && !statusMember) {
+              clearActiveGeneratingLock();
               renderChatList();
               return;
             }
@@ -52875,6 +53090,7 @@ ${recentHistoryText}
               if (typeof releaseBgKeepAlive === "function") {
                 try { releaseBgKeepAlive(); } catch (_) {}
               }
+              clearActiveGeneratingLock();
               if (chatHeaderTitle && state.chats[chatId]) {
                 chatHeaderTitle.style.opacity = 0;
                 setTimeout(() => {
@@ -52935,6 +53151,7 @@ ${recentHistoryText}
             console.error(
               `API 请求已被拦截，因为站点 ${proxyUrl} 在黑名单中。`,
             );
+            clearActiveGeneratingLock();
             return; // 阻止API请求
           }
 
@@ -52989,6 +53206,10 @@ ${recentHistoryText}
 
             // 4. 保存所有更改（包括给塔罗牌盖的章），然后再次触发AI，这次是让Char来讨论
             await db.chats.put(chat);
+            if (typeof releaseBgKeepAlive === "function") {
+              try { releaseBgKeepAlive(); } catch (_) {}
+            }
+            clearActiveGeneratingLock();
             return triggerAiResponse(); // 再次调用自己，让Char进行回应
           }
 
@@ -55486,32 +55707,50 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             let reasoningFromData = fullReasoning;
-            if (!fullContent && rawText.trim().startsWith("{")) {
-              try {
-                const jsonObj = JSON.parse(rawText.trim());
-                if (jsonObj.error) {
-                  throw new Error(jsonObj.error.message || JSON.stringify(jsonObj.error));
+            if (!fullContent && rawText && rawText.trim()) {
+              let rawTrimmed = rawText.trim();
+              if (!rawTrimmed.startsWith("{") && /(?:^|\n)\s*data:\s*/i.test(rawTrimmed) && typeof window.parseSseTextToSynthesized === "function") {
+                const salvagedSseObj = window.parseSseTextToSynthesized(rawTrimmed);
+                if (salvagedSseObj) {
+                  rawTrimmed = JSON.stringify(salvagedSseObj);
                 }
-                const candidateParts = jsonObj.candidates?.[0]?.content?.parts;
-                const geminiText = Array.isArray(candidateParts) ? candidateParts.map(p => (typeof p.text === "string" ? p.text : "")).join("") : (candidateParts?.[0]?.text || "");
-                const rawMsgContent = jsonObj.choices?.[0]?.message?.content;
-                const normalizedMsgText = Array.isArray(rawMsgContent)
-                  ? rawMsgContent.map(b => (typeof b === "string" ? b : (b?.text || ""))).join("")
-                  : (typeof rawMsgContent === "string" ? rawMsgContent : "");
-                const normalizedRootContent = Array.isArray(jsonObj.content)
-                  ? jsonObj.content.map(b => (typeof b === "string" ? b : (b?.text || ""))).join("")
-                  : "";
-                fullContent = normalizedMsgText
-                           || jsonObj.choices?.[0]?.delta?.content 
-                           || normalizedRootContent 
-                           || geminiText 
-                           || "";
-                reasoningFromData = jsonObj.choices?.[0]?.message?.reasoning_content 
-                                 || jsonObj.choices?.[0]?.message?.reasoning 
-                                 || fullReasoning 
-                                 || "";
-              } catch (e) {
-                throw new Error("解析返回内容失败: " + e.message);
+              } else if (!rawTrimmed.startsWith("{")) {
+                const fb = rawTrimmed.indexOf("{");
+                const lb = rawTrimmed.lastIndexOf("}");
+                if (fb !== -1 && lb > fb) {
+                  rawTrimmed = rawTrimmed.slice(fb, lb + 1);
+                }
+              }
+              if (rawTrimmed.startsWith("{")) {
+                try {
+                  const jsonObj = JSON.parse(rawTrimmed);
+                  if (jsonObj.error) {
+                    throw new Error(jsonObj.error.message || JSON.stringify(jsonObj.error));
+                  }
+                  const candidateParts = jsonObj.candidates?.[0]?.content?.parts;
+                  const geminiText = Array.isArray(candidateParts) ? candidateParts.map(p => (typeof p.text === "string" ? p.text : "")).join("") : (candidateParts?.[0]?.text || "");
+                  const rawMsgContent = jsonObj.choices?.[0]?.message?.content;
+                  const normalizedMsgText = Array.isArray(rawMsgContent)
+                    ? rawMsgContent.map(b => (typeof b === "string" ? b : (b?.text || ""))).join("")
+                    : (typeof rawMsgContent === "string" ? rawMsgContent : "");
+                  const normalizedRootContent = Array.isArray(jsonObj.content)
+                    ? jsonObj.content.map(b => (typeof b === "string" ? b : (b?.text || ""))).join("")
+                    : "";
+                  fullContent = normalizedMsgText
+                             || jsonObj.choices?.[0]?.delta?.content 
+                             || normalizedRootContent 
+                             || geminiText 
+                             || "";
+                  reasoningFromData = jsonObj.choices?.[0]?.message?.reasoning_content 
+                                   || jsonObj.choices?.[0]?.message?.reasoning 
+                                   || fullReasoning 
+                                   || "";
+                } catch (e) {
+                  if (e && e.message && !e.message.includes("Unexpected")) {
+                    throw new Error("解析返回内容失败: " + e.message);
+                  }
+                  fullContent = rawTrimmed;
+                }
               }
             }
 
@@ -55564,28 +55803,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 sanitizedContent = sanitizedContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "").trim();
               }
 
-              // 再次净化：如果首个结构符号是 [，按数组提取；如果是 {，按对象提取（仅当右括号位于最后一个对象大括号之后时才截取，防止台词内部括号截断后半段）
+              // 再次净化：仅当 [ 后面紧跟 { 且右方括号在最后一个右大括号之后时才按顶层数组提取，避免把开头的 [当前回合计数] 误判为JSON数组而漏切外层大括号
               const firstBracket = sanitizedContent.indexOf("[");
               const firstBrace = sanitizedContent.indexOf("{");
               const lastBracePos = sanitizedContent.lastIndexOf("}");
-              if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-                const lastBracket = sanitizedContent.lastIndexOf("]");
-                if (lastBracket > firstBracket && lastBracket > lastBracePos) {
-                  sanitizedContent = sanitizedContent.substring(
-                    firstBracket,
-                    lastBracket + 1,
-                  );
-                }
-              } else if (firstBrace !== -1) {
-                if (lastBracePos > firstBrace) {
-                  sanitizedContent = sanitizedContent.substring(
-                    firstBrace,
-                    lastBracePos + 1,
-                  );
-                }
+              const lastBracket = sanitizedContent.lastIndexOf("]");
+              const isRootJsonArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace) && /^\[\s*\{/.test(sanitizedContent.slice(firstBracket)) && lastBracket > lastBracePos;
+              if (isRootJsonArray) {
+                sanitizedContent = sanitizedContent.substring(
+                  firstBracket,
+                  lastBracket + 1,
+                );
+              } else if (firstBrace !== -1 && lastBracePos > firstBrace) {
+                sanitizedContent = sanitizedContent.substring(
+                  firstBrace,
+                  lastBracePos + 1,
+                );
               }
 
-              const fullResponse = JSON.parse(sanitizedContent);
+              let fullResponse;
+              try {
+                fullResponse = JSON.parse(sanitizedContent);
+              } catch (_jsonErr) {
+                if (typeof window.repairMalformedJsonQuotes === "function") {
+                  fullResponse = JSON.parse(window.repairMalformedJsonQuotes(sanitizedContent));
+                } else {
+                  throw _jsonErr;
+                }
+              }
 
               if (fullResponse.thinking && typeof fullResponse.thinking === "string") {
                 extractedThinking = fullResponse.thinking.trim();
@@ -56868,32 +57113,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     aiMessage.senderAvatar = chat.settings.aiAvatar;
                   }
                   break;
-                }
-                case "give_item":
-                case "gift_item":
-                case "obtain_item": {
-                  const itemObj = msgData.item || msgData.give_item || msgData;
-                  const targetRecipient = msgData.target || msgData.targetName || msgData.receiver || (chat.isGroup ? (chat.settings?.myNickname || "我") : "我");
-                  const senderGiver = msgData.name || (chat.isGroup ? "系统" : (chat.settings?.aiName || chat.name || "对方"));
-                  const cardMsg = {
-                    role: "assistant",
-                    type: "inventory_card",
-                    actionType: "gift",
-                    senderName: senderGiver,
-                    targetName: targetRecipient,
-                    item: itemObj,
-                    content: `[获得了物品：${itemObj.name || "道具"}]`,
-                    timestamp: getNextUniqueAiMsgTs()
-                  };
-                  chat.history.push(cardMsg);
-                  await db.chats.put(chat);
-                  if (isViewingThisChat) {
-                    appendMessage(cardMsg, chat);
-                  }
-                  continue;
-                }
-                case "apply_item_effect": {
-                  continue;
                 }
                 case "suggest_switch_chapter": {
                   let targetId = msgData.nextChapterId || msgData.chapterId || msgData.targetId;

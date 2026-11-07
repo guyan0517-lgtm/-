@@ -4111,6 +4111,13 @@ code, pre {
     const readSingleRes = async (targetRes) => {
       let accText = '';
       let readErrCaught = null;
+      if (targetRes && typeof targetRes.text === 'string') {
+        accText = targetRes.text;
+        if (typeof onChunkProgress === 'function') {
+          try { onChunkProgress(); } catch (_) {}
+        }
+        return { accText, readErrCaught };
+      }
       if (targetRes && targetRes.body && typeof targetRes.body.getReader === 'function') {
         const reader = targetRes.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -4220,49 +4227,43 @@ code, pre {
       } catch (_) {}
     }
 
-    const doDirectFetchWithRetry = async () => {
-      let lastErr = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          if (typeof window.ensureBackgroundKeepAlive === 'function') {
-            try { window.ensureBackgroundKeepAlive(null, true); } catch (_) {}
-          }
-          return await rawFetch(url, options);
-        } catch (err) {
-          if (err && err.name === 'AbortError') throw err;
-          lastErr = err;
-          if (attempt === 0) {
-            await (typeof window.waitDelay === 'function' ? window.waitDelay(500) : new Promise(r => setTimeout(r, 500)));
-          }
-        }
+    const doDirectFetchOnce = async () => {
+      if (typeof window.ensureBackgroundKeepAlive === 'function') {
+        try { window.ensureBackgroundKeepAlive(null, true); } catch (_) {}
       }
-      throw lastErr || new Error('Failed to fetch');
+      return await rawFetch(url, options);
     };
 
     if (method === 'POST' && !isStreamReq) {
       try {
-        const proxyRes = await rawFetch('/api/proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
+        return await doDirectFetchOnce();
+      } catch (directErr) {
+        if (directErr && directErr.name === 'AbortError') throw directErr;
+        try {
+          const proxyRes = await rawFetch('/api/proxy', {
             method: 'POST',
-            headers: options.headers || {},
-            body: parsedBody !== undefined ? parsedBody : options.body,
-            keepAliveHeartbeat: true
-          }),
-          signal: options.signal
-        });
-        if (proxyRes && proxyRes.ok) {
-          proxyRes._usedProxyHeartbeat = true;
-          proxyRes._directFallbackFn = doDirectFetchWithRetry;
-          return proxyRes;
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url,
+              method: 'POST',
+              headers: options.headers || {},
+              body: parsedBody !== undefined ? parsedBody : options.body,
+              keepAliveHeartbeat: true
+            }),
+            signal: options.signal
+          });
+          if (proxyRes && proxyRes.ok) {
+            proxyRes._usedProxyHeartbeat = true;
+            return proxyRes;
+          }
+        } catch (proxyErr) {
+          if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
         }
-      } catch (proxyErr) {
-        if (proxyErr && proxyErr.name === 'AbortError') throw proxyErr;
+        throw directErr;
       }
-      return await doDirectFetchWithRetry();
     }
+
+    const doDirectFetchWithRetry = doDirectFetchOnce;
 
     if (method === 'POST' && isStreamReq) {
       try {
@@ -12646,9 +12647,13 @@ code, pre {
           tavernState.apiConfig?.useExternalPhoneApi !== false &&
           (!extEffBase || extEffBase === cleanBase);
         if (canUseExternalPhoneTransport) {
-          res = await window.requestLlmapiWithFallback(payload, {
+          res = await window.requestLlmapiWithFallback(targetEndpoint, {
+            method: 'POST',
+            headers: reqHeaders,
+            body: JSON.stringify(payload),
             signal: abortCtrl.signal,
-            _preserveCallerStream: true
+            _preserveCallerStream: true,
+            _noAutoRetry: true
           });
         } else {
           res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
