@@ -208,6 +208,90 @@ function resolveLocalCardAssetFile(owner, repo, decodedRelPath) {
 const rawGhAssetCache = new Map();
 let rawGhAssetCacheBytes = 0;
 const RAW_GH_CACHE_MAX_BYTES = 25 * 1024 * 1024;
+const repoTreeIndexCache = new Map();
+
+async function getOrFetchRepoTreeIndex(owner, repo, branch = 'main') {
+  const cacheKey = `${owner}/${repo}@${branch}`;
+  const cached = repoTreeIndexCache.get(cacheKey);
+  if (cached && (Date.now() - cached.fetchedAt) < 30 * 60 * 1000) {
+    return cached;
+  }
+  try {
+    const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    }).catch(() => null);
+    if (treeRes && treeRes.ok) {
+      const treeData = await treeRes.json().catch(() => ({}));
+      const allBlobs = (treeData.tree || []).filter(x => x && x.type === 'blob' && x.size > 10 && x.path);
+      const exactSet = new Set();
+      const lowerToExact = new Map();
+      const stemToWebp = new Map();
+      const stemToImage = new Map();
+      const webpStemSet = new Set();
+
+      for (const b of allBlobs) {
+        const p = String(b.path);
+        exactSet.add(p);
+        lowerToExact.set(p.toLowerCase(), p);
+        const stem = p.replace(/\.[^.\/]+$/, '').toLowerCase();
+        if (/\.webp$/i.test(p)) {
+          webpStemSet.add(stem);
+          stemToWebp.set(stem, p);
+        } else if (/\.(png|jpg|jpeg)$/i.test(p) && !stemToImage.has(stem)) {
+          stemToImage.set(stem, p);
+        }
+      }
+
+      const optimalBlobs = allBlobs.filter(x => {
+        const p = String(x.path || '');
+        if (/^ingredient\/.+\.png$/i.test(p)) {
+          const stem = p.replace(/\.png$/i, '').toLowerCase();
+          if (webpStemSet.has(stem)) return false;
+        }
+        if (!p.includes('/') && p !== 'index.html' && p !== '超话.png') {
+          return false;
+        }
+        return true;
+      });
+
+      const entry = {
+        fetchedAt: Date.now(),
+        exactSet,
+        lowerToExact,
+        stemToWebp,
+        stemToImage,
+        optimalBlobs
+      };
+      repoTreeIndexCache.set(cacheKey, entry);
+      return entry;
+    }
+  } catch (_) {}
+  return cached || null;
+}
+
+async function resolveOptimalRemoteRepoPath(owner, repo, branch, requestedRelPath) {
+  const idx = await getOrFetchRepoTreeIndex(owner, repo, branch);
+  if (!idx) return requestedRelPath;
+  const cleanRel = String(requestedRelPath || '').replace(/^\/+/, '');
+  const lowerRel = cleanRel.toLowerCase();
+  const stem = lowerRel.replace(/\.[^.\/]+$/, '');
+  if (/^ingredient\/.+\.(png|webp)$/i.test(cleanRel) && idx.stemToWebp.has(stem)) {
+    return idx.stemToWebp.get(stem);
+  }
+  if (idx.exactSet.has(cleanRel)) {
+    return cleanRel;
+  }
+  if (idx.lowerToExact.has(lowerRel)) {
+    return idx.lowerToExact.get(lowerRel);
+  }
+  if (idx.stemToWebp.has(stem)) {
+    return idx.stemToWebp.get(stem);
+  }
+  if (idx.stemToImage.has(stem)) {
+    return idx.stemToImage.get(stem);
+  }
+  return cleanRel;
+}
 
 app.get('/api/raw-gh/*', async (req, res) => {
   try {
@@ -220,7 +304,7 @@ app.get('/api/raw-gh/*', async (req, res) => {
     });
     const encodedPath = decodedSegments.map(seg => encodeURIComponent(seg)).join('/');
 
-    // 1. Check local disk (/public/card-assets/) first!
+    // 1. Check local disk (/tmp/ephone-card-assets/) first!
     const parsedMatch = decodedSegments.join('/').match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
     if (parsedMatch) {
       const localFile = resolveLocalCardAssetFile(parsedMatch[1], parsedMatch[2], parsedMatch[4]);
@@ -240,13 +324,43 @@ app.get('/api/raw-gh/*', async (req, res) => {
       return res.end(cached.buffer);
     }
 
-    const primaryUrl = 'https://raw.githubusercontent.com/' + encodedPath;
+    let targetOwner = parsedMatch ? parsedMatch[1] : '';
+    let targetRepo = parsedMatch ? parsedMatch[2] : '';
+    let targetBranch = parsedMatch ? parsedMatch[3] : 'main';
+    let targetRelPath = parsedMatch ? parsedMatch[4] : '';
+    let resolvedRelPath = targetRelPath;
+
+    if (parsedMatch) {
+      resolvedRelPath = await resolveOptimalRemoteRepoPath(targetOwner, targetRepo, targetBranch, targetRelPath);
+      const localResolved = resolveLocalCardAssetFile(targetOwner, targetRepo, resolvedRelPath);
+      if (localResolved) {
+        res.setHeader('Content-Type', getLocalMimeType(localResolved));
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.sendFile(localResolved);
+      }
+    }
+
+    const effectiveEncodedPath = parsedMatch
+      ? `${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/${encodeURIComponent(targetBranch)}/${resolvedRelPath.split('/').map(encodeURIComponent).join('/')}`
+      : encodedPath;
+
+    const primaryUrl = 'https://raw.githubusercontent.com/' + effectiveEncodedPath;
     let upstream = await fetch(primaryUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     }).catch(() => null);
 
+    if ((!upstream || !upstream.ok) && effectiveEncodedPath !== encodedPath) {
+      upstream = await fetch('https://raw.githubusercontent.com/' + encodedPath, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      }).catch(() => null);
+      if (upstream && upstream.ok) {
+        resolvedRelPath = targetRelPath;
+      }
+    }
+
     if (!upstream || !upstream.ok) {
-      const jsdMatch = encodedPath.match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
+      const jsdMatch = effectiveEncodedPath.match(/^([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)$/);
       if (jsdMatch) {
         const mirrors = [
           `https://testingcf.jsdelivr.net/gh/${jsdMatch[1]}/${jsdMatch[2]}@${jsdMatch[3]}/${jsdMatch[4]}`,
@@ -266,14 +380,15 @@ app.get('/api/raw-gh/*', async (req, res) => {
       return res.status(upstream ? upstream.status : 502).end();
     }
 
-    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
     const arrBuf = await upstream.arrayBuffer();
     const buffer = Buffer.from(arrBuf);
+    const saveRelPath = resolvedRelPath || targetRelPath;
+    const contentType = saveRelPath ? getLocalMimeType(saveRelPath) : (upstream.headers.get('content-type') || 'application/octet-stream');
 
-    // Save to local disk (/public/card-assets/) so subsequent requests are 100% local!
-    if (parsedMatch && buffer.length > 0) {
+    // Save to local disk (/tmp/ephone-card-assets/) so subsequent requests are 100% local!
+    if (parsedMatch && buffer.length > 0 && saveRelPath) {
       try {
-        const savePath = path.join(CARD_ASSETS_DIR, parsedMatch[1], parsedMatch[2], parsedMatch[4]);
+        const savePath = path.join(CARD_ASSETS_DIR, targetOwner, targetRepo, saveRelPath);
         if (!savePath.includes('..')) {
           fs.mkdirSync(path.dirname(savePath), { recursive: true });
           fs.writeFileSync(savePath, buffer);
@@ -301,6 +416,100 @@ app.get('/api/raw-gh/*', async (req, res) => {
   }
 });
 
+app.get('/api/card-assets-list', async (req, res) => {
+  try {
+    const owner = String(req.query.owner || 'trrtty').replace(/[^a-zA-Z0-9_.-]/g, '');
+    const repo = String(req.query.repo || 'milktea').replace(/[^a-zA-Z0-9_.-]/g, '');
+    const branch = String(req.query.branch || 'main').replace(/[^a-zA-Z0-9_.-]/g, '');
+    const idx = await getOrFetchRepoTreeIndex(owner, repo, branch);
+    if (idx && Array.isArray(idx.optimalBlobs)) {
+      return res.json({
+        ok: true,
+        owner,
+        repo,
+        branch,
+        files: idx.optimalBlobs.map(b => b.path)
+      });
+    }
+    const baseDir = path.join(CARD_ASSETS_DIR, owner, repo);
+    const localFiles = [];
+    const walk = (dir, prefix = '') => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) walk(path.join(dir, entry.name), rel);
+        else if (entry.isFile()) localFiles.push(rel);
+      }
+    };
+    walk(baseDir);
+    return res.json({ ok: true, owner, repo, branch, files: localFiles });
+  } catch (err) {
+    return res.status(500).json({ ok: false, files: [] });
+  }
+});
+
+async function syncRepoAssetsToTmpDisk(owner = 'trrtty', repo = 'milktea', branch = 'main', priorityOnly = false) {
+  let downloadedCount = 0;
+  let totalLocalCount = 0;
+  const baseDir = path.join(CARD_ASSETS_DIR, owner, repo);
+  fs.mkdirSync(baseDir, { recursive: true });
+
+  const idx = await getOrFetchRepoTreeIndex(owner, repo, branch);
+  if (idx && Array.isArray(idx.optimalBlobs)) {
+    const blobs = priorityOnly
+      ? idx.optimalBlobs.filter(b => b.path === 'index.html' || b.path.startsWith('ingredient/') || b.path.startsWith('bg/') || b.path.startsWith('consumers/withbg/'))
+      : idx.optimalBlobs;
+    const queue = [...blobs];
+    const workers = Array.from({ length: 10 }, async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (!item || !item.path || item.path.includes('..')) continue;
+        const destPath = path.join(baseDir, item.path);
+        if (fs.existsSync(destPath) && fs.statSync(destPath).size > 10) {
+          totalLocalCount++;
+          continue;
+        }
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        const encPath = item.path.split('/').map(encodeURIComponent).join('/');
+        const candidates = [
+          `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encPath}`,
+          `https://testingcf.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encPath}`,
+          `https://fastly.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encPath}`
+        ];
+        for (const cUrl of candidates) {
+          const up = await fetch(cUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }).catch(() => null);
+          if (up && up.ok) {
+            const buf = Buffer.from(await up.arrayBuffer());
+            if (buf.length > 0) {
+              fs.writeFileSync(destPath, buf);
+              downloadedCount++;
+              totalLocalCount++;
+              break;
+            }
+          }
+        }
+      }
+    });
+    await Promise.all(workers);
+  } else {
+    const countFiles = (dir) => {
+      if (!fs.existsSync(dir)) return 0;
+      let c = 0;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) c += countFiles(path.join(dir, entry.name));
+        else if (entry.isFile()) c++;
+      }
+      return c;
+    };
+    totalLocalCount += countFiles(baseDir);
+  }
+  return { downloadedCount, totalLocalCount };
+}
+
+setTimeout(() => {
+  syncRepoAssetsToTmpDisk('trrtty', 'milktea', 'main', true).catch(() => {});
+}, 1500);
+
 app.post('/api/pull-card-assets', async (req, res) => {
   try {
     const body = req.body || {};
@@ -309,84 +518,27 @@ app.post('/api/pull-card-assets', async (req, res) => {
       : [{ owner: 'trrtty', repo: 'milktea', branch: 'main' }];
     let downloadedCount = 0;
     let totalLocalCount = 0;
+    const allFiles = [];
 
     for (const rInfo of repos) {
       const owner = String(rInfo.owner || 'trrtty').replace(/[^a-zA-Z0-9_.-]/g, '');
       const repo = String(rInfo.repo || 'milktea').replace(/[^a-zA-Z0-9_.-]/g, '');
       const branch = String(rInfo.branch || 'main').replace(/[^a-zA-Z0-9_.-]/g, '');
       if (!owner || !repo) continue;
-      const baseDir = path.join(CARD_ASSETS_DIR, owner, repo);
-      fs.mkdirSync(baseDir, { recursive: true });
-
-      const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      }).catch(() => null);
-      if (treeRes && treeRes.ok) {
-        const treeData = await treeRes.json().catch(() => ({}));
-        const allBlobs = (treeData.tree || []).filter(x => x.type === 'blob' && x.size > 10);
-        const webpPathSet = new Set(
-          allBlobs
-            .filter(x => /\.webp$/i.test(x.path || ''))
-            .map(x => String(x.path).replace(/\.webp$/i, '').toLowerCase())
-        );
-        const blobs = allBlobs.filter(x => {
-          if (/^ingredient\/.+\.png$/i.test(x.path || '')) {
-            const stem = String(x.path).replace(/\.png$/i, '').toLowerCase();
-            if (webpPathSet.has(stem)) return false;
-          }
-          return true;
-        });
-        const queue = [...blobs];
-        const workers = Array.from({ length: 10 }, async () => {
-          while (queue.length > 0) {
-            const item = queue.shift();
-            if (!item || !item.path || item.path.includes('..')) continue;
-            const destPath = path.join(baseDir, item.path);
-            if (fs.existsSync(destPath) && fs.statSync(destPath).size > 10) {
-              totalLocalCount++;
-              continue;
-            }
-            fs.mkdirSync(path.dirname(destPath), { recursive: true });
-            const encPath = item.path.split('/').map(encodeURIComponent).join('/');
-            const candidates = [
-              `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encPath}`,
-              `https://testingcf.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encPath}`,
-              `https://fastly.jsdelivr.net/gh/${owner}/${repo}@${branch}/${encPath}`
-            ];
-            for (const cUrl of candidates) {
-              const up = await fetch(cUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }).catch(() => null);
-              if (up && up.ok) {
-                const buf = Buffer.from(await up.arrayBuffer());
-                if (buf.length > 0) {
-                  fs.writeFileSync(destPath, buf);
-                  downloadedCount++;
-                  totalLocalCount++;
-                  break;
-                }
-              }
-            }
-          }
-        });
-        await Promise.all(workers);
-      } else {
-        // Count existing local files if GitHub API rate-limited
-        const countFiles = (dir) => {
-          if (!fs.existsSync(dir)) return 0;
-          let c = 0;
-          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            if (entry.isDirectory()) c += countFiles(path.join(dir, entry.name));
-            else if (entry.isFile()) c++;
-          }
-          return c;
-        };
-        totalLocalCount += countFiles(baseDir);
+      const r = await syncRepoAssetsToTmpDisk(owner, repo, branch, false);
+      downloadedCount += r.downloadedCount;
+      totalLocalCount += r.totalLocalCount;
+      const idx = await getOrFetchRepoTreeIndex(owner, repo, branch);
+      if (idx && Array.isArray(idx.optimalBlobs)) {
+        idx.optimalBlobs.forEach(b => allFiles.push({ owner, repo, branch, path: b.path }));
       }
     }
 
     return res.json({
       ok: true,
       downloaded: downloadedCount,
-      totalLocal: totalLocalCount
+      totalLocal: totalLocalCount,
+      files: allFiles
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err && err.message ? err.message : '拉取失败' });

@@ -1367,6 +1367,7 @@ code, pre {
     WORLDINFO_UPDATED: 'worldinfo_updated',
     WORLDINFO_ENTRIES_LOADED: 'worldinfo_entries_loaded',
     GENERATE_AFTER_DATA: 'generate_after_data',
+    CHAT_COMPLETION_PROMPT_READY: 'chat_completion_prompt_ready',
     CHAT_COMPLETION_SETTINGS_READY: 'chat_completion_settings_ready',
     SETTINGS_LOADED: 'settings_loaded',
     SETTINGS_UPDATED: 'settings_updated',
@@ -3076,17 +3077,32 @@ code, pre {
           return api;
         },
         on(evtNames, selectorOrFn, maybeFn) {
-          const events = String(evtNames || '').split(/\s+/).filter(Boolean);
+          const rawEvents = String(evtNames || '').split(/\s+/).filter(Boolean);
+          let trailingNs = '';
+          for (let i = rawEvents.length - 1; i >= 0; i--) {
+            const dotIdx = rawEvents[i].indexOf('.');
+            if (dotIdx >= 0) {
+              trailingNs = rawEvents[i].slice(dotIdx);
+              break;
+            }
+          }
+          const events = rawEvents.map(ev => (trailingNs && !ev.includes('.')) ? (ev + trailingNs) : ev);
           const isDelegated = typeof selectorOrFn === 'string' && typeof maybeFn === 'function';
           const handler = isDelegated ? function (e) {
-            const matched = e.target && e.target.closest ? e.target.closest(selectorOrFn) : null;
-            if (matched) maybeFn.call(matched, e);
+            const rawTarget = e && e.target;
+            const elemTarget = (rawTarget && rawTarget.nodeType === 3) ? rawTarget.parentElement : rawTarget;
+            const matched = elemTarget && elemTarget.closest ? elemTarget.closest(selectorOrFn) : null;
+            if (matched && (this === document || this === window || !this.contains || this.contains(matched))) {
+              return maybeFn.call(matched, e);
+            }
           } : selectorOrFn;
           if (typeof handler !== 'function') return api;
           arr.forEach(el => {
+            if (!el) return;
             if (!el._tavernEvtMap) el._tavernEvtMap = {};
             events.forEach(ev => {
               const baseEv = ev.split('.')[0];
+              if (!baseEv) return;
               if (!el._tavernEvtMap[ev]) el._tavernEvtMap[ev] = [];
               const listenerOpts = (baseEv === 'touchstart' || baseEv === 'touchmove') ? { passive: false } : false;
               el._tavernEvtMap[ev].push({ baseEv, handler, listenerOpts });
@@ -3099,13 +3115,31 @@ code, pre {
           const events = String(evtNames || '').split(/\s+/).filter(Boolean);
           const fn = typeof selectorOrFn === 'function' ? selectorOrFn : maybeFn;
           arr.forEach(el => {
+            if (!el) return;
+            if (events.length === 0 && !fn && el._tavernEvtMap) {
+              Object.keys(el._tavernEvtMap).forEach(k => {
+                el._tavernEvtMap[k].forEach(item => el.removeEventListener(item.baseEv, item.handler));
+                delete el._tavernEvtMap[k];
+              });
+              return;
+            }
             events.forEach(ev => {
               const baseEv = ev.split('.')[0];
-              if (fn) {
+              const nsPart = ev.includes('.') ? ev.slice(ev.indexOf('.')) : '';
+              if (fn && baseEv) {
                 el?.removeEventListener?.(baseEv, fn);
-              } else if (el && el._tavernEvtMap && el._tavernEvtMap[ev]) {
-                el._tavernEvtMap[ev].forEach(item => el.removeEventListener(item.baseEv, item.handler));
-                delete el._tavernEvtMap[ev];
+              } else if (el._tavernEvtMap) {
+                if (!baseEv && nsPart) {
+                  Object.keys(el._tavernEvtMap).forEach(k => {
+                    if (k === ev || k.endsWith(nsPart) || k.includes(nsPart + '.')) {
+                      el._tavernEvtMap[k].forEach(item => el.removeEventListener(item.baseEv, item.handler));
+                      delete el._tavernEvtMap[k];
+                    }
+                  });
+                } else if (el._tavernEvtMap[ev]) {
+                  el._tavernEvtMap[ev].forEach(item => el.removeEventListener(item.baseEv, item.handler));
+                  delete el._tavernEvtMap[ev];
+                }
               }
             });
           });
@@ -4101,6 +4135,8 @@ code, pre {
       name1: getUserDisplayName(),
       name2: card ? card.name : '角色',
       mainApi: 'openai',
+      model: resolvedCreds.model || '',
+      model_name: resolvedCreds.model || '',
       onlineStatus: (resolvedCreds.baseUrl && resolvedCreds.apiKey) ? (resolvedCreds.model || 'connected') : 'no_connection',
       maxContext: Number(getActivePreset()?.openai_max_context || 64000),
       chatCompletionSettings: getLiveOaiSettingsObject(),
@@ -7506,6 +7542,34 @@ code, pre {
       /tm-ext-entry|tm-fab-main|st_theme_mgr_v2/i.test(c);
   }
 
+  function isPinyinImePlugin(plugin) {
+    if (!plugin) return false;
+    const n = String(plugin.name || '');
+    const c = String(plugin.code || plugin.content || '');
+    return /输入法候选面板|拼音候选面板|th-pinyin-ime|thPinyinIme/i.test(n) ||
+      /th-pinyin-ime-panel|__thpPinyinImeInstance/i.test(c);
+  }
+
+  function cleanupPinyinImeDom() {
+    try {
+      if (window.__thpPinyinImeInstance && typeof window.__thpPinyinImeInstance.stop === 'function') {
+        window.__thpPinyinImeInstance.stop();
+      }
+    } catch (_) {}
+    [
+      'th-pinyin-ime-panel',
+      'th-pinyin-ime-style',
+      'th-pinyin-ime-menu',
+      'th-pinyin-ime-history',
+      'th-pinyin-ime-continue',
+      'th-pinyin-ime-settings',
+      'th-pinyin-ime-toggle',
+      'thp-rescue-entry'
+    ].forEach(id => {
+      document.getElementById(id)?.remove();
+    });
+  }
+
   function ensureCoreCompatibilityPluginsRegistered() {
     if (!Array.isArray(tavernState.plugins)) {
       tavernState.plugins = [];
@@ -8274,6 +8338,7 @@ code, pre {
     }
     const transpiled = String(codeStr || '')
       .replace(/\bwindow\.(?:top|parent)\b/g, 'window')
+      .replace(/if\s*\(\s*!host\s*\|\|\s*host\s*===\s*window\s*\)\s*return\s*;/g, 'if (!host) return;')
       .replace(/\bimport\.meta\.url\b/g, 'window.__ST_META_URL__')
       .replace(/\bimport\.meta\b/g, 'window.__ST_META__')
       .replace(/(?<![.\w$'"])import\s*\((?!\s*\))(?![^)]*\)\s*\{)/g, '(async (u) => window.__ST_BRIDGE__)(')
@@ -8389,6 +8454,17 @@ code, pre {
         return;
       }
     }
+    if (isPinyinImePlugin(plugin)) {
+      plugin.uiHtml = '';
+      if (
+        window.__thpPinyinImeInstance &&
+        document.getElementById('th-pinyin-ime-panel') &&
+        document.getElementById('th-pinyin-ime-toggle') &&
+        !execOpts.forceRerun
+      ) {
+        return;
+      }
+    }
     if (isBaiBaiImagePlugin(plugin)) {
       plugin.repoBaseUrl = 'https://raw.githubusercontent.com/baibai-git/ST-BaiBai-Image/main';
       plugin.jsEntryPath = 'dist/index.js';
@@ -8458,7 +8534,7 @@ code, pre {
     const codeStr = String(plugin.code || plugin.content || '').trim();
     if (!codeStr) return;
 
-    if (!isBurntChickenWingsPlugin(plugin) && !isBookExcerptPlugin(plugin) && (!plugin.uiHtml || isHostAppHtmlFallback(plugin.uiHtml))) {
+    if (!isBurntChickenWingsPlugin(plugin) && !isBookExcerptPlugin(plugin) && !isPinyinImePlugin(plugin) && (!plugin.uiHtml || isHostAppHtmlFallback(plugin.uiHtml))) {
       const extracted = extractEmbeddedHtmlFromPluginCode(codeStr);
       if (extracted && !isHostAppHtmlFallback(extracted)) plugin.uiHtml = extracted;
     }
@@ -8483,6 +8559,7 @@ code, pre {
       !isBaiBaiPlugin(plugin) &&
       !isBurntChickenWingsPlugin(plugin) &&
       !isBookExcerptPlugin(plugin) &&
+      !isPinyinImePlugin(plugin) &&
       mountedCustomPluginCodeMap.get(pluginRunKey) === codeSignature
     ) {
       return;
@@ -10737,6 +10814,74 @@ function buildFallbackCodeFromItem(drinkObj) {
         'if ((!item.code || !/^v2\\||^[A-Za-z0-9+/=]{12,}$/.test(String(item.code))) && typeof buildFallbackCodeFromItem === "function") item.code = buildFallbackCodeFromItem(item); setTimeout(() => renderThumbnail(index, key, item.code || item, 361 / 650), 0);'
       )
       .replace(
+        /function\s+updateCanvas\s*\(\)\s*\{[\s\S]*?\n\}/,
+        `function updateCanvas() {
+    const canvas = document.getElementById("cupCanvas");
+    if (!canvas) return;
+    if (typeof normalizeMilkteaIngredients === "function") normalizeMilkteaIngredients();
+    if (typeof ingredientsDB !== "undefined" && Array.isArray(ingredientsDB)) {
+      ingredientsDB.filter(i => i && i.isFixed).forEach(i => selectedIngredients.add(i.id));
+    }
+    const desiredNodes = [];
+    if (typeof appSettings !== "undefined" && appSettings && appSettings.drinkBackground) {
+      if (String(appSettings.drinkBackground).startsWith("#")) {
+        let bgDiv = canvas.querySelector('[data-layer-key="__bg_color__"]');
+        if (!bgDiv) {
+          bgDiv = document.createElement("div");
+          bgDiv.setAttribute("data-layer-key", "__bg_color__");
+        }
+        bgDiv.style.cssText = "position:absolute;inset:0;background:" + appSettings.drinkBackground + ";z-index:1;pointer-events:none;";
+        desiredNodes.push(bgDiv);
+      } else {
+        const bgKey = "__bg_img__::" + appSettings.drinkBackground;
+        let bgImg = canvas.querySelector('[data-layer-key="' + bgKey.replace(/"/g, "") + '"]');
+        if (!bgImg) {
+          bgImg = document.createElement("img");
+          bgImg.setAttribute("data-layer-key", bgKey);
+          bgImg.crossOrigin = "anonymous";
+          bgImg.src = imgBaseUrl + appSettings.drinkBackground + ".PNG";
+        }
+        bgImg.className = "layer-img";
+        bgImg.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;pointer-events:none;display:block;opacity:1;z-index:1;";
+        desiredNodes.push(bgImg);
+      }
+    }
+    const activeItems = [];
+    selectedIngredients.forEach((id) => {
+      const item = getIngredientById(id);
+      if (item) activeItems.push(item);
+    });
+    activeItems.sort((a, b) => {
+      if ((a.z || 0) !== (b.z || 0)) return (a.z || 0) - (b.z || 0);
+      return String(a.id || a.name || "").localeCompare(String(b.id || b.name || ""));
+    });
+    activeItems.forEach((item, idx) => {
+      const imgName = item.baseImageName || item.name;
+      const tintVal = item.defaultTint || item.tintColor || "";
+      const layerKey = String(imgName + "::" + tintVal).replace(/"/g, "");
+      let img = canvas.querySelector('[data-layer-key="' + layerKey + '"]');
+      if (!img) {
+        img = document.createElement("img");
+        img.setAttribute("data-layer-key", layerKey);
+        img.crossOrigin = "anonymous";
+        img.src = imgBaseUrl + imgName + ".PNG";
+        img.className = "layer-img";
+        if (tintVal) {
+          setTimeout(() => { applyTintFilter(img, tintVal); }, 0);
+        }
+      }
+      img.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;pointer-events:none;display:block;opacity:1;z-index:" + (10 + idx) + ";";
+      desiredNodes.push(img);
+    });
+    Array.from(canvas.children).forEach(ch => {
+      if (!desiredNodes.includes(ch)) ch.remove();
+    });
+    desiredNodes.forEach(node => {
+      if (node.parentElement !== canvas) canvas.appendChild(node);
+    });
+}`
+      )
+      .replace(
         /if\s*\(\s*layerId\s*===\s*['"]layer-settings['"]\s*\)/g,
         'if (typeof layerId !== "undefined" && layerId === "layer-settings")'
       )
@@ -10790,10 +10935,20 @@ function buildFallbackCodeFromItem(drinkObj) {
         sourceDoc = preloaded;
       }
     }
+    let useTermuxDirect = false;
+    try {
+      useTermuxDirect = localStorage.getItem('ephone_termux_card_assets_ready') === '1';
+    } catch (_) {}
     let cleaned = sourceDoc
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
       .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\)\s*;?/gi, '')
       .replace(/(<script\b[^>]*?\bsrc=['"])https?:\/\/cdn\.tailwindcss\.com[^'"]*(['"][^>]*>)/gi, '$1' + hostOrigin + '/public/vendor/tailwindcss.js$2')
+      .replace(
+        /https?:\/\/raw\.githubusercontent\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/(?:refs\/heads\/)?([a-zA-Z0-9_.-]+)\//gi,
+        (_, owner, repo, branch) => useTermuxDirect
+          ? ('http://127.0.0.1:8765/card-assets/' + owner + '/' + repo + '/')
+          : ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/')
+      )
       .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, (hostOrigin ? hostOrigin : '') + '/api/raw-gh/');
     cleaned = patchMilkteaCardHtml(cleaned);
 
@@ -11011,8 +11166,26 @@ function buildFallbackCodeFromItem(drinkObj) {
       var t = e && e.target;
       if (!t || t.tagName !== 'IMG') return;
       var fbStage = t.getAttribute('data-gh-cdn-fallback') || '0';
-      if (fbStage === '2') return;
+      if (fbStage === '3') return;
       var s = t.getAttribute('src') || '';
+      var pOrig = (window.parent && window.parent.location && window.parent.location.origin && window.parent.location.origin !== 'null') ? window.parent.location.origin : '';
+      if (s.indexOf('http://127.0.0.1:8765/card-assets/') === 0) {
+        var termuxRel = s.slice('http://127.0.0.1:8765/card-assets/'.length).split('?')[0];
+        var tParts = termuxRel.split('/');
+        if (tParts.length >= 3) {
+          var tOwner = tParts[0];
+          var tRepo = tParts[1];
+          var tPath = tParts.slice(2).join('/');
+          if (fbStage === '0' && /\.png$/i.test(tPath)) {
+            t.setAttribute('data-gh-cdn-fallback', '1');
+            t.src = 'http://127.0.0.1:8765/card-assets/' + tOwner + '/' + tRepo + '/' + tPath.replace(/\.png$/i, '.webp');
+            return;
+          }
+          t.setAttribute('data-gh-cdn-fallback', '2');
+          t.src = pOrig + '/api/raw-gh/' + tOwner + '/' + tRepo + '/main/' + tPath;
+          return;
+        }
+      }
       var sub = t.getAttribute('data-raw-gh-sub') || '';
       if (!sub) {
         if (s.indexOf('/api/raw-gh/') !== -1) {
@@ -11031,14 +11204,17 @@ function buildFallbackCodeFromItem(drinkObj) {
           if (parts.length > branchIdx + 1) {
             var branch = parts[branchIdx];
             var filePath = parts.slice(branchIdx + 1).join('/');
-            if (fbStage === '0') {
+            var hasTermuxAssets = false;
+            try { hasTermuxAssets = localStorage.getItem('ephone_termux_card_assets_ready') === '1'; } catch (_) {}
+            if (fbStage === '0' && hasTermuxAssets) {
               t.setAttribute('data-gh-cdn-fallback', '1');
-              t.removeAttribute('data-raw-gh-sub');
-              t.src = 'https://testingcf.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
-            } else {
+              t.src = 'http://127.0.0.1:8765/card-assets/' + owner + '/' + repo + '/' + filePath;
+            } else if (fbStage === '0' || fbStage === '1') {
               t.setAttribute('data-gh-cdn-fallback', '2');
-              t.removeAttribute('data-raw-gh-sub');
-              t.src = 'https://fastly.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + filePath;
+              var webpOrOrig = (/^ingredient\/.+\.png$/i.test(filePath)) ? filePath.replace(/\.png$/i, '.webp') : filePath;
+              t.src = pOrig + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/' + webpOrOrig + '?retry=1';
+            } else {
+              t.setAttribute('data-gh-cdn-fallback', '3');
             }
           }
         }
@@ -14827,6 +15003,12 @@ function buildFallbackCodeFromItem(drinkObj) {
       body:not(:has(#game-hall-screen.active)) [id^="th-fixed-"],
       body:not(:has(#game-hall-screen.active)) #th-detail-popup-ui,
       body:not(:has(#game-hall-screen.active)) #th-infra-room-edit-mask,
+      body:not(:has(#game-hall-screen.active)) #th-pinyin-ime-toggle,
+      body:not(:has(#game-hall-screen.active)) #th-pinyin-ime-panel,
+      body:not(:has(#game-hall-screen.active)) #th-pinyin-ime-settings,
+      body:not(:has(#game-hall-screen.active)) #th-pinyin-ime-menu,
+      body:not(:has(#game-hall-screen.active)) #th-pinyin-ime-history,
+      body:not(:has(#game-hall-screen.active)) #th-pinyin-ime-continue,
       body:not(:has(#game-hall-screen.active)) #adv-codex-panel,
       body:not(:has(#game-hall-screen.active)) #adv-codex-toggle {
         display: none !important;
@@ -16960,6 +17142,7 @@ function buildFallbackCodeFromItem(drinkObj) {
           #extensionsMenu:has(#pa-menu-entry) .tavern-popup-item[data-plugin-kind="bcw"] { display: none !important; }
           #extensionsMenu:has(#be-menu-entry) .tavern-popup-item[data-plugin-kind="book-excerpt"] { display: none !important; }
           #extensionsMenu:has(#tm-ext-entry) .tavern-popup-item[data-plugin-kind="theme-mgr"] { display: none !important; }
+          #extensionsMenu:has(#thp-rescue-entry) .tavern-popup-item[data-plugin-kind="pinyin-ime"] { display: none !important; }
         </style>
         <div class="tavern-popup-item" data-action="toggle-wand-plugins-submenu" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <span style="display:inline-flex;align-items:center;gap:6px;">
@@ -16983,7 +17166,9 @@ function buildFallbackCodeFromItem(drinkObj) {
                   ? 'data-plugin-kind="bcw"'
                   : (isBookExcerptPlugin(up)
                     ? 'data-plugin-kind="book-excerpt"'
-                    : (isThemeMgrPlugin(up) ? 'data-plugin-kind="theme-mgr"' : ''))));
+                    : (isThemeMgrPlugin(up)
+                      ? 'data-plugin-kind="theme-mgr"'
+                      : (isPinyinImePlugin(up) ? 'data-plugin-kind="pinyin-ime"' : '')))));
             return `
             <div class="tavern-popup-item" data-action="open-plugin-modal" data-plugin-id="${escapeHtmlSimple(up.id)}" ${kindAttr}>
               ${escapeHtmlSimple(stripUiEmojis(up.name))}
@@ -19884,6 +20069,20 @@ function buildFallbackCodeFromItem(drinkObj) {
         }
       }
       const apiMessages = buildTavernApiMessages({ isImpersonate, isContinue, isSwipeRegen, targetMesIndex });
+      const activeCredsForHook = resolveTavernApiCredentials();
+      const genDataPayload = {
+        prompt: apiMessages,
+        messages: apiMessages,
+        model: activeCredsForHook.model || '',
+        custom_model: activeCredsForHook.model || '',
+        api_url: activeCredsForHook.baseUrl || '',
+        reverse_proxy: activeCredsForHook.baseUrl || '',
+        chat_completion_source: /gemini|generativelanguage/i.test(String(activeCredsForHook.baseUrl || '') + ' ' + String(activeCredsForHook.model || '')) ? 'makersuite' : 'openai',
+        type: genType,
+        dryRun: false
+      };
+      await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATE_AFTER_DATA, genDataPayload, false);
+      await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_COMPLETION_PROMPT_READY, genDataPayload);
       currentApiMessages = apiMessages;
       pendingDbgFloorIdx = isContinue
         ? Math.max(0, sess.messages.length - 1)
@@ -20158,7 +20357,16 @@ function buildFallbackCodeFromItem(drinkObj) {
         maybeAutoGenerateNativeTagImageForFloor(newFloorIdx);
       }
       updateCharacterSpriteLayerOnly();
+      const lastFloorBeforeEndEvt = sess && sess.messages.length > 0 ? sess.messages[sess.messages.length - 1] : null;
+      const mesBeforeEndEvt = lastFloorBeforeEndEvt ? lastFloorBeforeEndEvt.mes : '';
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_ENDED, genType);
+      if (lastFloorBeforeEndEvt && lastFloorBeforeEndEvt.mes !== mesBeforeEndEvt) {
+        const curSw = Number(lastFloorBeforeEndEvt.swipe_id || 0);
+        if (Array.isArray(lastFloorBeforeEndEvt.swipes)) {
+          lastFloorBeforeEndEvt.swipes[curSw] = lastFloorBeforeEndEvt.mes;
+        }
+        appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: !uiRuntime.userScrolledUpDuringStream, skipMessageUpdatedEvent: true });
+      }
     } catch (err) {
       if (nonStreamWaitTimer) { clearInterval(nonStreamWaitTimer); nonStreamWaitTimer = null; }
       syncTavernGeneratingUiState(false);
@@ -20697,6 +20905,27 @@ function buildFallbackCodeFromItem(drinkObj) {
             return;
           }
         }
+        if (isPinyinImePlugin(p)) {
+          if (uiRuntime.activePluginModalId) {
+            uiRuntime.activePluginModalId = null;
+            refreshActivePluginModalOnly();
+          }
+          const openImeSettingsNow = () => {
+            const rescueRow = document.querySelector('#thp-rescue-entry .list-group-item') || document.getElementById('thp-rescue-entry');
+            if (rescueRow) {
+              rescueRow.click();
+              return true;
+            }
+            try {
+              document.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', altKey: true, shiftKey: true, bubbles: true }));
+            } catch (_) {}
+            return Boolean(document.querySelector('#th-pinyin-ime-settings.thp-open'));
+          };
+          if (!openImeSettingsNow()) {
+            setTimeout(openImeSettingsNow, 80);
+          }
+          return;
+        }
         if (isJsSlashRunnerPlugin(p) || isStPromptTemplatePlugin(p)) {
           if (typeof window.pushMobileBackGuard === 'function') {
             window.pushMobileBackGuard('tavern_plugin_modal');
@@ -20847,6 +21076,10 @@ function buildFallbackCodeFromItem(drinkObj) {
             card.helperScripts = card.helperScripts.filter(s => s && s.id !== sid);
           }
         } else {
+          const targetP = (tavernState.plugins || []).find(s => s && s.id === sid);
+          if (isPinyinImePlugin(targetP)) {
+            cleanupPinyinImeDom();
+          }
           tavernState.plugins = (tavernState.plugins || []).filter(s => s && s.id !== sid);
         }
         if (uiRuntime.editingJsrScriptId === sid) uiRuntime.editingJsrScriptId = null;
@@ -22746,9 +22979,14 @@ function buildFallbackCodeFromItem(drinkObj) {
         const p = (tavernState.plugins || []).find(x => x.id === pid);
         if (p) {
           p.enabled = actionEl.checked;
-          if (p.enabled && !p.builtInType) executeUserPluginScript(p);
+          if (p.enabled && !p.builtInType) {
+            executeUserPluginScript(p, { forceRerun: true });
+          } else if (!p.enabled && isPinyinImePlugin(p)) {
+            cleanupPinyinImeDom();
+          }
           await saveTavernStore();
           refreshOpenDrawerOnly();
+          if (uiRuntime.activePluginModalId) refreshActivePluginModalOnly();
         }
         return;
       }
@@ -22780,6 +23018,9 @@ function buildFallbackCodeFromItem(drinkObj) {
           document.getElementById('tm-ext-entry')?.remove();
           document.getElementById('tm-fab-main')?.remove();
           document.querySelectorAll('.tm-overlay, .tm-sheet-overlay, .tm-lightbox').forEach(el => el.remove());
+        }
+        if (isPinyinImePlugin(targetP)) {
+          cleanupPinyinImeDom();
         }
         if (isJsSlashRunnerPlugin(targetP) && tavernState.extensionSettings) {
           tavernState.extensionSettings._uninstalledJsSlashRunner = true;
@@ -22862,6 +23103,9 @@ function buildFallbackCodeFromItem(drinkObj) {
       }
       if (action === 'pull-card-local-assets') {
         const activeCard = getActiveCard();
+        const btnEl = actionEl;
+        const origHtml = btnEl ? btnEl.innerHTML : '';
+        if (btnEl) btnEl.disabled = true;
         showTavernToast('正在拉取卡片图片至本地目录...');
         try {
           const reposMap = new Map();
@@ -22879,17 +23123,99 @@ function buildFallbackCodeFromItem(drinkObj) {
             body: JSON.stringify({ repos: Array.from(reposMap.values()) })
           });
           const data = await resp.json().catch(() => ({}));
+
+          let termuxSavedCount = 0;
+          let termuxOnline = false;
+          try {
+            const pingRes = await fetch('http://127.0.0.1:8765/ping', { method: 'GET' }).catch(() => null);
+            termuxOnline = Boolean(pingRes && pingRes.ok);
+          } catch (_) {}
+
+          if (termuxOnline && data && Array.isArray(data.files) && data.files.length > 0) {
+            try {
+              await fetch('http://127.0.0.1:8765/card-assets/.nomedia', { method: 'PUT', body: new Uint8Array(0) }).catch(() => null);
+              let existingSet = new Set();
+              const mfRes = await fetch('http://127.0.0.1:8765/card-assets/_manifest.json').catch(() => null);
+              if (mfRes && mfRes.ok) {
+                const mfArr = await mfRes.json().catch(() => []);
+                if (Array.isArray(mfArr)) existingSet = new Set(mfArr);
+              }
+              const queue = [...data.files];
+              const total = queue.length;
+              let done = 0;
+              const workers = Array.from({ length: 6 }, async () => {
+                while (queue.length > 0) {
+                  const item = queue.shift();
+                  if (!item || !item.path) continue;
+                  const storeRel = `${item.owner}/${item.repo}/${item.path}`;
+                  const pngAliasRel = (/^ingredient\/.+\.webp$/i.test(item.path))
+                    ? `${item.owner}/${item.repo}/${item.path.replace(/\.webp$/i, '.PNG')}`
+                    : '';
+                  if (existingSet.has(storeRel) && (!pngAliasRel || existingSet.has(pngAliasRel))) {
+                    done++;
+                    termuxSavedCount++;
+                    continue;
+                  }
+                  const encPath = item.path.split('/').map(encodeURIComponent).join('/');
+                  const rawRes = await fetch(`/api/raw-gh/${item.owner}/${item.repo}/${item.branch}/${encPath}`).catch(() => null);
+                  if (rawRes && rawRes.ok) {
+                    const buf = await rawRes.arrayBuffer();
+                    if (buf && buf.byteLength > 0) {
+                      const encStore = storeRel.split('/').map(encodeURIComponent).join('/');
+                      const putRes = await fetch(`http://127.0.0.1:8765/card-assets/${encStore}`, {
+                        method: 'PUT',
+                        body: buf
+                      }).catch(() => null);
+                      if (pngAliasRel) {
+                        const encAlias = pngAliasRel.split('/').map(encodeURIComponent).join('/');
+                        await fetch(`http://127.0.0.1:8765/card-assets/${encAlias}`, {
+                          method: 'PUT',
+                          body: buf
+                        }).catch(() => null);
+                        existingSet.add(pngAliasRel);
+                      }
+                      if (putRes && putRes.ok) {
+                        existingSet.add(storeRel);
+                        termuxSavedCount++;
+                      }
+                    }
+                  }
+                  done++;
+                  if (btnEl && done % 15 === 0) {
+                    btnEl.textContent = `拉取 ${done}/${total}`;
+                  }
+                }
+              });
+              await Promise.all(workers);
+              await fetch('http://127.0.0.1:8765/card-assets/_manifest.json', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Array.from(existingSet))
+              }).catch(() => null);
+              localStorage.setItem('ephone_termux_card_assets_ready', '1');
+            } catch (_) {}
+          }
+
           if (data && data.ok) {
             preloadLocalMilkteaHtml();
             setTimeout(() => {
               try { renderTavernChatFloors(true); } catch (_) {}
             }, 150);
-            showTavernToast('本地已就绪 ' + (data.totalLocal || 0) + ' 个卡片资源文件');
+            if (termuxOnline && termuxSavedCount > 0) {
+              showTavernToast('已同步 ' + termuxSavedCount + ' 个文件至手机本地目录');
+            } else {
+              showTavernToast('本地已就绪 ' + (data.totalLocal || 0) + ' 个卡片资源文件');
+            }
           } else {
             showTavernToast('拉取失败，请稍后重试');
           }
         } catch (err) {
           showTavernToast('拉取异常: ' + (err && err.message ? err.message : '未知错误'));
+        } finally {
+          if (btnEl) {
+            btnEl.disabled = false;
+            if (origHtml) btnEl.innerHTML = origHtml;
+          }
         }
         return;
       }
@@ -24050,12 +24376,16 @@ function buildFallbackCodeFromItem(drinkObj) {
                 ? item.buttons.buttons
                 : (Array.isArray(item.buttons) ? item.buttons : []);
               const existingIdx = (tavernState.plugins || []).findIndex(x => x && x.name === itemName);
+              const skipExtractUi = isPinyinImePlugin({ name: itemName, code: itemCode }) ||
+                isBurntChickenWingsPlugin({ name: itemName, code: itemCode }) ||
+                isBookExcerptPlugin({ name: itemName, code: itemCode }) ||
+                isThemeMgrPlugin({ name: itemName, code: itemCode });
               const plugin = {
                 id: existingIdx >= 0 ? tavernState.plugins[existingIdx].id : ('plugin_' + Date.now() + '_' + count),
                 name: itemName,
                 enabled: item.enabled !== false,
                 code: itemCode,
-                uiHtml: item.uiHtml || item.html || extractEmbeddedHtmlFromPluginCode(itemCode),
+                uiHtml: skipExtractUi ? '' : (item.uiHtml || item.html || extractEmbeddedHtmlFromPluginCode(itemCode)),
                 buttons: itemBtns,
                 description: item.info || item.description || '酒馆助手与扩展脚本'
               };
@@ -24064,7 +24394,7 @@ function buildFallbackCodeFromItem(drinkObj) {
               } else {
                 tavernState.plugins.push(plugin);
               }
-              if (plugin.code) executeUserPluginScript(plugin);
+              if (plugin.code) executeUserPluginScript(plugin, { forceRerun: true });
               count++;
             }
           }
@@ -24355,6 +24685,13 @@ function buildFallbackCodeFromItem(drinkObj) {
       const paCloseBtn = paRootEl.querySelector('#pa-close');
       if (paCloseBtn) paCloseBtn.click();
       else paRootEl.setAttribute('hidden', 'hidden');
+      return markSubLayerClosed();
+    }
+    const thpSettingsEl = document.querySelector('#th-pinyin-ime-settings.thp-open');
+    if (thpSettingsEl) {
+      const thpClose = thpSettingsEl.querySelector('.thp-st-close');
+      if (thpClose) thpClose.click();
+      else thpSettingsEl.classList.remove('thp-open');
       return markSubLayerClosed();
     }
     const bodyPluginSelectors = [
