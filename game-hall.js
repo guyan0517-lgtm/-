@@ -11176,9 +11176,9 @@ function buildFallbackCodeFromItem(drinkObj) {
           var tOwner = tParts[0];
           var tRepo = tParts[1];
           var tPath = tParts.slice(2).join('/');
-          if (fbStage === '0' && /\.png$/i.test(tPath)) {
+          if (fbStage === '0' && tPath.toLowerCase().slice(-4) === '.png') {
             t.setAttribute('data-gh-cdn-fallback', '1');
-            t.src = 'http://127.0.0.1:8765/card-assets/' + tOwner + '/' + tRepo + '/' + tPath.replace(/\.png$/i, '.webp');
+            t.src = 'http://127.0.0.1:8765/card-assets/' + tOwner + '/' + tRepo + '/' + tPath.slice(0, -4) + '.webp';
             return;
           }
           t.setAttribute('data-gh-cdn-fallback', '2');
@@ -11211,7 +11211,7 @@ function buildFallbackCodeFromItem(drinkObj) {
               t.src = 'http://127.0.0.1:8765/card-assets/' + owner + '/' + repo + '/' + filePath;
             } else if (fbStage === '0' || fbStage === '1') {
               t.setAttribute('data-gh-cdn-fallback', '2');
-              var webpOrOrig = (/^ingredient\/.+\.png$/i.test(filePath)) ? filePath.replace(/\.png$/i, '.webp') : filePath;
+              var webpOrOrig = (filePath.toLowerCase().indexOf('ingredient/') === 0 && filePath.toLowerCase().slice(-4) === '.png') ? (filePath.slice(0, -4) + '.webp') : filePath;
               t.src = pOrig + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/' + webpOrOrig + '?retry=1';
             } else {
               t.setAttribute('data-gh-cdn-fallback', '3');

@@ -506,10 +506,6 @@ async function syncRepoAssetsToTmpDisk(owner = 'trrtty', repo = 'milktea', branc
   return { downloadedCount, totalLocalCount };
 }
 
-setTimeout(() => {
-  syncRepoAssetsToTmpDisk('trrtty', 'milktea', 'main', true).catch(() => {});
-}, 1500);
-
 app.post('/api/pull-card-assets', async (req, res) => {
   try {
     const body = req.body || {};

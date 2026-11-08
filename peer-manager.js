@@ -7303,6 +7303,7 @@
       const incoming = data.gameState;
       const wasActive = Boolean(targetChat.tavernGameState && targetChat.tavernGameState.active);
       const prevCollapsed = targetChat.tavernGameState ? Boolean(targetChat.tavernGameState.collapsed) : false;
+      const prevBroadcastId = targetChat.tavernGameState ? String(targetChat.tavernGameState.lastBroadcastId || "") : "";
 
       targetChat.tavernGameState = {
         ...incoming,
@@ -7311,6 +7312,19 @@
         showOpponentPicker: false,
         showParticipantEditor: false
       };
+
+      if (
+        incoming.lastBroadcastId &&
+        String(incoming.lastBroadcastId) !== prevBroadcastId &&
+        incoming.lastBroadcastText &&
+        typeof window.appendTavernGameBroadcast === "function"
+      ) {
+        window.appendTavernGameBroadcast(
+          targetChat,
+          String(incoming.lastBroadcastText),
+          String(incoming.lastBroadcastId)
+        );
+      }
 
       if (window.state && window.state.chats) {
         window.state.chats[targetChat.id] = targetChat;
