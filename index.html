@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=18.6" defer></script>
+    <script src="game-hall.js?v=18.7" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2526,7 +2526,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v18.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v18.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -120493,29 +120493,32 @@ ${specificRules}`;
             } else {
               const bashPanel = [
                 "# === EPhoneVault Auto Panel ===",
-                "ephone_vault_start() {",
-                "  termux-wake-lock 2>/dev/null || true",
-                "  touch ~/ephone_vault.log 2>/dev/null || true",
-                "  if [ \"$1\" = \"restart\" ]; then",
-                "    pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
-                "    sleep 0.3",
-                "    nohup python3 ~/.ephone_vault.py --force >/dev/null 2>&1 &",
-                "  else",
-                "    nohup python3 ~/.ephone_vault.py >/dev/null 2>&1 &",
-                "  fi",
-                "  sleep 0.3",
+                "ephone_vault_menu() {",
                 "  echo '----------------------------------------'",
                 "  echo '  [EPhone 本地后台与群控启动面板]'",
-                "  echo '  状态: 本地存储与对话转发已运行 127.0.0.1:8765'",
-                "  echo '  输入 1 回车: 重启本地后台并查看实时请求耗时状态'",
+                "  if pgrep -f '[.]ephone_vault[.]py' >/dev/null 2>&1; then",
+                "    echo '  状态: 本地存储与对话转发运行中 127.0.0.1:8765'",
+                "  else",
+                "    echo '  状态: 待启动 请按下方提示输入数字'",
+                "  fi",
+                "  echo '  输入 1 回车: 启动本地后台并查看实时请求耗时状态'",
                 "  echo '  输入 2 回车: 直接打开 NapCat QQ'",
                 "  echo '  输入 3 回车: 查看 6099 登录密钥与 3001 链接'",
                 "  echo '  输入 4 回车: 查看 QQ 实时收发日志'",
                 "  echo '----------------------------------------'",
-                "  if [ \"$1\" = \"restart\" ]; then",
-                "    echo '  [正在实时显示本地后台收发状态，按 Ctrl+C 可退回菜单]'",
-                "    tail -n 25 -f ~/ephone_vault.log",
-                "  fi",
+                "}",
+                "ephone_vault_start() {",
+                "  termux-wake-lock 2>/dev/null || true",
+                "  touch ~/ephone_vault.log 2>/dev/null || true",
+                "  pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
+                "  sleep 0.3",
+                "  nohup python3 ~/.ephone_vault.py --force >/dev/null 2>&1 &",
+                "  sleep 0.3",
+                "  echo '----------------------------------------'",
+                "  echo '  [本地存储与对话转发已启动 127.0.0.1:8765]'",
+                "  echo '  [正在实时显示本地后台收发状态，按 Ctrl+C 可退回菜单]'",
+                "  echo '----------------------------------------'",
+                "  tail -n 25 -f ~/ephone_vault.log",
                 "}",
                 "ephone_napcat_start() {",
                 "  proot-distro login napcat -- bash -c 'xvfb-run -a /root/Napcat/opt/QQ/qq --no-sandbox'",
@@ -120526,15 +120529,15 @@ ${specificRules}`;
                 "ephone_napcat_log() {",
                 "  tail -n 35 ~/napcat_run.log 2>/dev/null || echo '暂无日志，请先输入 2 启动 NapCat'",
                 "}",
-                "alias 1='ephone_vault_start restart'",
+                "alias 1='ephone_vault_start'",
                 "alias 2='ephone_napcat_start'",
                 "alias 3='ephone_qqbot_info'",
                 "alias 4='ephone_napcat_log'",
-                "ephone_vault_start",
+                "ephone_vault_menu",
                 "# === End EPhoneVault ===",
               ].join("\n");
               const b64Panel = btoa(unescape(encodeURIComponent(bashPanel)));
-              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'));open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Info}').decode('utf-8'));rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt=base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && ephone_vault_start restart`;
+              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'));open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Info}').decode('utf-8'));rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt=base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && . ~/.bashrc`;
             }
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -120548,7 +120551,7 @@ ${specificRules}`;
                 document.body.removeChild(ta);
               }
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 自动面板命令已复制，粘贴运行一次后每次打开 Termux 自动启动服务");
+                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 启动面板命令已复制，粘贴运行后输入 1 即可启动本地后台服务");
               }
             } catch (_) {
               if (typeof window.showCustomAlert === "function") {

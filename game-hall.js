@@ -4749,8 +4749,7 @@ code, pre {
 
     const transportMode = tavernState.apiConfig?.transportMode || 'auto';
     const shouldTryLocalProxy =
-      method === 'POST' &&
-      !isStreamReq &&
+      (method === 'POST' || method === 'GET') &&
       transportMode !== 'direct' &&
       typeof window.executeLocalBackendProxyFetch === 'function' &&
       (transportMode === 'local' || (typeof window.isLocalBackendSwitchEnabled === 'function' && window.isLocalBackendSwitchEnabled()));
@@ -14265,7 +14264,20 @@ function buildFallbackCodeFromItem(drinkObj) {
             _preserveCallerStream: true,
             _noAutoRetry: true,
             _forceLocalProxy: transportMode === 'local',
-            _forceDirectFetch: transportMode === 'direct'
+            _forceDirectFetch: transportMode === 'direct',
+            onStreamChunk: useStreaming && typeof onStreamUpdate === 'function'
+              ? (chunk) => {
+                  const liveParsed = extractReasoningAndCleanReply(chunk.content || '', { hasPrefill, isLiveStream: true });
+                  const liveReasoning = [chunk.thinking || '', liveParsed.reasoning].filter(Boolean).join('\n\n');
+                  const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+                  onStreamUpdate({
+                    content: liveParsed.cleanReply,
+                    reasoning: liveReasoning,
+                    genTime: elapsedSec,
+                    isStreaming: true
+                  });
+                }
+              : undefined
           });
         } else {
           res = await executeTavernRawFetchWithProxyFallback(targetEndpoint, {
@@ -14291,7 +14303,9 @@ function buildFallbackCodeFromItem(drinkObj) {
       }
 
       if (!res.ok) {
-        const errText = await res.text().catch(() => '');
+        const errText = typeof res.text === 'function'
+          ? await res.text().catch(() => '')
+          : String(res.text || res.error || '');
         let detail = errText.slice(0, 200) || res.statusText;
         try {
           const errJson = JSON.parse(errText);
@@ -14624,7 +14638,9 @@ function buildFallbackCodeFromItem(drinkObj) {
     }
 
     // Fallback when proxy returns application/json even though stream:true was requested
-    const data = await res.json();
+    const data = typeof res.json === 'function'
+      ? await res.json()
+      : JSON.parse(typeof res.text === 'string' && res.text.trim() ? res.text : '{}');
     const apiErr = extractErrorFromJson(data);
     if (apiErr) throw new Error('API返回错误: ' + apiErr);
     const choice = data.choices && data.choices[0];
