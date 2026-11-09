@@ -35033,7 +35033,8 @@ select,
   background: var(--background-color);
 }
 
-#world-book-list .world-book-group-container {
+#world-book-list .world-book-group-container,
+#regex-rules-list .world-book-group-container {
   margin-bottom: 10px;
   border: 1px solid var(--border-color);
   border-radius: 14px;
@@ -35041,11 +35042,13 @@ select,
   overflow: hidden;
 }
 
-#world-book-list .world-book-group-container:first-child {
+#world-book-list .world-book-group-container:first-child,
+#regex-rules-list .world-book-group-container:first-child {
   border-top: 1px solid var(--border-color);
 }
 
-#world-book-list .world-book-group-header {
+#world-book-list .world-book-group-header,
+#regex-rules-list .world-book-group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35057,11 +35060,13 @@ select,
   user-select: none;
 }
 
-#phone-screen.dark-mode #world-book-list .world-book-group-header {
+#phone-screen.dark-mode #world-book-list .world-book-group-header,
+#phone-screen.dark-mode #regex-rules-list .world-book-group-header {
   background: var(--card-bg);
 }
 
-#world-book-list .world-book-group-header-left {
+#world-book-list .world-book-group-header-left,
+#regex-rules-list .world-book-group-header-left {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -35069,7 +35074,8 @@ select,
   min-width: 0;
 }
 
-#world-book-list .world-book-group-header .arrow {
+#world-book-list .world-book-group-header .arrow,
+#regex-rules-list .world-book-group-header .arrow {
   width: 18px;
   height: 18px;
   display: inline-flex;
@@ -35081,11 +35087,13 @@ select,
   transition: transform 0.2s ease;
 }
 
-#world-book-list .world-book-group-header.collapsed .arrow {
+#world-book-list .world-book-group-header.collapsed .arrow,
+#regex-rules-list .world-book-group-header.collapsed .arrow {
   transform: rotate(-90deg);
 }
 
-#world-book-list .world-book-group-icon {
+#world-book-list .world-book-group-icon,
+#regex-rules-list .world-book-group-icon {
   width: 24px;
   height: 24px;
   border-radius: 7px;
@@ -35097,7 +35105,8 @@ select,
   flex-shrink: 0;
 }
 
-#world-book-list .world-book-group-header .group-name {
+#world-book-list .world-book-group-header .group-name,
+#regex-rules-list .world-book-group-header .group-name {
   font-weight: 600;
   font-size: 14px;
   color: var(--text-primary);
@@ -35106,7 +35115,8 @@ select,
   white-space: nowrap;
 }
 
-#world-book-list .world-book-group-count {
+#world-book-list .world-book-group-count,
+#regex-rules-list .world-book-group-count {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -35118,7 +35128,8 @@ select,
   margin-left: 8px;
 }
 
-#world-book-list .world-book-group-content {
+#world-book-list .world-book-group-content,
+#regex-rules-list .world-book-group-content {
   padding: 0 10px 10px 10px;
   display: flex;
   flex-direction: column;
@@ -35126,10 +35137,50 @@ select,
   background: var(--card-bg);
 }
 
-#world-book-list .world-book-group-content.collapsed {
+#world-book-list .world-book-group-content.collapsed,
+#regex-rules-list .world-book-group-content.collapsed {
   padding-top: 0;
   padding-bottom: 0;
   max-height: 0;
+  overflow: hidden;
+}
+
+#regex-rules-list.selection-mode .regex-rule-card {
+  position: relative;
+  padding-left: 42px !important;
+  cursor: pointer;
+}
+
+#regex-rules-list.selection-mode .regex-rule-card::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  background-color: var(--card-bg);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+#regex-rules-list.selection-mode .regex-rule-card.selected::before {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+#regex-rules-list.selection-mode .regex-rule-card.selected::after {
+  content: "✓";
+  position: absolute;
+  left: 17px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--card-bg);
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
 }
 
 #toggle-world-book-edit-mode-btn {
@@ -36185,8 +36236,8 @@ select,
   width: 16px;
   font-size: 11.5px;
   line-height: 1.25;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text-secondary) 72%, var(--card-bg));
   text-align: center;
   word-break: break-all;
 }

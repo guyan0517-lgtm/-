@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=18.7" defer></script>
+    <script src="game-hall.js?v=18.9" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -1036,6 +1036,14 @@
                 <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
             </span>
+
+            <span
+              class="action-btn"
+              id="batch-group-in-edit-mode-btn"
+              style="display: none"
+              title="移入分组"
+              >分组</span
+            >
 
             <span
               class="action-btn btn-danger"
@@ -2526,7 +2534,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v18.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v18.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -9585,6 +9593,13 @@
               </select>
               <input type="text" id="regex-name-input" class="moe-input" placeholder="输入规则名称" style="flex: 1; padding: 0 10px; font-size: 12.5px; height: 32px; line-height: 30px; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box;" />
             </div>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label style="font-size: 12px; margin-bottom: 4px; display: block;">分组</label>
+            <select id="regex-category-select" class="moe-input" style="width: 100%; padding: 0 8px; font-size: 12px; height: 32px; line-height: normal; color: var(--text-primary); background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; cursor: pointer;">
+              <option value="">未分类</option>
+            </select>
           </div>
 
           <div class="form-group" style="margin: 0;">
@@ -32389,10 +32404,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             },
           };
 
-          // 检测并导入附带的世界书条目，自动同步启用和关闭设置
+          // 检测并导入附带的世界书条目，自动同步启用和关闭设置并归入原分组
           let importedWbCount = 0;
           let enabledWbIds = [];
-          const rawBookObj = charData.character_book || data.character_book || null;
+          const rawBookObj =
+            charData.character_book ||
+            data.character_book ||
+            (charData.extensions && charData.extensions.character_book) ||
+            (data.extensions && data.extensions.character_book) ||
+            null;
           let rawEntriesArr = null;
           if (rawBookObj && rawBookObj.entries) {
             rawEntriesArr = Array.isArray(rawBookObj.entries)
@@ -32404,33 +32424,68 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             rawEntriesArr = data.world_entries;
           }
 
+          const ensureWbCategoryByName = async (catName) => {
+            const cleanName = String(catName || characterName || "未命名角色").trim() || characterName;
+            let existing = await db.worldBookCategories.where("name").equals(cleanName).first().catch(() => null);
+            if (!existing) {
+              const allCats = await db.worldBookCategories.toArray();
+              existing = allCats.find((c) => c && String(c.name || "").trim() === cleanName) || null;
+            }
+            if (existing) return existing.id;
+            return await db.worldBookCategories.add({ name: cleanName });
+          };
+
+          const wbDefaultGroupName =
+            rawBookObj && rawBookObj.name && String(rawBookObj.name).trim() && !/^(world\s*book|lorebook|default|unnamed)$/i.test(String(rawBookObj.name).trim())
+              ? String(rawBookObj.name).trim()
+              : characterName;
+
           if (Array.isArray(rawEntriesArr) && rawEntriesArr.length > 0) {
-            const newCategory = { name: characterName };
-            const newCategoryId = await db.worldBookCategories.add(newCategory);
+            const newCategoryId = await ensureWbCategoryByName(wbDefaultGroupName);
             const wbRes = await saveWorldBookEntriesFromArray(rawEntriesArr, newCategoryId);
             importedWbCount = wbRes.totalCount;
             enabledWbIds = wbRes.enabledIds;
           } else if (data.world && typeof data.world === "string" && data.world.trim()) {
-            const newCategory = { name: characterName };
-            const newCategoryId = await db.worldBookCategories.add(newCategory);
-            await parseAndSaveWorldBooks(data.world, newCategoryId);
-            const catBooks = (state.worldBooks || []).filter(b => b.categoryId === newCategoryId);
-            importedWbCount = catBooks.length;
-            enabledWbIds = catBooks.map(b => b.id);
+            const newCategoryId = await ensureWbCategoryByName(wbDefaultGroupName);
+            const wbId = "wb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+            const newBook = {
+              id: wbId,
+              name: wbDefaultGroupName,
+              content: data.world.trim(),
+              categoryId: newCategoryId,
+              enabled: true,
+              constant: true,
+              keys: [],
+              position: "before_char",
+            };
+            await db.worldBooks.add(newBook);
+            state.worldBooks = await db.worldBooks.toArray();
+            importedWbCount = 1;
+            enabledWbIds = [wbId];
           } else if (charData.world_info && typeof charData.world_info === "string" && charData.world_info.trim()) {
-            const newCategory = { name: characterName };
-            const newCategoryId = await db.worldBookCategories.add(newCategory);
-            await parseAndSaveWorldBooks(charData.world_info, newCategoryId);
-            const catBooks = (state.worldBooks || []).filter(b => b.categoryId === newCategoryId);
-            importedWbCount = catBooks.length;
-            enabledWbIds = catBooks.map(b => b.id);
+            const newCategoryId = await ensureWbCategoryByName(wbDefaultGroupName);
+            const wbId = "wb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+            const newBook = {
+              id: wbId,
+              name: wbDefaultGroupName,
+              content: charData.world_info.trim(),
+              categoryId: newCategoryId,
+              enabled: true,
+              constant: true,
+              keys: [],
+              position: "before_char",
+            };
+            await db.worldBooks.add(newBook);
+            state.worldBooks = await db.worldBooks.toArray();
+            importedWbCount = 1;
+            enabledWbIds = [wbId];
           }
 
           if (enabledWbIds.length > 0) {
             newChat.settings.linkedWorldBookIds = enabledWbIds;
           }
 
-          // 检测并导入角色卡附带的正则脚本，自动同步启用和关闭状态
+          // 检测并导入角色卡附带的正则脚本，自动同步启用和关闭状态并自动创建对应正则分组
           let importedRxCount = 0;
           const rawRegexScripts =
             (charData.extensions && Array.isArray(charData.extensions.regex_scripts) && charData.extensions.regex_scripts) ||
@@ -32454,6 +32509,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const isRxEnabled = rx.disabled === true
                 ? false
                 : (rx.enabled !== undefined ? Boolean(rx.enabled) : true);
+              const rxGroupName = String(rx.group || rx.category || rx.groupName || characterName).trim() || characterName;
+              const rxCategoryId = typeof window.ensureRegexCategoryByName === "function"
+                ? await window.ensureRegexCategoryByName(rxGroupName)
+                : null;
+              const itemApplyDisplay = rx.applyDisplay !== undefined
+                ? Boolean(rx.applyDisplay)
+                : (rx.promptOnly === true && !rx.markdownOnly ? false : true);
+              const itemApplyPrompt = rx.applyPrompt !== undefined
+                ? Boolean(rx.applyPrompt)
+                : (rx.markdownOnly === true && !rx.promptOnly ? false : Boolean(rx.promptOnly));
               const newRxId = "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
               existingRules.push({
                 id: newRxId,
@@ -32462,10 +32527,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 replaceString: replaceStr,
                 flags: rx.flags || "g",
                 enabled: isRxEnabled,
+                applyDisplay: itemApplyDisplay,
+                applyPrompt: itemApplyPrompt,
+                targetMode: "custom",
+                targetChatIds: [String(newChatId)],
                 scopeChat: true,
                 scopeBookshelf: false,
                 characterName: characterName,
                 chatId: newChatId,
+                categoryId: rxCategoryId,
               });
               linkedRxIds.push(newRxId);
               importedRxCount++;
@@ -70452,7 +70522,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          * 打开分类管理模态框
          */
         async function openCategoryManager() {
-          await renderCategoryListInManager();
+          if (window.currentWorldBookTopTab === "regex" && typeof window.renderRegexCategoryListInManager === "function") {
+            await window.renderRegexCategoryListInManager();
+          } else {
+            await renderCategoryListInManager();
+          }
           document
             .getElementById("world-book-category-manager-modal")
             .classList.add("visible");
@@ -70462,6 +70536,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          * 在模态框中渲染已存在的分类列表
          */
         async function renderCategoryListInManager() {
+          if (window.currentWorldBookTopTab === "regex" && typeof window.renderRegexCategoryListInManager === "function") {
+            return await window.renderRegexCategoryListInManager();
+          }
           const listEl = document.getElementById("existing-categories-list");
           const categories = await db.worldBookCategories.toArray();
           listEl.innerHTML = "";
@@ -70489,6 +70566,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const name = input.value.trim();
           if (!name) {
             alert("分类名不能为空！");
+            return;
+          }
+          if (window.currentWorldBookTopTab === "regex" && typeof window.addNewRegexCategory === "function") {
+            await window.addNewRegexCategory(name);
+            input.value = "";
             return;
           }
           const existing = await db.worldBookCategories
@@ -83438,7 +83520,69 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             let categoryName = file.name.replace(/\.[^/.]+$/, "").trim() || "导入的世界书";
             const newBooks = [];
 
-            if (fileName.endsWith('.json') || fileName.endsWith('.jsonl')) {
+            const appendEntriesFromSillyTavernObject = (dataObj) => {
+              if (!dataObj || typeof dataObj !== "object") return false;
+              if (dataObj.name && typeof dataObj.name === "string" && dataObj.name.trim()) {
+                categoryName = dataObj.name.trim();
+              }
+              const entriesSource =
+                (dataObj.entries && typeof dataObj.entries === "object" && dataObj.entries) ||
+                (dataObj.character_book && dataObj.character_book.entries && dataObj.character_book.entries) ||
+                (dataObj.data && dataObj.data.character_book && dataObj.data.character_book.entries && dataObj.data.character_book.entries) ||
+                null;
+              if (entriesSource && typeof entriesSource === "object") {
+                const keys = Object.keys(entriesSource);
+                for (let idx = 0; idx < keys.length; idx++) {
+                  const key = keys[idx];
+                  const entry = entriesSource[key];
+                  if (entry && typeof entry === "object") {
+                    const rawKeys = Array.isArray(entry.keys)
+                      ? entry.keys
+                      : (Array.isArray(entry.key) ? entry.key : []);
+                    const entryName = (
+                      entry.comment ||
+                      entry.name ||
+                      (rawKeys.length > 0 ? rawKeys.join(", ") : `条目 ${idx + 1}`)
+                    ).trim();
+                    const entryContent = String(entry.content || "").trim();
+                    if (entryName && entryContent) {
+                      const isEnabled = entry.disable === true
+                        ? false
+                        : (entry.disabled === true
+                            ? false
+                            : (entry.enabled !== undefined ? Boolean(entry.enabled) : true));
+                      newBooks.push({
+                        id: "wb_" + Date.now() + "_" + idx + "_" + Math.random().toString(36).substring(2, 7),
+                        name: entryName,
+                        content: entryContent,
+                        enabled: isEnabled,
+                        constant: Boolean(entry.constant),
+                        keys: rawKeys,
+                        position: entry.position || "before_char",
+                      });
+                    }
+                  }
+                }
+                return newBooks.length > 0;
+              } else if (Array.isArray(dataObj)) {
+                dataObj.forEach((item, idx) => {
+                  if (!item) return;
+                  const name = String(item.comment || item.name || item.title || `条目 ${idx + 1}`).trim();
+                  const content = String(item.content || item.text || (typeof item === "string" ? item : JSON.stringify(item))).trim();
+                  if (content) {
+                    newBooks.push({
+                      id: "wb_" + Date.now() + "_" + idx + "_" + Math.random().toString(36).substring(2, 7),
+                      name: name || `${categoryName} ${idx + 1}`,
+                      content: content,
+                    });
+                  }
+                });
+                return newBooks.length > 0;
+              }
+              return false;
+            };
+
+            if (fileName.endsWith(".json") || fileName.endsWith(".jsonl")) {
               const text = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = (e) => resolve(e.target.result);
@@ -83446,130 +83590,120 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 reader.readAsText(file, "UTF-8");
               });
               const data = JSON.parse(text);
-
-              if (data.entries && typeof data.entries === "object") {
-                for (const key in data.entries) {
-                  const entry = data.entries[key];
-                  if (entry) {
-                    const entryName = (entry.comment || entry.name || `条目 ${key}`).trim();
-                    const entryContent = (entry.content || "").trim();
-                    if (entryName && entryContent) {
-                      newBooks.push({
-                        id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
-                        name: entryName,
-                        content: entryContent,
-                      });
-                    }
-                  }
-                }
-              } else if (Array.isArray(data)) {
-                data.forEach((item, idx) => {
-                  const name = item.name || item.title || `条目 ${idx + 1}`;
-                  const content = item.content || item.text || JSON.stringify(item);
-                  if (content) {
-                    newBooks.push({
-                      id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
-                      name: name,
-                      content: content,
-                    });
-                  }
-                });
-              }
-            } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
-              let extractedText = '';
+              appendEntriesFromSillyTavernObject(data);
+            } else if (fileName.endsWith(".docx") || fileName.endsWith(".doc")) {
+              let extractedText = "";
               const arrayBuffer = await file.arrayBuffer();
-              if (window.mammoth && typeof window.mammoth.extractRawText === 'function') {
+              if (window.mammoth && typeof window.mammoth.extractRawText === "function") {
                 try {
                   const result = await window.mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-                  extractedText = result.value || '';
+                  extractedText = (result && result.value) ? String(result.value) : "";
                 } catch (mErr) {
-                  console.warn('Mammoth 解析告警', mErr);
+                  console.warn("Mammoth 解析告警", mErr);
                 }
               }
-              if (!extractedText && window.JSZip) {
+              if (!extractedText.trim() && window.JSZip) {
                 try {
                   const zip = await window.JSZip.loadAsync(arrayBuffer);
-                  const docXml = zip.file('word/document.xml');
+                  const docXml = zip.file("word/document.xml");
                   if (docXml) {
-                    const xmlText = await docXml.async('text');
+                    const xmlText = await docXml.async("text");
                     const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-                    const paragraphs = xmlDoc.getElementsByTagName('w:p');
-                    const textPieces = [];
-                    for (let i = 0; i < paragraphs.length; i++) {
-                      textPieces.push(paragraphs[i].textContent || '');
+                    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                    let paragraphs = xmlDoc.getElementsByTagName("w:p");
+                    if (!paragraphs || paragraphs.length === 0) {
+                      paragraphs = xmlDoc.getElementsByTagName("p");
                     }
-                    extractedText = textPieces.join('\n');
+                    const textPieces = [];
+                    if (paragraphs && paragraphs.length > 0) {
+                      for (let i = 0; i < paragraphs.length; i++) {
+                        textPieces.push(paragraphs[i].textContent || "");
+                      }
+                    } else {
+                      const pMatches = xmlText.match(/<w:p[\s>][\s\S]*?<\/w:p>/g) || [];
+                      pMatches.forEach((pBlock) => {
+                        const tMatches = pBlock.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) || [];
+                        const lineStr = tMatches
+                          .map((t) => t.replace(/<[^>]+>/g, ""))
+                          .join("");
+                        textPieces.push(lineStr);
+                      });
+                    }
+                    extractedText = textPieces.join("\n");
                   }
-                } catch (zErr) {}
+                } catch (zErr) {
+                  console.warn("JSZip 解析 docx 告警:", zErr);
+                }
               }
 
-              if (extractedText) {
-                const sections = extractedText.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
-                if (sections.length > 1) {
-                  sections.forEach((sec, idx) => {
-                    const firstLine = sec.split('\n')[0].substring(0, 30).trim();
-                    newBooks.push({
-                      id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
-                      name: firstLine || `${categoryName} 章节${idx + 1}`,
-                      content: sec,
-                    });
-                  });
-                } else {
+              const cleanDocText = String(extractedText || "").trim();
+              if (cleanDocText) {
+                let parsedAsJson = false;
+                if (cleanDocText.startsWith("{") || cleanDocText.startsWith("[")) {
+                  try {
+                    const maybeJson = JSON.parse(cleanDocText);
+                    parsedAsJson = appendEntriesFromSillyTavernObject(maybeJson);
+                  } catch (_) {}
+                }
+                if (!parsedAsJson) {
                   newBooks.push({
-                    id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
+                    id: "wb_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
                     name: categoryName,
-                    content: extractedText,
+                    content: cleanDocText,
                   });
                 }
               }
-            } else if (fileName.endsWith('.txt')) {
+            } else if (fileName.endsWith(".txt")) {
               const text = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = (e) => resolve(e.target.result);
                 reader.onerror = reject;
                 reader.readAsText(file, "UTF-8");
               });
-              const sections = text.split(/\n\s*\n\s*\n/).map(s => s.trim()).filter(Boolean);
-              if (sections.length > 1) {
-                sections.forEach((sec, idx) => {
-                  const firstLine = sec.split('\n')[0].substring(0, 30).trim();
+              const cleanTxt = String(text || "").trim();
+              if (cleanTxt) {
+                let parsedAsJson = false;
+                if (cleanTxt.startsWith("{") || cleanTxt.startsWith("[")) {
+                  try {
+                    const maybeJson = JSON.parse(cleanTxt);
+                    parsedAsJson = appendEntriesFromSillyTavernObject(maybeJson);
+                  } catch (_) {}
+                }
+                if (!parsedAsJson) {
                   newBooks.push({
-                    id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
-                    name: firstLine || `${categoryName} 节${idx + 1}`,
-                    content: sec,
+                    id: "wb_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+                    name: categoryName,
+                    content: cleanTxt,
                   });
-                });
-              } else {
-                newBooks.push({
-                  id: "wb_" + Date.now() + Math.random().toString(36).substring(2, 7),
-                  name: categoryName,
-                  content: text,
-                });
+                }
               }
             }
 
             if (newBooks.length === 0) {
-              if (typeof showCustomAlert === 'function') {
+              if (typeof showCustomAlert === "function") {
                 showCustomAlert("提示", "没有找到任何可导入的有效条目。");
               }
               return;
             }
 
-            // 获取或创建分类
-            let category = await db.worldBookCategories.where("name").equals(categoryName).first();
+            // 获取或创建分类（去重匹配）
+            let category = await db.worldBookCategories.where("name").equals(categoryName).first().catch(() => null);
+            if (!category) {
+              const allCats = await db.worldBookCategories.toArray();
+              category = allCats.find((c) => c && String(c.name || "").trim() === categoryName) || null;
+            }
             if (!category) {
               const newCategoryId = await db.worldBookCategories.add({ name: categoryName });
               category = { id: newCategoryId, name: categoryName };
             }
 
-            newBooks.forEach(b => { b.categoryId = category.id; });
+            newBooks.forEach((b) => { b.categoryId = category.id; });
 
             await db.worldBooks.bulkAdd(newBooks);
             state.worldBooks.push(...newBooks);
             await renderWorldBookScreen();
 
-            if (typeof showCustomAlert === 'function') {
+            if (typeof showCustomAlert === "function") {
               showCustomAlert(
                 "导入成功",
                 `成功将《${categoryName}》中的 ${newBooks.length} 个条目导入到世界书！`,
@@ -83577,7 +83711,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           } catch (error) {
             console.warn("导入世界书异常:", error);
-            if (typeof showCustomAlert === 'function') {
+            if (typeof showCustomAlert === "function") {
               showCustomAlert(
                 "导入失败",
                 `无法解析该文件: ${error.message || error}`,
@@ -90124,16 +90258,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         /**
          * 切换世界书的编辑模式
          */
+        const selectedRegexRules = new Set();
+
         async function toggleWorldBookEditMode() {
           isWorldBookEditMode = !isWorldBookEditMode;
+          const isRegexTab = window.currentWorldBookTopTab === "regex";
 
           const screen = document.getElementById("world-book-screen");
           const listEl = document.getElementById("world-book-list");
+          const rxListEl = document.getElementById("regex-rules-list");
           const editBtn = document.getElementById(
             "toggle-world-book-edit-mode-btn",
           );
           const manageBtn = document.getElementById(
             "manage-categories-in-edit-mode-btn",
+          );
+          const groupBtn = document.getElementById(
+            "batch-group-in-edit-mode-btn",
           );
           const addBtn = document.getElementById("add-world-book-btn");
           const importBtn = document.getElementById("import-world-book-btn");
@@ -90143,25 +90284,33 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           );
 
           screen.classList.toggle("selection-mode", isWorldBookEditMode);
-          listEl.classList.toggle("selection-mode", isWorldBookEditMode);
+          if (listEl) listEl.classList.toggle("selection-mode", isWorldBookEditMode);
+          if (rxListEl) rxListEl.classList.toggle("selection-mode", isWorldBookEditMode);
 
           if (isWorldBookEditMode) {
             editBtn.textContent = "完成";
             manageBtn.style.display = "inline-block";
+            if (groupBtn) groupBtn.style.display = "inline-block";
             deleteBtn.style.display = "inline-flex"; // 让删除按钮显示
             addBtn.style.display = "none";
             importBtn.style.display = "none";
           } else {
             editBtn.textContent = "编辑模式";
             manageBtn.style.display = "none";
+            if (groupBtn) groupBtn.style.display = "none";
             deleteBtn.style.display = "none"; // 让删除按钮隐藏
             addBtn.style.display = "inline-block";
             importBtn.style.display = "inline-block";
             selectedWorldBooks.clear();
+            selectedRegexRules.clear();
             updateWorldBookDeleteButton();
           }
 
-          await renderWorldBookScreen();
+          if (isRegexTab && typeof window.renderRegexRulesList === "function") {
+            window.renderRegexRulesList();
+          } else {
+            await renderWorldBookScreen();
+          }
         }
 
         /**
@@ -90197,23 +90346,51 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             "world-book-delete-selected-btn",
           );
           const countSpan = document.getElementById("world-book-delete-count");
-          const count = selectedWorldBooks.size;
+          const isRegexTab = window.currentWorldBookTopTab === "regex";
+          const count = isRegexTab ? selectedRegexRules.size : selectedWorldBooks.size;
 
-          // 更新按钮旁边的数字
-          if (count > 0) {
-            countSpan.textContent = `(${count})`;
-          } else {
-            countSpan.textContent = "";
+          if (countSpan) {
+            if (count > 0) {
+              countSpan.textContent = `${count}`;
+            } else {
+              countSpan.textContent = "";
+            }
           }
 
-          // 切换按钮的禁用状态
-          deleteBtn.disabled = count === 0;
+          if (deleteBtn) {
+            deleteBtn.disabled = count === 0;
+            deleteBtn.classList.toggle("visible", count > 0);
+          }
         }
 
         /**
-         * 处理批量删除世界书的逻辑
+         * 处理批量删除世界书或正则的逻辑
          */
         async function handleBulkDeleteWorldBooks() {
+          const isRegexTab = window.currentWorldBookTopTab === "regex";
+          if (isRegexTab) {
+            if (selectedRegexRules.size === 0) return;
+            const confirmed = await showCustomConfirm(
+              "确认删除",
+              `确定要永久删除选中的 ${selectedRegexRules.size} 条正则吗？此操作不可恢复。`,
+              { confirmButtonClass: "btn-danger" },
+            );
+            if (confirmed) {
+              const delCount = selectedRegexRules.size;
+              const allRules = typeof window.getStoredRegexRules === "function" ? window.getStoredRegexRules() : [];
+              const nextRules = allRules.filter((r) => !selectedRegexRules.has(r.id));
+              if (typeof window.saveStoredRegexRules === "function") {
+                await window.saveStoredRegexRules(nextRules);
+              }
+              await toggleWorldBookEditMode();
+              if (typeof window.refreshActiveChatRegexDisplay === "function") {
+                window.refreshActiveChatRegexDisplay();
+              }
+              await showCustomAlert("删除成功", `${delCount} 条正则已删除。`);
+            }
+            return;
+          }
+
           if (selectedWorldBooks.size === 0) return;
 
           const confirmed = await showCustomConfirm(
@@ -90241,16 +90418,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         }
 
         /**
-         * 删除一个世界书分类（现在会弹出选项）
+         * 删除一个世界书或正则分类（弹出选项）
          */
         async function deleteCategory(categoryId) {
+          if (window.currentWorldBookTopTab === "regex" && typeof window.deleteRegexCategory === "function") {
+            await window.deleteRegexCategory(categoryId);
+            return;
+          }
           const category = await db.worldBookCategories.get(categoryId);
           if (!category) return;
 
           const choice = await showChoiceModal(`删除分类 "${category.name}"`, [
             { text: "删除分类及其所有世界书", value: "delete_all" },
             {
-              text: "仅删除分类 (书变为未分类)",
+              text: "仅删除分类",
               value: "delete_category_only",
             },
           ]);
@@ -90260,7 +90441,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (choice === "delete_all") {
             const confirmed = await showCustomConfirm(
               "危险操作",
-              `你确定要永久删除分类 "${category.name}" 以及其中的【所有】世界书吗？此操作无法恢复！`,
+              `你确定要永久删除分类 "${category.name}" 以及其中的所有世界书吗？此操作无法恢复！`,
               { confirmButtonClass: "btn-danger" },
             );
             if (!confirmed) return;
@@ -90914,11 +91095,374 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return resultText;
           };
 
+          const REGEX_CATEGORIES_STORAGE_KEY = "tukey_custom_regex_categories_v1";
+
+          function getStoredRegexCategories() {
+            try {
+              if (state && state.globalSettings && Array.isArray(state.globalSettings.customRegexCategories)) {
+                return state.globalSettings.customRegexCategories;
+              }
+              const raw = localStorage.getItem(REGEX_CATEGORIES_STORAGE_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) return parsed;
+              }
+            } catch (e) {}
+            return [];
+          }
+
+          async function saveStoredRegexCategories(cats) {
+            const cleanCats = Array.isArray(cats) ? cats : [];
+            try {
+              localStorage.setItem(REGEX_CATEGORIES_STORAGE_KEY, JSON.stringify(cleanCats));
+            } catch (e) {}
+            if (state && state.globalSettings) {
+              state.globalSettings.customRegexCategories = cleanCats;
+              try {
+                await db.globalSettings.put(state.globalSettings);
+              } catch (e) {}
+            }
+          }
+
+          window.getStoredRegexCategories = getStoredRegexCategories;
+          window.saveStoredRegexCategories = saveStoredRegexCategories;
+          window.getStoredRegexRules = getStoredRegexRules;
+          window.saveStoredRegexRules = saveStoredRegexRules;
+          window.refreshActiveChatRegexDisplay = refreshActiveChatRegexDisplay;
+
+          window.ensureRegexCategoryByName = async function (catName) {
+            const cleanName = String(catName || "").trim();
+            if (!cleanName) return null;
+            const cats = getStoredRegexCategories();
+            const existing = cats.find((c) => c && String(c.name || "").trim().toLowerCase() === cleanName.toLowerCase());
+            if (existing) return existing.id;
+            const newId = "rxcat_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+            cats.push({ id: newId, name: cleanName });
+            await saveStoredRegexCategories(cats);
+            return newId;
+          };
+
+          function syncLegacyRegexRuleCategories() {
+            const rules = getStoredRegexRules();
+            const cats = getStoredRegexCategories();
+            let rulesChanged = false;
+            let catsChanged = false;
+
+            rules.forEach((rule) => {
+              if (!rule || rule.categoryId) return;
+              const autoGroupName = String(rule.group || rule.category || rule.groupName || rule.characterName || "").trim();
+              if (!autoGroupName) return;
+              let cat = cats.find((c) => c && String(c.name || "").trim().toLowerCase() === autoGroupName.toLowerCase());
+              if (!cat) {
+                cat = {
+                  id: "rxcat_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  name: autoGroupName,
+                };
+                cats.push(cat);
+                catsChanged = true;
+              }
+              rule.categoryId = cat.id;
+              rulesChanged = true;
+            });
+
+            if (catsChanged) {
+              try {
+                localStorage.setItem(REGEX_CATEGORIES_STORAGE_KEY, JSON.stringify(cats));
+              } catch (_) {}
+              if (state && state.globalSettings) {
+                state.globalSettings.customRegexCategories = cats;
+              }
+            }
+            if (rulesChanged) {
+              try {
+                localStorage.setItem(REGEX_STORAGE_KEY, JSON.stringify(rules));
+              } catch (_) {}
+              if (state && state.globalSettings) {
+                state.globalSettings.customRegexRules = rules;
+              }
+            }
+          }
+
+          window.renderRegexCategoryListInManager = async function () {
+            const listEl = document.getElementById("existing-categories-list");
+            if (!listEl) return;
+            const categories = getStoredRegexCategories();
+            listEl.innerHTML = "";
+            if (categories.length === 0) {
+              listEl.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">还没有任何分类</p>';
+            } else {
+              categories.forEach((cat) => {
+                const item = document.createElement("div");
+                item.className = "existing-group-item";
+                item.innerHTML = `
+                  <span class="group-name"></span>
+                  <span class="delete-group-btn" data-id="${cat.id}">×</span>
+                `;
+                item.querySelector(".group-name").textContent = cat.name || "未命名分组";
+                listEl.appendChild(item);
+              });
+            }
+          };
+
+          window.addNewRegexCategory = async function (name) {
+            const cleanName = String(name || "").trim();
+            if (!cleanName) return;
+            const cats = getStoredRegexCategories();
+            if (cats.some((c) => String(c.name || "").trim().toLowerCase() === cleanName.toLowerCase())) {
+              alert("该分类已存在！");
+              return;
+            }
+            cats.push({
+              id: "rxcat_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+              name: cleanName,
+            });
+            await saveStoredRegexCategories(cats);
+            await window.renderRegexCategoryListInManager();
+            window.renderRegexRulesList();
+          };
+
+          window.deleteRegexCategory = async function (categoryId) {
+            const catIdStr = String(categoryId);
+            const rules = getStoredRegexRules();
+            const cats = getStoredRegexCategories();
+            const catObj = cats.find((c) => String(c.id) === catIdStr);
+            const catName = catObj ? catObj.name : "该分组";
+            const rulesInCat = rules.filter((r) => String(r.categoryId || "") === catIdStr);
+
+            if (rulesInCat.length > 0) {
+              const choice = await showChoiceModal(
+                `删除分组 "${catName}"`,
+                [
+                  {
+                    text: "删除分组及其所有正则",
+                    value: "delete_all",
+                  },
+                  {
+                    text: "仅删除分组",
+                    value: "delete_category_only",
+                  },
+                ],
+              );
+
+              if (choice === "delete_all") {
+                const confirmed = await showCustomConfirm(
+                  "危险操作",
+                  `你确定要永久删除分组 "${catName}" 以及其中的所有正则吗？此操作无法恢复！`,
+                  { confirmButtonClass: "btn-danger" },
+                );
+                if (!confirmed) return;
+                const nextRules = rules.filter((r) => String(r.categoryId || "") !== catIdStr);
+                const nextCats = cats.filter((c) => String(c.id) !== catIdStr);
+                await saveStoredRegexRules(nextRules);
+                await saveStoredRegexCategories(nextCats);
+                rulesInCat.forEach((r) => selectedRegexRules.delete(r.id));
+                updateWorldBookDeleteButton();
+                await showCustomAlert("删除成功", `分组 "${catName}" 及其下的所有正则已被删除。`);
+              } else if (choice === "delete_category_only") {
+                rules.forEach((r) => {
+                  if (String(r.categoryId || "") === catIdStr) {
+                    r.categoryId = null;
+                    delete r.group;
+                    delete r.category;
+                    delete r.groupName;
+                    delete r.characterName;
+                  }
+                });
+                const nextCats = cats.filter((c) => String(c.id) !== catIdStr);
+                await saveStoredRegexRules(rules);
+                await saveStoredRegexCategories(nextCats);
+                await showCustomAlert("删除成功", `分组 "${catName}" 已被删除。`);
+              } else {
+                return;
+              }
+            } else {
+              const confirmed = await showCustomConfirm(
+                "确认删除",
+                `确定要删除空分组 "${catName}" 吗？`,
+                { confirmButtonClass: "btn-danger" },
+              );
+              if (confirmed) {
+                const nextCats = cats.filter((c) => String(c.id) !== catIdStr);
+                await saveStoredRegexCategories(nextCats);
+              } else {
+                return;
+              }
+            }
+
+            await window.renderRegexCategoryListInManager();
+            window.renderRegexRulesList();
+            refreshActiveChatRegexDisplay();
+          };
+
+          function populateRegexCategorySelect(selectedCatId = "") {
+            const sel = document.getElementById("regex-category-select");
+            if (!sel) return;
+            const cats = getStoredRegexCategories();
+            sel.innerHTML = '<option value="">未分类</option>';
+            cats.forEach((cat) => {
+              const opt = document.createElement("option");
+              opt.value = String(cat.id);
+              opt.textContent = cat.name || "未命名分组";
+              sel.appendChild(opt);
+            });
+            sel.value = selectedCatId ? String(selectedCatId) : "";
+          }
+
+          function createRegexRuleCardElement(rule, winNameMap) {
+            const card = document.createElement("div");
+            card.className = "regex-rule-card";
+            card.dataset.ruleId = rule.id;
+            if (isWorldBookEditMode && selectedRegexRules.has(rule.id)) {
+              card.classList.add("selected");
+            }
+
+            const scopeLabels = [];
+            if (rule.scopeChat !== false) scopeLabels.push("聊天");
+            if (rule.scopeBookshelf !== false) scopeLabels.push("书柜");
+            const scopeText = scopeLabels.length > 0 ? scopeLabels.join("·") : "未指定";
+
+            const modeParts = [];
+            if (rule.applyDisplay !== false) modeParts.push("仅显示");
+            if (rule.applyPrompt === true) modeParts.push("发送AI");
+            const modeText = modeParts.length === 2 ? "显示·AI" : (modeParts[0] || "仅显示");
+
+            let targetText = "全局";
+            const ruleTargets = Array.isArray(rule.targetChatIds) ? rule.targetChatIds.map(String) : [];
+            if (rule.chatId !== undefined && rule.chatId !== null && String(rule.chatId) !== "" && !ruleTargets.includes(String(rule.chatId))) {
+              ruleTargets.push(String(rule.chatId));
+            }
+            if (rule.targetMode === "custom" || ruleTargets.length > 0) {
+              const matchedNames = ruleTargets.map((k) => winNameMap[k] || rule.characterName || "指定").filter(Boolean);
+              targetText = matchedNames.length > 0
+                ? (matchedNames.length === 1 ? matchedNames[0] : `${matchedNames[0]}等${matchedNames.length}窗`)
+                : "指定窗口";
+            }
+
+            const replacePreview = rule.replaceString ? rule.replaceString : "空";
+
+            card.innerHTML = `
+              <div class="regex-rule-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              </div>
+              <div class="regex-rule-info">
+                <div class="regex-rule-title-row" style="flex-wrap: wrap; gap: 4px;">
+                  <span class="regex-rule-name"></span>
+                  <span class="regex-scope-badge">${modeText}</span>
+                  <span class="regex-scope-badge">${targetText}</span>
+                  <span class="regex-scope-badge">${scopeText}</span>
+                </div>
+                <div class="regex-rule-preview"></div>
+              </div>
+              <div class="regex-rule-actions">
+                <button type="button" class="moe-btn-mini regex-edit-btn" style="height: 26px; padding: 0 8px; font-size: 11.5px;">编辑</button>
+                <button type="button" class="moe-btn-mini regex-del-btn" style="height: 26px; padding: 0 8px; font-size: 11.5px;">删除</button>
+                <label class="toggle-switch" style="margin: 0; flex-shrink: 0;">
+                  <input type="checkbox" class="regex-toggle-input" ${rule.enabled !== false ? "checked" : ""} />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            `;
+            card.querySelector(".regex-rule-name").textContent = rule.name || "未命名规则";
+            card.querySelector(".regex-rule-preview").textContent = `${rule.findRegex || ""} → ${replacePreview}`;
+
+            card.addEventListener("click", (e) => {
+              if (!isWorldBookEditMode) return;
+              if (e.target.closest(".regex-rule-actions")) return;
+              e.stopPropagation();
+              card.classList.toggle("selected");
+              if (selectedRegexRules.has(rule.id)) {
+                selectedRegexRules.delete(rule.id);
+              } else {
+                selectedRegexRules.add(rule.id);
+              }
+              updateWorldBookDeleteButton();
+            });
+
+            const toggleInput = card.querySelector(".regex-toggle-input");
+            toggleInput.addEventListener("change", async (e) => {
+              e.stopPropagation();
+              const all = getStoredRegexRules();
+              const target = all.find((it) => it.id === rule.id);
+              if (target) {
+                target.enabled = Boolean(toggleInput.checked);
+                await saveStoredRegexRules(all);
+                refreshActiveChatRegexDisplay();
+              }
+            });
+
+            card.querySelector(".regex-edit-btn").addEventListener("click", (e) => {
+              e.stopPropagation();
+              if (isWorldBookEditMode) {
+                card.click();
+                return;
+              }
+              openRegexRuleEditor(rule.id);
+            });
+
+            card.querySelector(".regex-del-btn").addEventListener("click", async (e) => {
+              e.stopPropagation();
+              if (isWorldBookEditMode) {
+                card.click();
+                return;
+              }
+              const confirmed = await showCustomConfirm("删除正则", `确定要删除规则 ${rule.name || ""} 吗？`, { confirmButtonClass: "btn-danger" });
+              if (confirmed) {
+                const nextRules = getStoredRegexRules().filter((it) => it.id !== rule.id);
+                await saveStoredRegexRules(nextRules);
+                window.renderRegexRulesList();
+                refreshActiveChatRegexDisplay();
+              }
+            });
+
+            return card;
+          }
+
+          function createRegexGroupContainer(groupName, rulesInGroup, winNameMap) {
+            const groupContainer = document.createElement("div");
+            groupContainer.className = "world-book-group-container";
+
+            const isExpanded = !isWorldBookEditMode ? false : true;
+            const collapsedClass = isExpanded ? "" : "collapsed";
+
+            groupContainer.innerHTML = `
+              <div class="world-book-group-header ${collapsedClass}">
+                <div class="world-book-group-header-left">
+                  <span class="arrow">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </span>
+                  <span class="world-book-group-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                  </span>
+                  <span class="group-name"></span>
+                </div>
+                <span class="world-book-group-count">${rulesInGroup.length}</span>
+              </div>
+              <div class="world-book-group-content ${collapsedClass}"></div>
+            `;
+
+            groupContainer.querySelector(".group-name").textContent = groupName;
+            const contentEl = groupContainer.querySelector(".world-book-group-content");
+            rulesInGroup.forEach((rule) => {
+              contentEl.appendChild(createRegexRuleCardElement(rule, winNameMap));
+            });
+
+            const header = groupContainer.querySelector(".world-book-group-header");
+            header.addEventListener("click", () => {
+              header.classList.toggle("collapsed");
+              contentEl.classList.toggle("collapsed");
+            });
+
+            return groupContainer;
+          }
+
           window.renderRegexRulesList = function () {
             const listEl = document.getElementById("regex-rules-list");
             if (!listEl) return;
+            syncLegacyRegexRuleCategories();
             const rules = getStoredRegexRules();
+            const categories = getStoredRegexCategories();
             listEl.innerHTML = "";
+            listEl.classList.toggle("selection-mode", Boolean(isWorldBookEditMode));
 
             if (rules.length === 0) {
               listEl.innerHTML = `
@@ -90939,93 +91483,45 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               winNameMap[o.key] = o.name;
             });
 
-            rules.forEach((rule) => {
-              const card = document.createElement("div");
-              card.className = "regex-rule-card";
-              const scopeLabels = [];
-              if (rule.scopeChat !== false) scopeLabels.push("聊天");
-              if (rule.scopeBookshelf !== false) scopeLabels.push("书柜");
-              const scopeText = scopeLabels.length > 0 ? scopeLabels.join("·") : "未指定";
+            const groupedRules = rules.reduce((acc, rule) => {
+              const key = rule.categoryId ? String(rule.categoryId) : "uncategorized";
+              if (!acc[key]) acc[key] = [];
+              acc[key].push(rule);
+              return acc;
+            }, {});
 
-              const modeParts = [];
-              if (rule.applyDisplay !== false) modeParts.push("仅显示");
-              if (rule.applyPrompt === true) modeParts.push("发送AI");
-              const modeText = modeParts.length === 2 ? "显示·AI" : (modeParts[0] || "仅显示");
+            const fragment = document.createDocumentFragment();
+            const renderedCatKeys = new Set();
 
-              let targetText = "全局";
-              const ruleTargets = Array.isArray(rule.targetChatIds) ? rule.targetChatIds.map(String) : [];
-              if (rule.chatId !== undefined && rule.chatId !== null && String(rule.chatId) !== "" && !ruleTargets.includes(String(rule.chatId))) {
-                ruleTargets.push(String(rule.chatId));
+            categories.forEach((cat) => {
+              const key = String(cat.id);
+              const listInCat = groupedRules[key];
+              if (listInCat && listInCat.length > 0) {
+                renderedCatKeys.add(key);
+                fragment.appendChild(createRegexGroupContainer(cat.name || "未命名分组", listInCat, winNameMap));
               }
-              if (rule.targetMode === "custom" || ruleTargets.length > 0) {
-                const matchedNames = ruleTargets.map((k) => winNameMap[k] || rule.characterName || "指定").filter(Boolean);
-                targetText = matchedNames.length > 0
-                  ? (matchedNames.length === 1 ? matchedNames[0] : `${matchedNames[0]}等${matchedNames.length}窗`)
-                  : "指定窗口";
-              }
-
-              const replacePreview = rule.replaceString ? rule.replaceString : "空";
-
-              card.innerHTML = `
-                <div class="regex-rule-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-                </div>
-                <div class="regex-rule-info">
-                  <div class="regex-rule-title-row" style="flex-wrap: wrap; gap: 4px;">
-                    <span class="regex-rule-name"></span>
-                    <span class="regex-scope-badge">${modeText}</span>
-                    <span class="regex-scope-badge">${targetText}</span>
-                    <span class="regex-scope-badge">${scopeText}</span>
-                  </div>
-                  <div class="regex-rule-preview"></div>
-                </div>
-                <div class="regex-rule-actions">
-                  <button type="button" class="moe-btn-mini regex-edit-btn" style="height: 26px; padding: 0 8px; font-size: 11.5px;">编辑</button>
-                  <button type="button" class="moe-btn-mini regex-del-btn" style="height: 26px; padding: 0 8px; font-size: 11.5px;">删除</button>
-                  <label class="toggle-switch" style="margin: 0; flex-shrink: 0;">
-                    <input type="checkbox" class="regex-toggle-input" ${rule.enabled !== false ? "checked" : ""} />
-                    <span class="slider"></span>
-                  </label>
-                </div>
-              `;
-              card.querySelector(".regex-rule-name").textContent = rule.name || "未命名规则";
-              card.querySelector(".regex-rule-preview").textContent = `${rule.findRegex || ""} → ${replacePreview}`;
-
-              const toggleInput = card.querySelector(".regex-toggle-input");
-              toggleInput.addEventListener("change", async (e) => {
-                e.stopPropagation();
-                const all = getStoredRegexRules();
-                const target = all.find((it) => it.id === rule.id);
-                if (target) {
-                  target.enabled = Boolean(toggleInput.checked);
-                  await saveStoredRegexRules(all);
-                  refreshActiveChatRegexDisplay();
-                }
-              });
-
-              card.querySelector(".regex-edit-btn").addEventListener("click", (e) => {
-                e.stopPropagation();
-                openRegexRuleEditor(rule.id);
-              });
-
-              card.querySelector(".regex-del-btn").addEventListener("click", async (e) => {
-                e.stopPropagation();
-                const confirmed = await showCustomConfirm("删除正则", `确定要删除规则 ${rule.name || ""} 吗？`, { confirmButtonClass: "btn-danger" });
-                if (confirmed) {
-                  const nextRules = getStoredRegexRules().filter((it) => it.id !== rule.id);
-                  await saveStoredRegexRules(nextRules);
-                  window.renderRegexRulesList();
-                  refreshActiveChatRegexDisplay();
-                }
-              });
-
-              listEl.appendChild(card);
             });
+
+            const uncategorizedList = [...(groupedRules["uncategorized"] || [])];
+            Object.keys(groupedRules).forEach((k) => {
+              if (k !== "uncategorized" && !renderedCatKeys.has(k)) {
+                uncategorizedList.push(...groupedRules[k]);
+              }
+            });
+
+            if (uncategorizedList.length > 0) {
+              fragment.appendChild(createRegexGroupContainer("未分类", uncategorizedList, winNameMap));
+            }
+
+            listEl.appendChild(fragment);
           };
 
           window.currentWorldBookTopTab = "worldbook";
           window.switchWorldBookTopTab = function (tabName) {
             const isRegex = tabName === "regex";
+            if (isWorldBookEditMode && typeof toggleWorldBookEditMode === "function") {
+              toggleWorldBookEditMode();
+            }
             window.currentWorldBookTopTab = isRegex ? "regex" : "worldbook";
             const wbTabBtn = document.getElementById("wb-top-tab-worldbook");
             const rxTabBtn = document.getElementById("wb-top-tab-regex");
@@ -91036,6 +91532,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const editModeWbBtn = document.getElementById("toggle-world-book-edit-mode-btn");
             const addWbBtn = document.getElementById("add-world-book-btn");
             const manageCatBtn = document.getElementById("manage-categories-in-edit-mode-btn");
+            const groupBtn = document.getElementById("batch-group-in-edit-mode-btn");
             const deleteSelectedWbBtn = document.getElementById("world-book-delete-selected-btn");
 
             const importRxBtn = document.getElementById("import-regex-btn");
@@ -91045,16 +91542,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (rxTabBtn) rxTabBtn.classList.toggle("active", isRegex);
 
             if (isRegex) {
-              if (isWorldBookEditMode && typeof toggleWorldBookEditMode === "function") {
-                toggleWorldBookEditMode();
-              }
               if (wbList) wbList.style.display = "none";
               if (rxList) rxList.style.display = "flex";
               if (importWbBtn) importWbBtn.style.display = "";
-              if (editModeWbBtn) editModeWbBtn.style.display = "none";
+              if (editModeWbBtn) editModeWbBtn.style.display = "";
               if (addWbBtn) addWbBtn.style.display = "";
-              if (manageCatBtn) manageCatBtn.style.display = "none";
-              if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = "none";
+              if (manageCatBtn) manageCatBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
+              if (groupBtn) groupBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
+              if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
               if (importRxBtn) importRxBtn.style.display = "none";
               if (addRxBtn) addRxBtn.style.display = "none";
               window.renderRegexRulesList();
@@ -91064,9 +91559,103 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (importWbBtn) importWbBtn.style.display = "";
               if (editModeWbBtn) editModeWbBtn.style.display = "";
               if (addWbBtn) addWbBtn.style.display = "";
+              if (manageCatBtn) manageCatBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
+              if (groupBtn) groupBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
+              if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
               if (importRxBtn) importRxBtn.style.display = "none";
               if (addRxBtn) addRxBtn.style.display = "none";
               renderWorldBookScreen();
+            }
+          };
+
+          window.handleBatchGroupInEditMode = async function () {
+            const isRegex = window.currentWorldBookTopTab === "regex";
+            if (isRegex) {
+              const selectedIds = Array.from(selectedRegexRules);
+              if (selectedIds.length === 0) {
+                await showCustomAlert("提示", "请先点选要分组的正则");
+                return;
+              }
+              const cats = getStoredRegexCategories();
+              const options = cats.map((c) => ({
+                text: `移入「${c.name}」`,
+                value: String(c.id),
+              }));
+              options.push({ text: "新建分组并移入", value: "__NEW_GROUP__" });
+              options.push({ text: "移至未分类", value: "__UNCATEGORIZED__" });
+
+              const choice = await showChoiceModal("加入分组", options);
+              if (!choice) return;
+
+              let targetCatId = null;
+              if (choice === "__NEW_GROUP__") {
+                const newName = await showCustomPrompt("新建分组", "请输入新分组名称");
+                if (!newName || !newName.trim()) return;
+                targetCatId = await window.ensureRegexCategoryByName(newName.trim());
+              } else if (choice === "__UNCATEGORIZED__") {
+                targetCatId = null;
+              } else {
+                targetCatId = String(choice);
+              }
+
+              const rules = getStoredRegexRules();
+              rules.forEach((r) => {
+                if (selectedRegexRules.has(r.id)) {
+                  r.categoryId = targetCatId;
+                  if (!targetCatId) {
+                    delete r.group;
+                    delete r.category;
+                    delete r.groupName;
+                    delete r.characterName;
+                  }
+                }
+              });
+              await saveStoredRegexRules(rules);
+              selectedRegexRules.clear();
+              updateWorldBookDeleteButton();
+              window.renderRegexRulesList();
+            } else {
+              const selectedIds = Array.from(selectedWorldBooks);
+              if (selectedIds.length === 0) {
+                await showCustomAlert("提示", "请先点选要分组的世界书");
+                return;
+              }
+              const cats = await db.worldBookCategories.toArray();
+              const options = cats.map((c) => ({
+                text: `移入「${c.name}」`,
+                value: String(c.id),
+              }));
+              options.push({ text: "新建分组并移入", value: "__NEW_GROUP__" });
+              options.push({ text: "移至未分类", value: "__UNCATEGORIZED__" });
+
+              const choice = await showChoiceModal("加入分组", options);
+              if (!choice) return;
+
+              let targetCatId = null;
+              if (choice === "__NEW_GROUP__") {
+                const newName = await showCustomPrompt("新建分组", "请输入新分组名称");
+                if (!newName || !newName.trim()) return;
+                const cleanName = newName.trim();
+                let existing = cats.find((c) => String(c.name || "").trim() === cleanName);
+                if (existing) {
+                  targetCatId = existing.id;
+                } else {
+                  targetCatId = await db.worldBookCategories.add({ name: cleanName });
+                }
+              } else if (choice === "__UNCATEGORIZED__") {
+                targetCatId = null;
+              } else {
+                const matched = cats.find((c) => String(c.id) === String(choice));
+                targetCatId = matched ? matched.id : Number(choice);
+              }
+
+              for (const bId of selectedIds) {
+                await db.worldBooks.update(bId, { categoryId: targetCatId });
+              }
+              state.worldBooks = await db.worldBooks.toArray();
+              selectedWorldBooks.clear();
+              updateWorldBookDeleteButton();
+              await renderWorldBookScreen();
             }
           };
 
@@ -91096,6 +91685,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (nameInput) nameInput.value = found.name || "";
                 if (findInput) findInput.value = found.findRegex || "";
                 if (replaceInput) replaceInput.value = found.replaceString || "";
+                populateRegexCategorySelect(found.categoryId || "");
                 if (modeDisplay) modeDisplay.checked = found.applyDisplay !== false;
                 if (modePrompt) modePrompt.checked = found.applyPrompt === true;
                 const existingTargets = Array.isArray(found.targetChatIds) ? found.targetChatIds.map(String) : [];
@@ -91112,6 +91702,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (nameInput) nameInput.value = "";
               if (findInput) findInput.value = "";
               if (replaceInput) replaceInput.value = "";
+              populateRegexCategorySelect("");
               if (modeDisplay) modeDisplay.checked = true;
               if (modePrompt) modePrompt.checked = false;
               if (targetModeSelect) targetModeSelect.value = "global";
@@ -91132,8 +91723,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const rxFindPreset = document.getElementById("regex-find-preset-select");
           const rxReplacePreset = document.getElementById("regex-replace-preset-select");
           const rxTargetModeSelect = document.getElementById("regex-target-mode-select");
+          const batchGroupBtn = document.getElementById("batch-group-in-edit-mode-btn");
 
           window.openRegexRuleEditor = openRegexRuleEditor;
+          if (batchGroupBtn) {
+            batchGroupBtn.addEventListener("click", () => {
+              if (typeof window.handleBatchGroupInEditMode === "function") {
+                window.handleBatchGroupInEditMode();
+              }
+            });
+          }
           if (rxTargetModeSelect) {
             rxTargetModeSelect.addEventListener("change", () => {
               const checkedBoxes = Array.from(document.querySelectorAll("#regex-target-windows-box .regex-target-window-checkbox:checked")).map((el) => el.value);
@@ -91193,6 +91792,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const nameVal = document.getElementById("regex-name-input")?.value.trim() || "正则规则";
               const findVal = document.getElementById("regex-find-input")?.value || "";
               const replaceVal = document.getElementById("regex-replace-input")?.value || "";
+              const categoryVal = document.getElementById("regex-category-select")?.value || "";
               const applyDisplay = Boolean(document.getElementById("regex-mode-display")?.checked);
               const applyPrompt = Boolean(document.getElementById("regex-mode-prompt")?.checked);
               const targetMode = document.getElementById("regex-target-mode-select")?.value === "custom" ? "custom" : "global";
@@ -91222,6 +91822,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   target.name = nameVal;
                   target.findRegex = findVal;
                   target.replaceString = replaceVal;
+                  target.categoryId = categoryVal || null;
                   target.applyDisplay = applyDisplay;
                   target.applyPrompt = applyPrompt;
                   target.targetMode = targetMode;
@@ -91238,6 +91839,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   name: nameVal,
                   findRegex: findVal,
                   replaceString: replaceVal,
+                  categoryId: categoryVal || null,
                   flags: "g",
                   enabled: true,
                   applyDisplay: applyDisplay,
@@ -91256,22 +91858,35 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
           }
 
-          function parseImportedRegexContent(text, fileName) {
+          async function parseImportedRegexContent(text, fileName) {
             const extracted = [];
             const raw = String(text || "").trim();
             if (!raw) return extracted;
+            const defaultFileGroup = String(fileName || "").replace(/\.[^.]+$/, "").trim();
 
             try {
               const jsonData = JSON.parse(raw);
+              const topGroupName = (jsonData && !Array.isArray(jsonData) && typeof jsonData === "object")
+                ? String(jsonData.group || jsonData.category || jsonData.name || defaultFileGroup).trim()
+                : defaultFileGroup;
               const list = Array.isArray(jsonData)
                 ? jsonData
-                : (Array.isArray(jsonData.regexScripts) ? jsonData.regexScripts : (Array.isArray(jsonData.rules) ? jsonData.rules : [jsonData]));
-              list.forEach((item, idx) => {
-                if (!item || typeof item !== "object") return;
+                : (Array.isArray(jsonData.regexScripts)
+                    ? jsonData.regexScripts
+                    : (Array.isArray(jsonData.rules)
+                        ? jsonData.rules
+                        : (jsonData.extensions && Array.isArray(jsonData.extensions.regex_scripts)
+                            ? jsonData.extensions.regex_scripts
+                            : (jsonData.data && jsonData.data.extensions && Array.isArray(jsonData.data.extensions.regex_scripts)
+                                ? jsonData.data.extensions.regex_scripts
+                                : [jsonData]))));
+              for (let idx = 0; idx < list.length; idx++) {
+                const item = list[idx];
+                if (!item || typeof item !== "object") continue;
                 const findStr = item.findRegex ?? item.regex ?? item.find ?? item.pattern ?? "";
-                if (!String(findStr).trim()) return;
+                if (!String(findStr).trim()) continue;
                 const repStr = item.replaceString ?? item.replace ?? item.replacement ?? "";
-                const nameStr = item.scriptName || item.name || item.title || `${fileName.replace(/\.[^.]+$/, "")}_${idx + 1}`;
+                const nameStr = item.scriptName || item.name || item.title || `${defaultFileGroup || "正则"}_${idx + 1}`;
                 const enabledVal = item.disabled !== undefined ? !item.disabled : (item.enabled !== false);
                 const itemApplyDisplay = item.applyDisplay !== undefined
                   ? Boolean(item.applyDisplay)
@@ -91279,11 +91894,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const itemApplyPrompt = item.applyPrompt !== undefined
                   ? Boolean(item.applyPrompt)
                   : (item.markdownOnly === true && !item.promptOnly ? false : Boolean(item.promptOnly));
+                const groupName = String(item.group || item.category || item.groupName || item.characterName || (list.length > 1 ? topGroupName : "")).trim();
+                const catId = groupName ? await window.ensureRegexCategoryByName(groupName) : null;
                 extracted.push({
                   id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + idx,
                   name: String(nameStr).trim(),
                   findRegex: String(findStr),
                   replaceString: String(repStr),
+                  categoryId: catId,
                   flags: item.flags || "g",
                   enabled: Boolean(enabledVal),
                   applyDisplay: itemApplyDisplay,
@@ -91293,12 +91911,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   scopeChat: item.scopeChat !== false,
                   scopeBookshelf: item.scopeBookshelf !== false,
                 });
-              });
+              }
               if (extracted.length > 0) return extracted;
             } catch (e) {}
 
             // 解析 TXT 块格式（支持 名称/查找/替换 分段，或 查找=替换 单行格式）
             const blocks = raw.split(/\n\s*---+\s*\n|\n{2,}/);
+            const txtCatId = blocks.length > 1 && defaultFileGroup
+              ? await window.ensureRegexCategoryByName(defaultFileGroup)
+              : null;
             blocks.forEach((blk, bIdx) => {
               const trimmedBlk = blk.trim();
               if (!trimmedBlk) return;
@@ -91308,9 +91929,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (findMatch && findMatch[1].trim()) {
                 extracted.push({
                   id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + bIdx,
-                  name: nameMatch ? nameMatch[1].trim() : `${fileName.replace(/\.[^.]+$/, "")}_${bIdx + 1}`,
+                  name: nameMatch ? nameMatch[1].trim() : `${defaultFileGroup || "正则"}_${bIdx + 1}`,
                   findRegex: findMatch[1].trim(),
                   replaceString: repMatch ? repMatch[1] : "",
+                  categoryId: txtCatId,
                   flags: "g",
                   enabled: true,
                   applyDisplay: true,
@@ -91331,9 +91953,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (sepMatch && sepMatch[1].trim()) {
                   extracted.push({
                     id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6) + "_" + bIdx + "_" + lIdx,
-                    name: `${fileName.replace(/\.[^.]+$/, "")}_${extracted.length + 1}`,
+                    name: `${defaultFileGroup || "正则"}_${extracted.length + 1}`,
                     findRegex: sepMatch[1].trim(),
                     replaceString: sepMatch[2] || "",
+                    categoryId: txtCatId,
                     flags: "g",
                     enabled: true,
                     applyDisplay: true,
@@ -91350,9 +91973,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (extracted.length === 0 && raw) {
               extracted.push({
                 id: "rx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-                name: fileName.replace(/\.[^.]+$/, "") || "导入正则",
+                name: defaultFileGroup || "导入正则",
                 findRegex: raw.split(/\r?\n/)[0].trim(),
                 replaceString: raw.split(/\r?\n/)[1] || "",
+                categoryId: null,
                 flags: "g",
                 enabled: true,
                 applyDisplay: true,
@@ -91381,7 +92005,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               for (const file of files) {
                 try {
                   const text = await file.text();
-                  const parsedRules = parseImportedRegexContent(text, file.name || "正则");
+                  const parsedRules = await parseImportedRegexContent(text, file.name || "正则");
                   parsedRules.forEach((r) => {
                     if (r && r.findRegex) {
                       currentRules.push(r);
@@ -92125,8 +92749,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (st.truthOrDare) {
-              if (typeof mySeat.todRoll === "number" && mySeat.todRoll > 0) st.truthOrDare.myRoll = mySeat.todRoll;
-              if (typeof oppSeat.todRoll === "number" && oppSeat.todRoll > 0) st.truthOrDare.aiRoll = oppSeat.todRoll;
+              if (typeof mySeat.todRoll === "number") st.truthOrDare.myRoll = mySeat.todRoll;
+              if (typeof oppSeat.todRoll === "number") st.truthOrDare.aiRoll = oppSeat.todRoll;
             }
 
             if (st.kingGame && Array.isArray(st.kingGame.assignments)) {
@@ -92446,6 +93070,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               aiSeat.fgLocked = true;
               fg.resultText = `${aiSpeaker} 已出拳待揭晓`;
               aiBroadcastSummary = fg.resultText;
+            } else if (st.gameId === "truth_or_dare" && st.truthOrDare) {
+              const tod = st.truthOrDare;
+              const prevRollVal = typeof prevSeat.todRoll === "number" ? prevSeat.todRoll : (tod.myRoll || 0);
+              aiSeat.todRoll = rollDie();
+              if (prevRollVal > 0) {
+                while (aiSeat.todRoll === prevRollVal) aiSeat.todRoll = rollDie();
+                tod.selectedPerson = prevRollVal < aiSeat.todRoll ? prevName : aiSpeaker;
+                tod.currentPrompt = "";
+                tod.promptSource = "none";
+                aiBroadcastSummary = `${aiSpeaker} 拼点掷出 ${aiSeat.todRoll} 点，受罚者为 ${tod.selectedPerson}`;
+              } else {
+                tod.selectedPerson = "";
+                tod.currentPrompt = "";
+                tod.promptSource = "none";
+                aiBroadcastSummary = `${aiSpeaker} 拼点掷出 ${aiSeat.todRoll} 点，等待下家掷骰`;
+              }
             }
 
             if (aiBroadcastSummary) {
@@ -93655,7 +94295,7 @@ ${recentMsgs || "无"}`;
                 <span class="tavern-banner-emblem" style="width: 22px; height: 22px; min-width: 22px;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7"></polygon><polygon points="12 7 17 16 7 16"></polygon></svg>
                 </span>
-                <span class="tavern-sidebar-title">${verticalCharsHtml}</span>
+                <span class="tavern-sidebar-title" style="color: color-mix(in srgb, var(--text-secondary) 72%, var(--card-bg)); font-weight: 500;">${verticalCharsHtml}</span>
                 ${st.hasUnreadAiUpdate ? `<span class="tavern-sidebar-dot"></span>` : ""}
               `;
               return;
@@ -94246,16 +94886,33 @@ ${recentMsgs || "无"}`;
 
               if (duelBtn) {
                 duelBtn.onclick = () => {
-                  st.rollingAnimTick = true;
-                  tod.myRoll = rollDie();
-                  tod.aiRoll = rollDie();
-                  while (tod.aiRoll === tod.myRoll) tod.aiRoll = rollDie();
                   const myName = getMyDisplayNameInChat(chat);
                   const oppName = getDefaultOpponentName(chat);
-                  tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : oppName;
-                  tod.currentPrompt = "";
-                  tod.promptSource = "none";
-                  finishPlayerTurnAction(`真心话大冒险拼点：我掷出 ${tod.myRoll} 点，${oppName} 掷出 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`, true);
+                  if (tod.myRoll > 0 && !tod.aiRoll) {
+                    if (checkTurnLock()) return;
+                  }
+                  st.rollingAnimTick = true;
+                  if (!tod.myRoll && tod.aiRoll > 0) {
+                    tod.myRoll = rollDie();
+                    while (tod.myRoll === tod.aiRoll) tod.myRoll = rollDie();
+                    tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : oppName;
+                    tod.currentPrompt = "";
+                    tod.promptSource = "none";
+                    finishPlayerTurnAction(`真心话大冒险拼点：我掷出 ${tod.myRoll} 点，${oppName} 为 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`, true);
+                  } else {
+                    tod.myRoll = rollDie();
+                    tod.aiRoll = 0;
+                    if (st.seats) {
+                      const myKey = getMyParticipantKey(chat);
+                      Object.keys(st.seats).forEach((k) => {
+                        if (k !== myKey && st.seats[k]) st.seats[k].todRoll = 0;
+                      });
+                    }
+                    tod.selectedPerson = "";
+                    tod.currentPrompt = "";
+                    tod.promptSource = "none";
+                    finishPlayerTurnAction(`真心话大冒险拼点：我掷出了 ${tod.myRoll} 点，等待 ${oppName} 掷骰`, true);
+                  }
                 };
               }
 
@@ -95333,11 +95990,43 @@ ${specificRules}`;
                   const tod = st.truthOrDare;
                   if (actionType.includes("真心话")) tod.mode = "truth";
                   else if (actionType.includes("大冒险")) tod.mode = "dare";
+                  if ((tod.myRoll > 0 && !tod.aiRoll) || actionType.includes("拼点") || actionType.includes("骰")) {
+                    tod.aiRoll = rollDie();
+                    if (tod.myRoll > 0) {
+                      while (tod.aiRoll === tod.myRoll) tod.aiRoll = rollDie();
+                      const myName = getMyDisplayNameInChat(chat);
+                      tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : speaker;
+                      aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`;
+                    } else {
+                      aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点`;
+                    }
+                  }
                 }
 
                 if (aiTurnBroadcastText) {
                   const bId = "tgb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
                   const bText = formatTavernActionBroadcast(chat, aiTurnBroadcastText, speaker);
+                  st.lastBroadcastId = bId;
+                  st.lastBroadcastText = bText;
+                  if (typeof window.appendTavernGameBroadcast === "function") {
+                    window.appendTavernGameBroadcast(chat, bText, bId);
+                  }
+                }
+              }
+
+              // 若真心话大冒险玩家已先掷骰而AI本轮未附带动作标签，自动替AI完成掷骰拼点
+              if (chat.tavernGameState && chat.tavernGameState.active && chat.tavernGameState.gameId === "truth_or_dare" && chat.tavernGameState.truthOrDare) {
+                const st = chat.tavernGameState;
+                const tod = st.truthOrDare;
+                if (tod.myRoll > 0 && !tod.aiRoll) {
+                  const speaker = aiMsg.senderName || aiMsg.name || getDefaultOpponentName(chat);
+                  tod.aiRoll = rollDie();
+                  while (tod.aiRoll === tod.myRoll) tod.aiRoll = rollDie();
+                  const myName = getMyDisplayNameInChat(chat);
+                  tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : speaker;
+                  st.hasUnreadAiUpdate = true;
+                  const bId = "tgb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+                  const bText = formatTavernActionBroadcast(chat, `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`, speaker);
                   st.lastBroadcastId = bId;
                   st.lastBroadcastText = bText;
                   if (typeof window.appendTavernGameBroadcast === "function") {
@@ -101700,11 +102389,10 @@ ${specificRules}`;
 
           document
             .getElementById("world-book-import-input")
-            .addEventListener("change", (e) => {
-              const file = e.target.files[0];
-              if (file) {
-                // 当用户选择了文件后，调用我们的核心处理函数
-                handleImportSillyTavernWorldBook(file);
+            .addEventListener("change", async (e) => {
+              const files = Array.from(e.target.files || []);
+              for (const file of files) {
+                await handleImportSillyTavernWorldBook(file);
               }
               // 每次用完后清空，这样用户下次还能选择同一个文件
               e.target.value = null;
@@ -108673,7 +109361,11 @@ ${specificRules}`;
               document
                 .getElementById("world-book-category-manager-modal")
                 .classList.remove("visible");
-              renderWorldBookScreen(); // 关闭后刷新主列表
+              if (window.currentWorldBookTopTab === "regex" && typeof window.renderRegexRulesList === "function") {
+                window.renderRegexRulesList();
+              } else {
+                renderWorldBookScreen(); // 关闭后刷新主列表
+              }
             });
           document
             .getElementById("add-new-category-btn")
@@ -108682,7 +109374,8 @@ ${specificRules}`;
             .getElementById("existing-categories-list")
             .addEventListener("click", (e) => {
               if (e.target.classList.contains("delete-group-btn")) {
-                const categoryId = parseInt(e.target.dataset.id);
+                const rawId = e.target.dataset.id;
+                const categoryId = window.currentWorldBookTopTab === "regex" ? rawId : parseInt(rawId);
                 deleteCategory(categoryId);
               }
             });
@@ -121926,6 +122619,7 @@ ${specificRules}`;
       type="file"
       id="world-book-import-input"
       accept=".json, .jsonl, .txt, .docx, .doc"
+      multiple
       style="display: none"
     />
     <input type="file" id="ludo-qbank-import-input" accept=".json,application/json,text/plain,application/octet-stream,*/*" hidden />
