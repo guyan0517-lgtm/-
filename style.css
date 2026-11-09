@@ -35183,14 +35183,30 @@ select,
   line-height: 1;
 }
 
-#toggle-world-book-edit-mode-btn {
-  width: auto !important;
-  min-width: 40px;
-  padding: 0 8px !important;
-  border-radius: 16px !important;
-  font-size: 14px !important;
-  white-space: nowrap !important;
+#world-book-screen .header {
+  padding-left: 12px;
+  padding-right: 8px;
+}
+
+#world-book-screen .header .header-actions {
+  gap: 2px;
+  margin-left: auto;
+  margin-right: -2px;
+}
+
+#world-book-screen .header .action-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
   flex-shrink: 0 !important;
+}
+
+#world-book-screen .header #world-book-delete-selected-btn {
+  width: auto !important;
+  padding: 0 6px !important;
+  border-radius: 16px !important;
 }
 
 #world-book-screen #world-book-list .list-item,

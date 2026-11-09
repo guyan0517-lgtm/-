@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=18.9" defer></script>
+    <script src="game-hall.js?v=19.1" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -1042,8 +1042,23 @@
               id="batch-group-in-edit-mode-btn"
               style="display: none"
               title="移入分组"
-              >分组</span
             >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+            </span>
 
             <span
               class="action-btn btn-danger"
@@ -1074,9 +1089,26 @@
               <!-- 用于显示数量 -->
             </span>
 
-            <span class="action-btn" id="toggle-world-book-edit-mode-btn"
-              >编辑模式</span
+            <span
+              class="action-btn"
+              id="toggle-world-book-edit-mode-btn"
+              title="编辑模式"
             >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+            </span>
 
             <span class="action-btn" id="add-world-book-btn">+</span>
 
@@ -2534,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v18.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -72535,6 +72567,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const restored = JSON.parse(JSON.stringify(chat.tavernGameState.preAiSnapshot));
               restored.preAiSnapshot = JSON.parse(JSON.stringify(chat.tavernGameState.preAiSnapshot));
               chat.tavernGameState = restored;
+              if (typeof window.renderTavernGameFloatingCard === "function") {
+                window.renderTavernGameFloatingCard(chat);
+              }
             } catch (_) {}
           }
           if (chat.settings && chat.settings.preAiForeshadowSnapshot) {
@@ -90287,20 +90322,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (listEl) listEl.classList.toggle("selection-mode", isWorldBookEditMode);
           if (rxListEl) rxListEl.classList.toggle("selection-mode", isWorldBookEditMode);
 
+          const editModeSvgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>`;
+          const editDoneSvgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+
           if (isWorldBookEditMode) {
-            editBtn.textContent = "完成";
-            manageBtn.style.display = "inline-block";
-            if (groupBtn) groupBtn.style.display = "inline-block";
+            editBtn.innerHTML = editDoneSvgIcon;
+            editBtn.title = "完成编辑";
+            manageBtn.style.display = "inline-flex";
+            if (groupBtn) groupBtn.style.display = "inline-flex";
             deleteBtn.style.display = "inline-flex"; // 让删除按钮显示
             addBtn.style.display = "none";
             importBtn.style.display = "none";
           } else {
-            editBtn.textContent = "编辑模式";
+            editBtn.innerHTML = editModeSvgIcon;
+            editBtn.title = "编辑模式";
             manageBtn.style.display = "none";
             if (groupBtn) groupBtn.style.display = "none";
             deleteBtn.style.display = "none"; // 让删除按钮隐藏
-            addBtn.style.display = "inline-block";
-            importBtn.style.display = "inline-block";
+            addBtn.style.display = "inline-flex";
+            importBtn.style.display = "inline-flex";
             selectedWorldBooks.clear();
             selectedRegexRules.clear();
             updateWorldBookDeleteButton();
@@ -91547,8 +91587,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (importWbBtn) importWbBtn.style.display = "";
               if (editModeWbBtn) editModeWbBtn.style.display = "";
               if (addWbBtn) addWbBtn.style.display = "";
-              if (manageCatBtn) manageCatBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
-              if (groupBtn) groupBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
+              if (manageCatBtn) manageCatBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
+              if (groupBtn) groupBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
               if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
               if (importRxBtn) importRxBtn.style.display = "none";
               if (addRxBtn) addRxBtn.style.display = "none";
@@ -91559,8 +91599,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (importWbBtn) importWbBtn.style.display = "";
               if (editModeWbBtn) editModeWbBtn.style.display = "";
               if (addWbBtn) addWbBtn.style.display = "";
-              if (manageCatBtn) manageCatBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
-              if (groupBtn) groupBtn.style.display = isWorldBookEditMode ? "inline-block" : "none";
+              if (manageCatBtn) manageCatBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
+              if (groupBtn) groupBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
               if (deleteSelectedWbBtn) deleteSelectedWbBtn.style.display = isWorldBookEditMode ? "inline-flex" : "none";
               if (importRxBtn) importRxBtn.style.display = "none";
               if (addRxBtn) addRxBtn.style.display = "none";
@@ -93075,11 +93115,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const prevRollVal = typeof prevSeat.todRoll === "number" ? prevSeat.todRoll : (tod.myRoll || 0);
               aiSeat.todRoll = rollDie();
               if (prevRollVal > 0) {
-                while (aiSeat.todRoll === prevRollVal) aiSeat.todRoll = rollDie();
-                tod.selectedPerson = prevRollVal < aiSeat.todRoll ? prevName : aiSpeaker;
-                tod.currentPrompt = "";
-                tod.promptSource = "none";
-                aiBroadcastSummary = `${aiSpeaker} 拼点掷出 ${aiSeat.todRoll} 点，受罚者为 ${tod.selectedPerson}`;
+                if (prevRollVal === aiSeat.todRoll) {
+                  tod.selectedPerson = "平局";
+                  tod.currentPrompt = "";
+                  tod.promptSource = "none";
+                  aiBroadcastSummary = `${aiSpeaker} 拼点掷出 ${aiSeat.todRoll} 点，双方同为 ${aiSeat.todRoll} 点平局`;
+                } else {
+                  tod.selectedPerson = prevRollVal < aiSeat.todRoll ? prevName : aiSpeaker;
+                  tod.currentPrompt = "";
+                  tod.promptSource = "none";
+                  aiBroadcastSummary = `${aiSpeaker} 拼点掷出 ${aiSeat.todRoll} 点，受罚者为 ${tod.selectedPerson}`;
+                }
               } else {
                 tod.selectedPerson = "";
                 tod.currentPrompt = "";
@@ -93263,10 +93309,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 myHole: ensureSeatEntry(st, myKey).texasHole || [deck.pop(), deck.pop()],
                 aiHole: ensureSeatEntry(st, oppKey).texasHole || [deck.pop(), deck.pop()],
                 community: [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()],
-                stage: 1, // 0: preflop, 1: flop(3), 2: turn(4), 3: river(5), 4: showdown
+                stage: 0, // 0: preflop(0), 1: flop(3), 2: turn(4), 3: river(5), 4: showdown
                 potDrinks: 2,
                 revealed: false,
-                resultText: "已发两张私密底牌并翻开三张公共牌",
+                resultText: "已发两张私密底牌，公共牌待翻开",
               };
               st.lastActionSummary = "德州扑克开局，底池两杯罚酒";
             } else if (gameId === "sic_bo") {
@@ -94263,7 +94309,7 @@ ${recentMsgs || "无"}`;
 
               <div class="tavern-btn-grid-2">
                 <button type="button" id="tavern-fg-lock-btn" class="moe-btn tavern-action-btn${lockCls}" style="background: var(--accent-color); color: var(--card-bg); border: none;">锁拳</button>
-                <button type="button" id="tavern-fg-random-btn" class="moe-btn tavern-action-btn${lockCls}" style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">亮拳</button>
+                <button type="button" id="tavern-fg-random-btn" class="moe-btn tavern-action-btn" style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">再来</button>
               </div>
             `;
           }
@@ -94894,11 +94940,15 @@ ${recentMsgs || "无"}`;
                   st.rollingAnimTick = true;
                   if (!tod.myRoll && tod.aiRoll > 0) {
                     tod.myRoll = rollDie();
-                    while (tod.myRoll === tod.aiRoll) tod.myRoll = rollDie();
-                    tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : oppName;
                     tod.currentPrompt = "";
                     tod.promptSource = "none";
-                    finishPlayerTurnAction(`真心话大冒险拼点：我掷出 ${tod.myRoll} 点，${oppName} 为 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`, true);
+                    if (tod.myRoll === tod.aiRoll) {
+                      tod.selectedPerson = "平局";
+                      finishPlayerTurnAction(`真心话大冒险拼点：我掷出 ${tod.myRoll} 点，与 ${oppName} 同为 ${tod.aiRoll} 点平局`, true);
+                    } else {
+                      tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : oppName;
+                      finishPlayerTurnAction(`真心话大冒险拼点：我掷出 ${tod.myRoll} 点，${oppName} 为 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`, true);
+                    }
                   } else {
                     tod.myRoll = rollDie();
                     tod.aiRoll = 0;
@@ -95011,16 +95061,14 @@ ${recentMsgs || "无"}`;
               if (openBtn) {
                 openBtn.onclick = () => {
                   bj.revealed = true;
-                  if (oppIsAi) {
-                    while (calcBlackjackPoints(bj.aiHand) < 17 && bj.deck.length > 0) {
-                      bj.aiHand.push(bj.deck.pop());
-                    }
-                  }
                   const myPts = calcBlackjackPoints(bj.myHand);
                   const aiPts = calcBlackjackPoints(bj.aiHand);
                   const meLabel = isAnyPeerGameChat(chat) ? myName : "我";
-                  if (myPts > 21) {
-                    bj.resultText = `${meLabel} ${myPts} 点爆牌，${oppName}获胜`;
+                  if (myPts > 21 && aiPts > 21) {
+                    bj.resultText = `双方均爆牌平局`;
+                  } else if (myPts > 21) {
+                    st.myDrinks = (st.myDrinks || 0) + 1;
+                    bj.resultText = `${meLabel} ${myPts} 点爆牌，${oppName}获胜，${meLabel}罚酒一杯`;
                   } else if (aiPts > 21 || myPts > aiPts) {
                     st.aiDrinks = (st.aiDrinks || 0) + 1;
                     bj.resultText = `${meLabel} ${myPts} 点胜过 ${oppName} ${aiPts} 点，${oppName}罚酒一杯`;
@@ -95107,7 +95155,7 @@ ${recentMsgs || "无"}`;
                   if (checkTurnLock()) return;
                   if (th.stage < 3) {
                     th.stage += 1;
-                    th.resultText = th.stage === 2 ? "已翻开第四张转牌" : "已翻开第五张河牌";
+                    th.resultText = th.stage === 1 ? "已翻开前三张公共牌" : (th.stage === 2 ? "已翻开第四张转牌" : "已翻开第五张河牌");
                   } else {
                     th.revealed = true;
                     th.resultText = "公共牌全开，双方亮底牌";
@@ -95163,7 +95211,7 @@ ${recentMsgs || "无"}`;
                   if (checkTurnLock()) return;
                   sb.myBet = btn.getAttribute("data-bet") || "大";
                   sb.resultText = `${meLabel}已押 ${sb.myBet}`;
-                  finishPlayerTurnAction(`骰宝比大小我押注了 ${sb.myBet}`, isAnyPeerGameChat(chat));
+                  finishPlayerTurnAction(`骰宝比大小我押注了 ${sb.myBet}`, true);
                 };
               });
 
@@ -95177,13 +95225,31 @@ ${recentMsgs || "无"}`;
                   const isTriple = sb.dice[0] === sb.dice[1] && sb.dice[1] === sb.dice[2];
                   const sizeLabel = isTriple ? "豹子" : (sum >= 11 ? "大" : "小");
                   const oddEven = sum % 2 === 1 ? "单" : "双";
-                  const hit = sb.myBet === sizeLabel || sb.myBet === oddEven || (sb.myBet === "豹子" && isTriple);
-                  if (hit) {
-                    st.aiDrinks = (st.aiDrinks || 0) + 1;
-                    sb.resultText = `${sb.dice.join("-")} 共 ${sum} 点 ${sizeLabel}${oddEven} · ${oppName}罚酒一杯`;
+                  const myHit = sb.myBet === sizeLabel || sb.myBet === oddEven || (sb.myBet === "豹子" && isTriple);
+                  const aiHasBet = Boolean(sb.aiBet && sb.aiBet !== "待定");
+                  const aiHit = aiHasBet && (sb.aiBet === sizeLabel || sb.aiBet === oddEven || (sb.aiBet === "豹子" && isTriple));
+                  const dicePrefix = `${sb.dice.join("-")} 共 ${sum} 点 ${sizeLabel}${oddEven}`;
+                  if (aiHasBet) {
+                    if (myHit && !aiHit) {
+                      st.aiDrinks = (st.aiDrinks || 0) + 1;
+                      sb.resultText = `${dicePrefix} · ${meLabel}押中，${oppName}罚酒一杯`;
+                    } else if (!myHit && aiHit) {
+                      st.myDrinks = (st.myDrinks || 0) + 1;
+                      sb.resultText = `${dicePrefix} · ${oppName}押中，${meLabel}罚酒一杯`;
+                    } else if (myHit && aiHit) {
+                      sb.resultText = `${dicePrefix} · 双方均押中平局`;
+                    } else {
+                      st.myDrinks = (st.myDrinks || 0) + 1;
+                      st.aiDrinks = (st.aiDrinks || 0) + 1;
+                      sb.resultText = `${dicePrefix} · 双方均未押中，各罚酒一杯`;
+                    }
                   } else {
-                    st.myDrinks = (st.myDrinks || 0) + 1;
-                    sb.resultText = `${sb.dice.join("-")} 共 ${sum} 点 ${sizeLabel}${oddEven} · ${meLabel}罚酒一杯`;
+                    if (myHit) {
+                      sb.resultText = `${dicePrefix} · ${meLabel}押中免罚`;
+                    } else {
+                      st.myDrinks = (st.myDrinks || 0) + 1;
+                      sb.resultText = `${dicePrefix} · ${meLabel}未押中罚酒一杯`;
+                    }
                   }
                   finishPlayerTurnAction(sb.resultText, true);
                 };
@@ -95358,29 +95424,15 @@ ${recentMsgs || "无"}`;
 
               if (randBtn) {
                 randBtn.onclick = () => {
-                  if (checkTurnLock()) return;
-                  if (!oppIsAi) {
-                    if (oppSeat.fgLocked) {
-                      fg.aiHandVal = oppSeat.fgHandVal;
-                      fg.aiCallVal = oppSeat.fgCallVal;
-                      settleFingerGuessingRound();
-                      finishPlayerTurnAction(`酒桌划拳：${fg.resultText}`, true);
-                    } else {
-                      fg.locked = true;
-                      mySeat.fgHandVal = fg.myHandVal;
-                      mySeat.fgCallVal = fg.myCallVal;
-                      mySeat.fgLocked = true;
-                      fg.revealed = false;
-                      fg.resultText = `${meLabel}已锁拳，等待${oppName}亮拳开局`;
-                      finishPlayerTurnAction(`我在酒桌划拳中已锁定出拳与口令`, true);
-                    }
-                    return;
-                  }
-                  const opts = [0, 5, 10];
-                  fg.aiHandVal = opts[Math.floor(Math.random() * opts.length)];
-                  fg.aiCallVal = fg.aiHandVal + opts[Math.floor(Math.random() * opts.length)];
-                  settleFingerGuessingRound();
-                  finishPlayerTurnAction(`酒桌划拳：${fg.resultText}`, true);
+                  fg.locked = false;
+                  fg.revealed = false;
+                  fg.aiHandVal = null;
+                  fg.aiCallVal = null;
+                  mySeat.fgLocked = false;
+                  oppSeat.fgLocked = false;
+                  st.turnLockedForAi = false;
+                  fg.resultText = "已开启新一轮划拳，请选好手势与喊数后点锁拳";
+                  finishPlayerTurnAction("酒桌划拳准备新一轮", false);
                 };
               }
             }
@@ -95623,30 +95675,40 @@ ${qaContext || "暂无"}
               const tod = st.truthOrDare;
               const activeNames = (st.participants || []).filter((p) => p.active !== false).map((p) => p.name).join("、");
               const hasSystemDrawnCard = tod.promptSource === "drawn" && Boolean(tod.currentPrompt);
+              const rollStatusStr = `玩家当前骰点：${tod.myRoll ? tod.myRoll + "点" : "未掷"}，【${oppName}】当前骰点：${tod.aiRoll ? tod.aiRoll + "点" : "未掷"}`;
+              const actionGuideStr = `
+- 当前拼点状态：${rollStatusStr}。
+- 真人回合制规则：当需要你掷骰拼点时（例如玩家已掷出点数等待你掷骰，或你主动发起拼点），你只需在回复末尾附带指令 [酒桌行动｜动作：拼点]，严禁自己编造具体点数！系统收到指令后会纯随机为你投出 1 到 6 的点数，你在下一回合即可看到系统为你投出的真实点数与结果。
+- 若你在对话中主动转动酒瓶选人，可在回复末尾附带 [酒桌行动｜动作：转瓶]；若你主动从系统面板抽题卡，可附带 [酒桌行动｜动作：抽卡]。`;
               if (hasSystemDrawnCard) {
                 specificRules = `
 【真心话大冒险当前状态与RP互动规则】：
 - 当前在场参与成员：${activeNames || "全员"}
 - 本轮选定的受罚角色：${tod.selectedPerson || "由本轮转瓶或拼点决定"}
-- 本轮已从系统题库抽取${tod.mode === "truth" ? "真心话" : "大冒险"}题卡：「${tod.currentPrompt}」
+- 本轮已从系统题库抽取${tod.mode === "truth" ? "真心话" : "大冒险"}题卡：「${tod.currentPrompt}」${actionGuideStr}
 - 请结合上述抽出的题卡内容，在RP对话中直接进行提问、回答或执行互动。`;
               } else {
                 specificRules = `
 【真心话大冒险当前状态与RP互动规则】：
 - 当前在场参与成员：${activeNames || "全员"}
 - 本轮选定的受罚角色：${tod.selectedPerson || "可在RP对话中直接互动或由转瓶/拼点决定"}
-- 本轮未从系统面板抽取题卡，请完全按照RP对话中的口头提问或要求自然进行互动，不要提及任何系统题卡。`;
+- 本轮未从系统面板抽取题卡，请完全按照RP对话中的口头提问或要求自然进行互动，不要提及任何系统题卡。${actionGuideStr}`;
               }
             } else if (st.gameId === "blackjack" && st.blackjack) {
               const bj = st.blackjack;
               const myCardsStr = (bj.myHand || []).map((c) => c.rank).join(", ");
-              const aiCardsStr = (bj.aiHand || []).map((c) => c.rank).join(", ");
+              const aiVisibleCards = bj.revealed
+                ? (bj.aiHand || []).map((c) => c.rank).join(", ")
+                : [bj.aiHand?.[0]?.rank || "?", "暗牌", ...(bj.aiHand || []).slice(2).map((c) => c.rank)].join(", ");
+              const aiPtsInfo = bj.revealed
+                ? `共 ${calcBlackjackPoints(bj.aiHand)} 点`
+                : `明面已知牌加上一张未翻开的暗牌，当前共 ${(bj.aiHand || []).length} 张牌`;
               specificRules = `
 【二十一点当前牌桌状态】：
 - 本局对手：【${oppName}】。
-- 【${oppName}】的手牌（含暗牌）：【${aiCardsStr}】（共 ${calcBlackjackPoints(bj.aiHand)} 点，其中第二张牌对玩家保密）。
+- 【${oppName}】当前手牌：【${aiVisibleCards}】（${aiPtsInfo}）。
 - 玩家当前明牌：【${myCardsStr}】（共 ${calcBlackjackPoints(bj.myHand)} 点）。
-- 若你选择继续要牌，在末尾附带 [酒桌行动｜动作：要牌]；若你选择停牌，附带 [酒桌行动｜动作：停牌]；若直接亮牌比大小，附带 [酒桌行动｜动作：开牌]。`;
+- 真人回合制规则：若你选择要牌，在回复末尾附带 [酒桌行动｜动作：要牌]，系统将纯随机从牌堆顶发一张牌给你，下一回合你即可看到新摸到的牌面；若你选择停牌，附带 [酒桌行动｜动作：停牌]；若直接亮出暗牌比大小，附带 [酒桌行动｜动作：开牌]。`;
             } else if (st.gameId === "russian_roulette" && st.russianRoulette) {
               const rr = st.russianRoulette;
               specificRules = `
@@ -95688,9 +95750,8 @@ ${qaContext || "暂无"}
 【酒桌划拳（十五二十）规则】：
 - 本局对手：【${oppName}】。
 - 每人双手可出 0（双拳）、5（单掌）、10（双掌），同时高喊双方总和（0、5、10、15、20）。
-- 玩家当前状态：${fg.locked ? "已在面板锁定出拳，等待你同步亮拳结算" : "准备出拳"}。
-- 请在回复末尾附带你的出拳手势与叫数（系统将自动在面板上与玩家比对结算）：
-  [酒桌行动｜动作：划拳｜手势：0或5或10｜叫数：0或5或10或15或20]`;
+- 玩家当前状态：${fg.locked ? "已在面板锁定出拳，等待你同步出拳结算" : "准备出拳"}。${fg.revealed ? `上一轮结果：${fg.resultText}` : ""}
+- 当轮到你划拳时，请在回复末尾附带 [酒桌行动｜动作：划拳]（也可指定手势与叫数：[酒桌行动｜动作：划拳｜手势：0或5或10｜叫数：0或5或10或15或20]），系统将自动在面板上与玩家比对结算，下一回合你即可看到双方亮拳结果。`;
             }
 
             const rawBlock = `
@@ -95834,17 +95895,9 @@ ${specificRules}`;
                   } else if (actionType.includes("叫号")) {
                     const qM = body.match(/数量\s*[:：]\s*(\d+)/);
                     const fM = body.match(/点数\s*[:：]\s*(\d+)/);
-                    let q = qM ? parseInt(qM[1], 10) : (ld.currentBidQty + 1);
-                    let f = fM ? parseInt(fM[1], 10) : ld.currentBidFace;
+                    let q = qM ? parseInt(qM[1], 10) : (ld.currentBidQty || 3);
+                    let f = fM ? parseInt(fM[1], 10) : (ld.currentBidFace || 6);
                     if (f < 1 || f > 6) f = 6;
-                    if (ld.lastBidder) {
-                      const prevQ = ld.lastBidQty || 3;
-                      const prevF = ld.lastBidFace || 6;
-                      if (q < prevQ || (q === prevQ && f <= prevF)) {
-                        if (f > prevF) q = prevQ;
-                        else q = prevQ + 1;
-                      }
-                    }
                     ld.lastBidder = speaker;
                     ld.lastBidQty = q;
                     ld.lastBidFace = f;
@@ -95931,7 +95984,8 @@ ${specificRules}`;
                     aiTurnBroadcastText = th.resultText;
                   } else if (actionType.includes("跟注") && th.stage < 3) {
                     th.stage += 1;
-                    th.resultText = `${speaker} 跟注，桌面翻开下一张公共牌`;
+                    const stageLabel = th.stage === 1 ? "前三张公共牌" : (th.stage === 2 ? "第四张转牌" : "第五张河牌");
+                    th.resultText = `${speaker} 跟注，桌面翻开${stageLabel}`;
                     aiTurnBroadcastText = th.resultText;
                   }
                 } else if (st.gameId === "sic_bo" && st.sicBo) {
@@ -95945,7 +95999,37 @@ ${specificRules}`;
                   if (actionType.includes("开盅")) {
                     sb.revealed = true;
                     st.rollingAnimTick = true;
-                    aiTurnBroadcastText = `${speaker} 揭开了骰宝骰盅`;
+                    const sum = (sb.dice || []).reduce((a, b) => a + b, 0);
+                    const isTriple = sb.dice[0] === sb.dice[1] && sb.dice[1] === sb.dice[2];
+                    const sizeLabel = isTriple ? "豹子" : (sum >= 11 ? "大" : "小");
+                    const oddEven = sum % 2 === 1 ? "单" : "双";
+                    const myHit = sb.myBet === sizeLabel || sb.myBet === oddEven || (sb.myBet === "豹子" && isTriple);
+                    const aiHasBet = Boolean(sb.aiBet && sb.aiBet !== "待定");
+                    const aiHit = aiHasBet && (sb.aiBet === sizeLabel || sb.aiBet === oddEven || (sb.aiBet === "豹子" && isTriple));
+                    const dicePrefix = `${speaker} 开盅：${sb.dice.join("-")} 共 ${sum} 点 ${sizeLabel}${oddEven}`;
+                    if (aiHasBet) {
+                      if (myHit && !aiHit) {
+                        st.aiDrinks = (st.aiDrinks || 0) + 1;
+                        sb.resultText = `${dicePrefix} · 我押中，${speaker} 罚酒一杯`;
+                      } else if (!myHit && aiHit) {
+                        st.myDrinks = (st.myDrinks || 0) + 1;
+                        sb.resultText = `${dicePrefix} · ${speaker} 押中，我罚酒一杯`;
+                      } else if (myHit && aiHit) {
+                        sb.resultText = `${dicePrefix} · 双方均押中平局`;
+                      } else {
+                        st.myDrinks = (st.myDrinks || 0) + 1;
+                        st.aiDrinks = (st.aiDrinks || 0) + 1;
+                        sb.resultText = `${dicePrefix} · 双方均未押中，各罚酒一杯`;
+                      }
+                    } else {
+                      if (myHit) {
+                        sb.resultText = `${dicePrefix} · 我押中免罚`;
+                      } else {
+                        st.myDrinks = (st.myDrinks || 0) + 1;
+                        sb.resultText = `${dicePrefix} · 我未押中罚酒一杯`;
+                      }
+                    }
+                    aiTurnBroadcastText = sb.resultText;
                   }
                 } else if (st.gameId === "old_maid" && st.oldMaid) {
                   const om = st.oldMaid;
@@ -95970,11 +96054,15 @@ ${specificRules}`;
                   }
                 } else if (st.gameId === "finger_guessing" && st.fingerGuessing) {
                   const fg = st.fingerGuessing;
+                  const opts = [0, 5, 10];
+                  const randHand = opts[Math.floor(Math.random() * opts.length)];
+                  const randCall = randHand + opts[Math.floor(Math.random() * opts.length)];
                   const hM = body.match(/手势\s*[:：]\s*(\d+)/);
                   const cM = body.match(/叫数\s*[:：]\s*(\d+)/);
-                  fg.aiHandVal = hM ? parseInt(hM[1], 10) : 5;
-                  fg.aiCallVal = cM ? parseInt(cM[1], 10) : 10;
+                  fg.aiHandVal = hM ? parseInt(hM[1], 10) : randHand;
+                  fg.aiCallVal = cM ? parseInt(cM[1], 10) : randCall;
                   fg.revealed = true;
+                  fg.locked = false;
                   const total = fg.myHandVal + fg.aiHandVal;
                   if (fg.myCallVal === total && fg.aiCallVal !== total) {
                     st.aiDrinks = (st.aiDrinks || 0) + 1;
@@ -95990,15 +96078,37 @@ ${specificRules}`;
                   const tod = st.truthOrDare;
                   if (actionType.includes("真心话")) tod.mode = "truth";
                   else if (actionType.includes("大冒险")) tod.mode = "dare";
-                  if ((tod.myRoll > 0 && !tod.aiRoll) || actionType.includes("拼点") || actionType.includes("骰")) {
-                    tod.aiRoll = rollDie();
-                    if (tod.myRoll > 0) {
-                      while (tod.aiRoll === tod.myRoll) tod.aiRoll = rollDie();
-                      const myName = getMyDisplayNameInChat(chat);
-                      tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : speaker;
-                      aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`;
+                  if (actionType.includes("转瓶")) {
+                    const activePlayers = getActiveParticipantsOrder(chat, st);
+                    const chosen = activePlayers[Math.floor(Math.random() * activePlayers.length)] || { name: speaker };
+                    tod.bottleAngle = (tod.bottleAngle || 0) + 720 + Math.floor(Math.random() * 360);
+                    tod.selectedPerson = chosen.name;
+                    tod.currentPrompt = "";
+                    tod.promptSource = "none";
+                    aiTurnBroadcastText = `${speaker} 转动了酒瓶，瓶口指向了：${chosen.name}`;
+                  } else if (actionType.includes("抽卡") || actionType.includes("抽题")) {
+                    const pool = getTodPoolList(tod.mode, tod.category);
+                    tod.currentPrompt = pool[Math.floor(Math.random() * pool.length)];
+                    tod.promptSource = "drawn";
+                    aiTurnBroadcastText = `${speaker} 从题库抽中了${tod.mode === "truth" ? "真心话" : "大冒险"}题卡：${tod.currentPrompt}`;
+                  } else if (actionType.includes("拼点") || actionType.includes("骰")) {
+                    st.rollingAnimTick = true;
+                    const rolled = rollDie();
+                    if (tod.myRoll > 0 && !tod.aiRoll) {
+                      tod.aiRoll = rolled;
+                      if (tod.myRoll === tod.aiRoll) {
+                        tod.selectedPerson = "平局";
+                        aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，双方同为 ${tod.aiRoll} 点平局`;
+                      } else {
+                        const myName = getMyDisplayNameInChat(chat);
+                        tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : speaker;
+                        aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`;
+                      }
                     } else {
-                      aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点`;
+                      tod.aiRoll = rolled;
+                      tod.myRoll = 0;
+                      tod.selectedPerson = "";
+                      aiTurnBroadcastText = `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，等待你掷骰`;
                     }
                   }
                 }
@@ -96006,27 +96116,6 @@ ${specificRules}`;
                 if (aiTurnBroadcastText) {
                   const bId = "tgb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
                   const bText = formatTavernActionBroadcast(chat, aiTurnBroadcastText, speaker);
-                  st.lastBroadcastId = bId;
-                  st.lastBroadcastText = bText;
-                  if (typeof window.appendTavernGameBroadcast === "function") {
-                    window.appendTavernGameBroadcast(chat, bText, bId);
-                  }
-                }
-              }
-
-              // 若真心话大冒险玩家已先掷骰而AI本轮未附带动作标签，自动替AI完成掷骰拼点
-              if (chat.tavernGameState && chat.tavernGameState.active && chat.tavernGameState.gameId === "truth_or_dare" && chat.tavernGameState.truthOrDare) {
-                const st = chat.tavernGameState;
-                const tod = st.truthOrDare;
-                if (tod.myRoll > 0 && !tod.aiRoll) {
-                  const speaker = aiMsg.senderName || aiMsg.name || getDefaultOpponentName(chat);
-                  tod.aiRoll = rollDie();
-                  while (tod.aiRoll === tod.myRoll) tod.aiRoll = rollDie();
-                  const myName = getMyDisplayNameInChat(chat);
-                  tod.selectedPerson = tod.myRoll < tod.aiRoll ? (isAnyPeerGameChat(chat) ? myName : "我") : speaker;
-                  st.hasUnreadAiUpdate = true;
-                  const bId = "tgb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-                  const bText = formatTavernActionBroadcast(chat, `${speaker} 在真心话大冒险拼点掷出 ${tod.aiRoll} 点，受罚者为 ${tod.selectedPerson}`, speaker);
                   st.lastBroadcastId = bId;
                   st.lastBroadcastText = bText;
                   if (typeof window.appendTavernGameBroadcast === "function") {
