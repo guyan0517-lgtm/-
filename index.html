@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=19.5" defer></script>
+    <script src="game-hall.js?v=19.9" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3476,7 +3476,19 @@
           </div>
 
           <!-- 生图与画师串提取面板 -->
-          <div class="module-library-panel nai-theme-apple" id="module-nai-panel" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
+          <div class="module-library-panel nai-theme-folio" id="module-nai-panel" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
+            <!-- 手札外观专属复古黄铜夹与四角星芒矢量装饰（其他外观下自动隐藏） -->
+            <svg class="mod-nai-outer-metal-clip" viewBox="0 0 64 34" fill="none" aria-hidden="true">
+              <rect x="6" y="10" width="52" height="16" rx="3" fill="currentColor" opacity="0.88"></rect>
+              <rect x="10" y="13" width="44" height="10" rx="2" stroke="var(--card-bg)" stroke-width="1.2" opacity="0.55"></rect>
+              <path d="M20 10V4C20 2.34 21.34 1 23 1H41C42.66 1 44 2.34 44 4V10" stroke="currentColor" stroke-width="2.2"></path>
+              <circle cx="15" cy="18" r="2" fill="var(--card-bg)" opacity="0.7"></circle>
+              <circle cx="49" cy="18" r="2" fill="var(--card-bg)" opacity="0.7"></circle>
+            </svg>
+            <svg class="mod-nai-outer-corner tl" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
+            <svg class="mod-nai-outer-corner tr" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
+            <svg class="mod-nai-outer-corner bl" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
+            <svg class="mod-nai-outer-corner br" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
             <div class="mod-nai-scroll">
               <!-- 顶部模式单键切换与设置栏 -->
               <div class="mod-nai-topbar">
@@ -3752,9 +3764,11 @@
               <div class="form-group" style="margin-bottom: 0;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">外观</label>
                 <select id="mod-nai-setting-theme" class="moe-input mod-nai-select">
+                  <option value="folio">手札</option>
+                  <option value="tavern">酒馆</option>
                   <option value="apple">青苹果</option>
-                  <option value="default">初始</option>
                   <option value="puppy">狗塑</option>
+                  <option value="default">初始</option>
                 </select>
               </div>
               <div style="display: flex; justify-content: flex-end; padding-top: 4px;">
@@ -3763,226 +3777,273 @@
             </div>
           </div>
 
-          <!-- 生图收藏夹与共享画册弹窗（中世纪米棕纸质书签面板） -->
+          <!-- 生图收藏夹与共享画册弹窗（边境酒馆经营手札风格） -->
           <div class="modal" id="mod-nai-collection-modal" style="display: none;">
             <div class="modal-content mod-nai-bookmark-folio">
-              <div class="mod-nai-folio-ribbon"></div>
+              <!-- 左上角复古金属装订夹矢量装饰 -->
+              <svg class="mod-nai-folio-metal-clip" viewBox="0 0 64 34" fill="none" aria-hidden="true">
+                <rect x="6" y="10" width="52" height="16" rx="3" fill="currentColor" opacity="0.88"></rect>
+                <rect x="10" y="13" width="44" height="10" rx="2" stroke="var(--card-bg)" stroke-width="1.2" opacity="0.55"></rect>
+                <path d="M20 10V4C20 2.34 21.34 1 23 1H41C42.66 1 44 2.34 44 4V10" stroke="currentColor" stroke-width="2.2"></path>
+                <circle cx="15" cy="18" r="2" fill="var(--card-bg)" opacity="0.7"></circle>
+                <circle cx="49" cy="18" r="2" fill="var(--card-bg)" opacity="0.7"></circle>
+              </svg>
 
-              <!-- 顶部书签栏：标题 + 右上角矢量切换按钮 + 关闭按钮 -->
-              <div class="mod-nai-folio-header">
-                <div class="mod-nai-folio-title-group">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+              <!-- 顶部探出式手札分类签条 -->
+              <div class="mod-nai-folio-top-tabs">
+                <button type="button" class="mod-nai-folio-top-tab is-active" id="mod-nai-col-tab-local" title="收藏夹">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
                   </svg>
-                  <span class="mod-nai-folio-title" id="mod-nai-col-title">收藏夹</span>
-                  <span class="mod-nai-folio-subtitle" id="mod-nai-col-subtitle">私藏</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-refresh-shared-btn" style="display: none;" title="刷新共享收藏">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="23 4 23 10 17 10"></polyline>
-                      <polyline points="1 20 1 14 7 14"></polyline>
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
-                  </button>
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-scope-toggle-btn" title="切换私藏与共享">
-                    <svg id="mod-nai-col-scope-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <line x1="2" y1="12" x2="22" y2="12"></line>
-                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                    </svg>
-                    <span id="mod-nai-col-scope-btn-label">共享</span>
-                  </button>
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-close-btn" title="关闭">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
+                </button>
+                <button type="button" class="mod-nai-folio-top-tab" id="mod-nai-col-tab-shared" title="共享集">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                </button>
               </div>
 
-              <!-- 视图一：九宫格书签展示面（每页9个，外层仅显示1:1图片与名字） -->
-              <div id="mod-nai-col-grid-page" style="display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px;">
-                <div id="mod-nai-col-status-bar" style="display: none; font-size: 11px; color: var(--folio-ink-light); text-align: center; padding: 2px 4px;"></div>
-                <div class="mod-nai-folio-grid" id="mod-nai-col-grid-container"></div>
-                <div class="mod-nai-folio-footer">
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-prev-btn">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                    <span>上页</span>
-                  </button>
-                  <div class="mod-nai-folio-page-text" id="mod-nai-col-page-indicator">第 1 / 1 页</div>
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-next-btn">
-                    <span>下页</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                  </button>
-                </div>
-              </div>
+              <!-- 内部古典双线画框与四角星芒雕花 -->
+              <div class="mod-nai-folio-ornate-frame">
+                <svg class="mod-nai-corner-ornament tl" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
+                <svg class="mod-nai-corner-ornament tr" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
+                <svg class="mod-nai-corner-ornament bl" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
+                <svg class="mod-nai-corner-ornament br" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="8,0 10.2,5.8 16,8 10.2,10.2 8,16 5.8,10.2 0,8 5.8,5.8"></polygon></svg>
 
-              <!-- 视图二：单张书签详情展示面（不进入编辑模式时的美观展示面） -->
-              <div id="mod-nai-col-detail-page" style="display: none; flex-direction: column; flex: 1; min-height: 0; gap: 8px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-shrink: 0;">
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-back-btn">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                    <span>返回</span>
-                  </button>
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-upload-btn">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <!-- 边境酒馆报头条风格顶部栏 -->
+                <div class="mod-nai-folio-header">
+                  <div class="mod-nai-folio-title-group">
+                    <span class="mod-nai-folio-stamp-tag">FOLIO</span>
+                    <span class="mod-nai-folio-title-wrap">
+                      <span class="mod-nai-folio-title" id="mod-nai-col-title">收藏夹</span>
+                    </span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-refresh-shared-btn" style="display: none;" title="刷新共享收藏">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                      </svg>
+                    </button>
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-scope-toggle-btn" title="切换收藏夹与共享集">
+                      <svg id="mod-nai-col-scope-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                      </svg>
+                    </button>
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-close-btn" title="关闭">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 视图一：九宫格书签展示面（每页9个，外层仅显示1:1图片与名字） -->
+                <div id="mod-nai-col-grid-page" style="display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 6px;">
+                  <div id="mod-nai-col-status-bar" style="display: none; font-size: 11px; color: var(--folio-ink-light); text-align: center; padding: 2px 4px;"></div>
+                  <div class="mod-nai-folio-grid" id="mod-nai-col-grid-container"></div>
+                  <div class="mod-nai-folio-footer">
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-prev-btn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      </svg>
+                      <span>上页</span>
+                    </button>
+                    <div class="mod-nai-folio-page-text" id="mod-nai-col-page-indicator">第 1 / 1 页</div>
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-next-btn">
+                      <span>下页</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 视图二：单张书签详情展示面（不进入编辑模式时的美观展示面） -->
+                <div id="mod-nai-col-detail-page" style="display: none; flex-direction: column; flex: 1; min-height: 0; gap: 7px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-shrink: 0;">
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-back-btn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      </svg>
+                      <span>返回</span>
+                    </button>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-upload-btn" title="上传至共享集">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="17 8 12 3 7 8"></polyline>
+                          <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                      </button>
+                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-edit-btn">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 20h9"></path>
+                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                        <span>编辑</span>
+                      </button>
+                      <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-detail-import-btn" style="display: none;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>收录</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="mod-nai-folio-body-scroll">
+                    <div class="mod-nai-detail-stage-wrap">
+                      <div class="mod-nai-detail-square-stage" id="mod-nai-col-detail-img-stage"></div>
+                      <!-- 边境酒馆许可证同款火漆印章 -->
+                      <div class="mod-nai-wax-seal" id="mod-nai-col-wax-seal" title="点击盖章填入生图">
+                        <div class="mod-nai-wax-seal-text">酒馆<br />典藏印</div>
+                      </div>
+                    </div>
+
+                    <div class="mod-nai-detail-title-banner">
+                      <div class="mod-nai-detail-title-text" id="mod-nai-col-detail-name">未命名书签</div>
+                      <div class="mod-nai-stars-row" aria-hidden="true">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                      </div>
+                    </div>
+
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                          </svg>
+                          <span>画师</span>
+                        </span>
+                        <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-artist-btn" style="height: 23px; font-size: 10.5px; padding: 0 7px;">复制</button>
+                      </div>
+                      <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-artist-text"></div>
+                    </div>
+
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                          </svg>
+                          <span>正面</span>
+                        </span>
+                        <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-pos-btn" style="height: 23px; font-size: 10.5px; padding: 0 7px;">复制</button>
+                      </div>
+                      <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-pos-text"></div>
+                    </div>
+
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                          </svg>
+                          <span>负面</span>
+                        </span>
+                        <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-neg-btn" style="height: 23px; font-size: 10.5px; padding: 0 7px;">复制</button>
+                      </div>
+                      <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-neg-text"></div>
+                    </div>
+                  </div>
+
+                  <div class="mod-nai-folio-footer">
+                    <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-detail-apply-btn" style="width: 100%; height: 33px; font-size: 12px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      <span>填入生图</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 视图三：书签编辑模式（点击编辑后进入，可上传1:1图并设置名字、画师、正面、负面） -->
+                <div id="mod-nai-col-edit-page" style="display: none; flex-direction: column; flex: 1; min-height: 0; gap: 7px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-shrink: 0;">
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-back-btn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      </svg>
+                      <span>返回</span>
+                    </button>
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-grab-current-btn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
                       </svg>
-                      <span>上传</span>
-                    </button>
-                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-edit-btn">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 20h9"></path>
-                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                      </svg>
-                      <span>编辑</span>
-                    </button>
-                    <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-detail-import-btn" style="display: none;">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-                      </svg>
-                      <span>收录</span>
+                      <span>取当前生图</span>
                     </button>
                   </div>
-                </div>
 
-                <div class="mod-nai-folio-body-scroll">
-                  <div class="mod-nai-detail-square-stage" id="mod-nai-col-detail-img-stage"></div>
-                  <div class="mod-nai-detail-title-banner">
-                    <div class="mod-nai-detail-title-text" id="mod-nai-col-detail-name">未命名书签</div>
-                  </div>
-
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-                          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-                        </svg>
-                        <span>画师</span>
-                      </span>
-                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-artist-btn" style="height: 24px; font-size: 11px; padding: 0 8px;">复制</button>
+                  <div class="mod-nai-folio-body-scroll">
+                    <input type="file" id="mod-nai-col-edit-file-input" accept="image/*" style="display: none;" />
+                    <div class="mod-nai-detail-stage-wrap">
+                      <div class="mod-nai-detail-square-stage" id="mod-nai-col-edit-img-stage" style="cursor: pointer;" title="点击上传方形封面图"></div>
+                      <div class="mod-nai-wax-seal" id="mod-nai-col-edit-wax-seal" title="点击上传方形封面图">
+                        <div class="mod-nai-wax-seal-text">上传<br />画印</div>
+                      </div>
                     </div>
-                    <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-artist-text"></div>
-                  </div>
 
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                        </svg>
-                        <span>正面</span>
-                      </span>
-                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-pos-btn" style="height: 24px; font-size: 11px; padding: 0 8px;">复制</button>
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">名字</span>
+                      </div>
+                      <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入收藏名字" />
                     </div>
-                    <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-pos-text"></div>
-                  </div>
 
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-                        </svg>
-                        <span>负面</span>
-                      </span>
-                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-neg-btn" style="height: 24px; font-size: 11px; padding: 0 8px;">复制</button>
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">画师</span>
+                      </div>
+                      <textarea id="mod-nai-col-edit-artist-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="2" placeholder="输入画师串"></textarea>
                     </div>
-                    <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-neg-text"></div>
-                  </div>
-                </div>
 
-                <div class="mod-nai-folio-footer">
-                  <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-detail-apply-btn" style="width: 100%; height: 34px; font-size: 12.5px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    <span>填入生图</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- 视图三：书签编辑模式（点击编辑后进入，可上传1:1图并设置名字、画师、正面、负面） -->
-              <div id="mod-nai-col-edit-page" style="display: none; flex-direction: column; flex: 1; min-height: 0; gap: 8px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-shrink: 0;">
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-back-btn">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                    <span>返回</span>
-                  </button>
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-grab-current-btn">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span>取当前生图</span>
-                  </button>
-                </div>
-
-                <div class="mod-nai-folio-body-scroll">
-                  <input type="file" id="mod-nai-col-edit-file-input" accept="image/*" style="display: none;" />
-                  <div class="mod-nai-detail-square-stage" id="mod-nai-col-edit-img-stage" style="cursor: pointer;" title="点击上传方形封面图"></div>
-
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">名字</span>
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">正面</span>
+                      </div>
+                      <textarea id="mod-nai-col-edit-pos-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="3" placeholder="输入正面提示词"></textarea>
                     </div>
-                    <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入收藏名字" />
-                  </div>
 
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">画师</span>
+                    <div class="mod-nai-detail-section">
+                      <div class="mod-nai-detail-sec-head">
+                        <span class="mod-nai-detail-sec-label">负面</span>
+                      </div>
+                      <textarea id="mod-nai-col-edit-neg-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="2" placeholder="输入负面提示词"></textarea>
                     </div>
-                    <textarea id="mod-nai-col-edit-artist-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="2" placeholder="输入画师串"></textarea>
                   </div>
 
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">正面</span>
-                    </div>
-                    <textarea id="mod-nai-col-edit-pos-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="3" placeholder="输入正面提示词"></textarea>
+                  <div class="mod-nai-folio-footer">
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-delete-btn" style="height: 33px; padding: 0 13px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                      <span>删除</span>
+                    </button>
+                    <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-edit-save-btn" style="flex: 1; height: 33px; font-size: 12px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                      </svg>
+                      <span>保存</span>
+                    </button>
                   </div>
-
-                  <div class="mod-nai-detail-section">
-                    <div class="mod-nai-detail-sec-head">
-                      <span class="mod-nai-detail-sec-label">负面</span>
-                    </div>
-                    <textarea id="mod-nai-col-edit-neg-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="2" placeholder="输入负面提示词"></textarea>
-                  </div>
-                </div>
-
-                <div class="mod-nai-folio-footer">
-                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-delete-btn" style="height: 34px; padding: 0 14px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                    <span>删除</span>
-                  </button>
-                  <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-edit-save-btn" style="flex: 1; height: 34px; font-size: 12.5px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                      <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                      <polyline points="7 3 7 8 15 8"></polyline>
-                    </svg>
-                    <span>保存</span>
-                  </button>
                 </div>
               </div>
             </div>
@@ -42592,6 +42653,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let isBound = false;
 
           const THEME_ICONS = {
+            folio: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><polygon points="12 6 13.5 9.2 17 9.7 14.5 12.1 15.1 15.5 12 13.8 8.9 15.5 9.5 12.1 7 9.7 10.5 9.2 12 6"></polygon></svg>',
+            tavern: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path><path d="M12 7v6"></path><path d="M9 10h6"></path></svg>',
             apple: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 0 3 1 3.5 2.5C17 4.5 19.5 5.5 20 8c.6 3-1 7-3.5 10-1.5 1.8-3 2.5-4.5 2.5s-3-.7-4.5-2.5C5 15 3.4 11 4 8c.5-2.5 3-3.5 4.5-2.5C9 4 10.5 3 12 3z"></path><path d="M12 3c0-1.5 1.5-2.5 3-2"></path></svg>',
             default: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
             puppy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"></circle><circle cx="18" cy="8" r="2"></circle><circle cx="4" cy="8" r="2"></circle><path d="M14.5 13.5c-1.5-1.5-3.5-1.5-5 0L7 16c-1.5 1.5-.5 4 2 4h6c2.5 0 3.5-2.5 2-4l-2.5-2.5z"></path></svg>'
@@ -42606,7 +42669,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const defaultModel = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
             const defaults = {
               mode: "generate",
-              theme: "apple",
+              theme: "folio",
+              tavernThemeMigratedV196: true,
+              folioThemeMigratedV199: true,
               artistText: defaultArtist,
               pos1Text: defaultPos,
               pos2Text: "",
@@ -42628,6 +42693,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const raw = localStorage.getItem(PANEL_STATE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
+                if (parsed && !parsed.folioThemeMigratedV199) {
+                  parsed.theme = "folio";
+                  parsed.folioThemeMigratedV199 = true;
+                  try {
+                    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(parsed));
+                  } catch (_) {}
+                }
                 return Object.assign({}, defaults, parsed);
               }
             } catch (_) {}
@@ -42705,13 +42777,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const panel = document.getElementById("module-nai-panel");
             const iconBox = document.getElementById("mod-nai-theme-icon");
             const themeSelect = document.getElementById("mod-nai-setting-theme");
-            const validTheme = (themeName === "default" || themeName === "puppy" || themeName === "apple") ? themeName : "apple";
+            const validTheme = (themeName === "folio" || themeName === "tavern" || themeName === "default" || themeName === "puppy" || themeName === "apple") ? themeName : "folio";
             if (panel) {
-              panel.classList.remove("nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
+              panel.classList.remove("nai-theme-folio", "nai-theme-tavern", "nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
               panel.classList.add("nai-theme-" + validTheme);
             }
             if (iconBox) {
-              iconBox.innerHTML = THEME_ICONS[validTheme] || THEME_ICONS.apple;
+              iconBox.innerHTML = THEME_ICONS[validTheme] || THEME_ICONS.folio;
             }
             if (themeSelect && themeSelect.value !== validTheme) {
               themeSelect.value = validTheme;
@@ -43697,16 +43769,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function updateCollectionHeaderUI() {
             const titleEl = document.getElementById("mod-nai-col-title");
-            const subEl = document.getElementById("mod-nai-col-subtitle");
-            const scopeBtnLabel = document.getElementById("mod-nai-col-scope-btn-label");
             const scopeIcon = document.getElementById("mod-nai-col-scope-icon");
             const refreshBtn = document.getElementById("mod-nai-col-refresh-shared-btn");
+            const tabLocal = document.getElementById("mod-nai-col-tab-local");
+            const tabShared = document.getElementById("mod-nai-col-tab-shared");
             const isShared = colScope === "shared";
 
             if (titleEl) titleEl.textContent = isShared ? "共享集" : "收藏夹";
-            if (subEl) subEl.textContent = isShared ? "云端画册" : "私藏书签";
-            if (scopeBtnLabel) scopeBtnLabel.textContent = isShared ? "私藏" : "共享";
             if (refreshBtn) refreshBtn.style.display = isShared ? "inline-flex" : "none";
+            if (tabLocal) tabLocal.classList.toggle("is-active", !isShared);
+            if (tabShared) tabShared.classList.toggle("is-active", isShared);
             if (scopeIcon) {
               scopeIcon.innerHTML = isShared
                 ? '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>'
@@ -44133,9 +44205,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const openBtn = document.getElementById("mod-nai-open-collection-btn");
             const closeBtn = document.getElementById("mod-nai-col-close-btn");
             const scopeToggleBtn = document.getElementById("mod-nai-col-scope-toggle-btn");
+            const tabLocalBtn = document.getElementById("mod-nai-col-tab-local");
+            const tabSharedBtn = document.getElementById("mod-nai-col-tab-shared");
             const refreshSharedBtn = document.getElementById("mod-nai-col-refresh-shared-btn");
             const prevBtn = document.getElementById("mod-nai-col-prev-btn");
             const nextBtn = document.getElementById("mod-nai-col-next-btn");
+            const detailWaxSeal = document.getElementById("mod-nai-col-wax-seal");
+            const editWaxSeal = document.getElementById("mod-nai-col-edit-wax-seal");
+
+            const switchScopeTo = (targetScope) => {
+              colScope = targetScope === "shared" ? "shared" : "local";
+              switchCollectionSubView("grid");
+              if (colScope === "shared" && !colSharedLoadedOnce) {
+                renderCollectionGrid();
+                refreshSharedBookmarksFromGitHub();
+              } else {
+                setColStatus(colScope === "shared" && colSharedList.length === 0 ? "共享集暂无内容，可在收藏详情页点击上传分享" : "");
+                renderCollectionGrid();
+              }
+            };
 
             if (openBtn && modal) {
               openBtn.addEventListener("click", () => {
@@ -44153,15 +44241,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (scopeToggleBtn) {
               scopeToggleBtn.addEventListener("click", () => {
-                colScope = colScope === "local" ? "shared" : "local";
-                switchCollectionSubView("grid");
-                if (colScope === "shared" && !colSharedLoadedOnce) {
-                  renderCollectionGrid();
-                  refreshSharedBookmarksFromGitHub();
-                } else {
-                  setColStatus(colScope === "shared" && colSharedList.length === 0 ? "共享集暂无内容，可在私藏详情页点击上传分享" : "");
-                  renderCollectionGrid();
-                }
+                switchScopeTo(colScope === "local" ? "shared" : "local");
+              });
+            }
+            if (tabLocalBtn) {
+              tabLocalBtn.addEventListener("click", () => {
+                if (colScope !== "local") switchScopeTo("local");
+              });
+            }
+            if (tabSharedBtn) {
+              tabSharedBtn.addEventListener("click", () => {
+                if (colScope !== "shared") switchScopeTo("shared");
+              });
+            }
+            if (detailWaxSeal) {
+              detailWaxSeal.addEventListener("click", () => {
+                const applyBtn = document.getElementById("mod-nai-col-detail-apply-btn");
+                if (applyBtn) applyBtn.click();
+              });
+            }
+            if (editWaxSeal) {
+              editWaxSeal.addEventListener("click", () => {
+                const fileInp = document.getElementById("mod-nai-col-edit-file-input");
+                if (fileInp) fileInp.click();
               });
             }
             if (refreshSharedBtn) {

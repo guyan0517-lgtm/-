@@ -36431,17 +36431,19 @@ select,
 
 /* ===================================================================
  * 模组生图与画师串提取面板 (#module-nai-panel)
- * 严格复用现有 CSS 变量体系，支持 初始 / 青苹果 / 狗塑 三种面板外观
+ * 严格复用现有 CSS 变量体系，支持 酒馆 / 青苹果 / 狗塑 / 初始 四种面板外观
  * =================================================================== */
 #module-nai-panel {
   --nai-panel-bg: var(--background-color);
   --nai-card-bg: var(--card-bg);
   --nai-sub-bg: var(--secondary-bg);
   --nai-border: var(--border-color);
+  --nai-border-strong: var(--border-color);
   --nai-text: var(--text-primary);
   --nai-muted: var(--text-secondary);
   --nai-accent: var(--accent-color);
   --nai-accent-soft: color-mix(in srgb, var(--accent-color) 12%, var(--card-bg));
+  --nai-seal: color-mix(in srgb, var(--tukey-primary) 58%, var(--tukey-text-main));
   --nai-card-radius: 14px;
   --nai-btn-radius: 9999px;
   --nai-card-shadow: 0 2px 10px color-mix(in srgb, var(--text-primary) 4%, transparent);
@@ -36454,6 +36456,99 @@ select,
   overflow: hidden;
 }
 
+/* 手札美化外观（与收藏夹同款的完整边境酒馆经营手札精装外框版，保留原有酒馆/青苹果/狗塑/初始不覆盖） */
+#module-nai-panel.nai-theme-folio {
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-text-light) 22%, var(--card-bg));
+  --nai-paper-mid: color-mix(in srgb, var(--tukey-text-light) 30%, var(--card-bg));
+  --nai-paper-deep: color-mix(in srgb, var(--tukey-text-light) 40%, var(--card-bg));
+  --nai-card-bg: color-mix(in srgb, var(--tukey-text-light) 9%, var(--card-bg));
+  --nai-sub-bg: color-mix(in srgb, var(--tukey-text-light) 25%, var(--card-bg));
+  --nai-border: color-mix(in srgb, var(--tukey-text-light) 48%, var(--border-color));
+  --nai-border-strong: color-mix(in srgb, var(--tukey-text-main) 64%, var(--border-color));
+  --nai-text: var(--tukey-text-main);
+  --nai-muted: var(--tukey-text-light);
+  --nai-accent: var(--tukey-text-main);
+  --nai-accent-soft: color-mix(in srgb, var(--tukey-text-light) 28%, var(--card-bg));
+  --nai-seal: color-mix(in srgb, var(--tukey-primary) 56%, var(--tukey-text-main));
+  --nai-card-radius: 5px;
+  --nai-card-shadow:
+    inset 0 0 0 2px var(--nai-card-bg),
+    inset 0 0 0 3px color-mix(in srgb, var(--nai-border) 62%, transparent),
+    0 2px 0 0 var(--nai-paper-mid),
+    0 3px 6px color-mix(in srgb, var(--tukey-text-main) 14%, transparent);
+  background-color: var(--nai-panel-bg);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at center, transparent 52%, color-mix(in srgb, var(--tukey-text-main) 12%, transparent) 100%);
+  background-size: 20px 20px, 20px 20px, 100% 100%;
+  padding: 16px 10px 14px 10px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* 外层手札专属装饰默认隐藏，仅在 nai-theme-folio 下显示 */
+#module-nai-panel .mod-nai-outer-metal-clip,
+#module-nai-panel .mod-nai-outer-corner {
+  display: none;
+}
+
+#module-nai-panel.nai-theme-folio .mod-nai-outer-metal-clip {
+  display: block;
+  position: absolute;
+  top: 2px;
+  left: 24px;
+  width: 48px;
+  height: 25px;
+  transform: rotate(-2.5deg);
+  z-index: 25;
+  pointer-events: none;
+  color: var(--nai-text);
+  filter: drop-shadow(1px 2px 2px color-mix(in srgb, var(--tukey-text-main) 26%, transparent));
+}
+
+#module-nai-panel.nai-theme-folio .mod-nai-outer-corner {
+  display: block;
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  color: var(--nai-seal);
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0.85;
+}
+#module-nai-panel.nai-theme-folio .mod-nai-outer-corner.tl { top: 21px; left: 15px; }
+#module-nai-panel.nai-theme-folio .mod-nai-outer-corner.tr { top: 21px; right: 15px; }
+#module-nai-panel.nai-theme-folio .mod-nai-outer-corner.bl { bottom: 21px; left: 15px; }
+#module-nai-panel.nai-theme-folio .mod-nai-outer-corner.br { bottom: 21px; right: 15px; }
+
+/* 边境酒馆经营手札美化外观（保留原有酒馆版本） */
+#module-nai-panel.nai-theme-tavern {
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-text-light) 20%, var(--card-bg));
+  --nai-card-bg: color-mix(in srgb, var(--tukey-text-light) 10%, var(--card-bg));
+  --nai-sub-bg: color-mix(in srgb, var(--tukey-text-light) 24%, var(--card-bg));
+  --nai-border: color-mix(in srgb, var(--tukey-text-light) 48%, var(--border-color));
+  --nai-border-strong: color-mix(in srgb, var(--tukey-text-main) 62%, var(--border-color));
+  --nai-text: var(--tukey-text-main);
+  --nai-muted: var(--tukey-text-light);
+  --nai-accent: var(--tukey-text-main);
+  --nai-accent-soft: color-mix(in srgb, var(--tukey-text-light) 28%, var(--card-bg));
+  --nai-seal: color-mix(in srgb, var(--tukey-primary) 55%, var(--tukey-text-main));
+  --nai-card-radius: 6px;
+  --nai-card-shadow:
+    0 2px 4px -1px color-mix(in srgb, var(--tukey-text-main) 18%, transparent),
+    0 3px 0 0 color-mix(in srgb, var(--tukey-text-light) 12%, var(--card-bg)),
+    0 3px 0 1px color-mix(in srgb, var(--tukey-text-light) 42%, var(--border-color)),
+    0 6px 0 0 color-mix(in srgb, var(--tukey-text-light) 22%, var(--card-bg)),
+    0 6px 0 1px color-mix(in srgb, var(--tukey-text-main) 34%, var(--border-color)),
+    0 10px 18px color-mix(in srgb, var(--tukey-text-main) 16%, transparent);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 50% 35%, transparent 55%, color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 100%);
+  background-size: 20px 20px, 20px 20px, 100% 100%;
+}
+
 /* 青苹果美化外观 */
 #module-nai-panel.nai-theme-apple {
   --nai-accent: color-mix(in srgb, var(--tukey-success) 52%, var(--text-primary));
@@ -36462,6 +36557,7 @@ select,
   --nai-card-bg: color-mix(in srgb, var(--tukey-success) 5%, var(--card-bg));
   --nai-sub-bg: color-mix(in srgb, var(--tukey-success) 13%, var(--card-bg));
   --nai-border: color-mix(in srgb, var(--tukey-success) 38%, var(--border-color));
+  --nai-border-strong: color-mix(in srgb, var(--tukey-success) 52%, var(--border-color));
   --nai-card-radius: 16px;
   --nai-card-shadow:
     0 4px 14px color-mix(in srgb, var(--tukey-success) 14%, transparent),
@@ -36476,6 +36572,7 @@ select,
   --nai-card-bg: var(--card-bg);
   --nai-sub-bg: color-mix(in srgb, var(--tukey-primary-light) 16%, var(--secondary-bg));
   --nai-border: color-mix(in srgb, var(--tukey-text-light) 45%, var(--border-color));
+  --nai-border-strong: color-mix(in srgb, var(--tukey-text-main) 50%, var(--border-color));
   --nai-text: var(--tukey-text-main);
   --nai-muted: var(--tukey-text-light);
   --nai-card-radius: 16px;
@@ -36487,10 +36584,28 @@ select,
 #module-nai-panel .mod-nai-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 14px 22px 14px;
+  padding: 10px 14px 24px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+/* 手札外观：外层书页多层立体阴影 + 古典双实线内画框 */
+#module-nai-panel.nai-theme-folio .mod-nai-scroll {
+  border: 3px double var(--nai-border-strong);
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--nai-card-bg) 42%, transparent);
+  box-shadow:
+    inset 0 0 22px color-mix(in srgb, var(--tukey-text-main) 12%, transparent),
+    0 3px 0 0 var(--nai-card-bg),
+    0 3px 0 1px var(--nai-border-strong),
+    0 6px 0 0 var(--nai-paper-mid),
+    0 6px 0 1px var(--nai-border-strong),
+    0 9px 0 0 var(--nai-paper-deep),
+    0 9px 0 1px var(--nai-border-strong),
+    0 14px 24px color-mix(in srgb, var(--tukey-text-main) 24%, transparent);
+  padding: 12px 11px 22px 11px;
+  gap: 11px;
 }
 
 #module-nai-panel .mod-nai-topbar {
@@ -36504,10 +36619,34 @@ select,
   border-radius: var(--nai-card-radius);
   box-shadow: var(--nai-card-shadow);
   flex-shrink: 0;
+  position: relative;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-topbar {
+  background-color: color-mix(in srgb, var(--tukey-text-light) 6%, var(--card-bg));
+  border: 1.5px solid var(--nai-border-strong);
+  box-shadow:
+    inset 0 0 0 2px var(--nai-card-bg),
+    inset 0 0 0 3px var(--nai-border),
+    var(--nai-card-shadow);
+  padding: 9px 11px;
+}
+
+#module-nai-panel.nai-theme-folio .mod-nai-topbar {
+  background-color: var(--nai-card-bg);
+  border-top: 2px solid var(--nai-border-strong);
+  border-bottom: 2px solid var(--nai-border-strong);
+  border-left: 1.5px solid var(--nai-border-strong);
+  border-right: 1.5px solid var(--nai-border-strong);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px var(--nai-panel-bg),
+    1px 2px 4px color-mix(in srgb, var(--tukey-text-main) 10%, transparent);
+  padding: 7px 9px;
 }
 
 #module-nai-panel.nai-theme-puppy .mod-nai-topbar {
-  border-style: dashed;
+  border-style: solid;
 }
 
 #module-nai-panel .mod-nai-title-wrap {
@@ -36530,11 +36669,57 @@ select,
   flex-shrink: 0;
 }
 
+#module-nai-panel.nai-theme-tavern .mod-nai-badge-icon,
+#module-nai-panel.nai-theme-folio .mod-nai-badge-icon {
+  border-radius: 4px;
+  border: 1px solid var(--nai-border-strong);
+  background-color: var(--nai-sub-bg);
+  color: var(--nai-seal);
+  margin-right: 2px;
+  position: relative;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-badge-icon::after,
+#module-nai-panel.nai-theme-folio .mod-nai-badge-icon::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  background-color: var(--nai-border-strong);
+}
+
 #module-nai-panel .mod-nai-mode-title {
   font-size: 13.5px;
   font-weight: 700;
   color: var(--nai-text);
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-mode-title,
+#module-nai-panel.nai-theme-folio .mod-nai-mode-title {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-size: 14.5px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  margin-left: 3px;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-mode-title::before,
+#module-nai-panel.nai-theme-folio .mod-nai-mode-title::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  bottom: 1px;
+  height: 7px;
+  background-color: color-mix(in srgb, var(--tukey-text-light) 42%, transparent);
+  transform: rotate(-2deg);
+  border-radius: 2px;
+  z-index: -1;
 }
 
 #module-nai-panel .mod-nai-meta-pill {
@@ -36549,6 +36734,16 @@ select,
   text-overflow: ellipsis;
 }
 
+#module-nai-panel.nai-theme-tavern .mod-nai-meta-pill,
+#module-nai-panel.nai-theme-folio .mod-nai-meta-pill {
+  border-radius: 4px;
+  border: 1px solid var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--tukey-text-light) 16%, var(--card-bg));
+  color: var(--nai-text);
+  font-weight: 700;
+  font-family: "Times New Roman", "Noto Serif SC", serif;
+}
+
 #module-nai-panel .mod-nai-card {
   display: flex;
   flex-direction: column;
@@ -36560,6 +36755,42 @@ select,
   border-radius: var(--nai-card-radius);
   box-shadow: var(--nai-card-shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-card {
+  border: 1.5px solid var(--nai-border-strong);
+  padding: 12px 13px 14px 13px;
+  background-color: var(--nai-card-bg);
+  box-shadow:
+    inset 0 0 0 2px var(--nai-card-bg),
+    inset 0 0 0 3px color-mix(in srgb, var(--nai-border) 65%, transparent),
+    var(--nai-card-shadow);
+}
+
+#module-nai-panel.nai-theme-folio .mod-nai-card {
+  border: 1.5px solid var(--nai-border-strong);
+  border-radius: 5px;
+  padding: 11px 12px 13px 12px;
+  background-color: var(--nai-card-bg);
+  box-shadow: var(--nai-card-shadow);
+}
+
+/* 边境酒馆同款右下角波点矩阵装饰水印 (.card-dots) */
+#module-nai-panel.nai-theme-tavern .mod-nai-card::after,
+#module-nai-panel.nai-theme-folio .mod-nai-card::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  width: 54px;
+  height: 24px;
+  background-image: radial-gradient(var(--nai-border-strong) 20%, transparent 21%);
+  background-size: 6px 6px;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 0;
 }
 
 #module-nai-panel.nai-theme-puppy .mod-nai-card {
@@ -36573,6 +36804,15 @@ select,
     var(--nai-card-shadow);
 }
 
+#module-nai-panel.nai-theme-tavern .mod-nai-card.pos-active,
+#module-nai-panel.nai-theme-folio .mod-nai-card.pos-active {
+  border-color: var(--nai-seal);
+  box-shadow:
+    inset 0 0 0 2px var(--nai-card-bg),
+    inset 0 0 0 3px var(--nai-seal),
+    var(--nai-card-shadow);
+}
+
 #module-nai-panel .mod-nai-card-row {
   display: flex;
   align-items: center;
@@ -36580,6 +36820,18 @@ select,
   gap: 6px;
   flex-wrap: nowrap;
   min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-card-row {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--nai-border);
+}
+
+#module-nai-panel.nai-theme-folio .mod-nai-card-row {
+  padding-bottom: 6px;
+  border-bottom: 3px double var(--nai-border-strong);
 }
 
 #module-nai-panel .mod-nai-label-group {
@@ -36594,6 +36846,29 @@ select,
   font-weight: 600;
   color: var(--nai-text);
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-label-text,
+#module-nai-panel.nai-theme-folio .mod-nai-label-text {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-label-text::after,
+#module-nai-panel.nai-theme-folio .mod-nai-label-text::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -4px;
+  bottom: 1px;
+  height: 6px;
+  background-color: color-mix(in srgb, var(--tukey-text-light) 38%, transparent);
+  transform: rotate(-1.8deg);
+  border-radius: 2px;
+  z-index: -1;
 }
 
 #module-nai-panel .mod-nai-controls-group {
@@ -36618,6 +36893,11 @@ select,
   cursor: pointer;
 }
 
+#module-nai-panel.nai-theme-tavern .mod-nai-check,
+#module-nai-panel.nai-theme-folio .mod-nai-check {
+  accent-color: var(--nai-seal);
+}
+
 #module-nai-panel .mod-nai-select,
 #mod-nai-settings-modal .mod-nai-select {
   height: 28px !important;
@@ -36639,6 +36919,14 @@ select,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-select,
+#module-nai-panel.nai-theme-folio .mod-nai-select {
+  border-radius: 5px !important;
+  border: 1px solid var(--nai-border-strong) !important;
+  background-color: color-mix(in srgb, var(--tukey-text-light) 14%, var(--card-bg)) !important;
+  font-weight: 700;
 }
 
 #mod-nai-settings-modal .mod-nai-select {
@@ -36668,6 +36956,18 @@ select,
   white-space: nowrap;
   box-sizing: border-box;
   transition: transform 0.12s ease, background-color 0.15s ease;
+  position: relative;
+  z-index: 1;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-btn,
+#module-nai-panel.nai-theme-folio .mod-nai-btn {
+  border-radius: 5px;
+  border: 1px solid var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--tukey-text-light) 15%, var(--card-bg));
+  box-shadow: 0 1px 0 0 var(--nai-border-strong);
+  font-family: "Noto Serif SC", "Songti SC", sans-serif;
+  font-weight: 700;
 }
 
 #module-nai-panel .mod-nai-btn:active {
@@ -36678,6 +36978,24 @@ select,
   background-color: var(--nai-accent);
   border-color: var(--nai-accent);
   color: var(--card-bg);
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-btn.primary {
+  background-color: var(--nai-seal);
+  border-color: var(--nai-text);
+  color: var(--card-bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--card-bg) 35%, transparent),
+    0 2px 4px color-mix(in srgb, var(--tukey-text-main) 25%, transparent);
+}
+
+#module-nai-panel.nai-theme-folio .mod-nai-btn.primary {
+  background-color: var(--nai-seal);
+  border: 3px double color-mix(in srgb, var(--card-bg) 58%, var(--nai-seal));
+  color: var(--card-bg);
+  box-shadow:
+    inset 0 0 8px color-mix(in srgb, var(--tukey-text-main) 45%, transparent),
+    0 2px 5px color-mix(in srgb, var(--tukey-text-main) 24%, transparent);
 }
 
 #module-nai-panel .mod-nai-textarea {
@@ -36693,10 +37011,20 @@ select,
   box-sizing: border-box;
   resize: vertical;
   font-family: inherit;
+  position: relative;
+  z-index: 1;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-textarea,
+#module-nai-panel.nai-theme-folio .mod-nai-textarea {
+  border-radius: 4px;
+  border: 1px solid var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--card-bg) 72%, var(--nai-sub-bg));
+  box-shadow: inset 0 1px 4px color-mix(in srgb, var(--tukey-text-main) 7%, transparent);
 }
 
 #module-nai-panel.nai-theme-puppy .mod-nai-textarea {
-  border-style: dashed;
+  border-style: solid;
 }
 
 #module-nai-panel .mod-nai-textarea:focus {
@@ -36705,12 +37033,18 @@ select,
   background-color: var(--nai-card-bg);
 }
 
+#module-nai-panel.nai-theme-tavern .mod-nai-textarea:focus,
+#module-nai-panel.nai-theme-folio .mod-nai-textarea:focus {
+  border-color: var(--nai-seal);
+  background-color: var(--card-bg);
+}
+
 #module-nai-panel .mod-nai-preview-stage {
   width: 100%;
   min-height: 168px;
   max-height: 280px;
   border-radius: 12px;
-  border: 1.5px dashed var(--nai-border);
+  border: 1.5px solid var(--nai-border);
   background-color: var(--nai-sub-bg);
   display: flex;
   flex-direction: column;
@@ -36719,6 +37053,26 @@ select,
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
+  z-index: 1;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-preview-stage {
+  border-radius: 6px;
+  border: 3px double var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--tukey-text-light) 18%, var(--card-bg));
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--tukey-text-main) 10%, transparent);
+}
+
+/* 手札外观：拍立得标本画框 + 顶部实线和纸胶带贴条 */
+#module-nai-panel.nai-theme-folio .mod-nai-preview-stage {
+  border-radius: 5px;
+  border: 3px double var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--tukey-text-light) 18%, var(--card-bg));
+  box-shadow:
+    inset 0 0 16px color-mix(in srgb, var(--tukey-text-main) 10%, transparent),
+    0 2px 0 0 var(--nai-card-bg),
+    0 2px 0 1px var(--nai-border-strong);
+  margin-top: 3px;
 }
 
 #module-nai-panel .mod-nai-preview-stage img {
@@ -36730,55 +37084,168 @@ select,
 }
 
 /* ============================================================
-   生图收藏夹（中世纪米色羊皮纸书签画册，复用现有 CSS 变量体系）
+   生图收藏夹与共享画册（完整移植边境酒馆经营手札视觉体系，全实线与双线无虚线版）
    ============================================================ */
 #mod-nai-collection-modal .mod-nai-bookmark-folio {
-  --folio-paper-bg: color-mix(in srgb, var(--tukey-text-light) 15%, var(--card-bg));
-  --folio-card-bg: color-mix(in srgb, var(--tukey-text-light) 7%, var(--card-bg));
-  --folio-inner-bg: color-mix(in srgb, var(--tukey-text-light) 22%, var(--card-bg));
-  --folio-border: color-mix(in srgb, var(--tukey-text-light) 44%, var(--border-color));
-  --folio-border-strong: color-mix(in srgb, var(--tukey-text-main) 46%, var(--border-color));
+  --folio-paper-bg: color-mix(in srgb, var(--tukey-text-light) 22%, var(--card-bg));
+  --folio-paper-mid: color-mix(in srgb, var(--tukey-text-light) 30%, var(--card-bg));
+  --folio-paper-deep: color-mix(in srgb, var(--tukey-text-light) 40%, var(--card-bg));
+  --folio-card-bg: color-mix(in srgb, var(--tukey-text-light) 9%, var(--card-bg));
+  --folio-inner-bg: color-mix(in srgb, var(--tukey-text-light) 26%, var(--card-bg));
+  --folio-border: color-mix(in srgb, var(--tukey-text-light) 48%, var(--border-color));
+  --folio-border-strong: color-mix(in srgb, var(--tukey-text-main) 64%, var(--border-color));
   --folio-ink-dark: var(--tukey-text-main);
   --folio-ink-light: var(--tukey-text-light);
+  --folio-seal-red: color-mix(in srgb, var(--tukey-primary) 56%, var(--tukey-text-main));
+  --folio-seal-gold: color-mix(in srgb, var(--tukey-text-light) 60%, var(--tukey-primary-light));
   background-color: var(--folio-paper-bg);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tukey-text-light) 18%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at center, transparent 52%, color-mix(in srgb, var(--tukey-text-main) 12%, transparent) 100%);
+  background-size: 20px 20px, 20px 20px, 100% 100%;
   color: var(--folio-ink-dark);
-  border: 1.5px solid var(--folio-border-strong);
-  border-radius: 18px;
+  border: 2px solid var(--folio-border-strong);
+  border-radius: 6px;
+  /* 边境酒馆经营手札同款多层书页堆叠立体阴影 */
   box-shadow:
-    0 12px 30px color-mix(in srgb, var(--tukey-text-main) 22%, transparent),
-    inset 0 0 0 4px var(--folio-card-bg),
-    inset 0 0 0 5px var(--folio-border);
-  padding: 16px 14px 14px 14px;
-  width: 92%;
-  max-width: 390px;
-  max-height: 86vh;
+    inset 0 0 24px color-mix(in srgb, var(--tukey-text-main) 14%, transparent),
+    0 2px 4px -1px color-mix(in srgb, var(--tukey-text-main) 22%, transparent),
+    0 4px 0 0 var(--folio-card-bg),
+    0 4px 0 1px var(--folio-border),
+    0 8px 0 0 var(--folio-paper-mid),
+    0 8px 0 1px var(--folio-border),
+    0 12px 0 0 var(--folio-paper-deep),
+    0 12px 0 1px var(--folio-border-strong),
+    0 18px 32px color-mix(in srgb, var(--tukey-text-main) 34%, transparent);
+  padding: 12px 11px 13px 11px;
+  margin-top: 22px;
+  width: 93%;
+  max-width: 392px;
+  max-height: 83vh;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
 }
 
-#mod-nai-collection-modal .mod-nai-folio-ribbon {
+/* 左上角复古黄铜金属夹矢量装饰 (.metal-clip 同款) */
+#mod-nai-collection-modal .mod-nai-folio-metal-clip {
   position: absolute;
-  top: 0;
-  left: 22px;
-  width: 22px;
-  height: 14px;
-  background-color: var(--folio-ink-light);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%);
-  opacity: 0.72;
+  top: -18px;
+  left: 16px;
+  width: 50px;
+  height: 26px;
+  transform: rotate(-2.5deg);
+  z-index: 30;
   pointer-events: none;
+  color: var(--folio-ink-dark);
+  filter: drop-shadow(1px 2px 2px color-mix(in srgb, var(--tukey-text-main) 28%, transparent));
 }
 
+/* 顶部探出式手札分类签条 (.tabs / .tab-btn 同款) */
+#mod-nai-collection-modal .mod-nai-folio-top-tabs {
+  position: absolute;
+  top: -26px;
+  right: 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  z-index: 25;
+}
+
+#mod-nai-collection-modal .mod-nai-folio-top-tab {
+  height: 25px;
+  padding: 0 11px;
+  background-color: var(--folio-paper-mid);
+  border: 1.5px solid var(--folio-border-strong);
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  color: var(--folio-ink-light);
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-size: 11.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: inset 0 -3px 4px color-mix(in srgb, var(--tukey-text-main) 10%, transparent);
+  transition: transform 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+}
+
+#mod-nai-collection-modal .mod-nai-folio-top-tab.is-active {
+  height: 28px;
+  background-color: var(--folio-paper-bg);
+  color: var(--folio-seal-red);
+  box-shadow: 0 -2px 5px color-mix(in srgb, var(--tukey-text-main) 10%, transparent);
+  transform: translateY(1px);
+}
+
+/* 内部古典双线画框 (.ornate-border 同款) */
+#mod-nai-collection-modal .mod-nai-folio-ornate-frame {
+  border: 3px double var(--folio-border-strong);
+  border-radius: 4px;
+  padding: 9px 9px 10px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  background-color: color-mix(in srgb, var(--folio-card-bg) 38%, transparent);
+}
+
+/* 四角古典星芒矢量角花 */
+#mod-nai-collection-modal .mod-nai-corner-ornament {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  color: var(--folio-seal-red);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.85;
+}
+#mod-nai-collection-modal .mod-nai-corner-ornament.tl { top: 3px; left: 3px; }
+#mod-nai-collection-modal .mod-nai-corner-ornament.tr { top: 3px; right: 3px; }
+#mod-nai-collection-modal .mod-nai-corner-ornament.bl { bottom: 3px; left: 3px; }
+#mod-nai-collection-modal .mod-nai-corner-ornament.br { bottom: 3px; right: 3px; }
+
+/* 边境酒馆 DAILY NEWS 报头条风格顶部栏（全实线精装边框，无虚线） */
 #mod-nai-collection-modal .mod-nai-folio-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 2px 8px 2px;
-  border-bottom: 1px dashed var(--folio-border-strong);
+  padding: 5px 7px;
+  background-color: var(--folio-card-bg);
+  border-top: 2px solid var(--folio-border-strong);
+  border-bottom: 2px solid var(--folio-border-strong);
+  border-left: 1.5px solid var(--folio-border-strong);
+  border-right: 1.5px solid var(--folio-border-strong);
+  box-shadow:
+    inset 0 0 0 1px var(--folio-paper-bg),
+    1px 2px 3px color-mix(in srgb, var(--tukey-text-main) 8%, transparent);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 6;
+}
+
+#mod-nai-collection-modal .mod-nai-folio-stamp-tag {
+  font-family: "Times New Roman", "Noto Serif SC", serif;
+  font-weight: 900;
+  font-size: 10.5px;
+  letter-spacing: 0.8px;
+  color: var(--folio-ink-dark);
+  border-right: 2px solid var(--folio-ink-dark);
+  padding-right: 7px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
@@ -36790,41 +37257,68 @@ select,
   flex: 1;
 }
 
+#mod-nai-collection-modal .mod-nai-folio-title-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+/* 边境酒馆今日任务同款斜向手绘笔刷底纹条 */
+#mod-nai-collection-modal .mod-nai-folio-title-wrap::before {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  left: -3px;
+  width: calc(100% + 6px);
+  height: 7px;
+  background-color: color-mix(in srgb, var(--tukey-text-light) 42%, transparent);
+  transform: rotate(-2deg);
+  border-radius: 2px;
+  z-index: 0;
+}
+
+#mod-nai-collection-modal .mod-nai-folio-title-wrap::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: -1px;
+  width: calc(100% + 3px);
+  height: 5px;
+  background-color: color-mix(in srgb, var(--tukey-text-light) 28%, transparent);
+  transform: rotate(1.5deg);
+  border-radius: 2px;
+  z-index: 0;
+}
+
 #mod-nai-collection-modal .mod-nai-folio-title {
-  font-size: 15px;
-  font-weight: 700;
+  position: relative;
+  z-index: 2;
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-size: 14.5px;
+  font-weight: 900;
   color: var(--folio-ink-dark);
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#mod-nai-collection-modal .mod-nai-folio-subtitle {
-  font-size: 11px;
-  color: var(--folio-ink-light);
-  background-color: var(--folio-card-bg);
-  border: 1px solid var(--folio-border);
-  border-radius: 8px;
-  padding: 1px 7px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 #mod-nai-collection-modal .mod-nai-folio-icon-btn {
-  height: 30px;
-  min-width: 30px;
-  padding: 0 9px;
-  border-radius: 9px;
+  height: 27px;
+  padding: 0 8px;
+  border-radius: 5px;
   border: 1px solid var(--folio-border-strong);
-  background-color: var(--folio-card-bg);
+  background-color: var(--folio-paper-bg);
   color: var(--folio-ink-dark);
+  box-shadow: 0 1px 0 0 var(--folio-border-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: "Noto Serif SC", "Songti SC", sans-serif;
   cursor: pointer;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -36836,53 +37330,99 @@ select,
 }
 
 #mod-nai-collection-modal .mod-nai-folio-icon-btn.primary {
-  background-color: var(--folio-ink-dark);
+  background-color: var(--folio-seal-red);
   border-color: var(--folio-ink-dark);
   color: var(--folio-card-bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--folio-card-bg) 35%, transparent),
+    0 1px 2px color-mix(in srgb, var(--tukey-text-main) 25%, transparent);
 }
 
+/* 九宫格手札标本墙排布 */
 #mod-nai-collection-modal .mod-nai-folio-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
-  padding: 4px 2px;
+  gap: 11px 9px;
+  padding: 8px 3px 6px 3px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   align-content: start;
 }
 
+/* 拍立得手账贴纸卡片 (.sticker-btn + .rot-1~6 同款微倾角与纸张投影) */
 #mod-nai-collection-modal .mod-nai-bookmark-cell {
   background-color: var(--folio-card-bg);
-  border: 1px solid var(--folio-border);
-  border-radius: 12px;
-  padding: 6px 6px 7px 6px;
+  border: 1px solid var(--folio-border-strong);
+  border-radius: 4px;
+  padding: 5px 5px 7px 5px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 5px;
   cursor: pointer;
   box-sizing: border-box;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--folio-ink-dark) 8%, transparent);
-  transition: transform 0.14s ease, border-color 0.15s ease;
+  box-shadow:
+    2px 3px 6px color-mix(in srgb, var(--folio-ink-dark) 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--folio-paper-bg) 60%, transparent);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s ease;
   position: relative;
 }
 
-#mod-nai-collection-modal .mod-nai-bookmark-cell:active {
-  transform: scale(0.96);
+/* 顶部半透明和纸胶带装饰（全实线精致压边，无虚线） */
+#mod-nai-collection-modal .mod-nai-bookmark-cell::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 28px;
+  height: 9px;
+  transform: translateX(-50%) rotate(-2.5deg);
+  background-color: color-mix(in srgb, var(--tukey-text-light) 36%, var(--card-bg));
+  border: 1px solid var(--folio-border-strong);
+  border-radius: 1px;
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 3;
 }
 
+#mod-nai-collection-modal .mod-nai-bookmark-cell:nth-child(3n + 1) {
+  transform: rotate(-1.2deg);
+}
+#mod-nai-collection-modal .mod-nai-bookmark-cell:nth-child(3n + 2) {
+  transform: rotate(0.95deg);
+}
+#mod-nai-collection-modal .mod-nai-bookmark-cell:nth-child(3n) {
+  transform: rotate(-0.8deg);
+}
+
+#mod-nai-collection-modal .mod-nai-bookmark-cell:hover,
+#mod-nai-collection-modal .mod-nai-bookmark-cell:active {
+  transform: rotate(0deg) scale(1.04);
+  border-color: var(--folio-seal-red);
+  z-index: 5;
+}
+
+/* 新建与空位格采用双层内嵌实线画框替代虚线框 */
 #mod-nai-collection-modal .mod-nai-bookmark-cell.empty-slot {
-  border-style: dashed;
-  background-color: color-mix(in srgb, var(--folio-card-bg) 65%, transparent);
+  border: 1px solid var(--folio-border);
+  background-color: color-mix(in srgb, var(--folio-card-bg) 58%, transparent);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--folio-paper-bg) 70%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--folio-ink-dark) 5%, transparent);
+}
+
+#mod-nai-collection-modal .mod-nai-bookmark-cell.empty-slot::before {
+  opacity: 0.45;
 }
 
 #mod-nai-collection-modal .mod-nai-bookmark-thumb {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 8px;
+  border-radius: 3px;
   border: 1px solid var(--folio-border);
   background-color: var(--folio-inner-bg);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--folio-ink-dark) 10%, transparent);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -36900,37 +37440,42 @@ select,
 }
 
 #mod-nai-collection-modal .mod-nai-bookmark-name {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--folio-ink-dark);
   text-align: center;
-  line-height: 1.3;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 2px;
+  padding: 1px 2px 1px 2px;
+  border-bottom: 1px solid var(--folio-border);
 }
 
 #mod-nai-collection-modal .mod-nai-bookmark-cell.empty-slot .mod-nai-bookmark-name {
   color: var(--folio-ink-light);
-  font-weight: 500;
+  font-weight: 600;
 }
 
+/* 底部手札翻页触发栏（古典双实线替代虚线） */
 #mod-nai-collection-modal .mod-nai-folio-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--folio-border-strong);
+  padding-top: 7px;
+  border-top: 3px double var(--folio-border-strong);
   flex-shrink: 0;
 }
 
 #mod-nai-collection-modal .mod-nai-folio-page-text {
+  font-family: "Times New Roman", "Noto Serif SC", serif;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--folio-ink-light);
+  font-weight: 800;
+  color: var(--folio-ink-dark);
   text-align: center;
+  letter-spacing: 1px;
   flex: 1;
 }
 
@@ -36940,27 +37485,37 @@ select,
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 2px 2px 4px 2px;
+  gap: 10px;
+  padding: 2px 2px 6px 2px;
+}
+
+/* 详情与编辑页：带复古相角卡扣与火漆印章的1:1画框 */
+#mod-nai-collection-modal .mod-nai-detail-stage-wrap {
+  position: relative;
+  width: 68%;
+  max-width: 206px;
+  margin: 2px auto 2px auto;
+  flex-shrink: 0;
 }
 
 #mod-nai-collection-modal .mod-nai-detail-square-stage {
-  width: 68%;
-  max-width: 210px;
+  width: 100%;
   aspect-ratio: 1 / 1;
-  margin: 2px auto 0 auto;
-  border-radius: 12px;
-  border: 1.5px solid var(--folio-border-strong);
+  border-radius: 5px;
+  border: 2px solid var(--folio-border-strong);
   background-color: var(--folio-inner-bg);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--folio-ink-dark) 12%, transparent);
+  box-shadow:
+    0 3px 0 0 var(--folio-card-bg),
+    0 3px 0 1px var(--folio-border-strong),
+    0 6px 14px color-mix(in srgb, var(--folio-ink-dark) 18%, transparent);
   overflow: hidden;
   display: flex;
-   flex-direction: column;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   color: var(--folio-ink-light);
   position: relative;
-  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 #mod-nai-collection-modal .mod-nai-detail-square-stage img {
@@ -36970,28 +37525,106 @@ select,
   display: block;
 }
 
+/* 边境酒馆营业许可证同款火漆印章（双实线精雕内圈替代虚线） */
+#mod-nai-collection-modal .mod-nai-wax-seal {
+  position: absolute;
+  right: -14px;
+  bottom: -10px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background-color: var(--folio-seal-red);
+  border: 3px double color-mix(in srgb, var(--folio-card-bg) 60%, var(--folio-seal-red));
+  box-shadow:
+    inset 0 0 10px color-mix(in srgb, var(--folio-ink-dark) 65%, transparent),
+    2px 3px 7px color-mix(in srgb, var(--folio-ink-dark) 35%, transparent);
+  color: var(--folio-card-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-10deg);
+  z-index: 8;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.16s ease;
+}
+
+#mod-nai-collection-modal .mod-nai-wax-seal:active {
+  transform: rotate(-10deg) scale(0.92);
+}
+
+#mod-nai-collection-modal .mod-nai-wax-seal-text {
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+/* 边境酒馆许可证同款双实线标题横幅 + 五星评级列 */
 #mod-nai-collection-modal .mod-nai-detail-title-banner {
   text-align: center;
-  padding: 4px 10px 6px 10px;
-  border-bottom: 1px dashed var(--folio-border);
+  padding: 2px 8px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 #mod-nai-collection-modal .mod-nai-detail-title-text {
-  font-size: 15px;
-  font-weight: 700;
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-size: 15.5px;
+  font-weight: 900;
   color: var(--folio-ink-dark);
+  border-bottom: 3px double var(--folio-seal-red);
+  background-color: color-mix(in srgb, var(--folio-card-bg) 75%, transparent);
+  padding: 3px 16px;
+  border-radius: 4px 4px 0 0;
   word-break: break-word;
   line-height: 1.35;
 }
 
+#mod-nai-collection-modal .mod-nai-stars-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--folio-seal-red);
+  opacity: 0.85;
+}
+
+/* 边境酒馆新客档案卡 (.card-outer / .card-inner / .card-dots) 风格提示词框 */
 #mod-nai-collection-modal .mod-nai-detail-section {
   background-color: var(--folio-card-bg);
-  border: 1px solid var(--folio-border);
-  border-radius: 11px;
-  padding: 8px 10px;
+  border: 1px solid var(--folio-border-strong);
+  border-radius: 4px;
+  padding: 8px 10px 9px 10px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 2px var(--folio-card-bg),
+    inset 0 0 0 3px color-mix(in srgb, var(--folio-border) 55%, transparent),
+    0 2px 4px color-mix(in srgb, var(--folio-ink-dark) 8%, transparent);
+}
+
+/* 右下角波点阵列水印 (.card-dots) */
+#mod-nai-collection-modal .mod-nai-detail-section::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  width: 48px;
+  height: 20px;
+  background-image: radial-gradient(var(--folio-ink-dark) 20%, transparent 21%);
+  background-size: 6px 6px;
+  opacity: 0.24;
+  pointer-events: none;
+  z-index: 0;
 }
 
 #mod-nai-collection-modal .mod-nai-detail-sec-head {
@@ -36999,35 +37632,48 @@ select,
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  padding-bottom: 5px;
+  border-bottom: 3px double var(--folio-border-strong);
+  position: relative;
+  z-index: 1;
 }
 
 #mod-nai-collection-modal .mod-nai-detail-sec-label {
-  font-size: 12px;
-  font-weight: 700;
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  font-size: 12.5px;
+  font-weight: 900;
   color: var(--folio-ink-dark);
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  position: relative;
+  z-index: 1;
+}
+
+#mod-nai-collection-modal .mod-nai-detail-sec-label svg {
+  color: var(--folio-seal-red);
 }
 
 #mod-nai-collection-modal .mod-nai-detail-sec-content {
   font-size: 12px;
-  line-height: 1.48;
-  color: var(--folio-ink-light);
+  line-height: 1.52;
+  color: var(--folio-ink-dark);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 92px;
   overflow-y: auto;
-  padding: 4px 6px;
-  border-radius: 7px;
+  padding: 6px 8px;
+  border-radius: 4px;
   background-color: var(--folio-paper-bg);
   border: 1px solid var(--folio-border);
+  position: relative;
+  z-index: 1;
 }
 
 #mod-nai-collection-modal .mod-nai-edit-input,
 #mod-nai-collection-modal .mod-nai-edit-textarea {
   width: 100%;
-  border-radius: 8px !important;
+  border-radius: 4px !important;
   border: 1px solid var(--folio-border-strong) !important;
   background-color: var(--folio-paper-bg) !important;
   color: var(--folio-ink-dark) !important;
@@ -37035,11 +37681,23 @@ select,
   padding: 7px 9px !important;
   box-sizing: border-box !important;
   font-family: inherit;
+  position: relative;
+  z-index: 1;
+}
+
+#mod-nai-collection-modal .mod-nai-edit-input:focus,
+#mod-nai-collection-modal .mod-nai-edit-textarea:focus {
+  border-color: var(--folio-seal-red) !important;
+  background-color: var(--folio-card-bg) !important;
+  outline: none !important;
 }
 
 #mod-nai-collection-modal .mod-nai-edit-input {
   height: 34px !important;
   line-height: 20px !important;
 }
+
+
+
 
 
