@@ -37041,8 +37041,8 @@ select,
 
 #module-nai-panel .mod-nai-preview-stage {
   width: 100%;
-  min-height: 168px;
-  max-height: 280px;
+  min-height: 260px;
+  max-height: 460px;
   border-radius: 12px;
   border: 1.5px solid var(--nai-border);
   background-color: var(--nai-sub-bg);
@@ -37077,7 +37077,7 @@ select,
 
 #module-nai-panel .mod-nai-preview-stage img {
   max-width: 100%;
-  max-height: 268px;
+  max-height: 446px;
   object-fit: contain;
   display: block;
   border-radius: 8px;

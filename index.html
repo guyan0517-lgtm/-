@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=20.0" defer></script>
+    <script src="game-hall.js?v=20.2" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3546,18 +3546,13 @@
                   </div>
                 </div>
 
-                <!-- 1. 画师串 -->
-                <div class="mod-nai-card">
+                <!-- 1. 画师串一 -->
+                <div class="mod-nai-card pos-active" id="mod-nai-artist1-card">
                   <div class="mod-nai-card-row">
-                    <div class="mod-nai-label-group">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nai-accent); flex-shrink: 0;">
-                        <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-                        <path d="M2 2l7.586 7.586"></path>
-                        <circle cx="11" cy="11" r="2"></circle>
-                      </svg>
+                    <label class="mod-nai-label-group" style="cursor: pointer; margin: 0;">
+                      <input type="checkbox" id="mod-nai-artist1-check" class="mod-nai-check" checked />
                       <span class="mod-nai-label-text">画师</span>
-                    </div>
+                    </label>
                     <div class="mod-nai-controls-group">
                       <select id="mod-nai-artist-preset-select" class="moe-input mod-nai-select">
                         <option value="">预设</option>
@@ -3567,7 +3562,26 @@
                       <button type="button" class="mod-nai-btn" id="mod-nai-artist-copy-btn">复制</button>
                     </div>
                   </div>
-                  <textarea id="mod-nai-gen-artist-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="输入画师串，修改后实时自动保存"></textarea>
+                  <textarea id="mod-nai-gen-artist-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="输入第一组画师串，勾选即可启用"></textarea>
+                </div>
+
+                <!-- 1b. 画师串二 -->
+                <div class="mod-nai-card" id="mod-nai-artist2-card">
+                  <div class="mod-nai-card-row">
+                    <label class="mod-nai-label-group" style="cursor: pointer; margin: 0;">
+                      <input type="checkbox" id="mod-nai-artist2-check" class="mod-nai-check" />
+                      <span class="mod-nai-label-text">画师</span>
+                    </label>
+                    <div class="mod-nai-controls-group">
+                      <select id="mod-nai-artist2-preset-select" class="moe-input mod-nai-select">
+                        <option value="">预设</option>
+                      </select>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-preset-save-btn">新建</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-preset-del-btn">删除</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-copy-btn">复制</button>
+                    </div>
+                  </div>
+                  <textarea id="mod-nai-gen-artist2-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="输入第二组画师串，可随时切换勾选进行对比"></textarea>
                 </div>
 
                 <!-- 2. 正面提示词一 -->
@@ -41932,28 +41946,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           if (!window._naiPromptAutoSaveBound) {
             window._naiPromptAutoSaveBound = true;
-            ["nai-default-positive", "nai-default-artist", "nai-default-negative"].forEach((id) => {
+            [
+              "nai-default-positive",
+              "nai-default-artist",
+              "nai-default-negative",
+              "nai-resolution",
+              "nai-steps",
+              "nai-cfg-scale",
+              "nai-sampler",
+              "nai-seed",
+              "nai-uc-preset",
+              "nai-quality-toggle",
+              "nai-smea",
+              "nai-smea-dyn",
+              "nai-cors-proxy",
+              "nai-custom-proxy-url"
+            ].forEach((id) => {
               const el = document.getElementById(id);
               if (el) {
                 const syncToStorage = () => {
                   try {
-                    const modalEl = document.getElementById("novelai-settings-modal");
-                    const isModalVisible = modalEl && (modalEl.style.display === "flex" || modalEl.style.display === "block");
-                    if (!isModalVisible) return;
-                    const current = getNovelAISettings();
-                    const aEl = document.getElementById("nai-default-artist");
-                    const pEl = document.getElementById("nai-default-positive");
-                    const nEl = document.getElementById("nai-default-negative");
-                    if (aEl) current.artist_prompt = aEl.value;
-                    if (pEl) current.default_positive = pEl.value;
-                    if (nEl) current.default_negative = nEl.value;
-                    localStorage.setItem("novelai-settings", JSON.stringify(current));
-                    if (window.state && window.state.apiConfig) {
-                      window.state.apiConfig.novelaiConfig = current;
-                      if (window.db && window.db.apiConfig) {
-                        window.db.apiConfig.put(window.state.apiConfig).catch(() => {});
-                      }
-                    }
+                    saveNovelAISettings(false);
                   } catch (_) {}
                 };
                 el.addEventListener("input", syncToStorage);
@@ -41988,9 +42001,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const posInput = document.getElementById("nai-default-positive");
           const negInput = document.getElementById("nai-default-negative");
 
-          const domArtistVal = artistInput ? artistInput.value : "";
-          const domPosVal = posInput ? posInput.value : "";
-          const domNegVal = negInput ? negInput.value : "";
+          const domArtistVal = artistInput ? artistInput.value : prevSettings.artist_prompt || "";
+          const domPosVal = posInput ? posInput.value : prevSettings.default_positive || "";
+          const domNegVal = negInput ? negInput.value : prevSettings.default_negative || "";
 
           const rawSteps = parseInt(document.getElementById("nai-steps")?.value, 10);
           const validSteps = (!isNaN(rawSteps) && rawSteps >= 1 && rawSteps <= 50)
@@ -41998,34 +42011,33 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             : (prevSettings.steps >= 1 && prevSettings.steps <= 50 ? prevSettings.steps : 28);
 
           const settings = {
-            resolution: document.getElementById("nai-resolution")?.value || prevSettings.resolution,
-            steps: (isModalVisible || window._naiModalLoadedOnce) ? validSteps : prevSettings.steps,
+            resolution: document.getElementById("nai-resolution")?.value || prevSettings.resolution || "1024x1024",
+            steps: validSteps,
             cfg_scale: parseFloat(
               document.getElementById("nai-cfg-scale")?.value,
-            ) || prevSettings.cfg_scale,
-            sampler: document.getElementById("nai-sampler")?.value || prevSettings.sampler,
+            ) || prevSettings.cfg_scale || 5,
+            sampler: document.getElementById("nai-sampler")?.value || prevSettings.sampler || "k_euler_ancestral",
             seed: document.getElementById("nai-seed") ? parseInt(document.getElementById("nai-seed").value) : prevSettings.seed,
             uc_preset: document.getElementById("nai-uc-preset") ? parseInt(document.getElementById("nai-uc-preset").value) : prevSettings.uc_preset,
             quality_toggle:
               document.getElementById("nai-quality-toggle") ? document.getElementById("nai-quality-toggle").checked : prevSettings.quality_toggle,
             smea: document.getElementById("nai-smea") ? document.getElementById("nai-smea").checked : prevSettings.smea,
             smea_dyn: document.getElementById("nai-smea-dyn") ? document.getElementById("nai-smea-dyn").checked : prevSettings.smea_dyn,
-            artist_prompt: (isModalVisible || window._naiModalLoadedOnce) ? (domArtistVal || prevSettings.artist_prompt || "") : (prevSettings.artist_prompt || ""),
-            default_positive: (isModalVisible || window._naiModalLoadedOnce) ? (domPosVal || prevSettings.default_positive || "") : (prevSettings.default_positive || ""),
-            default_negative: (isModalVisible || window._naiModalLoadedOnce) ? (domNegVal || prevSettings.default_negative || "") : (prevSettings.default_negative || ""),
-            cors_proxy: document.getElementById("nai-cors-proxy")?.value || prevSettings.cors_proxy,
+            artist_prompt: domArtistVal,
+            default_positive: domPosVal,
+            default_negative: domNegVal,
+            cors_proxy: document.getElementById("nai-cors-proxy") ? document.getElementById("nai-cors-proxy").value : prevSettings.cors_proxy,
             custom_proxy_url: document.getElementById("nai-custom-proxy-url")
               ? document.getElementById("nai-custom-proxy-url").value
               : prevSettings.custom_proxy_url,
           };
 
-          if (isModalVisible) {
-            settings.artist_prompt = domArtistVal;
-            settings.default_positive = domPosVal;
-            settings.default_negative = domNegVal;
-          }
-
-          localStorage.setItem("novelai-settings", JSON.stringify(settings));
+          try {
+            localStorage.setItem("novelai-settings", JSON.stringify(settings));
+            localStorage.setItem("novelai-artist-prompt", settings.artist_prompt || "");
+            localStorage.setItem("novelai-positive-prompt", settings.default_positive || "");
+            localStorage.setItem("novelai-negative-prompt", settings.default_negative || "");
+          } catch (_) {}
           if (window.state && window.state.apiConfig) {
             window.state.apiConfig.novelaiConfig = settings;
             if (window.db && window.db.apiConfig) {
@@ -42078,6 +42090,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             parsed = window.state.apiConfig.novelaiConfig;
           }
           if (parsed && typeof parsed === "object") {
+            if (!localStorage.getItem("novelai_api_isolated_v201")) {
+              try {
+                localStorage.setItem("novelai_api_isolated_v201", "1");
+                if (!parsed.default_negative || !String(parsed.default_negative).trim()) {
+                  parsed.default_negative = defaultSettings.default_negative;
+                  localStorage.setItem("novelai-settings", JSON.stringify(parsed));
+                }
+              } catch (_) {}
+            }
             const merged = { ...defaultSettings, ...parsed };
             const numericSteps = parseInt(merged.steps, 10);
             if (isNaN(numericSteps) || numericSteps < 1 || numericSteps > 50) {
@@ -42203,9 +42224,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           const settings = getNovelAISettings();
-          const negativePrompt = document
+          const testNegInput = document
             .getElementById("nai-test-negative")
             .value.trim();
+          const negativePrompt = testNegInput || settings.default_negative || "";
 
           const statusDiv = document.getElementById("nai-test-status");
           const resultDiv = document.getElementById("nai-test-result");
@@ -42224,7 +42246,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // V4/V4.5 和 V3 使用不同的请求体格式
             let requestBody;
 
-            const finalTestPrompt = [settings.artist_prompt, settings.default_positive, prompt].filter(Boolean).join(", ");
+            const finalTestPrompt = prompt;
             if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
               // V4/V4.5/V5 使用新格式
               requestBody = {
@@ -42532,7 +42554,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const localKey = localStorage.getItem("novelai-api-key") || "";
           const apiKey = domKey || localKey;
 
-          const model = resolveNovelAIModel(options.model);
+          const isIsolatedModule = Boolean(options && options.isolatedModuleNai);
+          const model = isIsolatedModule
+            ? (options.model || "nai-diffusion-4-5-full")
+            : resolveNovelAIModel(options.model);
 
           if (!apiKey) {
             throw new Error("请先在设置中配置 NovelAI API Key");
@@ -42542,21 +42567,36 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           const settings = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
-          const resToUse = options.resolution || settings.resolution || "1024x1024";
+          const resToUse = isIsolatedModule
+            ? (options.resolution || "1024x1024")
+            : (options.resolution || settings.resolution || "1024x1024");
           const [width, height] = resToUse.split("x").map(Number);
-          const domNegative = document.getElementById("nai-default-negative") ? document.getElementById("nai-default-negative").value.trim() : "";
-          const negativePrompt = (options.negativePrompt || domNegative || settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry").trim();
 
-          const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
-          const artist = (options.artist !== undefined ? options.artist : (domArtist || settings.artist_prompt || "")).trim();
-          const domPos = document.getElementById("nai-default-positive") ? document.getElementById("nai-default-positive").value.trim() : "";
-          const defaultPos = (options.defaultPositive !== undefined ? options.defaultPositive : (domPos || settings.default_positive || "")).trim();
+          let negativePrompt = "";
+          let finalPrompt = "";
+          if (isIsolatedModule) {
+            negativePrompt = String(options.negativePrompt !== undefined ? options.negativePrompt : "").trim();
+            const modArtist = String(options.artist || "").trim();
+            const modPos = String(options.positivePrompt !== undefined ? options.positivePrompt : prompt).trim();
+            const pieces = [];
+            if (modArtist) pieces.push(modArtist);
+            if (modPos && modPos !== modArtist) pieces.push(modPos);
+            finalPrompt = pieces.filter(Boolean).join(", ");
+          } else {
+            const domNegative = document.getElementById("nai-default-negative") ? document.getElementById("nai-default-negative").value.trim() : "";
+            negativePrompt = (options.negativePrompt || domNegative || settings.default_negative || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry").trim();
 
-          let promptPieces = [];
-          if (artist && !prompt.includes(artist)) promptPieces.push(artist);
-          if (defaultPos && !prompt.includes(defaultPos)) promptPieces.push(defaultPos);
-          if (prompt && prompt.trim()) promptPieces.push(prompt.trim());
-          const finalPrompt = promptPieces.filter(Boolean).join(", ");
+            const domArtist = document.getElementById("nai-default-artist") ? document.getElementById("nai-default-artist").value.trim() : "";
+            const artist = (options.artist !== undefined ? options.artist : (domArtist || settings.artist_prompt || "")).trim();
+            const domPos = document.getElementById("nai-default-positive") ? document.getElementById("nai-default-positive").value.trim() : "";
+            const defaultPos = (options.defaultPositive !== undefined ? options.defaultPositive : (domPos || settings.default_positive || "")).trim();
+
+            let promptPieces = [];
+            if (artist && !prompt.includes(artist)) promptPieces.push(artist);
+            if (defaultPos && !prompt.includes(defaultPos)) promptPieces.push(defaultPos);
+            if (prompt && prompt.trim()) promptPieces.push(prompt.trim());
+            finalPrompt = promptPieces.filter(Boolean).join(", ");
+          }
 
           const seedToUse = options.seed !== undefined ? options.seed : (settings.seed !== -1 && settings.seed !== undefined ? settings.seed : Math.floor(Math.random() * 4294967295));
 
@@ -42688,30 +42728,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           };
 
           function loadPanelState() {
-            const nai = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
-            const defaultArtist = nai.artist_prompt || localStorage.getItem("novelai-artist-prompt") || "";
-            const defaultPos = nai.default_positive || localStorage.getItem("novelai-positive-prompt") || "masterpiece, best quality, very aesthetic, absurdres";
-            const defaultNeg = nai.default_negative || localStorage.getItem("novelai-negative-prompt") || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
-            const defaultRes = nai.resolution || "1024x1024";
-            const defaultModel = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
             const defaults = {
               mode: "generate",
               theme: "folio",
-              tavernThemeMigratedV196: true,
-              folioThemeMigratedV199: true,
-              artistText: defaultArtist,
-              pos1Text: defaultPos,
+              artistText: "",
+              artist2Text: "",
+              artist1Checked: true,
+              artist2Checked: false,
+              pos1Text: "masterpiece, best quality, very aesthetic, absurdres",
               pos2Text: "",
-              negText: defaultNeg,
+              negText: "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
               pos1Checked: true,
               pos2Checked: false,
-              resolution: defaultRes,
-              model: defaultModel,
+              resolution: "1024x1024",
+              model: "nai-diffusion-4-5-full",
               inspectArtistText: "",
               inspectPosText: "",
               inspectNegText: "",
               inspectStatusText: "支持包含元数据的PNG与隐写图层解析",
               artistPresetSelected: "",
+              artist2PresetSelected: "",
               pos1PresetSelected: "",
               pos2PresetSelected: "",
               negPresetSelected: ""
@@ -42719,31 +42755,33 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (memoryPanelState && typeof memoryPanelState === "object") {
               return Object.assign({}, defaults, memoryPanelState);
             }
-            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPanelState) {
-              memoryPanelState = Object.assign({}, defaults, window.state.globalSettings.naiPanelState);
-              return Object.assign({}, memoryPanelState);
-            }
             try {
               const raw = localStorage.getItem(PANEL_STATE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
-                if (parsed && !parsed.folioThemeMigratedV199) {
-                  parsed.theme = "folio";
-                  parsed.folioThemeMigratedV199 = true;
-                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(parsed));
+                if (parsed && typeof parsed === "object") {
+                  memoryPanelState = Object.assign({}, defaults, parsed);
+                  return Object.assign({}, memoryPanelState);
                 }
-                memoryPanelState = Object.assign({}, defaults, parsed);
-                return Object.assign({}, memoryPanelState);
               }
             } catch (_) {}
-            memoryPanelState = Object.assign({}, defaults);
-            return Object.assign({}, memoryPanelState);
+            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPanelState) {
+              memoryPanelState = Object.assign({}, defaults, window.state.globalSettings.naiPanelState);
+              return Object.assign({}, memoryPanelState);
+            }
+            return Object.assign({}, defaults);
           }
 
           function savePanelState(stateObj) {
             memoryPanelState = Object.assign({}, stateObj);
             safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
-            if (window.state && window.state.globalSettings) {
+            if (window.state) {
+              if (!window.state.globalSettings || typeof window.state.globalSettings !== "object") {
+                window.state.globalSettings = { id: "main" };
+              }
+              if (!window.state.globalSettings.id) {
+                window.state.globalSettings.id = "main";
+              }
               window.state.globalSettings.naiPanelState = memoryPanelState;
               if (window.db && window.db.globalSettings) {
                 window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
@@ -42757,19 +42795,44 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               positive: [],
               negative: []
             };
+            let localStore = null;
+            try {
+              const raw = localStorage.getItem(PRESETS_STORE_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object") {
+                  localStore = {
+                    artist: Array.isArray(parsed.artist) ? parsed.artist : [],
+                    positive: Array.isArray(parsed.positive) ? parsed.positive : [],
+                    negative: Array.isArray(parsed.negative) ? parsed.negative : []
+                  };
+                }
+              }
+            } catch (_) {}
+            const gsStore = (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore)
+              ? window.state.globalSettings.naiPresetsStore
+              : null;
+
             if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
               return {
-                artist: Array.isArray(memoryPresetsStore.artist) ? memoryPresetsStore.artist : [],
-                positive: Array.isArray(memoryPresetsStore.positive) ? memoryPresetsStore.positive : [],
-                negative: Array.isArray(memoryPresetsStore.negative) ? memoryPresetsStore.negative : []
+                artist: [...(Array.isArray(memoryPresetsStore.artist) ? memoryPresetsStore.artist : [])],
+                positive: [...(Array.isArray(memoryPresetsStore.positive) ? memoryPresetsStore.positive : [])],
+                negative: [...(Array.isArray(memoryPresetsStore.negative) ? memoryPresetsStore.negative : [])]
               };
             }
-            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore) {
-              const gs = window.state.globalSettings.naiPresetsStore;
+            if (localStore && (localStore.artist.length || localStore.positive.length || localStore.negative.length)) {
+              memoryPresetsStore = localStore;
+              return {
+                artist: [...memoryPresetsStore.artist],
+                positive: [...memoryPresetsStore.positive],
+                negative: [...memoryPresetsStore.negative]
+              };
+            }
+            if (gsStore && typeof gsStore === "object") {
               memoryPresetsStore = {
-                artist: Array.isArray(gs.artist) ? gs.artist : [],
-                positive: Array.isArray(gs.positive) ? gs.positive : [],
-                negative: Array.isArray(gs.negative) ? gs.negative : []
+                artist: Array.isArray(gsStore.artist) ? gsStore.artist : [],
+                positive: Array.isArray(gsStore.positive) ? gsStore.positive : [],
+                negative: Array.isArray(gsStore.negative) ? gsStore.negative : []
               };
               return {
                 artist: [...memoryPresetsStore.artist],
@@ -42777,24 +42840,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 negative: [...memoryPresetsStore.negative]
               };
             }
-            try {
-              const raw = localStorage.getItem(PRESETS_STORE_KEY);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                memoryPresetsStore = {
-                  artist: Array.isArray(parsed.artist) ? parsed.artist : [],
-                  positive: Array.isArray(parsed.positive) ? parsed.positive : [],
-                  negative: Array.isArray(parsed.negative) ? parsed.negative : []
-                };
-                return {
-                  artist: [...memoryPresetsStore.artist],
-                  positive: [...memoryPresetsStore.positive],
-                  negative: [...memoryPresetsStore.negative]
-                };
-              }
-            } catch (_) {}
-            memoryPresetsStore = defaults;
-            return { artist: [], positive: [], negative: [] };
+            if (localStore) {
+              memoryPresetsStore = localStore;
+              return {
+                artist: [...memoryPresetsStore.artist],
+                positive: [...memoryPresetsStore.positive],
+                negative: [...memoryPresetsStore.negative]
+              };
+            }
+            return defaults;
           }
 
           function savePresetsStore(store) {
@@ -42804,7 +42858,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               negative: Array.isArray(store && store.negative) ? store.negative : []
             };
             safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
-            if (window.state && window.state.globalSettings) {
+            if (window.state) {
+              if (!window.state.globalSettings || typeof window.state.globalSettings !== "object") {
+                window.state.globalSettings = { id: "main" };
+              }
+              if (!window.state.globalSettings.id) {
+                window.state.globalSettings.id = "main";
+              }
               window.state.globalSettings.naiPresetsStore = memoryPresetsStore;
               if (window.db && window.db.globalSettings) {
                 window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
@@ -42813,11 +42873,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function getShortModelLabel(modelVal) {
-            const m = String(modelVal || "");
-            if (m.includes("5-curated")) return "V5精";
-            if (m.includes("5-full")) return "V5";
-            if (m.includes("4-curated")) return "V4.5精";
-            if (m.includes("4-5-full")) return "V4.5";
+            const m = String(modelVal || "").toLowerCase();
+            if (m.includes("4-5-curated") || m.includes("4-curated")) return "V4.5精";
+            if (m.includes("4-5-full") || m.includes("nai-diffusion-4")) return "V4.5";
+            if (m.includes("nai-diffusion-5-curated") || m === "v5-curated") return "V5精";
+            if (m.includes("nai-diffusion-5-full") || m.includes("nai-diffusion-5") || m === "v5") return "V5";
             if (m.includes("3")) return "V3";
             return "V4.5";
           }
@@ -42877,6 +42937,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (toggleText) toggleText.textContent = isInspect ? "生图" : "提取";
           }
 
+          function computeActiveArtistPrompt() {
+            const ac1 = document.getElementById("mod-nai-artist1-check");
+            const ac2 = document.getElementById("mod-nai-artist2-check");
+            const a1 = document.getElementById("mod-nai-gen-artist-input");
+            const a2 = document.getElementById("mod-nai-gen-artist2-input");
+            const card1 = document.getElementById("mod-nai-artist1-card");
+            const card2 = document.getElementById("mod-nai-artist2-card");
+            const is1 = ac1 ? ac1.checked : true;
+            const is2 = ac2 ? ac2.checked : false;
+            if (card1) card1.classList.toggle("pos-active", is1);
+            if (card2) card2.classList.toggle("pos-active", is2);
+            const parts = [];
+            if (is1 && a1 && a1.value.trim()) parts.push(a1.value.trim());
+            if (is2 && a2 && a2.value.trim()) parts.push(a2.value.trim());
+            return parts.join(", ");
+          }
+
           function computeActivePositivePrompt() {
             const c1 = document.getElementById("mod-nai-pos1-check");
             const c2 = document.getElementById("mod-nai-pos2-check");
@@ -42894,8 +42971,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return parts.join(", ");
           }
 
+          // 严格独立保存本生图模块的自身配置，绝不修改 API 设置中的 NovelAI 提示词、尺寸或模型
           function syncModuleNaiToGlobal() {
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const artist2El = document.getElementById("mod-nai-gen-artist2-input");
+            const ac1El = document.getElementById("mod-nai-artist1-check");
+            const ac2El = document.getElementById("mod-nai-artist2-check");
             const pos1El = document.getElementById("mod-nai-gen-pos1-input");
             const pos2El = document.getElementById("mod-nai-gen-pos2-input");
             const c1El = document.getElementById("mod-nai-pos1-check");
@@ -42910,54 +42991,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
             const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
 
+            computeActiveArtistPrompt();
+            computeActivePositivePrompt();
+
             const st = loadPanelState();
             const artistVal = artistEl ? artistEl.value : st.artistText;
-            const activePosVal = computeActivePositivePrompt();
+            const artist2Val = artist2El ? artist2El.value : (st.artist2Text || "");
             const negVal = negEl ? negEl.value : st.negText;
             const resVal = (resEl && resEl.value) ? resEl.value : (st.resolution || "1024x1024");
             const modelVal = (modelEl && modelEl.value) ? modelEl.value : (st.model || "nai-diffusion-4-5-full");
-            const themeVal = (themeEl && themeEl.value) ? themeEl.value : (st.theme || "apple");
-
-            // 同步到全局 NovelAI DOM 与存储，确保聊天生图、头像生图、地图生图完全一致
-            const domArtist = document.getElementById("nai-default-artist");
-            if (domArtist) domArtist.value = artistVal;
-            const domPos = document.getElementById("nai-default-positive");
-            if (domPos) domPos.value = activePosVal;
-            const domNeg = document.getElementById("nai-default-negative");
-            if (domNeg) domNeg.value = negVal;
-            const domRes = document.getElementById("nai-resolution");
-            if (domRes) domRes.value = resVal;
-            const domModel = document.getElementById("novelai-model");
-            if (domModel) domModel.value = modelVal;
-
-            window._naiModalLoadedOnce = true;
-            window._naiApiDomLoadedOnce = true;
-
-            try {
-              const currentSettings = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
-              currentSettings.artist_prompt = artistVal;
-              currentSettings.default_positive = activePosVal;
-              currentSettings.default_negative = negVal;
-              currentSettings.resolution = resVal;
-              localStorage.setItem("novelai-settings", JSON.stringify(currentSettings));
-              localStorage.setItem("novelai-artist-prompt", artistVal);
-              localStorage.setItem("novelai-positive-prompt", activePosVal);
-              localStorage.setItem("novelai-negative-prompt", negVal);
-              localStorage.setItem("novelai-model", modelVal);
-              if (artistVal.trim()) {
-                localStorage.setItem("coc_module_draw_global_prompt", artistVal.trim());
-              }
-              if (window.state && window.state.apiConfig) {
-                window.state.apiConfig.novelaiConfig = currentSettings;
-                window.state.apiConfig.novelaiModel = modelVal;
-                if (window.db && window.db.apiConfig) {
-                  window.db.apiConfig.put(window.state.apiConfig).catch(() => {});
-                }
-              }
-            } catch (_) {}
+            const themeVal = (themeEl && themeEl.value) ? themeEl.value : (st.theme || "folio");
 
             st.theme = themeVal;
             st.artistText = artistVal;
+            st.artist2Text = artist2Val;
+            st.artist1Checked = ac1El ? ac1El.checked : true;
+            st.artist2Checked = ac2El ? ac2El.checked : false;
             st.pos1Text = pos1El ? pos1El.value : st.pos1Text;
             st.pos2Text = pos2El ? pos2El.value : st.pos2Text;
             st.negText = negVal;
@@ -42991,7 +43040,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const opt = document.createElement("option");
                 opt.value = item.name;
                 opt.textContent = item.name;
-                if (item.name === selectedName && (!inp || curInputVal === String(item.value || "").trim())) {
+                if (item.name === selectedName && (!inp || !curInputVal || curInputVal === String(item.value || "").trim())) {
                   opt.selected = true;
                   matchedSelected = item.name;
                 }
@@ -43001,6 +43050,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             };
 
             fillSelect("mod-nai-artist-preset-select", "mod-nai-gen-artist-input", store.artist, st.artistPresetSelected);
+            fillSelect("mod-nai-artist2-preset-select", "mod-nai-gen-artist2-input", store.artist, st.artist2PresetSelected);
             fillSelect("mod-nai-pos1-preset-select", "mod-nai-gen-pos1-input", store.positive, st.pos1PresetSelected);
             fillSelect("mod-nai-pos2-preset-select", "mod-nai-gen-pos2-input", store.positive, st.pos2PresetSelected);
             fillSelect("mod-nai-neg-preset-select", "mod-nai-gen-neg-input", store.negative, st.negPresetSelected);
@@ -43110,7 +43160,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // ============================================================
-          // NovelAI 原图元数据与隐写解析引擎 (支持 PNG tEXt/iTXt/zTXt 与 stealth_pngcomp)
+          // NovelAI 原图元数据与隐写解析引擎
           // ============================================================
           async function decompressBytes(bytes, format) {
             if (typeof DecompressionStream === "undefined") return null;
@@ -43212,7 +43262,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!ctx) return null;
             ctx.drawImage(imgEl, 0, 0);
             const imgData = ctx.getImageData(0, 0, width, height).data;
-            // 立即释放画布显存，避免堆积在浏览器内存中
             canvas.width = 0;
             canvas.height = 0;
 
@@ -43277,7 +43326,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               .trim();
             if (!text) return { artist: "", positive: "" };
 
-            // 按英文逗号、中文逗号与换行切分，含 artist 的词条归入画师串，其余归入正面提示词
+            // 按英文逗号、中文逗号与换行切分，含 artist 或年份 yearXXXX 的词条归入画师串，其余归入正面提示词
             const rawTokens = text.split(/[,，\r\n]+/);
             const artistParts = [];
             const positiveParts = [];
@@ -43286,6 +43335,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const s = tok.trim();
               if (!s) return false;
               if (/artist/i.test(s)) return true;
+              if (/\byear\s*\d{4}\b/i.test(s) || /^[\{\[\(\s0-9.\-:]*year\s*\d{4}/i.test(s)) return true;
               if (/^[\{\[\(\s0-9.\-:]*by\s+[a-z0-9_]/i.test(s)) return true;
               return false;
             };
@@ -43359,7 +43409,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               rawPos = metaObj.Description;
             }
 
-            // 兼容 SD WebUI parameters 字段
             if (!rawPos && typeof metaObj.parameters === "string") {
               const paramStr = metaObj.parameters;
               const negIdx = paramStr.indexOf("\nNegative prompt:");
@@ -43513,15 +43562,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (openSettingsBtn && settingsModal) {
               openSettingsBtn.addEventListener("click", () => {
+                const st = loadPanelState();
+                if (resSelect && st.resolution) resSelect.value = st.resolution;
+                if (modelSelect && st.model) modelSelect.value = st.model;
+                if (themeSelect && st.theme) themeSelect.value = st.theme;
                 settingsModal.style.display = "flex";
               });
             }
             const hideSettings = () => {
+              if (themeSelect && themeSelect.value) {
+                applyThemeToPanel(themeSelect.value);
+              }
               syncModuleNaiToGlobal();
               if (settingsModal) settingsModal.style.display = "none";
             };
             if (closeSettingsBtn) closeSettingsBtn.addEventListener("click", hideSettings);
-            if (doneSettingsBtn) doneSettingsBtn.addEventListener("click", hideSettings);
+            if (doneSettingsBtn) {
+              doneSettingsBtn.addEventListener("click", () => {
+                hideSettings();
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已保存设置", "success");
+                }
+              });
+            }
 
             if (resSelect) {
               resSelect.addEventListener("change", () => {
@@ -43543,6 +43606,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // 3. 生图面板与提取面板：所有文本框与勾选框全事件实时保存
             [
               "mod-nai-gen-artist-input",
+              "mod-nai-gen-artist2-input",
               "mod-nai-gen-pos1-input",
               "mod-nai-gen-pos2-input",
               "mod-nai-gen-neg-input",
@@ -43559,7 +43623,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             });
 
-            ["mod-nai-pos1-check", "mod-nai-pos2-check"].forEach((id) => {
+            ["mod-nai-artist1-check", "mod-nai-artist2-check", "mod-nai-pos1-check", "mod-nai-pos2-check"].forEach((id) => {
               const el = document.getElementById(id);
               if (el) {
                 el.addEventListener("change", syncModuleNaiToGlobal);
@@ -43579,7 +43643,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               modulesBackBtn.addEventListener("click", syncModuleNaiToGlobal);
             }
 
-            // 底部手动保存按钮（生图页与提取页各一个）
+            // 底部手动保存按钮
             const genSaveAllBtn = document.getElementById("mod-nai-gen-save-all-btn");
             if (genSaveAllBtn) {
               genSaveAllBtn.addEventListener("click", () => handleManualSaveWithFeedback(genSaveAllBtn));
@@ -43648,7 +43712,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               "mod-nai-artist-preset-del-btn",
               "mod-nai-artist-copy-btn",
               "artistPresetSelected",
-              null
+              "mod-nai-artist1-check"
+            );
+            bindPresetRow(
+              "artist",
+              "mod-nai-artist2-preset-select",
+              "mod-nai-gen-artist2-input",
+              "mod-nai-artist2-preset-save-btn",
+              "mod-nai-artist2-preset-del-btn",
+              "mod-nai-artist2-copy-btn",
+              "artist2PresetSelected",
+              "mod-nai-artist2-check"
             );
             bindPresetRow(
               "positive",
@@ -43681,7 +43755,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               null
             );
 
-            // 5. 生图执行按钮（生出的图支持三击直接下载到本地）
+            // 5. 生图执行按钮
             const runGenBtn = document.getElementById("mod-nai-gen-run-btn");
             const genResultImg = document.getElementById("mod-nai-gen-result-img");
             const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
@@ -43690,13 +43764,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (runGenBtn) {
               runGenBtn.addEventListener("click", async () => {
                 syncModuleNaiToGlobal();
-                const artistVal = (document.getElementById("mod-nai-gen-artist-input")?.value || "").trim();
+                const activeArtistVal = computeActiveArtistPrompt();
                 const activePosVal = computeActivePositivePrompt();
                 const negVal = (document.getElementById("mod-nai-gen-neg-input")?.value || "").trim();
                 const resVal = document.getElementById("mod-nai-setting-resolution")?.value || "1024x1024";
                 const modelVal = document.getElementById("mod-nai-setting-model")?.value || "nai-diffusion-4-5-full";
 
-                if (!activePosVal && !artistVal) {
+                if (!activePosVal && !activeArtistVal) {
                   if (typeof window.showCustomAlert === "function") {
                     await window.showCustomAlert("提示", "请至少勾选并填写一组正面词或画师串");
                   }
@@ -43712,8 +43786,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
 
                 try {
-                  const dataUrl = await callNovelAiDirect(activePosVal || artistVal, {
-                    artist: artistVal,
+                  const dataUrl = await callNovelAiDirect(activePosVal, {
+                    isolatedModuleNai: true,
+                    artist: activeArtistVal,
                     defaultPositive: "",
                     negativePrompt: negVal,
                     resolution: resVal,
@@ -43721,7 +43796,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   });
                   if (genResultImg && dataUrl) {
                     genResultImg.src = dataUrl;
-                    genResultImg.title = activePosVal || artistVal || "NAI_Image";
+                    genResultImg.title = activePosVal || activeArtistVal || "NAI_Image";
                     genResultImg.style.display = "block";
                   }
                   if (genPlaceholder) genPlaceholder.style.display = "none";
@@ -44481,10 +44556,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               detailApplyBtn.addEventListener("click", () => {
                 if (!colCurrentItem) return;
                 const artistEl = document.getElementById("mod-nai-gen-artist-input");
+                const ac1El = document.getElementById("mod-nai-artist1-check");
                 const pos1El = document.getElementById("mod-nai-gen-pos1-input");
                 const c1El = document.getElementById("mod-nai-pos1-check");
                 const negEl = document.getElementById("mod-nai-gen-neg-input");
                 if (artistEl && colCurrentItem.artist !== undefined) artistEl.value = colCurrentItem.artist;
+                if (ac1El) ac1El.checked = true;
                 if (pos1El && colCurrentItem.positive !== undefined) pos1El.value = colCurrentItem.positive;
                 if (c1El) c1El.checked = true;
                 if (negEl && colCurrentItem.negative !== undefined) negEl.value = colCurrentItem.negative;
@@ -44558,7 +44635,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
                 const posInp = document.getElementById("mod-nai-col-edit-pos-input");
                 const negInp = document.getElementById("mod-nai-col-edit-neg-input");
-                if (artistInp) artistInp.value = st.artistText || "";
+                if (artistInp) artistInp.value = computeActiveArtistPrompt() || st.artistText || "";
                 if (posInp) posInp.value = computeActivePositivePrompt() || st.pos1Text || "";
                 if (negInp) negInp.value = st.negText || "";
                 const genImg = document.getElementById("mod-nai-gen-result-img");
@@ -44620,6 +44697,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const artist2El = document.getElementById("mod-nai-gen-artist2-input");
+            const ac1El = document.getElementById("mod-nai-artist1-check");
+            const ac2El = document.getElementById("mod-nai-artist2-check");
             const pos1El = document.getElementById("mod-nai-gen-pos1-input");
             const pos2El = document.getElementById("mod-nai-gen-pos2-input");
             const c1El = document.getElementById("mod-nai-pos1-check");
@@ -44627,6 +44707,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const negEl = document.getElementById("mod-nai-gen-neg-input");
             const resEl = document.getElementById("mod-nai-setting-resolution");
             const modelEl = document.getElementById("mod-nai-setting-model");
+            const themeEl = document.getElementById("mod-nai-setting-theme");
 
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
@@ -44634,6 +44715,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
 
             if (artistEl) artistEl.value = st.artistText !== undefined ? st.artistText : "";
+            if (artist2El) artist2El.value = st.artist2Text !== undefined ? st.artist2Text : "";
+            if (ac1El) ac1El.checked = st.artist1Checked !== false;
+            if (ac2El) ac2El.checked = Boolean(st.artist2Checked);
             if (pos1El) pos1El.value = st.pos1Text !== undefined ? st.pos1Text : "";
             if (pos2El) pos2El.value = st.pos2Text !== undefined ? st.pos2Text : "";
             if (c1El) c1El.checked = st.pos1Checked !== false;
@@ -44641,6 +44725,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (negEl) negEl.value = st.negText !== undefined ? st.negText : "";
             if (resEl) resEl.value = st.resolution || "1024x1024";
             if (modelEl) modelEl.value = st.model || "nai-diffusion-4-5-full";
+            if (themeEl) themeEl.value = st.theme || "folio";
 
             if (inspectArtistEl) inspectArtistEl.value = st.inspectArtistText || "";
             if (inspectPosEl) inspectPosEl.value = st.inspectPosText || "";
@@ -44651,8 +44736,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             applyThemeToPanel(st.theme || "folio");
             applyModeView(st.mode || "generate");
+            computeActiveArtistPrompt();
+            computeActivePositivePrompt();
             renderPresetSelectOptions();
-            syncModuleNaiToGlobal();
+            updateHeaderSummary();
           };
 
           window.getModuleNaiLiveStateForMashu = function (scope) {
@@ -44660,6 +44747,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const st = loadPanelState();
             const store = loadPresetsStore();
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const artist2El = document.getElementById("mod-nai-gen-artist2-input");
+            const ac1El = document.getElementById("mod-nai-artist1-check");
+            const ac2El = document.getElementById("mod-nai-artist2-check");
             const pos1El = document.getElementById("mod-nai-gen-pos1-input");
             const pos2El = document.getElementById("mod-nai-gen-pos2-input");
             const c1El = document.getElementById("mod-nai-pos1-check");
@@ -44673,7 +44763,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
 
             const liveGen = {
+              artist1Checked: ac1El ? Boolean(ac1El.checked) : (st.artist1Checked !== false),
               artistText: artistEl ? artistEl.value : (st.artistText || ""),
+              artist2Checked: ac2El ? Boolean(ac2El.checked) : Boolean(st.artist2Checked),
+              artist2Text: artist2El ? artist2El.value : (st.artist2Text || ""),
+              effectiveArtistPrompt: computeActiveArtistPrompt(),
               pos1Checked: c1El ? Boolean(c1El.checked) : (st.pos1Checked !== false),
               pos1Text: pos1El ? pos1El.value : (st.pos1Text || ""),
               pos2Checked: c2El ? Boolean(c2El.checked) : Boolean(st.pos2Checked),
@@ -44682,7 +44776,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               negText: negEl ? negEl.value : (st.negText || ""),
               resolution: (resEl && resEl.value) ? resEl.value : (st.resolution || "1024x1024"),
               model: (modelEl && modelEl.value) ? modelEl.value : (st.model || "nai-diffusion-4-5-full"),
-              theme: st.theme || "apple",
+              theme: st.theme || "folio",
               savedPresets: {
                 artist: (store.artist || []).map(p => p.name),
                 positive: (store.positive || []).map(p => p.name),
@@ -44720,6 +44814,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               : ((orig, spec) => (spec && typeof spec.content === "string" ? spec.content : orig));
 
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const artist2El = document.getElementById("mod-nai-gen-artist2-input");
+            const ac1El = document.getElementById("mod-nai-artist1-check");
+            const ac2El = document.getElementById("mod-nai-artist2-check");
             const pos1El = document.getElementById("mod-nai-gen-pos1-input");
             const pos2El = document.getElementById("mod-nai-gen-pos2-input");
             const c1El = document.getElementById("mod-nai-pos1-check");
@@ -44735,10 +44832,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const curInspArtist = inspectArtistEl ? inspectArtistEl.value : (st.inspectArtistText || "");
               const curInspPos = inspectPosEl ? inspectPosEl.value : (st.inspectPosText || "");
               const curInspNeg = inspectNegEl ? inspectNegEl.value : (st.inspectNegText || "");
-              if (curInspArtist && artistEl) {
-                artistEl.value = curInspArtist;
-                st.artistText = curInspArtist;
-                changedFields.push("同步提取画师到生图");
+              if (curInspArtist) {
+                if (edit.copyToArtist2 && artist2El) {
+                  artist2El.value = curInspArtist;
+                  st.artist2Text = curInspArtist;
+                  changedFields.push("同步提取画师到画师二");
+                } else if (artistEl) {
+                  artistEl.value = curInspArtist;
+                  st.artistText = curInspArtist;
+                  changedFields.push("同步提取画师到画师一");
+                }
               }
               if (curInspPos) {
                 if (edit.copyToPos2 && pos2El) {
@@ -44779,7 +44882,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               changedFields.push(label);
             };
 
-            applyFieldUpdate(artistEl, "artistText", "生图画师串", edit.artistText !== undefined ? edit.artistText : edit.artist, edit.artistPatches || edit.artistPatch);
+            applyFieldUpdate(artistEl, "artistText", "生图画师一", edit.artistText !== undefined ? edit.artistText : edit.artist, edit.artistPatches || edit.artistPatch);
+            applyFieldUpdate(artist2El, "artist2Text", "生图画师二", edit.artist2Text !== undefined ? edit.artist2Text : edit.artist2, edit.artist2Patches || edit.artist2Patch);
             applyFieldUpdate(pos1El, "pos1Text", "生图正面一", edit.pos1Text !== undefined ? edit.pos1Text : edit.pos1, edit.pos1Patches || edit.pos1Patch);
             applyFieldUpdate(pos2El, "pos2Text", "生图正面二", edit.pos2Text !== undefined ? edit.pos2Text : edit.pos2, edit.pos2Patches || edit.pos2Patch);
             applyFieldUpdate(negEl, "negText", "生图负面词", edit.negText !== undefined ? edit.negText : edit.neg, edit.negPatches || edit.negPatch);
@@ -44787,6 +44891,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             applyFieldUpdate(inspectPosEl, "inspectPosText", "提取正面词", edit.inspectPosText !== undefined ? edit.inspectPosText : edit.inspectPos, edit.inspectPosPatches || edit.inspectPosPatch);
             applyFieldUpdate(inspectNegEl, "inspectNegText", "提取负面词", edit.inspectNegText !== undefined ? edit.inspectNegText : edit.inspectNeg, edit.inspectNegPatches || edit.inspectNegPatch);
 
+            if (edit.artist1Checked !== undefined) {
+              const ab1 = Boolean(edit.artist1Checked);
+              if (ac1El) ac1El.checked = ab1;
+              st.artist1Checked = ab1;
+              changedFields.push("画师一勾选状态");
+            }
+            if (edit.artist2Checked !== undefined) {
+              const ab2 = Boolean(edit.artist2Checked);
+              if (ac2El) ac2El.checked = ab2;
+              st.artist2Checked = ab2;
+              changedFields.push("画师二勾选状态");
+            }
             if (edit.pos1Checked !== undefined) {
               const b1 = Boolean(edit.pos1Checked);
               if (c1El) c1El.checked = b1;
@@ -44826,18 +44942,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return changedFields;
           };
 
+          function hydrateModuleNaiFromDbIfNeeded() {
+            if (typeof window.openModuleNaiPanel === "function") {
+              window.openModuleNaiPanel();
+            }
+            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+              window.db.globalSettings.get("main").then((gs) => {
+                if (!gs) return;
+                let changed = false;
+                if (!localStorage.getItem(PANEL_STATE_KEY) && gs.naiPanelState && typeof gs.naiPanelState === "object") {
+                  memoryPanelState = Object.assign({}, loadPanelState(), gs.naiPanelState);
+                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
+                  changed = true;
+                }
+                if (!localStorage.getItem(PRESETS_STORE_KEY) && gs.naiPresetsStore && typeof gs.naiPresetsStore === "object") {
+                  memoryPresetsStore = {
+                    artist: Array.isArray(gs.naiPresetsStore.artist) ? gs.naiPresetsStore.artist : [],
+                    positive: Array.isArray(gs.naiPresetsStore.positive) ? gs.naiPresetsStore.positive : [],
+                    negative: Array.isArray(gs.naiPresetsStore.negative) ? gs.naiPresetsStore.negative : []
+                  };
+                  safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+                  changed = true;
+                }
+                if (changed && typeof window.openModuleNaiPanel === "function") {
+                  window.openModuleNaiPanel();
+                }
+              }).catch(() => {});
+            }
+          }
+
           if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", () => {
-              if (typeof window.openModuleNaiPanel === "function") {
-                window.openModuleNaiPanel();
-              }
-            });
+            document.addEventListener("DOMContentLoaded", hydrateModuleNaiFromDbIfNeeded);
           } else {
-            setTimeout(() => {
-              if (typeof window.openModuleNaiPanel === "function") {
-                window.openModuleNaiPanel();
-              }
-            }, 0);
+            setTimeout(hydrateModuleNaiFromDbIfNeeded, 0);
           }
         })();
 
@@ -124464,33 +124601,34 @@ ${specificRules}`;
                 "  echo '----------------------------------------'",
                 "  echo '  [EPhone 本地后台与群控手动面板]'",
                 "  if pgrep -f '[.]ephone_vault[.]py' >/dev/null 2>&1; then",
-                "    echo '  当前状态: 本地后台运行中 127.0.0.1:8765'",
+                "    echo '  当前状态: 本地后台已在后台运行中 127.0.0.1:8765'",
                 "  else",
-                "    echo '  当前状态: 未启动 不会开机自启 请手动输入数字'",
+                "    echo '  当前状态: 未启动 绝不开机自启 请按需输入数字'",
                 "  fi",
-                "  echo '  输入 1 回车: 启动本地后台并查看实时请求耗时状态'",
+                "  echo '  输入 1 回车: 后台静默启动本地服务 窗口不锁定'",
                 "  echo '  输入 2 回车: 直接打开 NapCat QQ'",
                 "  echo '  输入 3 回车: 查看 6099 登录密钥与 3001 链接'",
-                "  echo '  输入 4 回车: 查看 QQ 实时收发日志'",
-                "  echo '  输入 0 回车: 停止本地后台服务'",
+                "  echo '  输入 4 回车: 查看 QQ 最近收发日志'",
+                "  echo '  输入 5 回车: 查看本地后台最近收发日志'",
+                "  echo '  输入 0 回车: 彻底关闭本地后台服务'",
                 "  echo '----------------------------------------'",
                 "}",
                 "ephone_vault_start() {",
                 "  termux-wake-lock 2>/dev/null || true",
                 "  touch ~/ephone_vault.log 2>/dev/null || true",
                 "  pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
-                "  sleep 0.3",
+                "  sleep 0.2",
                 "  nohup python3 ~/.ephone_vault.py --force >/dev/null 2>&1 &",
                 "  sleep 0.3",
                 "  echo '----------------------------------------'",
-                "  echo '  [本地存储与对话转发已启动 127.0.0.1:8765]'",
-                "  echo '  [正在实时显示本地后台收发状态，按 Ctrl+C 可退回菜单]'",
+                "  echo '  [本地后台已在后台静默运行 127.0.0.1:8765]'",
+                "  echo '  [当前窗口已释放 无需关闭 可直接输入 2 或其他命令]'",
                 "  echo '----------------------------------------'",
-                "  tail -n 25 -f ~/ephone_vault.log",
+                "  tail -n 5 ~/ephone_vault.log 2>/dev/null || true",
                 "}",
                 "ephone_vault_stop() {",
-                "  pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
-                "  echo '  [已停止本地后台服务]'",
+                "  pkill -9 -f 'ephone_vault' 2>/dev/null || true",
+                "  echo '  [已彻底关闭本地后台服务]'",
                 "}",
                 "ephone_napcat_start() {",
                 "  proot-distro login napcat -- bash -c 'xvfb-run -a /root/Napcat/opt/QQ/qq --no-sandbox'",
@@ -124501,10 +124639,14 @@ ${specificRules}`;
                 "ephone_napcat_log() {",
                 "  tail -n 35 ~/napcat_run.log 2>/dev/null || echo '暂无日志，请先输入 2 启动 NapCat'",
                 "}",
+                "ephone_vault_log() {",
+                "  tail -n 30 ~/ephone_vault.log 2>/dev/null || echo '暂无本地后台日志，请先输入 1 启动本地后台'",
+                "}",
                 "alias 1='ephone_vault_start'",
                 "alias 2='ephone_napcat_start'",
                 "alias 3='ephone_qqbot_info'",
                 "alias 4='ephone_napcat_log'",
+                "alias 5='ephone_vault_log'",
                 "alias 0='ephone_vault_stop'",
                 "ephone_vault_menu",
                 "# === End EPhoneVault ===",
@@ -124515,14 +124657,15 @@ ${specificRules}`;
                 `open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'))`,
                 `open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Info}').decode('utf-8'))`,
                 `nt=base64.b64decode('${b64Panel}').decode('utf-8')`,
-                "files=['~/.bashrc','~/.bash_profile','~/.profile','~/.zshrc','/data/data/com.termux/files/usr/etc/bash.bashrc','/data/data/com.termux/files/usr/etc/profile','/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/napcat/root/.bashrc']",
-                "bad=re.compile(r'(\\.ephone_vault\\.py|ephone_vault_start|ephone_napcat_start|proot-distro\\s+login\\s+napcat|xvfb-run.*qq|ephone_vault\\.log)',re.I)",
+                "files=['~/.bashrc','~/.bash_profile','~/.profile','~/.bash_login','~/.zshrc','/data/data/com.termux/files/usr/etc/bash.bashrc','/data/data/com.termux/files/usr/etc/profile','/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/napcat/root/.bashrc']",
+                "bad=re.compile(r'(EPhone|ephone_|\\.ephone_vault|反代转发|实时反代|8765|6099|3001|proot-distro\\s+login\\s+napcat|xvfb-run.*qq|napcat_run\\.log|termux-wake-lock|alias\\s+[012345]=)',re.I)",
                 "for fp in files:",
                 "  p=os.path.expanduser(fp)",
                 "  if not os.path.exists(p): continue",
                 "  try:",
                 "    t=open(p,'r',encoding='utf-8',errors='ignore').read()",
-                "    t=re.sub(r'# === EPhoneVault Auto Panel ===[\\s\\S]*?# === End EPhoneVault ===','',t)",
+                "    t=re.sub(r'# === EPhone[\\s\\S]*?# === End EPhone[^\\n]*','',t)",
+                "    t=re.sub(r'ephone_[a-zA-Z0-9_]*\\s*\\(\\)\\s*\\{[\\s\\S]*?\\n\\}','',t)",
                 "    lines=[ln for ln in t.splitlines() if not bad.search(ln)]",
                 "    clean='\\n'.join(lines).strip()",
                 "    if p==os.path.expanduser('~/.bashrc'):",
@@ -124533,10 +124676,13 @@ ${specificRules}`;
                 "  except Exception: pass",
                 "bashrc=os.path.expanduser('~/.bashrc')",
                 "if not os.path.exists(bashrc):",
-                "  open(bashrc,'w',encoding='utf-8').write(nt+'\\n')"
+                "  open(bashrc,'w',encoding='utf-8').write(nt+'\\n')",
+                "print('\\n========================================')",
+                "print('  已成功更新为手动后台面板 绝不再开机自启')",
+                "print('========================================')"
               ].join("\n");
               const b64Setup = btoa(unescape(encodeURIComponent(setupPy)));
-              cmd = `pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true; pkg install -y python >/dev/null 2>&1; python3 -c "import base64;exec(base64.b64decode('${b64Setup}').decode('utf-8'))" && . ~/.bashrc`;
+              cmd = `pkill -9 -f 'ephone_vault' 2>/dev/null || true; (command -v python3 >/dev/null 2>&1 || pkg install -y python); python3 -c "import base64;exec(base64.b64decode('${b64Setup}').decode('utf-8'))" && . ~/.bashrc`;
             }
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -124550,7 +124696,7 @@ ${specificRules}`;
                 document.body.removeChild(ta);
               }
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 启动面板命令已复制，粘贴运行后输入 1 即可启动本地后台服务");
+                window.showCustomAlert("提示", platform === "ios" ? "苹果 a-Shell 启动命令已复制" : "安卓 Termux 手动面板命令已复制。若 Termux 当前卡在旧版实时监控界面，请先点一下键盘上的 CTRL 再点 c 退回命令行，然后再粘贴运行一次，即可永久清除开机自启与刷屏锁定");
               }
             } catch (_) {
               if (typeof window.showCustomAlert === "function") {
