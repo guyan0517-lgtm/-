@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=19.1" defer></script>
+    <script src="game-hall.js?v=19.3" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -2775,6 +2775,7 @@
             <div class="module-header-nav" id="module-header-nav">
               <span class="module-header-tab active" data-tab="library">模组库</span>
               <span class="module-header-tab" data-tab="wizard">切割</span>
+              <span class="module-header-tab" data-tab="nai">生图</span>
             </div>
             <button type="button" id="module-section-settings-btn" title="设置" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; color: var(--text-primary); border-radius: 50%;">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3470,6 +3471,286 @@
                   <div class="module-empty-desc" id="module-workshop-empty-desc">请在上方配置GitHub仓库链接后点击刷新或上传模组</div>
                 </div>
                 <div id="module-workshop-list" style="display: none; flex-direction: column; gap: 8px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 生图与画师串提取面板 -->
+          <div class="module-library-panel nai-theme-apple" id="module-nai-panel" style="display: none; height: 100%; flex-direction: column; overflow: hidden;">
+            <div class="mod-nai-scroll">
+              <!-- 顶部模式单键切换与设置栏 -->
+              <div class="mod-nai-topbar">
+                <div class="mod-nai-title-wrap">
+                  <span class="mod-nai-badge-icon" id="mod-nai-theme-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3c1.5 0 3 1 3.5 2.5C17 4.5 19.5 5.5 20 8c.6 3-1 7-3.5 10-1.5 1.8-3 2.5-4.5 2.5s-3-.7-4.5-2.5C5 15 3.4 11 4 8c.5-2.5 3-3.5 4.5-2.5C9 4 10.5 3 12 3z"></path>
+                      <path d="M12 3c0-1.5 1.5-2.5 3-2"></path>
+                    </svg>
+                  </span>
+                  <span class="mod-nai-mode-title" id="mod-nai-current-mode-label">生图</span>
+                  <span class="mod-nai-meta-pill" id="mod-nai-meta-summary">V4.5 · 竖图</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="mod-nai-btn" id="mod-nai-mode-toggle-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span id="mod-nai-mode-toggle-text">提取</span>
+                  </button>
+                  <button type="button" class="mod-nai-btn" id="mod-nai-settings-open-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>设置</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 面板一：生图与双正面词对比视图 -->
+              <div id="mod-nai-generate-view" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- 顶部图片预览卡片 -->
+                <div class="mod-nai-card">
+                  <div class="mod-nai-preview-stage" id="mod-nai-gen-preview-stage">
+                    <div id="mod-nai-gen-placeholder" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 12px; color: var(--nai-muted);">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                      </svg>
+                      <span style="font-size: 11.5px;">点击下方生图预览，生出图片连点三下即可下载</span>
+                    </div>
+                    <img id="mod-nai-gen-result-img" class="naiimag-image" alt="NAI_Image" style="display: none; cursor: pointer;" />
+                  </div>
+                  <div id="mod-nai-gen-status-text" style="display: none; font-size: 11.5px; color: var(--nai-muted); text-align: center;">正在连接生图服务...</div>
+                  <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+                    <button type="button" class="mod-nai-btn primary" id="mod-nai-gen-run-btn" style="flex: 1; height: 32px; font-size: 12.5px;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                      <span>生图</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 1. 画师串 -->
+                <div class="mod-nai-card">
+                  <div class="mod-nai-card-row">
+                    <div class="mod-nai-label-group">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nai-accent); flex-shrink: 0;">
+                        <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                        <path d="M2 2l7.586 7.586"></path>
+                        <circle cx="11" cy="11" r="2"></circle>
+                      </svg>
+                      <span class="mod-nai-label-text">画师</span>
+                    </div>
+                    <div class="mod-nai-controls-group">
+                      <select id="mod-nai-artist-preset-select" class="moe-input mod-nai-select">
+                        <option value="">预设</option>
+                      </select>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-preset-save-btn">新建</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-preset-del-btn">删除</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-copy-btn">复制</button>
+                    </div>
+                  </div>
+                  <textarea id="mod-nai-gen-artist-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="输入画师串，修改后实时自动保存"></textarea>
+                </div>
+
+                <!-- 2. 正面提示词一 -->
+                <div class="mod-nai-card pos-active" id="mod-nai-pos1-card">
+                  <div class="mod-nai-card-row">
+                    <label class="mod-nai-label-group" style="cursor: pointer; margin: 0;">
+                      <input type="checkbox" id="mod-nai-pos1-check" class="mod-nai-check" checked />
+                      <span class="mod-nai-label-text">正面</span>
+                    </label>
+                    <div class="mod-nai-controls-group">
+                      <select id="mod-nai-pos1-preset-select" class="moe-input mod-nai-select">
+                        <option value="">预设</option>
+                      </select>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-preset-save-btn">新建</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-preset-del-btn">删除</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-copy-btn">复制</button>
+                    </div>
+                  </div>
+                  <textarea id="mod-nai-gen-pos1-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入第一组正面词，勾选即可启用"></textarea>
+                </div>
+
+                <!-- 3. 正面提示词二 -->
+                <div class="mod-nai-card" id="mod-nai-pos2-card">
+                  <div class="mod-nai-card-row">
+                    <label class="mod-nai-label-group" style="cursor: pointer; margin: 0;">
+                      <input type="checkbox" id="mod-nai-pos2-check" class="mod-nai-check" />
+                      <span class="mod-nai-label-text">正面</span>
+                    </label>
+                    <div class="mod-nai-controls-group">
+                      <select id="mod-nai-pos2-preset-select" class="moe-input mod-nai-select">
+                        <option value="">预设</option>
+                      </select>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-preset-save-btn">新建</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-preset-del-btn">删除</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-copy-btn">复制</button>
+                    </div>
+                  </div>
+                  <textarea id="mod-nai-gen-pos2-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入第二组正面词，可随时切换勾选进行对比"></textarea>
+                </div>
+
+                <!-- 4. 负面提示词 -->
+                <div class="mod-nai-card">
+                  <div class="mod-nai-card-row">
+                    <div class="mod-nai-label-group">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nai-muted); flex-shrink: 0;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                      </svg>
+                      <span class="mod-nai-label-text">负面</span>
+                    </div>
+                    <div class="mod-nai-controls-group">
+                      <select id="mod-nai-neg-preset-select" class="moe-input mod-nai-select">
+                        <option value="">预设</option>
+                      </select>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-preset-save-btn">新建</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-preset-del-btn">删除</button>
+                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-copy-btn">复制</button>
+                    </div>
+                  </div>
+                  <textarea id="mod-nai-gen-neg-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入负面词，修改后实时自动保存"></textarea>
+                </div>
+
+                <!-- 底部手动确认保存按钮 -->
+                <button type="button" class="mod-nai-btn primary" id="mod-nai-gen-save-all-btn" style="width: 100%; height: 36px; font-size: 13px; margin-top: 2px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                  <span>保存</span>
+                </button>
+              </div>
+
+              <!-- 面板二：上传原图提取画师串与提示词视图 -->
+              <div id="mod-nai-inspect-view" style="display: none; flex-direction: column; gap: 10px;">
+                <div class="mod-nai-card">
+                  <input type="file" id="mod-nai-inspect-file-input" accept="image/png,image/webp,image/*" style="display: none;" />
+                  <div class="mod-nai-preview-stage" id="mod-nai-inspect-dropzone" style="cursor: pointer;">
+                    <div id="mod-nai-inspect-placeholder" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 12px; color: var(--nai-muted); text-align: center;">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">点击选图或拖入原图</span>
+                      <span style="font-size: 11px;">自动解析画师串、正面词与负面词</span>
+                    </div>
+                    <img id="mod-nai-inspect-preview-img" alt="原图" style="display: none;" />
+                  </div>
+                  <div id="mod-nai-inspect-meta-status" style="font-size: 11px; color: var(--nai-muted); text-align: center;">支持包含元数据的PNG与隐写图层解析</div>
+                  <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-clear-btn">清空</button>
+                    <button type="button" class="mod-nai-btn primary" id="mod-nai-inspect-pick-btn" style="flex: 1; height: 32px; font-size: 12.5px;">选图</button>
+                  </div>
+                </div>
+
+                <!-- 提取结果：画师 -->
+                <div class="mod-nai-card">
+                  <div class="mod-nai-card-row">
+                    <div class="mod-nai-label-group">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nai-accent); flex-shrink: 0;">
+                        <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                        <path d="M2 2l7.586 7.586"></path>
+                        <circle cx="11" cy="11" r="2"></circle>
+                      </svg>
+                      <span class="mod-nai-label-text">画师</span>
+                    </div>
+                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-copy-artist-btn">复制</button>
+                  </div>
+                  <textarea id="mod-nai-inspect-artist-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="提取出的画师串显示在此，实时自动保存"></textarea>
+                </div>
+
+                <!-- 提取结果：正面 -->
+                <div class="mod-nai-card">
+                  <div class="mod-nai-card-row">
+                    <div class="mod-nai-label-group">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nai-accent); flex-shrink: 0;">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                      <span class="mod-nai-label-text">正面</span>
+                    </div>
+                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-copy-pos-btn">复制</button>
+                  </div>
+                  <textarea id="mod-nai-inspect-pos-input" class="module-prompt-textarea mod-nai-textarea" rows="4" placeholder="提取出的正面词显示在此，实时自动保存"></textarea>
+                </div>
+
+                <!-- 提取结果：负面 -->
+                <div class="mod-nai-card">
+                  <div class="mod-nai-card-row">
+                    <div class="mod-nai-label-group">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--nai-muted); flex-shrink: 0;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                      </svg>
+                      <span class="mod-nai-label-text">负面</span>
+                    </div>
+                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-copy-neg-btn">复制</button>
+                  </div>
+                  <textarea id="mod-nai-inspect-neg-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="提取出的负面词显示在此，实时自动保存"></textarea>
+                </div>
+
+                <!-- 底部手动确认保存按钮 -->
+                <button type="button" class="mod-nai-btn primary" id="mod-nai-inspect-save-all-btn" style="width: 100%; height: 36px; font-size: 13px; margin-top: 2px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                  <span>保存</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 生图极简设置弹窗 -->
+          <div class="modal" id="mod-nai-settings-modal" style="display: none;">
+            <div class="modal-content" style="width: calc(100% - 40px); max-width: 330px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">生图设置</span>
+                <button type="button" class="modal-close" id="mod-nai-settings-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">尺寸</label>
+                <select id="mod-nai-setting-resolution" class="moe-input mod-nai-select">
+                  <option value="832x1216">竖图 832x1216</option>
+                  <option value="1216x832">横图 1216x832</option>
+                  <option value="1024x1024">方图 1024x1024</option>
+                  <option value="512x768">小竖 512x768</option>
+                  <option value="768x512">小横 768x512</option>
+                  <option value="640x640">小方 640x640</option>
+                  <option value="1088x1920">长竖 1088x1920</option>
+                  <option value="1920x1088">宽横 1920x1088</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">版本</label>
+                <select id="mod-nai-setting-model" class="moe-input mod-nai-select">
+                  <option value="nai-diffusion-4-5-full">V4.5 Full</option>
+                  <option value="nai-diffusion-4-curated-preview">V4.5 Curated</option>
+                  <option value="nai-diffusion-5-full">V5 Full</option>
+                  <option value="nai-diffusion-5-curated">V5 Curated</option>
+                  <option value="nai-diffusion-3">V3 Anime</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">外观</label>
+                <select id="mod-nai-setting-theme" class="moe-input mod-nai-select">
+                  <option value="apple">青苹果</option>
+                  <option value="default">初始</option>
+                  <option value="puppy">狗塑</option>
+                </select>
+              </div>
+              <div style="display: flex; justify-content: flex-end; padding-top: 4px;">
+                <button type="button" class="module-btn-primary" id="mod-nai-settings-done-btn" style="height: 30px; padding: 0 18px; font-size: 12px; border-radius: 8px;">确定</button>
               </div>
             </div>
           </div>
@@ -41480,6 +41761,1106 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           return imageDataUrl;
         }
         window.callNovelAiDirect = callNovelAiDirect;
+
+        // ============================================================
+        // 模组生图与原图元数据提取面板 (#module-nai-panel)
+        // ============================================================
+        (function initModuleNaiPanelController() {
+          const PANEL_STATE_KEY = "mod_nai_panel_state_v1";
+          const PRESETS_STORE_KEY = "mod_nai_presets_v1";
+          let inspectObjectUrl = null;
+          let isBound = false;
+
+          const THEME_ICONS = {
+            apple: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 0 3 1 3.5 2.5C17 4.5 19.5 5.5 20 8c.6 3-1 7-3.5 10-1.5 1.8-3 2.5-4.5 2.5s-3-.7-4.5-2.5C5 15 3.4 11 4 8c.5-2.5 3-3.5 4.5-2.5C9 4 10.5 3 12 3z"></path><path d="M12 3c0-1.5 1.5-2.5 3-2"></path></svg>',
+            default: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
+            puppy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"></circle><circle cx="18" cy="8" r="2"></circle><circle cx="4" cy="8" r="2"></circle><path d="M14.5 13.5c-1.5-1.5-3.5-1.5-5 0L7 16c-1.5 1.5-.5 4 2 4h6c2.5 0 3.5-2.5 2-4l-2.5-2.5z"></path></svg>'
+          };
+
+          function loadPanelState() {
+            const nai = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
+            const defaultArtist = nai.artist_prompt || localStorage.getItem("novelai-artist-prompt") || "";
+            const defaultPos = nai.default_positive || localStorage.getItem("novelai-positive-prompt") || "masterpiece, best quality, very aesthetic, absurdres";
+            const defaultNeg = nai.default_negative || localStorage.getItem("novelai-negative-prompt") || "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry";
+            const defaultRes = nai.resolution || "1024x1024";
+            const defaultModel = localStorage.getItem("novelai-model") || "nai-diffusion-4-5-full";
+            const defaults = {
+              mode: "generate",
+              theme: "apple",
+              artistText: defaultArtist,
+              pos1Text: defaultPos,
+              pos2Text: "",
+              negText: defaultNeg,
+              pos1Checked: true,
+              pos2Checked: false,
+              resolution: defaultRes,
+              model: defaultModel,
+              inspectArtistText: "",
+              inspectPosText: "",
+              inspectNegText: "",
+              inspectStatusText: "支持包含元数据的PNG与隐写图层解析",
+              artistPresetSelected: "",
+              pos1PresetSelected: "",
+              pos2PresetSelected: "",
+              negPresetSelected: ""
+            };
+            try {
+              const raw = localStorage.getItem(PANEL_STATE_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                return Object.assign({}, defaults, parsed);
+              }
+            } catch (_) {}
+            return defaults;
+          }
+
+          function savePanelState(stateObj) {
+            try {
+              localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(stateObj));
+            } catch (_) {}
+          }
+
+          function loadPresetsStore() {
+            const defaults = {
+              artist: [],
+              positive: [],
+              negative: []
+            };
+            try {
+              const raw = localStorage.getItem(PRESETS_STORE_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                return {
+                  artist: Array.isArray(parsed.artist) ? parsed.artist : [],
+                  positive: Array.isArray(parsed.positive) ? parsed.positive : [],
+                  negative: Array.isArray(parsed.negative) ? parsed.negative : []
+                };
+              }
+            } catch (_) {}
+            return defaults;
+          }
+
+          function savePresetsStore(store) {
+            try {
+              localStorage.setItem(PRESETS_STORE_KEY, JSON.stringify(store));
+            } catch (_) {}
+          }
+
+          function getShortModelLabel(modelVal) {
+            const m = String(modelVal || "");
+            if (m.includes("5-curated")) return "V5精";
+            if (m.includes("5-full")) return "V5";
+            if (m.includes("4-curated")) return "V4.5精";
+            if (m.includes("4-5-full")) return "V4.5";
+            if (m.includes("3")) return "V3";
+            return "V4.5";
+          }
+
+          function getShortResLabel(resVal) {
+            const map = {
+              "832x1216": "竖图",
+              "1216x832": "横图",
+              "1024x1024": "方图",
+              "512x768": "小竖",
+              "768x512": "小横",
+              "640x640": "小方",
+              "1088x1920": "长竖",
+              "1920x1088": "宽横"
+            };
+            return map[resVal] || String(resVal || "方图");
+          }
+
+          function updateHeaderSummary() {
+            const resSelect = document.getElementById("mod-nai-setting-resolution");
+            const modelSelect = document.getElementById("mod-nai-setting-model");
+            const summaryEl = document.getElementById("mod-nai-meta-summary");
+            if (!summaryEl) return;
+            const st = loadPanelState();
+            const resVal = (resSelect && resSelect.value) || st.resolution || "1024x1024";
+            const modelVal = (modelSelect && modelSelect.value) || st.model || "nai-diffusion-4-5-full";
+            summaryEl.textContent = getShortModelLabel(modelVal) + " · " + getShortResLabel(resVal);
+          }
+
+          function applyThemeToPanel(themeName) {
+            const panel = document.getElementById("module-nai-panel");
+            const iconBox = document.getElementById("mod-nai-theme-icon");
+            const themeSelect = document.getElementById("mod-nai-setting-theme");
+            const validTheme = (themeName === "default" || themeName === "puppy" || themeName === "apple") ? themeName : "apple";
+            if (panel) {
+              panel.classList.remove("nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
+              panel.classList.add("nai-theme-" + validTheme);
+            }
+            if (iconBox) {
+              iconBox.innerHTML = THEME_ICONS[validTheme] || THEME_ICONS.apple;
+            }
+            if (themeSelect && themeSelect.value !== validTheme) {
+              themeSelect.value = validTheme;
+            }
+          }
+
+          function applyModeView(mode) {
+            const genView = document.getElementById("mod-nai-generate-view");
+            const inspectView = document.getElementById("mod-nai-inspect-view");
+            const modeLabel = document.getElementById("mod-nai-current-mode-label");
+            const toggleText = document.getElementById("mod-nai-mode-toggle-text");
+            const isInspect = mode === "inspect";
+            if (genView) genView.style.display = isInspect ? "none" : "flex";
+            if (inspectView) inspectView.style.display = isInspect ? "flex" : "none";
+            if (modeLabel) modeLabel.textContent = isInspect ? "提取" : "生图";
+            if (toggleText) toggleText.textContent = isInspect ? "生图" : "提取";
+          }
+
+          function computeActivePositivePrompt() {
+            const c1 = document.getElementById("mod-nai-pos1-check");
+            const c2 = document.getElementById("mod-nai-pos2-check");
+            const p1 = document.getElementById("mod-nai-gen-pos1-input");
+            const p2 = document.getElementById("mod-nai-gen-pos2-input");
+            const card1 = document.getElementById("mod-nai-pos1-card");
+            const card2 = document.getElementById("mod-nai-pos2-card");
+            const is1 = c1 ? c1.checked : true;
+            const is2 = c2 ? c2.checked : false;
+            if (card1) card1.classList.toggle("pos-active", is1);
+            if (card2) card2.classList.toggle("pos-active", is2);
+            const parts = [];
+            if (is1 && p1 && p1.value.trim()) parts.push(p1.value.trim());
+            if (is2 && p2 && p2.value.trim()) parts.push(p2.value.trim());
+            return parts.join(", ");
+          }
+
+          function syncModuleNaiToGlobal() {
+            const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+            const pos2El = document.getElementById("mod-nai-gen-pos2-input");
+            const c1El = document.getElementById("mod-nai-pos1-check");
+            const c2El = document.getElementById("mod-nai-pos2-check");
+            const negEl = document.getElementById("mod-nai-gen-neg-input");
+            const resEl = document.getElementById("mod-nai-setting-resolution");
+            const modelEl = document.getElementById("mod-nai-setting-model");
+            const themeEl = document.getElementById("mod-nai-setting-theme");
+
+            const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
+            const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
+            const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
+            const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
+
+            const st = loadPanelState();
+            const artistVal = artistEl ? artistEl.value : st.artistText;
+            const activePosVal = computeActivePositivePrompt();
+            const negVal = negEl ? negEl.value : st.negText;
+            const resVal = (resEl && resEl.value) ? resEl.value : (st.resolution || "1024x1024");
+            const modelVal = (modelEl && modelEl.value) ? modelEl.value : (st.model || "nai-diffusion-4-5-full");
+            const themeVal = (themeEl && themeEl.value) ? themeEl.value : (st.theme || "apple");
+
+            // 同步到全局 NovelAI DOM 与存储，确保聊天生图、头像生图、地图生图完全一致
+            const domArtist = document.getElementById("nai-default-artist");
+            if (domArtist) domArtist.value = artistVal;
+            const domPos = document.getElementById("nai-default-positive");
+            if (domPos) domPos.value = activePosVal;
+            const domNeg = document.getElementById("nai-default-negative");
+            if (domNeg) domNeg.value = negVal;
+            const domRes = document.getElementById("nai-resolution");
+            if (domRes) domRes.value = resVal;
+            const domModel = document.getElementById("novelai-model");
+            if (domModel) domModel.value = modelVal;
+
+            window._naiModalLoadedOnce = true;
+            window._naiApiDomLoadedOnce = true;
+
+            try {
+              const currentSettings = typeof getNovelAISettings === "function" ? getNovelAISettings() : {};
+              currentSettings.artist_prompt = artistVal;
+              currentSettings.default_positive = activePosVal;
+              currentSettings.default_negative = negVal;
+              currentSettings.resolution = resVal;
+              localStorage.setItem("novelai-settings", JSON.stringify(currentSettings));
+              localStorage.setItem("novelai-artist-prompt", artistVal);
+              localStorage.setItem("novelai-positive-prompt", activePosVal);
+              localStorage.setItem("novelai-negative-prompt", negVal);
+              localStorage.setItem("novelai-model", modelVal);
+              if (artistVal.trim()) {
+                localStorage.setItem("coc_module_draw_global_prompt", artistVal.trim());
+              }
+              if (window.state && window.state.apiConfig) {
+                window.state.apiConfig.novelaiConfig = currentSettings;
+                window.state.apiConfig.novelaiModel = modelVal;
+                if (window.db && window.db.apiConfig) {
+                  window.db.apiConfig.put(window.state.apiConfig).catch(() => {});
+                }
+              }
+            } catch (_) {}
+
+            st.theme = themeVal;
+            st.artistText = artistVal;
+            st.pos1Text = pos1El ? pos1El.value : st.pos1Text;
+            st.pos2Text = pos2El ? pos2El.value : st.pos2Text;
+            st.negText = negVal;
+            st.pos1Checked = c1El ? c1El.checked : true;
+            st.pos2Checked = c2El ? c2El.checked : false;
+            st.resolution = resVal;
+            st.model = modelVal;
+            if (inspectArtistEl) st.inspectArtistText = inspectArtistEl.value;
+            if (inspectPosEl) st.inspectPosText = inspectPosEl.value;
+            if (inspectNegEl) st.inspectNegText = inspectNegEl.value;
+            if (inspectStatusEl && inspectStatusEl.textContent) {
+              st.inspectStatusText = inspectStatusEl.textContent;
+            }
+            savePanelState(st);
+            updateHeaderSummary();
+          }
+
+          function renderPresetSelectOptions() {
+            const store = loadPresetsStore();
+            const st = loadPanelState();
+
+            const fillSelect = (selectId, list, selectedName) => {
+              const sel = document.getElementById(selectId);
+              if (!sel) return;
+              sel.innerHTML = '<option value="">预设</option>';
+              list.forEach((item) => {
+                if (!item || !item.name) return;
+                const opt = document.createElement("option");
+                opt.value = item.name;
+                opt.textContent = item.name;
+                if (item.name === selectedName) opt.selected = true;
+                sel.appendChild(opt);
+              });
+            };
+
+            fillSelect("mod-nai-artist-preset-select", store.artist, st.artistPresetSelected);
+            fillSelect("mod-nai-pos1-preset-select", store.positive, st.pos1PresetSelected);
+            fillSelect("mod-nai-pos2-preset-select", store.positive, st.pos2PresetSelected);
+            fillSelect("mod-nai-neg-preset-select", store.negative, st.negPresetSelected);
+          }
+
+          async function handleSavePreset(category, inputId, selectId, stateKey) {
+            const inputEl = document.getElementById(inputId);
+            const selectEl = document.getElementById(selectId);
+            const val = inputEl ? inputEl.value.trim() : "";
+            if (!val) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "请先填写内容后再保存预设");
+              }
+              return;
+            }
+            const defaultName = (selectEl && selectEl.value) ? selectEl.value : "";
+            let name = "";
+            if (typeof window.showCustomPrompt === "function") {
+              name = await window.showCustomPrompt("保存预设", "请输入预设名称", defaultName);
+            } else {
+              name = defaultName || ("预设" + Date.now().toString().slice(-4));
+            }
+            if (!name || !String(name).trim()) return;
+            const cleanName = String(name).trim();
+
+            const store = loadPresetsStore();
+            const list = Array.isArray(store[category]) ? store[category] : [];
+            const idx = list.findIndex((x) => x && x.name === cleanName);
+            if (idx >= 0) {
+              list[idx].value = val;
+            } else {
+              list.push({ name: cleanName, value: val });
+            }
+            store[category] = list;
+            savePresetsStore(store);
+
+            const st = loadPanelState();
+            st[stateKey] = cleanName;
+            savePanelState(st);
+            renderPresetSelectOptions();
+          }
+
+          async function handleDeletePreset(category, selectId, stateKey) {
+            const selectEl = document.getElementById(selectId);
+            const selectedName = selectEl ? selectEl.value : "";
+            if (!selectedName) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "请先在下拉框中选择要删除的预设");
+              }
+              return;
+            }
+            if (typeof window.showCustomConfirm === "function") {
+              const ok = await window.showCustomConfirm("删除预设", "确定删除预设 " + selectedName + " 吗？");
+              if (!ok) return;
+            }
+            const store = loadPresetsStore();
+            store[category] = (store[category] || []).filter((x) => x && x.name !== selectedName);
+            savePresetsStore(store);
+
+            const st = loadPanelState();
+            if (st[stateKey] === selectedName) st[stateKey] = "";
+            savePanelState(st);
+            renderPresetSelectOptions();
+          }
+
+          async function copyTextFromInput(inputId, btnEl) {
+            const el = document.getElementById(inputId);
+            const text = el ? el.value.trim() : "";
+            if (!text) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "当前内容为空");
+              }
+              return;
+            }
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+              } else if (el) {
+                el.select();
+                document.execCommand("copy");
+              }
+              if (btnEl) {
+                const prev = btnEl.textContent;
+                btnEl.textContent = "已复";
+                setTimeout(() => {
+                  btnEl.textContent = prev;
+                }, 1000);
+              }
+            } catch (_) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "复制未成功，请长按文本框手动复制");
+              }
+            }
+          }
+
+          // ============================================================
+          // NovelAI 原图元数据与隐写解析引擎 (支持 PNG tEXt/iTXt/zTXt 与 stealth_pngcomp)
+          // ============================================================
+          async function decompressBytes(bytes, format) {
+            if (typeof DecompressionStream === "undefined") return null;
+            try {
+              const ds = new DecompressionStream(format);
+              const writer = ds.writable.getWriter();
+              writer.write(bytes);
+              writer.close();
+              const outBuffer = await new Response(ds.readable).arrayBuffer();
+              return new TextDecoder("utf-8").decode(outBuffer);
+            } catch (_) {
+              return null;
+            }
+          }
+
+          async function parsePngChunksFromBuffer(arrayBuffer) {
+            const bytes = new Uint8Array(arrayBuffer);
+            if (
+              bytes.length < 8 ||
+              bytes[0] !== 0x89 ||
+              bytes[1] !== 0x50 ||
+              bytes[2] !== 0x4E ||
+              bytes[3] !== 0x47
+            ) {
+              return null;
+            }
+            const view = new DataView(arrayBuffer);
+            const textMap = {};
+            let offset = 8;
+            const latin1Decoder = new TextDecoder("iso-8859-1");
+            const utf8Decoder = new TextDecoder("utf-8");
+
+            while (offset + 8 <= bytes.length) {
+              const length = view.getUint32(offset, false);
+              const type = latin1Decoder.decode(bytes.subarray(offset + 4, offset + 8));
+              const dataStart = offset + 8;
+              const dataEnd = dataStart + length;
+              if (dataEnd > bytes.length) break;
+
+              const chunkData = bytes.subarray(dataStart, dataEnd);
+              if (type === "tEXt") {
+                const nulIdx = chunkData.indexOf(0);
+                if (nulIdx > 0) {
+                  const key = latin1Decoder.decode(chunkData.subarray(0, nulIdx));
+                  const val = utf8Decoder.decode(chunkData.subarray(nulIdx + 1));
+                  textMap[key] = val;
+                }
+              } else if (type === "iTXt") {
+                const nulIdx = chunkData.indexOf(0);
+                if (nulIdx > 0 && nulIdx + 2 < chunkData.length) {
+                  const key = latin1Decoder.decode(chunkData.subarray(0, nulIdx));
+                  const compFlag = chunkData[nulIdx + 1];
+                  let pos = nulIdx + 3;
+                  const langNul = chunkData.indexOf(0, pos);
+                  if (langNul >= 0) {
+                    pos = langNul + 1;
+                    const transNul = chunkData.indexOf(0, pos);
+                    if (transNul >= 0) {
+                      pos = transNul + 1;
+                      const payload = chunkData.subarray(pos);
+                      if (compFlag === 1) {
+                        const inflated =
+                          (await decompressBytes(payload, "deflate")) ||
+                          (await decompressBytes(payload, "deflate-raw"));
+                        if (inflated) textMap[key] = inflated;
+                      } else {
+                        textMap[key] = utf8Decoder.decode(payload);
+                      }
+                    }
+                  }
+                }
+              } else if (type === "zTXt") {
+                const nulIdx = chunkData.indexOf(0);
+                if (nulIdx > 0 && nulIdx + 2 <= chunkData.length) {
+                  const key = latin1Decoder.decode(chunkData.subarray(0, nulIdx));
+                  const payload = chunkData.subarray(nulIdx + 2);
+                  const inflated =
+                    (await decompressBytes(payload, "deflate")) ||
+                    (await decompressBytes(payload, "deflate-raw"));
+                  if (inflated) textMap[key] = inflated;
+                }
+              } else if (type === "IEND") {
+                break;
+              }
+              offset = dataEnd + 4;
+            }
+            return Object.keys(textMap).length > 0 ? textMap : null;
+          }
+
+          async function extractStealthPngInfoFromImage(imgEl) {
+            const width = imgEl.naturalWidth || imgEl.width;
+            const height = imgEl.naturalHeight || imgEl.height;
+            if (!width || !height) return null;
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (!ctx) return null;
+            ctx.drawImage(imgEl, 0, 0);
+            const imgData = ctx.getImageData(0, 0, width, height).data;
+            // 立即释放画布显存，避免堆积在浏览器内存中
+            canvas.width = 0;
+            canvas.height = 0;
+
+            const totalPixels = width * height;
+            if (totalPixels < 200) return null;
+
+            const readAlphaBitAt = (bitIndex) => {
+              const x = Math.floor(bitIndex / height);
+              const y = bitIndex % height;
+              const pixelIdx = (y * width + x) * 4;
+              return imgData[pixelIdx + 3] & 1;
+            };
+
+            const readAlphaBytes = (startBit, byteCount) => {
+              const out = new Uint8Array(byteCount);
+              let bitCursor = startBit;
+              for (let i = 0; i < byteCount; i++) {
+                let b = 0;
+                for (let bit = 0; bit < 8; bit++) {
+                  b = (b << 1) | readAlphaBitAt(bitCursor++);
+                }
+                out[i] = b;
+              }
+              return out;
+            };
+
+            const magicBytes = readAlphaBytes(0, 15);
+            const magicStr = new TextDecoder("ascii").decode(magicBytes);
+            if (magicStr !== "stealth_pngcomp" && magicStr !== "stealth_pnginfo") {
+              return null;
+            }
+
+            const lenBytes = readAlphaBytes(120, 4);
+            const bitLen =
+              ((lenBytes[0] << 24) >>> 0) |
+              (lenBytes[1] << 16) |
+              (lenBytes[2] << 8) |
+              lenBytes[3];
+            const byteLen = Math.floor(bitLen / 8);
+            if (byteLen <= 0 || byteLen > 2 * 1024 * 1024 || 152 + bitLen > totalPixels) {
+              return null;
+            }
+
+            const payloadBytes = readAlphaBytes(152, byteLen);
+            let jsonText = null;
+            if (magicStr === "stealth_pngcomp") {
+              jsonText = await decompressBytes(payloadBytes, "gzip");
+            } else {
+              jsonText = new TextDecoder("utf-8").decode(payloadBytes);
+            }
+            if (!jsonText) return null;
+            try {
+              return JSON.parse(jsonText);
+            } catch (_) {
+              return null;
+            }
+          }
+
+          function splitPositiveIntoArtistAndTags(rawPrompt) {
+            const text = String(rawPrompt || "").trim();
+            if (!text) return { artist: "", positive: "" };
+
+            // 按顶层逗号切分，同时保持 1.2::artist:a, artist:b:: 权重块完整
+            const tokens = [];
+            let buf = "";
+            let inWeightBlock = false;
+            for (let i = 0; i < text.length; i++) {
+              const ch = text[i];
+              if (ch === ":" && text[i + 1] === ":") {
+                buf += "::";
+                i++;
+                if (!inWeightBlock) {
+                  // 检查 :: 前面是否是数字权重或紧跟 artist
+                  inWeightBlock = true;
+                } else {
+                  inWeightBlock = false;
+                }
+                continue;
+              }
+              if (ch === "," && !inWeightBlock) {
+                if (buf.trim()) tokens.push(buf.trim());
+                buf = "";
+              } else {
+                buf += ch;
+              }
+            }
+            if (buf.trim()) tokens.push(buf.trim());
+
+            const artistParts = [];
+            const positiveParts = [];
+
+            const isArtistToken = (tok) => {
+              const s = tok.trim();
+              if (!s) return false;
+              if (/artist\s*:/i.test(s)) return true;
+              if (/\\?\(artist\\?\)/i.test(s)) return true;
+              if (/^[\{\[\(\s0-9.\-:]*by\s+[a-z0-9_]/i.test(s)) return true;
+              return false;
+            };
+
+            tokens.forEach((tok) => {
+              if (isArtistToken(tok)) {
+                artistParts.push(tok);
+              } else {
+                positiveParts.push(tok);
+              }
+            });
+
+            return {
+              artist: artistParts.join(", "),
+              positive: positiveParts.join(", ")
+            };
+          }
+
+          function parseMetadataToPrompts(metaObj) {
+            if (!metaObj || typeof metaObj !== "object") return null;
+            let rawComment = metaObj.Comment || metaObj.comment || "";
+            let commentData = null;
+            if (typeof rawComment === "string" && rawComment.trim().startsWith("{")) {
+              try {
+                commentData = JSON.parse(rawComment);
+              } catch (_) {}
+            } else if (rawComment && typeof rawComment === "object") {
+              commentData = rawComment;
+            }
+
+            let rawPos = "";
+            let rawNeg = "";
+            let modelInfo = metaObj.Source || metaObj.Software || "";
+
+            if (commentData) {
+              if (
+                commentData.v4_prompt &&
+                commentData.v4_prompt.caption &&
+                typeof commentData.v4_prompt.caption.base_caption === "string"
+              ) {
+                rawPos = commentData.v4_prompt.caption.base_caption;
+                const charCaps = commentData.v4_prompt.caption.char_captions;
+                if (Array.isArray(charCaps) && charCaps.length > 0) {
+                  const extraChars = charCaps
+                    .map((c) => (c && c.char_caption ? String(c.char_caption).trim() : ""))
+                    .filter((s) => s && !rawPos.includes(s));
+                  if (extraChars.length > 0) {
+                    rawPos = [rawPos, ...extraChars].filter(Boolean).join(", ");
+                  }
+                }
+              } else if (typeof commentData.prompt === "string") {
+                rawPos = commentData.prompt;
+              }
+
+              if (
+                commentData.v4_negative_prompt &&
+                commentData.v4_negative_prompt.caption &&
+                typeof commentData.v4_negative_prompt.caption.base_caption === "string"
+              ) {
+                rawNeg = commentData.v4_negative_prompt.caption.base_caption;
+              } else if (typeof commentData.uc === "string") {
+                rawNeg = commentData.uc;
+              } else if (typeof commentData.negative_prompt === "string") {
+                rawNeg = commentData.negative_prompt;
+              }
+            }
+
+            if (!rawPos && typeof metaObj.Description === "string") {
+              rawPos = metaObj.Description;
+            }
+
+            // 兼容 SD WebUI parameters 字段
+            if (!rawPos && typeof metaObj.parameters === "string") {
+              const paramStr = metaObj.parameters;
+              const negIdx = paramStr.indexOf("\nNegative prompt:");
+              const stepsIdx = paramStr.indexOf("\nSteps:");
+              if (negIdx >= 0) {
+                rawPos = paramStr.slice(0, negIdx).trim();
+                const negStart = negIdx + "\nNegative prompt:".length;
+                rawNeg = (stepsIdx > negStart ? paramStr.slice(negStart, stepsIdx) : paramStr.slice(negStart)).trim();
+              } else if (stepsIdx >= 0) {
+                rawPos = paramStr.slice(0, stepsIdx).trim();
+              } else {
+                rawPos = paramStr.trim();
+              }
+            }
+
+            if (!rawPos && !rawNeg) return null;
+            const split = splitPositiveIntoArtistAndTags(rawPos);
+            return {
+              artist: split.artist,
+              positive: split.positive,
+              negative: String(rawNeg || "").trim(),
+              sourceInfo: modelInfo
+            };
+          }
+
+          async function handleInspectFile(file) {
+            if (!file) return;
+            const statusEl = document.getElementById("mod-nai-inspect-meta-status");
+            const previewImg = document.getElementById("mod-nai-inspect-preview-img");
+            const placeholder = document.getElementById("mod-nai-inspect-placeholder");
+            const artistInput = document.getElementById("mod-nai-inspect-artist-input");
+            const posInput = document.getElementById("mod-nai-inspect-pos-input");
+            const negInput = document.getElementById("mod-nai-inspect-neg-input");
+
+            if (inspectObjectUrl) {
+              try { URL.revokeObjectURL(inspectObjectUrl); } catch (_) {}
+              inspectObjectUrl = null;
+            }
+            inspectObjectUrl = URL.createObjectURL(file);
+            if (previewImg) {
+              previewImg.src = inspectObjectUrl;
+              previewImg.style.display = "block";
+            }
+            if (placeholder) placeholder.style.display = "none";
+            if (statusEl) statusEl.textContent = "正在解析原图元数据...";
+
+            try {
+              const buffer = await file.arrayBuffer();
+              let metaObj = await parsePngChunksFromBuffer(buffer);
+              let parsed = metaObj ? parseMetadataToPrompts(metaObj) : null;
+
+              if (!parsed && previewImg) {
+                await new Promise((resolve) => {
+                  if (previewImg.complete && previewImg.naturalWidth > 0) return resolve();
+                  previewImg.onload = () => resolve();
+                  previewImg.onerror = () => resolve();
+                });
+                const stealthObj = await extractStealthPngInfoFromImage(previewImg);
+                if (stealthObj) {
+                  parsed = parseMetadataToPrompts(stealthObj);
+                }
+              }
+
+              if (parsed) {
+                if (artistInput) artistInput.value = parsed.artist || "";
+                if (posInput) posInput.value = parsed.positive || "";
+                if (negInput) negInput.value = parsed.negative || "";
+                if (statusEl) {
+                  statusEl.textContent = parsed.artist
+                    ? "已提取画师串、正面词与负面词"
+                    : "已提取正面词与负面词，原图未单独标注画师前缀";
+                }
+              } else {
+                if (statusEl) {
+                  statusEl.textContent = "未检测到内嵌元数据，请确认上传的是未压缩原图";
+                }
+              }
+              syncModuleNaiToGlobal();
+            } catch (err) {
+              if (statusEl) {
+                statusEl.textContent = "解析出错: " + (err && err.message ? err.message : "请重试");
+              }
+              syncModuleNaiToGlobal();
+            }
+          }
+
+          function handleManualSaveWithFeedback(btnEl) {
+            syncModuleNaiToGlobal();
+            if (btnEl) {
+              const spanEl = btnEl.querySelector("span");
+              if (spanEl) {
+                const prev = spanEl.textContent;
+                spanEl.textContent = "已保存";
+                setTimeout(() => {
+                  spanEl.textContent = prev || "保存";
+                }, 1200);
+              }
+            }
+            if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("已保存", "success");
+            }
+          }
+
+          function bindModuleNaiPanelEvents() {
+            if (isBound) return;
+            const panel = document.getElementById("module-nai-panel");
+            if (!panel) return;
+            isBound = true;
+
+            // 1. 顶部单键切换 生图 / 提取
+            const modeBtn = document.getElementById("mod-nai-mode-toggle-btn");
+            if (modeBtn) {
+              modeBtn.addEventListener("click", () => {
+                syncModuleNaiToGlobal();
+                const st = loadPanelState();
+                st.mode = st.mode === "inspect" ? "generate" : "inspect";
+                savePanelState(st);
+                applyModeView(st.mode);
+              });
+            }
+
+            // 2. 顶部设置弹窗开关与实时保存
+            const settingsModal = document.getElementById("mod-nai-settings-modal");
+            const openSettingsBtn = document.getElementById("mod-nai-settings-open-btn");
+            const closeSettingsBtn = document.getElementById("mod-nai-settings-close-btn");
+            const doneSettingsBtn = document.getElementById("mod-nai-settings-done-btn");
+            const resSelect = document.getElementById("mod-nai-setting-resolution");
+            const modelSelect = document.getElementById("mod-nai-setting-model");
+            const themeSelect = document.getElementById("mod-nai-setting-theme");
+
+            if (openSettingsBtn && settingsModal) {
+              openSettingsBtn.addEventListener("click", () => {
+                settingsModal.style.display = "flex";
+              });
+            }
+            const hideSettings = () => {
+              syncModuleNaiToGlobal();
+              if (settingsModal) settingsModal.style.display = "none";
+            };
+            if (closeSettingsBtn) closeSettingsBtn.addEventListener("click", hideSettings);
+            if (doneSettingsBtn) doneSettingsBtn.addEventListener("click", hideSettings);
+
+            if (resSelect) {
+              resSelect.addEventListener("change", () => {
+                syncModuleNaiToGlobal();
+              });
+            }
+            if (modelSelect) {
+              modelSelect.addEventListener("change", () => {
+                syncModuleNaiToGlobal();
+              });
+            }
+            if (themeSelect) {
+              themeSelect.addEventListener("change", () => {
+                applyThemeToPanel(themeSelect.value);
+                syncModuleNaiToGlobal();
+              });
+            }
+
+            // 3. 生图面板与提取面板：所有文本框与勾选框全事件实时保存
+            [
+              "mod-nai-gen-artist-input",
+              "mod-nai-gen-pos1-input",
+              "mod-nai-gen-pos2-input",
+              "mod-nai-gen-neg-input",
+              "mod-nai-inspect-artist-input",
+              "mod-nai-inspect-pos-input",
+              "mod-nai-inspect-neg-input"
+            ].forEach((id) => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.addEventListener("input", syncModuleNaiToGlobal);
+                el.addEventListener("keyup", syncModuleNaiToGlobal);
+                el.addEventListener("change", syncModuleNaiToGlobal);
+                el.addEventListener("blur", syncModuleNaiToGlobal);
+              }
+            });
+
+            ["mod-nai-pos1-check", "mod-nai-pos2-check"].forEach((id) => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.addEventListener("change", syncModuleNaiToGlobal);
+              }
+            });
+
+            // 页面切后台、离开或点击返回时自动落盘保存
+            window.addEventListener("pagehide", syncModuleNaiToGlobal);
+            window.addEventListener("beforeunload", syncModuleNaiToGlobal);
+            document.addEventListener("visibilitychange", () => {
+              if (document.visibilityState === "hidden") {
+                syncModuleNaiToGlobal();
+              }
+            });
+            const modulesBackBtn = document.getElementById("modules-back-btn");
+            if (modulesBackBtn) {
+              modulesBackBtn.addEventListener("click", syncModuleNaiToGlobal);
+            }
+
+            // 底部手动保存按钮（生图页与提取页各一个）
+            const genSaveAllBtn = document.getElementById("mod-nai-gen-save-all-btn");
+            if (genSaveAllBtn) {
+              genSaveAllBtn.addEventListener("click", () => handleManualSaveWithFeedback(genSaveAllBtn));
+            }
+            const inspectSaveAllBtn = document.getElementById("mod-nai-inspect-save-all-btn");
+            if (inspectSaveAllBtn) {
+              inspectSaveAllBtn.addEventListener("click", () => handleManualSaveWithFeedback(inspectSaveAllBtn));
+            }
+
+            // 4. 预设下拉切换、新建、删除、复制
+            const bindPresetRow = (category, selectId, inputId, saveBtnId, delBtnId, copyBtnId, stateKey, checkId) => {
+              const sel = document.getElementById(selectId);
+              if (sel) {
+                sel.addEventListener("change", () => {
+                  const chosenName = sel.value;
+                  const st = loadPanelState();
+                  st[stateKey] = chosenName;
+                  savePanelState(st);
+                  if (!chosenName) return;
+                  const store = loadPresetsStore();
+                  const found = (store[category] || []).find((x) => x && x.name === chosenName);
+                  if (found) {
+                    const inp = document.getElementById(inputId);
+                    if (inp) inp.value = found.value || "";
+                    if (checkId) {
+                      const chk = document.getElementById(checkId);
+                      if (chk && !chk.checked) chk.checked = true;
+                    }
+                    syncModuleNaiToGlobal();
+                  }
+                });
+              }
+              const saveBtn = document.getElementById(saveBtnId);
+              if (saveBtn) {
+                saveBtn.addEventListener("click", () => handleSavePreset(category, inputId, selectId, stateKey));
+              }
+              const delBtn = document.getElementById(delBtnId);
+              if (delBtn) {
+                delBtn.addEventListener("click", () => handleDeletePreset(category, selectId, stateKey));
+              }
+              const copyBtn = document.getElementById(copyBtnId);
+              if (copyBtn) {
+                copyBtn.addEventListener("click", () => copyTextFromInput(inputId, copyBtn));
+              }
+            };
+
+            bindPresetRow(
+              "artist",
+              "mod-nai-artist-preset-select",
+              "mod-nai-gen-artist-input",
+              "mod-nai-artist-preset-save-btn",
+              "mod-nai-artist-preset-del-btn",
+              "mod-nai-artist-copy-btn",
+              "artistPresetSelected",
+              null
+            );
+            bindPresetRow(
+              "positive",
+              "mod-nai-pos1-preset-select",
+              "mod-nai-gen-pos1-input",
+              "mod-nai-pos1-preset-save-btn",
+              "mod-nai-pos1-preset-del-btn",
+              "mod-nai-pos1-copy-btn",
+              "pos1PresetSelected",
+              "mod-nai-pos1-check"
+            );
+            bindPresetRow(
+              "positive",
+              "mod-nai-pos2-preset-select",
+              "mod-nai-gen-pos2-input",
+              "mod-nai-pos2-preset-save-btn",
+              "mod-nai-pos2-preset-del-btn",
+              "mod-nai-pos2-copy-btn",
+              "pos2PresetSelected",
+              "mod-nai-pos2-check"
+            );
+            bindPresetRow(
+              "negative",
+              "mod-nai-neg-preset-select",
+              "mod-nai-gen-neg-input",
+              "mod-nai-neg-preset-save-btn",
+              "mod-nai-neg-preset-del-btn",
+              "mod-nai-neg-copy-btn",
+              "negPresetSelected",
+              null
+            );
+
+            // 5. 生图执行按钮（生出的图支持三击直接下载到本地）
+            const runGenBtn = document.getElementById("mod-nai-gen-run-btn");
+            const genResultImg = document.getElementById("mod-nai-gen-result-img");
+            const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
+            const genStatus = document.getElementById("mod-nai-gen-status-text");
+
+            if (runGenBtn) {
+              runGenBtn.addEventListener("click", async () => {
+                syncModuleNaiToGlobal();
+                const artistVal = (document.getElementById("mod-nai-gen-artist-input")?.value || "").trim();
+                const activePosVal = computeActivePositivePrompt();
+                const negVal = (document.getElementById("mod-nai-gen-neg-input")?.value || "").trim();
+                const resVal = document.getElementById("mod-nai-setting-resolution")?.value || "1024x1024";
+                const modelVal = document.getElementById("mod-nai-setting-model")?.value || "nai-diffusion-4-5-full";
+
+                if (!activePosVal && !artistVal) {
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert("提示", "请至少勾选并填写一组正面词或画师串");
+                  }
+                  return;
+                }
+
+                runGenBtn.disabled = true;
+                const spanEl = runGenBtn.querySelector("span");
+                if (spanEl) spanEl.textContent = "生成中";
+                if (genStatus) {
+                  genStatus.style.display = "block";
+                  genStatus.textContent = "正在生成图像，请稍候...";
+                }
+
+                try {
+                  const dataUrl = await callNovelAiDirect(activePosVal || artistVal, {
+                    artist: artistVal,
+                    defaultPositive: "",
+                    negativePrompt: negVal,
+                    resolution: resVal,
+                    model: modelVal
+                  });
+                  if (genResultImg && dataUrl) {
+                    genResultImg.src = dataUrl;
+                    genResultImg.title = activePosVal || artistVal || "NAI_Image";
+                    genResultImg.style.display = "block";
+                  }
+                  if (genPlaceholder) genPlaceholder.style.display = "none";
+                  if (genStatus) {
+                    genStatus.style.display = "block";
+                    genStatus.textContent = "连点图片三下即可下载到本地";
+                  }
+                } catch (err) {
+                  if (genStatus) {
+                    genStatus.style.display = "block";
+                    genStatus.textContent = "生图未成功: " + (err && err.message ? err.message : "请检查API配置");
+                  }
+                } finally {
+                  runGenBtn.disabled = false;
+                  if (spanEl) spanEl.textContent = "生图";
+                }
+              });
+            }
+
+            // 6. 提取面板：上传、拖拽、清空、复制
+            const fileInput = document.getElementById("mod-nai-inspect-file-input");
+            const dropzone = document.getElementById("mod-nai-inspect-dropzone");
+            const pickBtn = document.getElementById("mod-nai-inspect-pick-btn");
+            const clearBtn = document.getElementById("mod-nai-inspect-clear-btn");
+
+            const triggerPick = () => {
+              if (fileInput) fileInput.click();
+            };
+            if (dropzone) {
+              dropzone.addEventListener("click", triggerPick);
+              dropzone.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              });
+              dropzone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                if (f) handleInspectFile(f);
+              });
+            }
+            if (pickBtn) pickBtn.addEventListener("click", triggerPick);
+            if (fileInput) {
+              fileInput.addEventListener("change", () => {
+                const f = fileInput.files && fileInput.files[0];
+                if (f) handleInspectFile(f);
+                fileInput.value = "";
+              });
+            }
+            if (clearBtn) {
+              clearBtn.addEventListener("click", () => {
+                if (inspectObjectUrl) {
+                  try { URL.revokeObjectURL(inspectObjectUrl); } catch (_) {}
+                  inspectObjectUrl = null;
+                }
+                const previewImg = document.getElementById("mod-nai-inspect-preview-img");
+                const placeholder = document.getElementById("mod-nai-inspect-placeholder");
+                const statusEl = document.getElementById("mod-nai-inspect-meta-status");
+                if (previewImg) {
+                  previewImg.removeAttribute("src");
+                  previewImg.style.display = "none";
+                }
+                if (placeholder) placeholder.style.display = "flex";
+                if (statusEl) statusEl.textContent = "支持包含元数据的PNG与隐写图层解析";
+                ["mod-nai-inspect-artist-input", "mod-nai-inspect-pos-input", "mod-nai-inspect-neg-input"].forEach((id) => {
+                  const el = document.getElementById(id);
+                  if (el) el.value = "";
+                });
+                syncModuleNaiToGlobal();
+              });
+            }
+
+            const copyInspectArtist = document.getElementById("mod-nai-inspect-copy-artist-btn");
+            if (copyInspectArtist) {
+              copyInspectArtist.addEventListener("click", () => copyTextFromInput("mod-nai-inspect-artist-input", copyInspectArtist));
+            }
+            const copyInspectPos = document.getElementById("mod-nai-inspect-copy-pos-btn");
+            if (copyInspectPos) {
+              copyInspectPos.addEventListener("click", () => copyTextFromInput("mod-nai-inspect-pos-input", copyInspectPos));
+            }
+            const copyInspectNeg = document.getElementById("mod-nai-inspect-copy-neg-btn");
+            if (copyInspectNeg) {
+              copyInspectNeg.addEventListener("click", () => copyTextFromInput("mod-nai-inspect-neg-input", copyInspectNeg));
+            }
+          }
+
+          window.openModuleNaiPanel = function () {
+            bindModuleNaiPanelEvents();
+            const st = loadPanelState();
+
+            const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+            const pos2El = document.getElementById("mod-nai-gen-pos2-input");
+            const c1El = document.getElementById("mod-nai-pos1-check");
+            const c2El = document.getElementById("mod-nai-pos2-check");
+            const negEl = document.getElementById("mod-nai-gen-neg-input");
+            const resEl = document.getElementById("mod-nai-setting-resolution");
+            const modelEl = document.getElementById("mod-nai-setting-model");
+
+            const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
+            const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
+            const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
+            const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
+
+            if (artistEl) artistEl.value = st.artistText !== undefined ? st.artistText : "";
+            if (pos1El) pos1El.value = st.pos1Text !== undefined ? st.pos1Text : "";
+            if (pos2El) pos2El.value = st.pos2Text !== undefined ? st.pos2Text : "";
+            if (c1El) c1El.checked = st.pos1Checked !== false;
+            if (c2El) c2El.checked = Boolean(st.pos2Checked);
+            if (negEl) negEl.value = st.negText !== undefined ? st.negText : "";
+            if (resEl) resEl.value = st.resolution || "1024x1024";
+            if (modelEl) modelEl.value = st.model || "nai-diffusion-4-5-full";
+
+            if (inspectArtistEl) inspectArtistEl.value = st.inspectArtistText || "";
+            if (inspectPosEl) inspectPosEl.value = st.inspectPosText || "";
+            if (inspectNegEl) inspectNegEl.value = st.inspectNegText || "";
+            if (inspectStatusEl && st.inspectStatusText) {
+              inspectStatusEl.textContent = st.inspectStatusText;
+            }
+
+            applyThemeToPanel(st.theme || "apple");
+            applyModeView(st.mode || "generate");
+            renderPresetSelectOptions();
+            syncModuleNaiToGlobal();
+          };
+
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", () => {
+              if (typeof window.openModuleNaiPanel === "function") {
+                window.openModuleNaiPanel();
+              }
+            });
+          } else {
+            setTimeout(() => {
+              if (typeof window.openModuleNaiPanel === "function") {
+                window.openModuleNaiPanel();
+              }
+            }, 0);
+          }
+        })();
 
         let autoExportTimer = null;
         let lastAutoExportTriggerSlot = "";

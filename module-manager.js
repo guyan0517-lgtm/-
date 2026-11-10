@@ -1654,6 +1654,7 @@
       const wizardPanel = document.getElementById('module-wizard-panel');
       const libraryPanel = document.getElementById('module-library-panel');
       const workshopPanel = document.getElementById('module-workshop-panel');
+      const naiPanel = document.getElementById('module-nai-panel');
       const settingsBtn = document.getElementById('module-section-settings-btn');
       const tabs = document.querySelectorAll('.module-header-tab');
 
@@ -1668,17 +1669,28 @@
       if (panelName === 'library') {
         if (wizardPanel) wizardPanel.style.display = 'none';
         if (workshopPanel) workshopPanel.style.display = 'none';
+        if (naiPanel) naiPanel.style.display = 'none';
         if (libraryPanel) libraryPanel.style.display = 'flex';
         this.renderLibraryList();
       } else if (panelName === 'workshop') {
         if (wizardPanel) wizardPanel.style.display = 'none';
         if (libraryPanel) libraryPanel.style.display = 'none';
+        if (naiPanel) naiPanel.style.display = 'none';
         if (workshopPanel) workshopPanel.style.display = 'flex';
         this.openWorkshopPanel();
+      } else if (panelName === 'nai') {
+        if (wizardPanel) wizardPanel.style.display = 'none';
+        if (libraryPanel) libraryPanel.style.display = 'none';
+        if (workshopPanel) workshopPanel.style.display = 'none';
+        if (naiPanel) naiPanel.style.display = 'flex';
+        if (typeof window.openModuleNaiPanel === 'function') {
+          window.openModuleNaiPanel();
+        }
       } else {
         if (wizardPanel) wizardPanel.style.display = 'flex';
         if (libraryPanel) libraryPanel.style.display = 'none';
         if (workshopPanel) workshopPanel.style.display = 'none';
+        if (naiPanel) naiPanel.style.display = 'none';
       }
       this.saveDraft();
     },
