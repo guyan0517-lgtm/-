@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=19.3" defer></script>
+    <script src="game-hall.js?v=19.5" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3618,15 +3618,23 @@
                   <textarea id="mod-nai-gen-neg-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入负面词，修改后实时自动保存"></textarea>
                 </div>
 
-                <!-- 底部手动确认保存按钮 -->
-                <button type="button" class="mod-nai-btn primary" id="mod-nai-gen-save-all-btn" style="width: 100%; height: 36px; font-size: 13px; margin-top: 2px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                    <polyline points="7 3 7 8 15 8"></polyline>
-                  </svg>
-                  <span>保存</span>
-                </button>
+                <!-- 底部手动确认保存按钮与收藏夹入口 -->
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                  <button type="button" class="mod-nai-btn" id="mod-nai-open-collection-btn" style="flex: 1; height: 36px; font-size: 13px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>收藏夹</span>
+                  </button>
+                  <button type="button" class="mod-nai-btn primary" id="mod-nai-gen-save-all-btn" style="flex: 1; height: 36px; font-size: 13px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                      <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                      <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    <span>保存</span>
+                  </button>
+                </div>
               </div>
 
               <!-- 面板二：上传原图提取画师串与提示词视图 -->
@@ -3751,6 +3759,231 @@
               </div>
               <div style="display: flex; justify-content: flex-end; padding-top: 4px;">
                 <button type="button" class="module-btn-primary" id="mod-nai-settings-done-btn" style="height: 30px; padding: 0 18px; font-size: 12px; border-radius: 8px;">确定</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 生图收藏夹与共享画册弹窗（中世纪米棕纸质书签面板） -->
+          <div class="modal" id="mod-nai-collection-modal" style="display: none;">
+            <div class="modal-content mod-nai-bookmark-folio">
+              <div class="mod-nai-folio-ribbon"></div>
+
+              <!-- 顶部书签栏：标题 + 右上角矢量切换按钮 + 关闭按钮 -->
+              <div class="mod-nai-folio-header">
+                <div class="mod-nai-folio-title-group">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span class="mod-nai-folio-title" id="mod-nai-col-title">收藏夹</span>
+                  <span class="mod-nai-folio-subtitle" id="mod-nai-col-subtitle">私藏</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-refresh-shared-btn" style="display: none;" title="刷新共享收藏">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                  </button>
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-scope-toggle-btn" title="切换私藏与共享">
+                    <svg id="mod-nai-col-scope-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="2" y1="12" x2="22" y2="12"></line>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <span id="mod-nai-col-scope-btn-label">共享</span>
+                  </button>
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-close-btn" title="关闭">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 视图一：九宫格书签展示面（每页9个，外层仅显示1:1图片与名字） -->
+              <div id="mod-nai-col-grid-page" style="display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px;">
+                <div id="mod-nai-col-status-bar" style="display: none; font-size: 11px; color: var(--folio-ink-light); text-align: center; padding: 2px 4px;"></div>
+                <div class="mod-nai-folio-grid" id="mod-nai-col-grid-container"></div>
+                <div class="mod-nai-folio-footer">
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-prev-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>上页</span>
+                  </button>
+                  <div class="mod-nai-folio-page-text" id="mod-nai-col-page-indicator">第 1 / 1 页</div>
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-next-btn">
+                    <span>下页</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 视图二：单张书签详情展示面（不进入编辑模式时的美观展示面） -->
+              <div id="mod-nai-col-detail-page" style="display: none; flex-direction: column; flex: 1; min-height: 0; gap: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-back-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>返回</span>
+                  </button>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-upload-btn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span>上传</span>
+                    </button>
+                    <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-edit-btn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                      </svg>
+                      <span>编辑</span>
+                    </button>
+                    <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-detail-import-btn" style="display: none;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                      </svg>
+                      <span>收录</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mod-nai-folio-body-scroll">
+                  <div class="mod-nai-detail-square-stage" id="mod-nai-col-detail-img-stage"></div>
+                  <div class="mod-nai-detail-title-banner">
+                    <div class="mod-nai-detail-title-text" id="mod-nai-col-detail-name">未命名书签</div>
+                  </div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                        </svg>
+                        <span>画师</span>
+                      </span>
+                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-artist-btn" style="height: 24px; font-size: 11px; padding: 0 8px;">复制</button>
+                    </div>
+                    <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-artist-text"></div>
+                  </div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                        <span>正面</span>
+                      </span>
+                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-pos-btn" style="height: 24px; font-size: 11px; padding: 0 8px;">复制</button>
+                    </div>
+                    <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-pos-text"></div>
+                  </div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                        </svg>
+                        <span>负面</span>
+                      </span>
+                      <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-detail-copy-neg-btn" style="height: 24px; font-size: 11px; padding: 0 8px;">复制</button>
+                    </div>
+                    <div class="mod-nai-detail-sec-content" id="mod-nai-col-detail-neg-text"></div>
+                  </div>
+                </div>
+
+                <div class="mod-nai-folio-footer">
+                  <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-detail-apply-btn" style="width: 100%; height: 34px; font-size: 12.5px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span>填入生图</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 视图三：书签编辑模式（点击编辑后进入，可上传1:1图并设置名字、画师、正面、负面） -->
+              <div id="mod-nai-col-edit-page" style="display: none; flex-direction: column; flex: 1; min-height: 0; gap: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-back-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>返回</span>
+                  </button>
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-grab-current-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>取当前生图</span>
+                  </button>
+                </div>
+
+                <div class="mod-nai-folio-body-scroll">
+                  <input type="file" id="mod-nai-col-edit-file-input" accept="image/*" style="display: none;" />
+                  <div class="mod-nai-detail-square-stage" id="mod-nai-col-edit-img-stage" style="cursor: pointer;" title="点击上传方形封面图"></div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">名字</span>
+                    </div>
+                    <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入收藏名字" />
+                  </div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">画师</span>
+                    </div>
+                    <textarea id="mod-nai-col-edit-artist-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="2" placeholder="输入画师串"></textarea>
+                  </div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">正面</span>
+                    </div>
+                    <textarea id="mod-nai-col-edit-pos-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="3" placeholder="输入正面提示词"></textarea>
+                  </div>
+
+                  <div class="mod-nai-detail-section">
+                    <div class="mod-nai-detail-sec-head">
+                      <span class="mod-nai-detail-sec-label">负面</span>
+                    </div>
+                    <textarea id="mod-nai-col-edit-neg-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="2" placeholder="输入负面提示词"></textarea>
+                  </div>
+                </div>
+
+                <div class="mod-nai-folio-footer">
+                  <button type="button" class="mod-nai-folio-icon-btn" id="mod-nai-col-edit-delete-btn" style="height: 34px; padding: 0 14px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>删除</span>
+                  </button>
+                  <button type="button" class="mod-nai-folio-icon-btn primary" id="mod-nai-col-edit-save-btn" style="flex: 1; height: 34px; font-size: 12.5px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                      <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                      <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    <span>保存</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -38922,329 +39155,162 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           return JSON.stringify(backupData, null, 2);
         }
 
-        // 支持大文件自动分片上传 + 自动去除敏感Key防止报错
-        async function uploadBackupToGitHub(isAuto = false) {
-          let { githubToken, githubUsername, githubRepo, githubPath } =
-            state.apiConfig;
+        // ============================================================
+        // GitHub 零崩溃低内存全量与流式云备份核心辅助工具
+        // 解决：1. 第二次覆盖上传 >1MB 文件拿不到 SHA 导致 422 失败
+        //       2. 500-600MB 本地数据一次性打包导致浏览器内存溢出崩溃
+        //       3. 完整包含所有数据库表、localStorage 与酒馆 (tavernStateBackup)
+        // ============================================================
+        window._ghRepoShaCacheMap = window._ghRepoShaCacheMap || {};
 
-          // 1. 基础检查
-          if (!githubToken || !githubUsername || !githubRepo) {
-            if (!isAuto) alert("请先在 API 设置中填写 GitHub 配置！");
-            return;
-          }
-          githubToken = githubToken.trim();
-          githubUsername = githubUsername.trim();
-          githubRepo = githubRepo
+        function sanitizeGithubConfigFields(rawToken, rawUser, rawRepo, rawPath) {
+          const token = String(rawToken || "").trim();
+          const user = String(rawUser || "").trim();
+          const repo = String(rawRepo || "")
             .trim()
             .replace(/\/$/, "")
             .split("/")
             .pop()
-            .replace(".git", "");
-          githubPath = (githubPath || "ephone_backup.json").trim();
-
-          if (!isAuto)
-            await showCustomAlert("准备中...", "正在打包并计算文件大小...");
-
-          try {
-            // 2. 获取原始 JSON 数据字符串
-            const rawJsonContent = await getFullBackupData();
-
-            // GitHub 会拒绝包含 API Key 的文件上传，所以必须在上传前清空它们
-            const backupObj = JSON.parse(rawJsonContent);
-
-            if (backupObj.apiConfig) {
-              // 清空 OpenAI/API Key
-              backupObj.apiConfig.apiKey = "";
-              // 清空 GitHub Token (最关键，不删这个必报 secret detected)
-              backupObj.apiConfig.githubToken = "";
-              // 清空 Minimax Key
-              backupObj.apiConfig.minimaxApiKey = "";
-            }
-
-            // 重新转换回 JSON 字符串
-            const jsonContent = JSON.stringify(backupObj, null, 2);
-
-            // 3. 转成 Base64 (解决中文乱码)
-            const fullBase64 = btoa(unescape(encodeURIComponent(jsonContent)));
-
-            // 计算 Base64 大小 (字节)
-            const totalSize = fullBase64.length;
-            // 设定分片阈值：45MB
-            const CHUNK_SIZE = 45 * 1024 * 1024;
-
-            const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
-
-            console.log(
-              `[GitHub] 文件大小: ${(totalSize / 1024 / 1024).toFixed(2)} MB, 分片数: ${totalChunks}`,
-            );
-
-            // 如果只有1片，走普通上传；如果多片，走分片上传
-            if (totalChunks === 1) {
-              await uploadSingleFile(
-                githubUsername,
-                githubRepo,
-                githubPath,
-                githubToken,
-                fullBase64,
-                isAuto,
-              );
-            } else {
-              if (!isAuto)
-                await showCustomAlert(
-                  "文件较大",
-                  `将分为 ${totalChunks} 个部分上传，请耐心等待...`,
-                );
-
-              for (let i = 0; i < totalChunks; i++) {
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(start + CHUNK_SIZE, totalSize);
-                const chunkContent = fullBase64.substring(start, end);
-
-                const partName = `${githubPath}.${String(i + 1).padStart(3, "0")}`;
-
-                if (!isAuto) {
-                  console.log(`正在上传分片 ${i + 1}/${totalChunks} ...`);
-                }
-
-                await uploadSingleFile(
-                  githubUsername,
-                  githubRepo,
-                  partName,
-                  githubToken,
-                  chunkContent,
-                  isAuto,
-                  true,
-                );
-              }
-
-              const infoContent = btoa(
-                `{"total_parts": ${totalChunks}, "timestamp": ${Date.now()}}`,
-              );
-              await uploadSingleFile(
-                githubUsername,
-                githubRepo,
-                `${githubPath}.meta`,
-                githubToken,
-                infoContent,
-                true,
-                true,
-              );
-            }
-
-            console.log("GitHub 备份全部完成！");
-            if (!isAuto) {
-              await showCustomAlert(
-                "上传成功",
-                `备份已上传。(为了安全，云端备份已自动移除API Key，恢复时请记得重新填写)`,
-              );
-            }
-          } catch (error) {
-            console.error("GitHub 备份失败:", error);
-            // 如果还是报 Bad credentials，提示用户检查 Token
-            if (error.message.includes("Bad credentials")) {
-              if (!isAuto)
-                await showCustomAlert(
-                  "认证失败",
-                  'GitHub Token 无效或过期。请重新生成 Token 并确保勾选了 "repo" 权限。',
-                );
-            } else {
-              if (!isAuto) await showCustomAlert("上传失败", error.message);
-            }
-          }
+            .replace(/\.git$/i, "");
+          const path = String(rawPath || "ephone_backup.json").trim().replace(/^\/+/, "");
+          return { token, user, repo, path };
         }
 
-        async function restoreBackupFromGitHub() {
-          let { githubToken, githubUsername, githubRepo, githubPath } =
-            state.apiConfig;
+        function sanitizeSecretStringValue(str) {
+          if (typeof str !== "string" || !str) return str;
+          return str
+            .replace(/gh[pousr]_[A-Za-z0-9_]{20,}/g, "")
+            .replace(/github_pat_[A-Za-z0-9_]{20,}/g, "")
+            .replace(/sk-[A-Za-z0-9_-]{20,}/g, "");
+        }
 
-          // 1. 基础检查
-          if (!githubToken || !githubUsername || !githubRepo) {
-            alert("请先在 API 设置中填写 GitHub 配置！");
-            return;
+        function encodeUtf8BytesToBase64Chunked(uint8Arr) {
+          if (!uint8Arr || uint8Arr.length === 0) return "";
+          const STEP = 0x6000; // 24576 bytes (multiple of 3)
+          const parts = [];
+          for (let i = 0; i < uint8Arr.length; i += STEP) {
+            const sub = uint8Arr.subarray(i, Math.min(i + STEP, uint8Arr.length));
+            let bin = "";
+            for (let j = 0; j < sub.length; j++) {
+              bin += String.fromCharCode(sub[j]);
+            }
+            parts.push(btoa(bin));
           }
+          return parts.join("");
+        }
 
-          // 2. 确认操作
-          const confirmed = await showCustomConfirm(
-            "⚠️ 高能预警",
-            "即将从 GitHub 下载备份并【覆盖】当前所有数据！\n\n如果 GitHub 上的备份较旧，您当前的新数据将会丢失。\n\n确定要继续吗？",
-            { confirmButtonClass: "btn-danger" },
-          );
-          if (!confirmed) return;
+        function decodeBase64ToUtf8String(b64Str) {
+          const clean = String(b64Str || "").replace(/\s+/g, "");
+          if (!clean) return "";
+          const bin = atob(clean);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) {
+            bytes[i] = bin.charCodeAt(i);
+          }
+          return new TextDecoder("utf-8").decode(bytes);
+        }
 
-          githubToken = githubToken.trim();
-          githubUsername = githubUsername.trim();
-          githubRepo = githubRepo
-            .trim()
-            .replace(/\/$/, "")
-            .split("/")
-            .pop()
-            .replace(".git", "");
-          githubPath = (githubPath || "ephone_backup.json").trim();
-
-          await showCustomAlert(
-            "正在连接...",
-            "正在检查 GitHub 上的备份文件...",
-          );
-
+        async function prefetchGitHubRepoTreeShas(user, repo, token) {
+          const cacheKey = `${user}/${repo}`;
+          const map = {};
+          const rawFetch = window._rawNativeFetch || window.fetch;
+          const headers = {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `token ${token}`
+          };
           try {
-            let finalBase64String = "";
-
-            // 3. 策略 A：检查是否存在分片索引文件 (.meta)
-            const metaUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${githubPath}.meta`;
-            let metaData = null;
-
-            try {
-              const metaRes = await fetch(metaUrl, {
-                headers: { Authorization: `token ${githubToken}` },
-              });
-              if (metaRes.ok) {
-                const metaJson = await metaRes.json();
-                const metaContentStr = atob(
-                  metaJson.content.replace(/\s/g, ""),
-                );
-                metaData = JSON.parse(metaContentStr);
-              }
-            } catch (e) {
-              console.log("未找到 meta 文件，尝试单文件模式。");
-            }
-
-            // 4. 分支处理：分片下载 vs 单文件下载
-            if (metaData && metaData.total_parts) {
-              // === 分片模式 (处理超大文件) ===
-              const totalParts = metaData.total_parts;
-              const modalTitle = document.getElementById("custom-modal-title");
-
-              for (let i = 1; i <= totalParts; i++) {
-                if (modalTitle)
-                  modalTitle.textContent = `正在下载分片 ${i}/${totalParts}...`;
-
-                const partName = `${githubPath}.${String(i).padStart(3, "0")}`;
-                // 获取分片文件的 SHA 信息
-                const partInfoUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${partName}`;
-
-                const partInfoRes = await fetch(partInfoUrl, {
-                  headers: { Authorization: `token ${githubToken}` },
-                });
-
-                if (!partInfoRes.ok)
-                  throw new Error(`获取分片 ${partName} 信息失败`);
-
-                const partJson = await partInfoRes.json();
-
-                // 统一使用 Blob API 获取内容，避免 download_url 的 CORS 问题
-                // 无论是分片还是单文件，只要 SHA 存在，就用 Blob API
-                const blobUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/git/blobs/${partJson.sha}`;
-                const blobRes = await fetch(blobUrl, {
-                  headers: { Authorization: `token ${githubToken}` },
-                });
-
-                if (!blobRes.ok)
-                  throw new Error(`分片 ${partName} 内容下载失败`);
-
-                const blobJson = await blobRes.json();
-                finalBase64String += blobJson.content.replace(/\s/g, "");
-              }
-              console.log("所有分片下载并拼接完成。");
-            } else {
-              // === 单文件模式 ===
-              // 1. 先获取文件的元数据（拿到 sha）
-              const singleUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${githubPath}`;
-              const res = await fetch(singleUrl, {
-                headers: { Authorization: `token ${githubToken}` },
-              });
-
-              if (!res.ok) {
-                if (res.status === 404)
-                  throw new Error("未找到备份文件！请检查文件名是否正确。");
-                throw new Error(`下载失败: ${res.status}`);
-              }
-
-              const json = await res.json();
-
-              if (json.content) {
-                // 文件较小 (<1MB)，API 直接返回了 content
-                finalBase64String = json.content.replace(/\s/g, "");
-              } else if (json.sha) {
-                // 文件较大 (>1MB)，API 没有 content，但有 sha
-                // 使用 Blob API 获取内容（它支持 CORS 和 Token）
-                console.log("文件大于1MB，正在通过 Blob API 下载...");
-                if (document.getElementById("custom-modal-title")) {
-                  document.getElementById("custom-modal-title").textContent =
-                    "正在通过 Blob API 下载大文件...";
-                }
-
-                const blobUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/git/blobs/${json.sha}`;
-                const blobRes = await fetch(blobUrl, {
-                  headers: { Authorization: `token ${githubToken}` },
-                });
-
-                if (!blobRes.ok)
-                  throw new Error(`Blob API 请求失败: ${blobRes.status}`);
-
-                const blobJson = await blobRes.json();
-                finalBase64String = blobJson.content.replace(/\s/g, "");
-              } else {
-                throw new Error(
-                  "无法获取文件内容: GitHub API 未返回 content 或 sha",
-                );
-              }
-            }
-
-            // 5. 解码与恢复
-            if (document.getElementById("custom-modal-title")) {
-              document.getElementById("custom-modal-title").textContent =
-                "正在解析数据(可能需要几秒)...";
-            }
-
-            // a. Base64 -> 二进制字符串
-            const binaryString = atob(finalBase64String);
-
-            // b. 二进制字符串 -> Uint8Array -> UTF-8 字符串
-            // (这一步是为了解决中文乱码问题)
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            const decoder = new TextDecoder("utf-8");
-            const jsonString = decoder.decode(bytes);
-
-            // c. 预检 JSON
-            try {
-              JSON.parse(jsonString);
-            } catch (parseErr) {
-              throw new Error(
-                `JSON解析失败(文件可能不完整): ${parseErr.message}`,
-              );
-            }
-
-            // d. 导入
-            const virtualFile = new File([jsonString], "github_restore.json", {
-              type: "application/json",
+            const repoRes = await rawFetch(`https://api.github.com/repos/${user}/${repo}?t=${Date.now()}`, {
+              headers,
+              cache: "no-store"
             });
-            hideCustomModal();
-            await importBackup(virtualFile);
-          } catch (error) {
-            console.error("恢复失败:", error);
-            // 如果是 403 错误，通常是 Token 权限问题
-            let extraMsg = "";
-            if (
-              error.message.includes("403") ||
-              error.message.includes("Failed to fetch")
-            ) {
-              extraMsg =
-                "\n\n(提示：这可能是网络问题，或者您的 GitHub Token 没有足够的权限访问该私有仓库。)";
+            let defaultBranch = "main";
+            if (repoRes.ok) {
+              const repoJson = await repoRes.json();
+              if (repoJson && repoJson.default_branch) defaultBranch = repoJson.default_branch;
             }
-            await showCustomAlert(
-              "恢复失败",
-              `错误信息: ${error.message}${extraMsg}`,
+            const treeRes = await rawFetch(
+              `https://api.github.com/repos/${user}/${repo}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1&t=${Date.now()}`,
+              { headers, cache: "no-store" }
             );
-          }
+            if (treeRes.ok) {
+              const treeJson = await treeRes.json();
+              if (treeJson && Array.isArray(treeJson.tree)) {
+                treeJson.tree.forEach((item) => {
+                  if (item && item.path && item.sha) {
+                    map[item.path] = item.sha;
+                  }
+                });
+              }
+            }
+          } catch (_) {}
+          window._ghRepoShaCacheMap[cacheKey] = map;
+          return map;
         }
 
-        /**
-         * 辅助函数：上传单个文件到 GitHub
-         * 增强版：支持获取SHA以覆盖文件，处理404情况
-         */
+        async function getGitHubRemoteFileSha(user, repo, path, token, forceRefresh = false) {
+          const cleanPath = String(path || "").replace(/^\/+/, "");
+          const cacheKey = `${user}/${repo}`;
+          const rawFetch = window._rawNativeFetch || window.fetch;
+          const headers = {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `token ${token}`
+          };
+
+          if (!forceRefresh && window._ghRepoShaCacheMap[cacheKey] && window._ghRepoShaCacheMap[cacheKey][cleanPath]) {
+            return window._ghRepoShaCacheMap[cacheKey][cleanPath];
+          }
+
+          // 1. 直接查询文件元数据 (<1MB 时直接返回 sha)
+          try {
+            const directUrl = `https://api.github.com/repos/${user}/${repo}/contents/${cleanPath}?t=${Date.now()}`;
+            const getRes = await rawFetch(directUrl, {
+              method: "GET",
+              headers,
+              cache: "no-store"
+            });
+            if (getRes.ok) {
+              const json = await getRes.json();
+              if (json && json.sha) {
+                if (!window._ghRepoShaCacheMap[cacheKey]) window._ghRepoShaCacheMap[cacheKey] = {};
+                window._ghRepoShaCacheMap[cacheKey][cleanPath] = json.sha;
+                return json.sha;
+              }
+            } else if (getRes.status === 404) {
+              return null;
+            }
+          } catch (_) {}
+
+          // 2. 当文件 >1MB 导致直接查询报 403 too_large 时，通过父目录列表获取 SHA
+          try {
+            const parts = cleanPath.split("/").filter(Boolean);
+            const fileName = parts.pop();
+            const parentDir = parts.join("/");
+            const dirUrl = parentDir
+              ? `https://api.github.com/repos/${user}/${repo}/contents/${parentDir}?t=${Date.now()}`
+              : `https://api.github.com/repos/${user}/${repo}/contents?t=${Date.now()}`;
+            const dirRes = await rawFetch(dirUrl, {
+              method: "GET",
+              headers,
+              cache: "no-store"
+            });
+            if (dirRes.ok) {
+              const dirList = await dirRes.json();
+              if (Array.isArray(dirList)) {
+                if (!window._ghRepoShaCacheMap[cacheKey]) window._ghRepoShaCacheMap[cacheKey] = {};
+                dirList.forEach((f) => {
+                  if (f && f.path && f.sha) window._ghRepoShaCacheMap[cacheKey][f.path] = f.sha;
+                });
+                const found = dirList.find((f) => f && (f.name === fileName || f.path === cleanPath));
+                if (found && found.sha) return found.sha;
+              }
+            }
+          } catch (_) {}
+
+          // 3. 兜底使用 Git Trees API 获取完整树 SHA（支持大文件与多文件目录）
+          const treeMap = await prefetchGitHubRepoTreeShas(user, repo, token);
+          return treeMap[cleanPath] || null;
+        }
+
         async function uploadSingleFile(
           user,
           repo,
@@ -39253,83 +39319,211 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           contentBase64,
           isAuto,
         ) {
-          const apiUrl = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
+          const cleanPath = String(path || "").replace(/^\/+/, "");
+          const apiUrl = `https://api.github.com/repos/${user}/${repo}/contents/${cleanPath}`;
+          const rawFetch = window._rawNativeFetch || window.fetch;
+          const cacheKey = `${user}/${repo}`;
 
-          // 1. 尝试获取现有的 SHA (用于覆盖)
-          let sha = null;
-          try {
-            // 这里的 fetch 可能会因为网络问题失败，所以加 try-catch
-            const getRes = await fetch(apiUrl, {
-              method: "GET",
-              headers: { Authorization: `token ${token}` },
-            });
-            if (getRes.ok) {
-              const json = await getRes.json();
-              sha = json.sha;
+          let lastErr = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const sha = await getGitHubRemoteFileSha(user, repo, cleanPath, token, attempt > 0);
+            const body = {
+              message: `Backup ${new Date().toLocaleString()}`,
+              content: contentBase64,
+            };
+            if (sha) body.sha = sha;
+
+            try {
+              const res = await rawFetch(apiUrl, {
+                method: "PUT",
+                headers: {
+                  Accept: "application/vnd.github.v3+json",
+                  Authorization: `token ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(body),
+              });
+
+              if (res.ok) {
+                try {
+                  const resJson = await res.json();
+                  if (resJson && resJson.content && resJson.content.sha) {
+                    if (!window._ghRepoShaCacheMap[cacheKey]) window._ghRepoShaCacheMap[cacheKey] = {};
+                    window._ghRepoShaCacheMap[cacheKey][cleanPath] = resJson.content.sha;
+                  }
+                } catch (_) {}
+                return true;
+              }
+
+              const errText = await res.text();
+              let errMsg = `Status ${res.status}`;
+              try {
+                const errJson = JSON.parse(errText);
+                errMsg = errJson.message || errMsg;
+              } catch (_) {}
+              lastErr = new Error(`GitHub API Error: ${errMsg}`);
+
+              if (res.status === 409 || res.status === 422 || res.status >= 500) {
+                await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+                continue;
+              }
+              throw lastErr;
+            } catch (err) {
+              lastErr = err;
+              if (attempt === 2) throw lastErr;
+              await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
             }
-          } catch (e) {
-            console.warn(
-              `[Github] 获取文件 SHA 失败 (可能是新文件): ${path}`,
-              e,
-            );
-            // 忽略获取SHA的错误，假设是新文件继续尝试上传
+          }
+          throw lastErr || new Error("GitHub 上传失败");
+        }
+
+        async function fetchGitHubFileDecodedUtf8(user, repo, path, token) {
+          const cleanPath = String(path || "").replace(/^\/+/, "");
+          const rawFetch = window._rawNativeFetch || window.fetch;
+          const headers = {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `token ${token}`
+          };
+
+          const fetchBlobBySha = async (sha) => {
+            if (!sha) return null;
+            const blobUrl = `https://api.github.com/repos/${user}/${repo}/git/blobs/${sha}?t=${Date.now()}`;
+            const blobRes = await rawFetch(blobUrl, { headers, cache: "no-store" });
+            if (!blobRes.ok) throw new Error(`Blob 下载失败: ${blobRes.status}`);
+            const blobJson = await blobRes.json();
+            return decodeBase64ToUtf8String(blobJson.content || "");
+          };
+
+          const singleUrl = `https://api.github.com/repos/${user}/${repo}/contents/${cleanPath}?t=${Date.now()}`;
+          const res = await rawFetch(singleUrl, { headers, cache: "no-store" });
+          if (res.status === 404) return null;
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.content) {
+              return decodeBase64ToUtf8String(json.content);
+            }
+            if (json && json.sha) {
+              return await fetchBlobBySha(json.sha);
+            }
+          }
+          // 若文件 >1MB 返回 403 too_large，则先查 SHA 再走 Blob API
+          const fallbackSha = await getGitHubRemoteFileSha(user, repo, cleanPath, token, false);
+          if (fallbackSha) {
+            return await fetchBlobBySha(fallbackSha);
+          }
+          return null;
+        }
+
+        // 全量上传按钮与自动备份统一走低内存分模块流式引擎，彻底避免 500-600MB 网页崩溃与二次上传失效
+        async function uploadBackupToGitHub(isAuto = false) {
+          const autoFlag = typeof isAuto === "boolean" ? isAuto : false;
+          return await uploadBackupToGitHubStream(autoFlag, true);
+        }
+
+        async function restoreBackupFromGitHub() {
+          let { githubToken, githubUsername, githubRepo, githubPath } =
+            state.apiConfig;
+
+          if (!githubToken || !githubUsername || !githubRepo) {
+            alert("请先在 API 设置中填写 GitHub 配置！");
+            return;
           }
 
-          // 2. 准备上传请求体
-          const body = {
-            message: `Backup ${new Date().toLocaleString()}`,
-            content: contentBase64,
-          };
-          if (sha) body.sha = sha;
+          const { token, user, repo, path } = sanitizeGithubConfigFields(
+            githubToken,
+            githubUsername,
+            githubRepo,
+            githubPath
+          );
+          let basePath = path.endsWith(".json") ? path.slice(0, -5) : path;
 
-          // 3. 执行上传 (PUT)
-          const res = await fetch(apiUrl, {
-            method: "PUT",
-            headers: {
-              Authorization: `token ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          });
+          // 优先检查是否存在流式全量总索引 (_master_meta.json)，若存在则直接走低内存全量恢复
+          try {
+            const masterCheck = await fetchGitHubFileDecodedUtf8(
+              user,
+              repo,
+              `${basePath}_master_meta.json`,
+              token
+            );
+            if (masterCheck) {
+              return await restoreBackupFromGitHubStream();
+            }
+          } catch (_) {}
 
-          if (!res.ok) {
-            const errText = await res.text();
-            let errMsg = `Status ${res.status}`;
+          const confirmed = await showCustomConfirm(
+            "⚠️ 高能预警",
+            "即将从 GitHub 下载备份并【覆盖】当前所有数据！\n\n如果 GitHub 上的备份较旧，您当前的新数据将会丢失。\n\n确定要继续吗？",
+            { confirmButtonClass: "btn-danger" },
+          );
+          if (!confirmed) return;
+
+          await showCustomAlert(
+            "正在连接...",
+            "正在检查 GitHub 上的备份文件...",
+          );
+
+          try {
+            await prefetchGitHubRepoTreeShas(user, repo, token);
+            let metaData = null;
             try {
-              const errJson = JSON.parse(errText);
-              errMsg = errJson.message || errMsg;
-            } catch (e) {}
-            throw new Error(`GitHub API Error: ${errMsg}`);
+              const metaStr = await fetchGitHubFileDecodedUtf8(user, repo, `${path}.meta`, token);
+              if (metaStr) metaData = JSON.parse(metaStr);
+            } catch (_) {}
+
+            let jsonString = "";
+            if (metaData && metaData.total_parts) {
+              const totalParts = metaData.total_parts;
+              const modalTitle = document.getElementById("custom-modal-title");
+              let combinedB64 = "";
+              for (let i = 1; i <= totalParts; i++) {
+                if (modalTitle) modalTitle.textContent = `正在下载分片 ${i}/${totalParts}...`;
+                const partName = `${path}.${String(i).padStart(3, "0")}`;
+                const sha = await getGitHubRemoteFileSha(user, repo, partName, token, false);
+                if (!sha) throw new Error(`未找到分片 ${partName}`);
+                const blobRes = await fetch(
+                  `https://api.github.com/repos/${user}/${repo}/git/blobs/${sha}?t=${Date.now()}`,
+                  { headers: { Authorization: `token ${token}` }, cache: "no-store" }
+                );
+                if (!blobRes.ok) throw new Error(`分片 ${partName} 下载失败`);
+                const blobJson = await blobRes.json();
+                combinedB64 += String(blobJson.content || "").replace(/\s+/g, "");
+              }
+              jsonString = decodeBase64ToUtf8String(combinedB64);
+            } else {
+              const singleStr = await fetchGitHubFileDecodedUtf8(user, repo, path, token);
+              if (!singleStr) {
+                throw new Error("未找到备份文件！请检查文件名是否正确。");
+              }
+              jsonString = singleStr;
+            }
+
+            const virtualFile = new File([jsonString], "github_restore.json", {
+              type: "application/json",
+            });
+            hideCustomModal();
+            await importBackup(virtualFile);
+          } catch (error) {
+            console.error("恢复失败:", error);
+            await showCustomAlert(
+              "恢复失败",
+              `错误信息: ${error.message}`,
+            );
           }
         }
 
-        /**
-         * 管理自动备份定时器 (已修改：支持自定义时间和模式)
-         */
         function handleAutoBackupTimer() {
-          // 清除旧定时器
           if (githubBackupTimer) {
             clearInterval(githubBackupTimer);
             githubBackupTimer = null;
           }
 
-          // 如果开启了自动备份
           if (state.apiConfig && state.apiConfig.githubAutoBackup) {
-            // 获取间隔时间，默认为 30 分钟
-            const intervalMinutes = state.apiConfig.githubBackupInterval || 30;
+            const intervalMinutes = Math.max(5, Number(state.apiConfig.githubBackupInterval) || 30);
             console.log(`已开启 GitHub 自动备份 (每 ${intervalMinutes} 分钟)`);
 
             githubBackupTimer = setInterval(
               () => {
-                // 获取备份模式，默认为全量
-                const mode = state.apiConfig.githubBackupMode || "full";
-
-                if (mode === "stream") {
-                  // 传入 true 表示这是自动备份
-                  uploadBackupToGitHubStream(true);
-                } else {
-                  uploadBackupToGitHub(true);
-                }
+                uploadBackupToGitHubStream(true, true);
               },
               intervalMinutes * 60 * 1000,
             );
@@ -43430,6 +43624,754 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const copyInspectNeg = document.getElementById("mod-nai-inspect-copy-neg-btn");
             if (copyInspectNeg) {
               copyInspectNeg.addEventListener("click", () => copyTextFromInput("mod-nai-inspect-neg-input", copyInspectNeg));
+            }
+
+            // 7. 生图收藏夹与共享画册（中世纪羊皮纸书签画册，每页9格）
+            bindCollectionFolioEvents();
+          }
+
+          // ============================================================
+          // 生图收藏夹与云端共享集控制器（9宫格分页 + 详情面 + 编辑面 + GitHub隔离目录共享）
+          // ============================================================
+          const BOOKMARKS_STORE_KEY = "mod_nai_bookmarks_v1";
+          const ITEMS_PER_PAGE = 9;
+          let colScope = "local"; // "local" | "shared"
+          let colLocalPage = 1;
+          let colSharedPage = 1;
+          let colSharedList = [];
+          let colSharedLoadedOnce = false;
+          let colCurrentItem = null;
+          let colCurrentIndex = -1;
+          let colEditImageDraft = "";
+          let colIsCreatingNew = false;
+
+          const PLACEHOLDER_BOOKMARK_SVG =
+            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path><path d="M12 7v6"></path><path d="M9 10h6"></path></svg>';
+          const FILLED_NO_IMG_SVG =
+            '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><circle cx="11" cy="11" r="2"></circle></svg>';
+
+          function loadLocalBookmarks() {
+            try {
+              const raw = localStorage.getItem(BOOKMARKS_STORE_KEY);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) return parsed;
+              }
+            } catch (_) {}
+            return [];
+          }
+
+          function saveLocalBookmarks(list) {
+            const cleanList = Array.isArray(list) ? list : [];
+            try {
+              localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(cleanList));
+            } catch (_) {}
+            if (window.state && window.state.globalSettings) {
+              window.state.globalSettings.naiBookmarksCollection = cleanList;
+              if (window.db && window.db.globalSettings) {
+                window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
+              }
+            }
+          }
+
+          function setColStatus(msg) {
+            const bar = document.getElementById("mod-nai-col-status-bar");
+            if (!bar) return;
+            if (!msg) {
+              bar.style.display = "none";
+              bar.textContent = "";
+            } else {
+              bar.style.display = "block";
+              bar.textContent = msg;
+            }
+          }
+
+          function switchCollectionSubView(viewName) {
+            const gridPage = document.getElementById("mod-nai-col-grid-page");
+            const detailPage = document.getElementById("mod-nai-col-detail-page");
+            const editPage = document.getElementById("mod-nai-col-edit-page");
+            if (gridPage) gridPage.style.display = viewName === "grid" ? "flex" : "none";
+            if (detailPage) detailPage.style.display = viewName === "detail" ? "flex" : "none";
+            if (editPage) editPage.style.display = viewName === "edit" ? "flex" : "none";
+          }
+
+          function updateCollectionHeaderUI() {
+            const titleEl = document.getElementById("mod-nai-col-title");
+            const subEl = document.getElementById("mod-nai-col-subtitle");
+            const scopeBtnLabel = document.getElementById("mod-nai-col-scope-btn-label");
+            const scopeIcon = document.getElementById("mod-nai-col-scope-icon");
+            const refreshBtn = document.getElementById("mod-nai-col-refresh-shared-btn");
+            const isShared = colScope === "shared";
+
+            if (titleEl) titleEl.textContent = isShared ? "共享集" : "收藏夹";
+            if (subEl) subEl.textContent = isShared ? "云端画册" : "私藏书签";
+            if (scopeBtnLabel) scopeBtnLabel.textContent = isShared ? "私藏" : "共享";
+            if (refreshBtn) refreshBtn.style.display = isShared ? "inline-flex" : "none";
+            if (scopeIcon) {
+              scopeIcon.innerHTML = isShared
+                ? '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>'
+                : '<circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>';
+            }
+          }
+
+          function renderCollectionGrid() {
+            updateCollectionHeaderUI();
+            const gridEl = document.getElementById("mod-nai-col-grid-container");
+            const pageTextEl = document.getElementById("mod-nai-col-page-indicator");
+            const prevBtn = document.getElementById("mod-nai-col-prev-btn");
+            const nextBtn = document.getElementById("mod-nai-col-next-btn");
+            if (!gridEl) return;
+
+            // 先释放旧节点图片引用，防止翻页堆积内存
+            gridEl.querySelectorAll("img").forEach((img) => {
+              img.removeAttribute("src");
+            });
+            gridEl.innerHTML = "";
+
+            const isShared = colScope === "shared";
+            const sourceList = isShared ? colSharedList : loadLocalBookmarks();
+            const totalItems = sourceList.length;
+
+            // 本地私藏模式下：如果当前页填满了9个，允许翻到新的一页继续添加
+            const totalPages = isShared
+              ? Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
+              : Math.max(1, Math.ceil((totalItems + 1) / ITEMS_PER_PAGE));
+
+            if (isShared) {
+              if (colSharedPage > totalPages) colSharedPage = totalPages;
+              if (colSharedPage < 1) colSharedPage = 1;
+            } else {
+              if (colLocalPage > totalPages) colLocalPage = totalPages;
+              if (colLocalPage < 1) colLocalPage = 1;
+            }
+
+            const curPage = isShared ? colSharedPage : colLocalPage;
+            const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
+
+            for (let slot = 0; slot < ITEMS_PER_PAGE; slot++) {
+              const itemIdx = startIdx + slot;
+              const item = sourceList[itemIdx];
+              const cell = document.createElement("div");
+
+              if (item) {
+                cell.className = "mod-nai-bookmark-cell";
+                const thumb = document.createElement("div");
+                thumb.className = "mod-nai-bookmark-thumb";
+                if (item.image) {
+                  const img = document.createElement("img");
+                  img.loading = "lazy";
+                  img.src = item.image;
+                  img.alt = item.name || "书签";
+                  thumb.appendChild(img);
+                } else {
+                  thumb.innerHTML = FILLED_NO_IMG_SVG;
+                }
+                const nameDiv = document.createElement("div");
+                nameDiv.className = "mod-nai-bookmark-name";
+                nameDiv.textContent = item.name || "未命名";
+                cell.appendChild(thumb);
+                cell.appendChild(nameDiv);
+                cell.addEventListener("click", () => {
+                  openBookmarkDetailView(item, itemIdx);
+                });
+              } else {
+                cell.className = "mod-nai-bookmark-cell empty-slot";
+                const thumb = document.createElement("div");
+                thumb.className = "mod-nai-bookmark-thumb";
+                thumb.innerHTML = PLACEHOLDER_BOOKMARK_SVG;
+                const nameDiv = document.createElement("div");
+                nameDiv.className = "mod-nai-bookmark-name";
+                nameDiv.textContent = isShared ? "空位" : "新建";
+                cell.appendChild(thumb);
+                cell.appendChild(nameDiv);
+                if (!isShared) {
+                  cell.addEventListener("click", () => {
+                    openCreateNewBookmarkEditView();
+                  });
+                } else {
+                  cell.style.cursor = "default";
+                  cell.style.opacity = "0.45";
+                }
+              }
+              gridEl.appendChild(cell);
+            }
+
+            if (pageTextEl) {
+              pageTextEl.textContent = `第 ${curPage} / ${totalPages} 页`;
+            }
+            if (prevBtn) {
+              prevBtn.disabled = curPage <= 1;
+              prevBtn.style.opacity = curPage <= 1 ? "0.45" : "1";
+            }
+            if (nextBtn) {
+              nextBtn.disabled = curPage >= totalPages;
+              nextBtn.style.opacity = curPage >= totalPages ? "0.45" : "1";
+            }
+          }
+
+          function openBookmarkDetailView(item, idx) {
+            if (!item) return;
+            colCurrentItem = item;
+            colCurrentIndex = typeof idx === "number" ? idx : -1;
+            const isShared = colScope === "shared";
+
+            const stageEl = document.getElementById("mod-nai-col-detail-img-stage");
+            const nameEl = document.getElementById("mod-nai-col-detail-name");
+            const artistEl = document.getElementById("mod-nai-col-detail-artist-text");
+            const posEl = document.getElementById("mod-nai-col-detail-pos-text");
+            const negEl = document.getElementById("mod-nai-col-detail-neg-text");
+            const uploadBtn = document.getElementById("mod-nai-col-detail-upload-btn");
+            const editBtn = document.getElementById("mod-nai-col-detail-edit-btn");
+            const importBtn = document.getElementById("mod-nai-col-detail-import-btn");
+
+            if (stageEl) {
+              stageEl.innerHTML = "";
+              if (item.image) {
+                const img = document.createElement("img");
+                img.src = item.image;
+                img.alt = item.name || "书签";
+                img.className = "naiimag-image";
+                img.title = item.name || "Bookmark";
+                stageEl.appendChild(img);
+              } else {
+                stageEl.innerHTML = FILLED_NO_IMG_SVG + '<span style="font-size:11px;margin-top:4px;">暂无封面图</span>';
+              }
+            }
+            if (nameEl) nameEl.textContent = item.name || "未命名书签";
+            if (artistEl) artistEl.textContent = item.artist || "未设置画师串";
+            if (posEl) posEl.textContent = item.positive || "未设置正面提示词";
+            if (negEl) negEl.textContent = item.negative || "未设置负面提示词";
+
+            if (uploadBtn) uploadBtn.style.display = isShared ? "none" : "inline-flex";
+            if (editBtn) editBtn.style.display = isShared ? "none" : "inline-flex";
+            if (importBtn) importBtn.style.display = isShared ? "inline-flex" : "none";
+
+            switchCollectionSubView("detail");
+
+            // 如果共享书签列表项只含摘要，异步拉取完整详情包
+            if (isShared && item.id && !item._detailLoaded && typeof ModuleManager !== "undefined" && typeof ModuleManager.fetchWorkshopGithubJson === "function") {
+              ModuleManager.fetchWorkshopGithubJson(`nai-bookmarks/items/${item.id}.json`)
+                .then((fullData) => {
+                  if (fullData && typeof fullData === "object") {
+                    Object.assign(item, fullData, { _detailLoaded: true });
+                    if (colCurrentItem === item) {
+                      if (artistEl) artistEl.textContent = item.artist || "未设置画师串";
+                      if (posEl) posEl.textContent = item.positive || "未设置正面提示词";
+                      if (negEl) negEl.textContent = item.negative || "未设置负面提示词";
+                      if (item.image && stageEl) {
+                        stageEl.innerHTML = `<img src="${item.image}" alt="${item.name || "书签"}" class="naiimag-image" />`;
+                      }
+                    }
+                  }
+                })
+                .catch(() => {});
+            }
+          }
+
+          function renderEditSquarePreview(dataUrl) {
+            const stageEl = document.getElementById("mod-nai-col-edit-img-stage");
+            if (!stageEl) return;
+            stageEl.innerHTML = "";
+            if (dataUrl) {
+              const img = document.createElement("img");
+              img.src = dataUrl;
+              img.alt = "封面预览";
+              stageEl.appendChild(img);
+            } else {
+              stageEl.innerHTML =
+                PLACEHOLDER_BOOKMARK_SVG +
+                '<span style="font-size:11px;margin-top:4px;">点击上传一比一图片</span>';
+            }
+          }
+
+          function openCreateNewBookmarkEditView() {
+            colIsCreatingNew = true;
+            const st = loadPanelState();
+            const genImg = document.getElementById("mod-nai-gen-result-img");
+            const curGenSrc = (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) ? genImg.src : "";
+
+            colCurrentItem = {
+              id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+              name: "",
+              image: curGenSrc,
+              artist: st.artistText || "",
+              positive: computeActivePositivePrompt() || st.pos1Text || "",
+              negative: st.negText || "",
+              updatedAt: Date.now()
+            };
+            colCurrentIndex = -1;
+            colEditImageDraft = colCurrentItem.image || "";
+
+            const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
+            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
+            const negInp = document.getElementById("mod-nai-col-edit-neg-input");
+            const delBtn = document.getElementById("mod-nai-col-edit-delete-btn");
+
+            if (nameInp) nameInp.value = "";
+            if (artistInp) artistInp.value = colCurrentItem.artist;
+            if (posInp) posInp.value = colCurrentItem.positive;
+            if (negInp) negInp.value = colCurrentItem.negative;
+            if (delBtn) delBtn.style.display = "none";
+            renderEditSquarePreview(colEditImageDraft);
+            switchCollectionSubView("edit");
+          }
+
+          function openExistingBookmarkEditView() {
+            if (!colCurrentItem) return;
+            colIsCreatingNew = false;
+            colEditImageDraft = colCurrentItem.image || "";
+
+            const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
+            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
+            const negInp = document.getElementById("mod-nai-col-edit-neg-input");
+            const delBtn = document.getElementById("mod-nai-col-edit-delete-btn");
+
+            if (nameInp) nameInp.value = colCurrentItem.name || "";
+            if (artistInp) artistInp.value = colCurrentItem.artist || "";
+            if (posInp) posInp.value = colCurrentItem.positive || "";
+            if (negInp) negInp.value = colCurrentItem.negative || "";
+            if (delBtn) delBtn.style.display = "inline-flex";
+            renderEditSquarePreview(colEditImageDraft);
+            switchCollectionSubView("edit");
+          }
+
+          function persistCurrentBookmarkEditDraft(requireNonEmpty = false) {
+            if (!colCurrentItem || colScope === "shared") return false;
+            const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
+            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
+            const negInp = document.getElementById("mod-nai-col-edit-neg-input");
+
+            const nameVal = (nameInp ? nameInp.value : "").trim();
+            const artistVal = (artistInp ? artistInp.value : "").trim();
+            const posVal = (posInp ? posInp.value : "").trim();
+            const negVal = (negInp ? negInp.value : "").trim();
+
+            if (requireNonEmpty && !nameVal && !artistVal && !posVal && !colEditImageDraft) {
+              return false;
+            }
+
+            colCurrentItem.name = nameVal || "未命名书签";
+            colCurrentItem.image = colEditImageDraft || "";
+            colCurrentItem.artist = artistVal;
+            colCurrentItem.positive = posVal;
+            colCurrentItem.negative = negVal;
+            colCurrentItem.updatedAt = Date.now();
+
+            const list = loadLocalBookmarks();
+            const existingIdx = list.findIndex((x) => x && x.id === colCurrentItem.id);
+            if (existingIdx >= 0) {
+              list[existingIdx] = colCurrentItem;
+              colCurrentIndex = existingIdx;
+            } else if (nameVal || artistVal || posVal || colEditImageDraft) {
+              list.push(colCurrentItem);
+              colCurrentIndex = list.length - 1;
+              colIsCreatingNew = false;
+            }
+            saveLocalBookmarks(list);
+            return true;
+          }
+
+          async function compressImageFileToSquareDataUrl(file) {
+            return await new Promise((resolve) => {
+              const url = URL.createObjectURL(file);
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  const side = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
+                  const sx = Math.max(0, Math.floor(((img.naturalWidth || img.width) - side) / 2));
+                  const sy = Math.max(0, Math.floor(((img.naturalHeight || img.height) - side) / 2));
+                  const targetSize = Math.min(480, side || 480);
+                  const canvas = document.createElement("canvas");
+                  canvas.width = targetSize;
+                  canvas.height = targetSize;
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, sx, sy, side, side, 0, 0, targetSize, targetSize);
+                  let out = canvas.toDataURL("image/webp", 0.82);
+                  if (!out || out.length < 32 || !out.startsWith("data:image/webp")) {
+                    out = canvas.toDataURL("image/jpeg", 0.84);
+                  }
+                  canvas.width = 0;
+                  canvas.height = 0;
+                  URL.revokeObjectURL(url);
+                  resolve(out);
+                } catch (_) {
+                  URL.revokeObjectURL(url);
+                  resolve("");
+                }
+              };
+              img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve("");
+              };
+              img.src = url;
+            });
+          }
+
+          async function refreshSharedBookmarksFromGitHub() {
+            if (typeof ModuleManager === "undefined" || typeof ModuleManager.fetchWorkshopGithubJson !== "function") {
+              setColStatus("共享服务正在初始化，请稍候");
+              return;
+            }
+            setColStatus("正在同步共享收藏夹...");
+            try {
+              const indexData = await ModuleManager.fetchWorkshopGithubJson("nai-bookmarks/index.json");
+              if (indexData && Array.isArray(indexData.items)) {
+                colSharedList = indexData.items;
+              } else if (Array.isArray(indexData)) {
+                colSharedList = indexData;
+              } else {
+                colSharedList = [];
+              }
+              colSharedLoadedOnce = true;
+              setColStatus(colSharedList.length > 0 ? "" : "共享集暂无内容，可在私藏详情页点击上传分享");
+              renderCollectionGrid();
+            } catch (err) {
+              setColStatus("同步未完成: " + (err && err.message ? err.message : "请检查网络"));
+              renderCollectionGrid();
+            }
+          }
+
+          async function uploadCurrentBookmarkToShared(btnEl) {
+            if (!colCurrentItem) return;
+            if (typeof ModuleManager === "undefined" || typeof ModuleManager.putWorkshopGithubFile !== "function") {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "共享组件尚未就绪");
+              }
+              return;
+            }
+
+            // 如果工坊未单独填 Token，自动借用 API 设置中的 GitHub Token
+            const cfg = ModuleManager.getWorkshopConfig();
+            if (!cfg.githubToken && window.state && window.state.apiConfig && window.state.apiConfig.githubToken) {
+              localStorage.setItem("ephone_workshop_gh_token", window.state.apiConfig.githubToken.trim());
+            }
+
+            const spanEl = btnEl ? btnEl.querySelector("span") : null;
+            const prevTxt = spanEl ? spanEl.textContent : "上传";
+            if (btnEl) btnEl.disabled = true;
+            if (spanEl) spanEl.textContent = "上传中";
+
+            try {
+              const itemId = colCurrentItem.id || ("bm_" + Date.now());
+              const sharedItemPayload = {
+                id: itemId,
+                category: "nai_bookmark",
+                name: colCurrentItem.name || "未命名书签",
+                image: colCurrentItem.image || "",
+                artist: colCurrentItem.artist || "",
+                positive: colCurrentItem.positive || "",
+                negative: colCurrentItem.negative || "",
+                updatedAt: Date.now()
+              };
+
+              await ModuleManager.putWorkshopGithubFile(
+                `nai-bookmarks/items/${itemId}.json`,
+                JSON.stringify(sharedItemPayload),
+                `Share NAI bookmark ${sharedItemPayload.name}`
+              );
+
+              let currentIndex = [];
+              try {
+                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson("nai-bookmarks/index.json");
+                if (remoteIdx && Array.isArray(remoteIdx.items)) {
+                  currentIndex = remoteIdx.items;
+                } else if (Array.isArray(remoteIdx)) {
+                  currentIndex = remoteIdx;
+                }
+              } catch (_) {}
+
+              const summaryEntry = {
+                id: itemId,
+                category: "nai_bookmark",
+                name: sharedItemPayload.name,
+                image: sharedItemPayload.image,
+                artist: sharedItemPayload.artist,
+                positive: sharedItemPayload.positive,
+                negative: sharedItemPayload.negative,
+                updatedAt: sharedItemPayload.updatedAt,
+                _detailLoaded: true
+              };
+
+              const existPos = currentIndex.findIndex((x) => x && x.id === itemId);
+              if (existPos >= 0) {
+                currentIndex[existPos] = summaryEntry;
+              } else {
+                currentIndex.unshift(summaryEntry);
+              }
+
+              await ModuleManager.putWorkshopGithubFile(
+                "nai-bookmarks/index.json",
+                JSON.stringify({ version: 1, type: "nai_bookmarks_isolated_store", updatedAt: Date.now(), items: currentIndex }),
+                `Update NAI bookmarks index`
+              );
+
+              colSharedList = currentIndex;
+              colSharedLoadedOnce = true;
+
+              if (spanEl) spanEl.textContent = "已上传";
+              if (typeof window.showDownloadToast === "function") {
+                window.showDownloadToast("已上传至共享集", "success");
+              }
+              setTimeout(() => {
+                if (spanEl) spanEl.textContent = prevTxt;
+              }, 1400);
+            } catch (err) {
+              if (spanEl) spanEl.textContent = prevTxt;
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("上传未成功", err && err.message ? err.message : "请检查GitHub令牌配置");
+              }
+            } finally {
+              if (btnEl) btnEl.disabled = false;
+            }
+          }
+
+          function bindCollectionFolioEvents() {
+            const modal = document.getElementById("mod-nai-collection-modal");
+            const openBtn = document.getElementById("mod-nai-open-collection-btn");
+            const closeBtn = document.getElementById("mod-nai-col-close-btn");
+            const scopeToggleBtn = document.getElementById("mod-nai-col-scope-toggle-btn");
+            const refreshSharedBtn = document.getElementById("mod-nai-col-refresh-shared-btn");
+            const prevBtn = document.getElementById("mod-nai-col-prev-btn");
+            const nextBtn = document.getElementById("mod-nai-col-next-btn");
+
+            if (openBtn && modal) {
+              openBtn.addEventListener("click", () => {
+                colScope = "local";
+                setColStatus("");
+                switchCollectionSubView("grid");
+                renderCollectionGrid();
+                modal.style.display = "flex";
+              });
+            }
+            if (closeBtn && modal) {
+              closeBtn.addEventListener("click", () => {
+                modal.style.display = "none";
+              });
+            }
+            if (scopeToggleBtn) {
+              scopeToggleBtn.addEventListener("click", () => {
+                colScope = colScope === "local" ? "shared" : "local";
+                switchCollectionSubView("grid");
+                if (colScope === "shared" && !colSharedLoadedOnce) {
+                  renderCollectionGrid();
+                  refreshSharedBookmarksFromGitHub();
+                } else {
+                  setColStatus(colScope === "shared" && colSharedList.length === 0 ? "共享集暂无内容，可在私藏详情页点击上传分享" : "");
+                  renderCollectionGrid();
+                }
+              });
+            }
+            if (refreshSharedBtn) {
+              refreshSharedBtn.addEventListener("click", () => {
+                refreshSharedBookmarksFromGitHub();
+              });
+            }
+            if (prevBtn) {
+              prevBtn.addEventListener("click", () => {
+                if (colScope === "shared") {
+                  if (colSharedPage > 1) colSharedPage--;
+                } else {
+                  if (colLocalPage > 1) colLocalPage--;
+                }
+                renderCollectionGrid();
+              });
+            }
+            if (nextBtn) {
+              nextBtn.addEventListener("click", () => {
+                if (colScope === "shared") {
+                  colSharedPage++;
+                } else {
+                  colLocalPage++;
+                }
+                renderCollectionGrid();
+              });
+            }
+
+            // 详情页按钮
+            const detailBackBtn = document.getElementById("mod-nai-col-detail-back-btn");
+            const detailEditBtn = document.getElementById("mod-nai-col-detail-edit-btn");
+            const detailUploadBtn = document.getElementById("mod-nai-col-detail-upload-btn");
+            const detailImportBtn = document.getElementById("mod-nai-col-detail-import-btn");
+            const detailApplyBtn = document.getElementById("mod-nai-col-detail-apply-btn");
+            const copyArtistBtn = document.getElementById("mod-nai-col-detail-copy-artist-btn");
+            const copyPosBtn = document.getElementById("mod-nai-col-detail-copy-pos-btn");
+            const copyNegBtn = document.getElementById("mod-nai-col-detail-copy-neg-btn");
+
+            if (detailBackBtn) {
+              detailBackBtn.addEventListener("click", () => {
+                switchCollectionSubView("grid");
+                renderCollectionGrid();
+              });
+            }
+            if (detailEditBtn) {
+              detailEditBtn.addEventListener("click", () => {
+                openExistingBookmarkEditView();
+              });
+            }
+            if (detailUploadBtn) {
+              detailUploadBtn.addEventListener("click", () => {
+                uploadCurrentBookmarkToShared(detailUploadBtn);
+              });
+            }
+            if (detailImportBtn) {
+              detailImportBtn.addEventListener("click", () => {
+                if (!colCurrentItem) return;
+                const list = loadLocalBookmarks();
+                const cloned = {
+                  id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  name: colCurrentItem.name || "收录书签",
+                  image: colCurrentItem.image || "",
+                  artist: colCurrentItem.artist || "",
+                  positive: colCurrentItem.positive || "",
+                  negative: colCurrentItem.negative || "",
+                  updatedAt: Date.now()
+                };
+                list.push(cloned);
+                saveLocalBookmarks(list);
+                const spanEl = detailImportBtn.querySelector("span");
+                if (spanEl) {
+                  spanEl.textContent = "已收录";
+                  setTimeout(() => { spanEl.textContent = "收录"; }, 1200);
+                }
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已收入我的收藏夹", "success");
+                }
+              });
+            }
+            if (detailApplyBtn) {
+              detailApplyBtn.addEventListener("click", () => {
+                if (!colCurrentItem) return;
+                const artistEl = document.getElementById("mod-nai-gen-artist-input");
+                const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+                const c1El = document.getElementById("mod-nai-pos1-check");
+                const negEl = document.getElementById("mod-nai-gen-neg-input");
+                if (artistEl && colCurrentItem.artist !== undefined) artistEl.value = colCurrentItem.artist;
+                if (pos1El && colCurrentItem.positive !== undefined) pos1El.value = colCurrentItem.positive;
+                if (c1El) c1El.checked = true;
+                if (negEl && colCurrentItem.negative !== undefined) negEl.value = colCurrentItem.negative;
+                syncModuleNaiToGlobal();
+                if (modal) modal.style.display = "none";
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已填入生图面板并保存", "success");
+                }
+              });
+            }
+
+            const copyRawString = async (str, btn) => {
+              const txt = String(str || "").trim();
+              if (!txt) return;
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(txt);
+                }
+                if (btn) {
+                  const prev = btn.textContent;
+                  btn.textContent = "已复";
+                  setTimeout(() => { btn.textContent = prev; }, 1000);
+                }
+              } catch (_) {}
+            };
+            if (copyArtistBtn) copyArtistBtn.addEventListener("click", () => copyRawString(colCurrentItem?.artist, copyArtistBtn));
+            if (copyPosBtn) copyPosBtn.addEventListener("click", () => copyRawString(colCurrentItem?.positive, copyPosBtn));
+            if (copyNegBtn) copyNegBtn.addEventListener("click", () => copyRawString(colCurrentItem?.negative, copyNegBtn));
+
+            // 编辑页事件与实时自动保存
+            const editBackBtn = document.getElementById("mod-nai-col-edit-back-btn");
+            const editGrabBtn = document.getElementById("mod-nai-col-edit-grab-current-btn");
+            const editImgStage = document.getElementById("mod-nai-col-edit-img-stage");
+            const editFileInput = document.getElementById("mod-nai-col-edit-file-input");
+            const editDeleteBtn = document.getElementById("mod-nai-col-edit-delete-btn");
+            const editSaveBtn = document.getElementById("mod-nai-col-edit-save-btn");
+
+            [
+              "mod-nai-col-edit-name-input",
+              "mod-nai-col-edit-artist-input",
+              "mod-nai-col-edit-pos-input",
+              "mod-nai-col-edit-neg-input"
+            ].forEach((id) => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.addEventListener("input", () => persistCurrentBookmarkEditDraft(false));
+                el.addEventListener("change", () => persistCurrentBookmarkEditDraft(false));
+                el.addEventListener("blur", () => persistCurrentBookmarkEditDraft(false));
+              }
+            });
+
+            if (editImgStage && editFileInput) {
+              editImgStage.addEventListener("click", () => editFileInput.click());
+              editFileInput.addEventListener("change", async () => {
+                const f = editFileInput.files && editFileInput.files[0];
+                if (f) {
+                  const sqUrl = await compressImageFileToSquareDataUrl(f);
+                  if (sqUrl) {
+                    colEditImageDraft = sqUrl;
+                    renderEditSquarePreview(colEditImageDraft);
+                    persistCurrentBookmarkEditDraft(false);
+                  }
+                }
+                editFileInput.value = "";
+              });
+            }
+
+            if (editGrabBtn) {
+              editGrabBtn.addEventListener("click", () => {
+                const st = loadPanelState();
+                const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
+                const posInp = document.getElementById("mod-nai-col-edit-pos-input");
+                const negInp = document.getElementById("mod-nai-col-edit-neg-input");
+                if (artistInp) artistInp.value = st.artistText || "";
+                if (posInp) posInp.value = computeActivePositivePrompt() || st.pos1Text || "";
+                if (negInp) negInp.value = st.negText || "";
+                const genImg = document.getElementById("mod-nai-gen-result-img");
+                if (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) {
+                  colEditImageDraft = genImg.src;
+                  renderEditSquarePreview(colEditImageDraft);
+                }
+                persistCurrentBookmarkEditDraft(false);
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已读取当前生图内容", "success");
+                }
+              });
+            }
+
+            if (editBackBtn) {
+              editBackBtn.addEventListener("click", () => {
+                if (colIsCreatingNew) {
+                  switchCollectionSubView("grid");
+                  renderCollectionGrid();
+                } else {
+                  persistCurrentBookmarkEditDraft(false);
+                  openBookmarkDetailView(colCurrentItem, colCurrentIndex);
+                }
+              });
+            }
+
+            if (editSaveBtn) {
+              editSaveBtn.addEventListener("click", () => {
+                persistCurrentBookmarkEditDraft(false);
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已保存书签", "success");
+                }
+                openBookmarkDetailView(colCurrentItem, colCurrentIndex);
+              });
+            }
+
+            if (editDeleteBtn) {
+              editDeleteBtn.addEventListener("click", async () => {
+                if (!colCurrentItem) return;
+                if (typeof window.showCustomConfirm === "function") {
+                  const ok = await window.showCustomConfirm("删除书签", "确定删除这条收藏吗？");
+                  if (!ok) return;
+                }
+                const list = loadLocalBookmarks().filter((x) => x && x.id !== colCurrentItem.id);
+                saveLocalBookmarks(list);
+                colCurrentItem = null;
+                switchCollectionSubView("grid");
+                renderCollectionGrid();
+              });
             }
           }
 
@@ -99769,583 +100711,395 @@ ${specificRules}`;
           .getElementById("aurora-save-book-btn")
           .addEventListener("click", saveCurrentNovelToShelf);
         /**
-         * Git流式上传 (分表 + 自动切片 + 重试机制)
-         * 修复：解决 "Failed to fetch" 网络超时问题
+         * Git流式低内存全量上传 (分表 + 大表按行分批 + 字节流切片 + 预取SHA + 自动脱敏重试)
+         * 彻底修复：
+         * 1. isAuto 未定义导致手动/自动流式备份报 ReferenceError
+         * 2. 第二次上传到同一仓库因 >1MB 文件拿不到 SHA 导致失败
+         * 3. 500-600MB 本地数据库一次性 JSON.stringify + btoa 导致浏览器内存溢出崩溃
+         * 4. 完整包含所有数据库表、localStorageSnapshot 以及酒馆 (tavernStateBackup)
          */
-        async function uploadBackupToGitHubStream() {
+        async function uploadBackupToGitHubStream(isAuto = false, skipConfirm = false) {
+          const autoMode = typeof isAuto === "boolean" ? isAuto : false;
           let { githubToken, githubUsername, githubRepo, githubPath } =
-            state.apiConfig;
+            state.apiConfig || {};
 
           if (!githubToken || !githubUsername || !githubRepo) {
-            alert("请先在 API 设置中填写 GitHub 配置！");
+            if (!autoMode) alert("请先在 API 设置中填写 GitHub 配置！");
             return;
           }
 
-          // 整理路径
-          githubToken = githubToken.trim();
-          githubUsername = githubUsername.trim();
-          githubRepo = githubRepo
-            .trim()
-            .replace(/\/$/, "")
-            .split("/")
-            .pop()
-            .replace(".git", "");
-          let basePath = (githubPath || "ephone_backup").trim();
-          if (basePath.endsWith(".json")) {
-            basePath = basePath.replace(".json", "");
-          }
+          const { token, user, repo, path } = sanitizeGithubConfigFields(
+            githubToken,
+            githubUsername,
+            githubRepo,
+            githubPath
+          );
+          let basePath = path.endsWith(".json") ? path.slice(0, -5) : path;
+          if (!basePath) basePath = "ephone_backup";
 
-          // ★★★ 2.如果是自动备份，跳过确认框 ★★★
-          if (!isAuto) {
+          if (!autoMode && !skipConfirm) {
             const confirmed = await showCustomConfirm(
-              "开始流式上传",
-              `将把数据拆分为多个文件上传。\n已优化为 15MB 分片以防止网络超时。\n\n确定要开始吗？`,
+              "开始云端备份上传",
+              "将采用低内存分片模式上传全部手机数据与酒馆数据，防止大内存崩溃。确定开始吗？",
             );
             if (!confirmed) return;
           }
 
           const loadingOverlay = document.getElementById("generation-overlay");
-          if (loadingOverlay) {
-            const loadingText = loadingOverlay.querySelector("p");
-            if (!isAuto) {
-              loadingOverlay.classList.add("visible");
-            } else {
-              console.log("正在后台执行流式备份...");
-            }
+          const loadingText = loadingOverlay ? loadingOverlay.querySelector("p") : null;
+          if (loadingOverlay && !autoMode) {
+            loadingOverlay.classList.add("visible");
           }
 
-          // ★★★ 修改 1: 降低分片大小到 15MB (浏览器上传更稳定) ★★★
-          const CHUNK_SIZE = 15 * 1024 * 1024;
+          const updateStatusText = (txt) => {
+            if (loadingText && !autoMode) loadingText.textContent = txt;
+          };
 
-          // ★★★ 辅助函数: 延时 (防止触发速率限制) ★★★
-          const sleep = (ms) =>
-            new Promise((resolve) => setTimeout(resolve, ms));
+          // 单个上传分片控制在 8MB Base64 以内，内存峰值不超过 18MB
+          const CHUNK_SIZE = 8 * 1024 * 1024;
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-          // ★★★ 辅助函数: 带重试的上传器 ★★★
-          const uploadWithRetry = async (path, content, retries = 3) => {
+          const uploadWithRetry = async (targetPath, contentB64, retries = 3) => {
             for (let i = 0; i < retries; i++) {
               try {
-                await uploadSingleFile(
-                  githubUsername,
-                  githubRepo,
-                  path,
-                  githubToken,
-                  content,
-                  true,
-                );
-                return; // 成功则退出
+                await uploadSingleFile(user, repo, targetPath, token, contentB64, true);
+                return;
               } catch (error) {
-                console.warn(`上传 ${path} 失败 (第 ${i + 1} 次重试):`, error);
-                if (i === retries - 1) throw error; // 最后一次还失败，则抛出异常
-                await sleep(2000); // 失败后等待2秒再试
+                console.warn(`上传 ${targetPath} 异常，正在重试 (${i + 1}/${retries}):`, error);
+                if (i === retries - 1) throw error;
+                await sleep(1500 * (i + 1));
               }
             }
           };
 
+          const uploadModuleObjectLowMemory = async (moduleKey, payloadObj, stepLabel) => {
+            if (payloadObj === undefined || payloadObj === null) return false;
+            updateStatusText(`${stepLabel} 正在编码: ${moduleKey}...`);
+            await sleep(25);
+
+            let jsonStr = JSON.stringify(payloadObj);
+            // 释放原对象引用辅助 GC
+            payloadObj = null;
+            jsonStr = sanitizeSecretStringValue(jsonStr);
+
+            const utf8Bytes = new TextEncoder().encode(jsonStr);
+            jsonStr = ""; // 立即释放大字符串引用
+
+            const fileName = `${basePath}_${moduleKey}.json`;
+            // 6MB 原始字节对应 8MB Base64（必须是3的倍数以保证Base64分片无缝拼接）
+            const RAW_SLICE_BYTES = 6 * 1024 * 1024;
+
+            if (utf8Bytes.length > RAW_SLICE_BYTES) {
+              const totalChunks = Math.ceil(utf8Bytes.length / RAW_SLICE_BYTES);
+              for (let c = 0; c < totalChunks; c++) {
+                updateStatusText(`${stepLabel} 上传 ${moduleKey} 分片 ${c + 1}/${totalChunks}...`);
+                const start = c * RAW_SLICE_BYTES;
+                const end = Math.min(start + RAW_SLICE_BYTES, utf8Bytes.length);
+                const sliceB64 = encodeUtf8BytesToBase64Chunked(utf8Bytes.subarray(start, end));
+                const partName = `${fileName}.${String(c + 1).padStart(3, "0")}`;
+                await uploadWithRetry(partName, sliceB64);
+                await sleep(350);
+              }
+              const metaInfo = {
+                split: true,
+                totalChunks: totalChunks,
+                originalByteLength: utf8Bytes.length,
+                timestamp: Date.now()
+              };
+              const metaB64 = encodeUtf8BytesToBase64Chunked(new TextEncoder().encode(JSON.stringify(metaInfo)));
+              await uploadWithRetry(`${fileName}.meta`, metaB64);
+            } else {
+              updateStatusText(`${stepLabel} 正在上传: ${moduleKey}...`);
+              const fullB64 = encodeUtf8BytesToBase64Chunked(utf8Bytes);
+              await uploadWithRetry(fileName, fullB64);
+              // 如果之前该表是分片的，现在变小了，写一个 split:false 的 meta 覆盖旧分片标记
+              const cacheMap = window._ghRepoShaCacheMap[`${user}/${repo}`] || {};
+              if (cacheMap[`${fileName}.meta`]) {
+                const resetMeta = encodeUtf8BytesToBase64Chunked(
+                  new TextEncoder().encode(JSON.stringify({ split: false, totalChunks: 0, timestamp: Date.now() }))
+                );
+                await uploadWithRetry(`${fileName}.meta`, resetMeta);
+              }
+              await sleep(200);
+            }
+            return true;
+          };
+
           try {
-            // 1. 准备任务列表
-            const tablesToExport = db.tables.map((t) => t.name);
+            updateStatusText("正在连接 GitHub 仓库并同步文件索引...");
+            await prefetchGitHubRepoTreeShas(user, repo, token);
+
             const singleObjects = [
               "apiConfig",
               "globalSettings",
               "musicLibrary",
               "qzoneSettings",
             ];
+            const tablesToExport = db.tables
+              .map((t) => t.name)
+              .filter((name) => !singleObjects.includes(name));
 
             const allTasks = [
               ...tablesToExport.map((name) => ({ type: "table", name })),
               ...singleObjects.map((name) => ({ type: "object", name })),
+              { type: "special", name: "localStorageSnapshot" },
+              { type: "special", name: "tavernStateBackup" },
             ];
 
             const totalTasks = allTasks.length;
 
-            // 2. 遍历执行
             for (let i = 0; i < totalTasks; i++) {
               const task = allTasks[i];
+              const stepLabel = `[${i + 1}/${totalTasks}]`;
+              updateStatusText(`${stepLabel} 读取本地数据: ${task.name}...`);
+              await sleep(30);
 
               let data = null;
               if (task.type === "table") {
-                // 对于大表，这里读取可能会花一点时间，UI更新一下
-                loadingText.textContent = `[${i + 1}/${totalTasks}] 读取本地数据: ${task.name}...`;
-                // 给UI一点渲染时间
-                await sleep(50);
                 data = await db[task.name].toArray();
-              } else {
-                data = await db[task.name].get("main");
-                // 安全过滤
-                if (data && task.name === "apiConfig") {
-                  data.apiKey = "";
-                  data.githubToken = "";
-                  data.minimaxApiKey = "";
+                if (task.name === "apiPresets" && Array.isArray(data)) {
+                  data = data.map((p) => (p ? { ...p, apiKey: "" } : p));
+                }
+              } else if (task.type === "object") {
+                const rawObj = await db[task.name].get("main");
+                if (rawObj) {
+                  data = JSON.parse(JSON.stringify(rawObj));
+                  if (task.name === "apiConfig") {
+                    data.apiKey = "";
+                    data.githubToken = "";
+                    data.minimaxApiKey = "";
+                  }
+                }
+              } else if (task.name === "localStorageSnapshot") {
+                const lsSnap = {};
+                for (let kIdx = 0; kIdx < localStorage.length; kIdx++) {
+                  const k = localStorage.key(kIdx);
+                  if (!k) continue;
+                  if (
+                    k === "github-token" ||
+                    k === "ephone_workshop_gh_token" ||
+                    k === "workshop-github-token" ||
+                    k === "novelai-api-key"
+                  ) {
+                    continue;
+                  }
+                  lsSnap[k] = sanitizeSecretStringValue(localStorage.getItem(k) || "");
+                }
+                data = lsSnap;
+              } else if (task.name === "tavernStateBackup") {
+                if (typeof window.getTavernStateForFullBackup === "function") {
+                  try {
+                    data = await window.getTavernStateForFullBackup();
+                  } catch (_) {}
                 }
               }
 
               if (!data) continue;
-
-              loadingText.textContent = `[${i + 1}/${totalTasks}] 正在编码: ${task.name}...`;
-              await sleep(20);
-
-              // 序列化并转Base64
-              const jsonContent = JSON.stringify(data);
-              const contentBase64 = btoa(
-                unescape(encodeURIComponent(jsonContent)),
-              );
-
-              const fileName = `${basePath}_${task.name}.json`;
-              const totalSize = contentBase64.length;
-
-              // 3. 上传逻辑
-              if (totalSize > CHUNK_SIZE) {
-                const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
-
-                for (let c = 0; c < totalChunks; c++) {
-                  loadingText.textContent = `[${i + 1}/${totalTasks}] 上传 ${
-                    task.name
-                  } 分片 (${c + 1}/${totalChunks})...`;
-
-                  const start = c * CHUNK_SIZE;
-                  const end = Math.min(start + CHUNK_SIZE, totalSize);
-                  const chunkContent = contentBase64.substring(start, end);
-                  const partName = `${fileName}.${String(c + 1).padStart(3, "0")}`;
-
-                  // 使用重试机制上传
-                  await uploadWithRetry(partName, chunkContent);
-
-                  // ★★★ 每次上传完一个分片，休息 1 秒 ★★★
-                  await sleep(1000);
-                }
-
-                // 上传索引文件
-                const metaInfo = {
-                  split: true,
-                  totalChunks: totalChunks,
-                  originalSize: totalSize,
-                };
-                const metaBase64 = btoa(JSON.stringify(metaInfo));
-                await uploadWithRetry(`${fileName}.meta`, metaBase64);
-              } else {
-                loadingText.textContent = `[${i + 1}/${totalTasks}] 正在上传: ${task.name}...`;
-                await uploadWithRetry(fileName, contentBase64);
-                await sleep(500); // 小文件也稍微休息一下
-              }
+              await uploadModuleObjectLowMemory(task.name, data, stepLabel);
+              data = null;
+              await sleep(40);
             }
 
-            // 4. 上传总索引
             const masterMeta = {
-              type: "stream_backup_v2",
+              type: "stream_backup_v3",
               timestamp: Date.now(),
               tables: tablesToExport,
               configs: singleObjects,
+              extras: ["localStorageSnapshot", "tavernStateBackup"],
             };
-            const masterMetaBase64 = btoa(
-              unescape(encodeURIComponent(JSON.stringify(masterMeta))),
+            const masterMetaB64 = encodeUtf8BytesToBase64Chunked(
+              new TextEncoder().encode(JSON.stringify(masterMeta))
             );
-            await uploadWithRetry(
-              `${basePath}_master_meta.json`,
-              masterMetaBase64,
-            );
+            await uploadWithRetry(`${basePath}_master_meta.json`, masterMetaB64);
 
-            // ★★★ 4. 成功后的处理 ★★★
-            if (isAuto) {
-              // 如果是自动备份，使用顶部通知条（不打断用户）
-              showNotification(
-                state.activeChatId || "system",
-                "GitHub 自动备份已完成 ✅",
-              );
+            if (autoMode) {
+              if (typeof showNotification === "function") {
+                showNotification(
+                  state.activeChatId || "system",
+                  "GitHub 自动备份已完成",
+                );
+              }
               console.log("GitHub 自动备份已完成");
             } else {
-              // 如果是手动，弹窗提示
               await showCustomAlert(
                 "上传完成",
-                `所有数据已流式上传成功！\n网络波动已自动处理。`,
+                "全部手机数据与酒馆数据已安全分片上传至 GitHub！",
               );
             }
           } catch (error) {
-            console.error("流式上传失败:", error);
-            // ★★★ 5. 失败处理 ★★★
-            if (!isAuto) {
+            console.error("GitHub 备份上传失败:", error);
+            if (!autoMode) {
               await showCustomAlert(
                 "上传中断",
-                `多次重试后仍然失败。\n错误信息: ${error.message}\n请检查网络连接是否稳定。`,
-              );
-            } else {
-              showNotification(
-                state.activeChatId || "system",
-                "GitHub 自动备份失败 ❌",
+                `错误信息: ${error.message}\n请检查网络连接与 GitHub Token 权限。`,
               );
             }
           } finally {
-            // 无论如何都要尝试移除，防止手动模式卡住
-            loadingOverlay.classList.remove("visible");
+            if (loadingOverlay) loadingOverlay.classList.remove("visible");
           }
         }
 
         /**
-         * Git流式导入 (修复版：支持分表下载 + 自动合并分片)
+         * Git流式低内存全量恢复 (支持全表、单对象配置、localStorageSnapshot 与酒馆数据)
          */
         async function restoreBackupFromGitHubStream() {
           let { githubToken, githubUsername, githubRepo, githubPath } =
-            state.apiConfig;
+            state.apiConfig || {};
 
           if (!githubToken || !githubUsername || !githubRepo) {
             alert("请先在 API 设置中填写 GitHub 配置！");
             return;
           }
 
-          githubToken = githubToken.trim();
-          githubUsername = githubUsername.trim();
-          githubRepo = githubRepo
-            .trim()
-            .replace(/\/$/, "")
-            .split("/")
-            .pop()
-            .replace(".git", "");
-          let basePath = (githubPath || "ephone_backup").trim();
-          if (basePath.endsWith(".json")) {
-            basePath = basePath.replace(".json", "");
-          }
+          const { token, user, repo, path } = sanitizeGithubConfigFields(
+            githubToken,
+            githubUsername,
+            githubRepo,
+            githubPath
+          );
+          let basePath = path.endsWith(".json") ? path.slice(0, -5) : path;
+          if (!basePath) basePath = "ephone_backup";
 
           const confirmed = await showCustomConfirm(
-            "⚠️ 确认流式恢复",
-            `将从 GitHub 依次下载以 "${basePath}_" 开头的文件并覆盖当前数据。\n\n此操作会【清空】当前所有数据且不可撤销！\n确定要继续吗？`,
+            "⚠️ 确认从 GitHub 恢复",
+            `将从 GitHub 下载备份并覆盖当前数据（包含全部聊天、世界书、思维链、模组、收藏夹与酒馆数据）。\n\n确定要继续吗？`,
             { confirmButtonClass: "btn-danger" },
           );
           if (!confirmed) return;
 
           const loadingOverlay = document.getElementById("generation-overlay");
-          if (loadingOverlay) {
-            const loadingText = loadingOverlay.querySelector("p");
-            loadingOverlay.classList.add("visible");
-          }
+          const loadingText = loadingOverlay ? loadingOverlay.querySelector("p") : null;
+          if (loadingOverlay) loadingOverlay.classList.add("visible");
+          const updateStatusText = (txt) => {
+            if (loadingText) loadingText.textContent = txt;
+          };
 
           try {
-            // 1. 定义需要恢复的表名和配置
-            const tablesToImport = db.tables.map((t) => t.name);
+            updateStatusText("正在同步 GitHub 仓库文件索引...");
+            await prefetchGitHubRepoTreeShas(user, repo, token);
+
             const singleObjects = [
               "apiConfig",
               "globalSettings",
               "musicLibrary",
               "qzoneSettings",
             ];
+            const tablesToImport = db.tables
+              .map((t) => t.name)
+              .filter((name) => !singleObjects.includes(name));
 
-            // 合并任务列表
             const allTasks = [
               ...tablesToImport.map((name) => ({ type: "table", name })),
               ...singleObjects.map((name) => ({ type: "object", name })),
+              { type: "special", name: "localStorageSnapshot" },
+              { type: "special", name: "tavernStateBackup" },
             ];
 
             const totalTasks = allTasks.length;
             let completedTasks = 0;
             let successCount = 0;
 
-            // 清库
-            loadingText.textContent = "正在清空当前数据库...";
+            const downloadModuleJsonLowMemory = async (taskName) => {
+              const fileName = `${basePath}_${taskName}.json`;
+              let splitInfo = null;
+              try {
+                const metaStr = await fetchGitHubFileDecodedUtf8(user, repo, `${fileName}.meta`, token);
+                if (metaStr) {
+                  const parsedMeta = JSON.parse(metaStr);
+                  if (parsedMeta && parsedMeta.split && parsedMeta.totalChunks > 0) {
+                    splitInfo = parsedMeta;
+                  }
+                }
+              } catch (_) {}
+
+              if (splitInfo && splitInfo.totalChunks > 0) {
+                const chunkStrings = [];
+                for (let c = 1; c <= splitInfo.totalChunks; c++) {
+                  updateStatusText(
+                    `正在下载 ${taskName} 分片 ${c}/${splitInfo.totalChunks}...`
+                  );
+                  const partName = `${fileName}.${String(c).padStart(3, "0")}`;
+                  const partUtf8 = await fetchGitHubFileDecodedUtf8(user, repo, partName, token);
+                  if (partUtf8 === null) throw new Error(`分片 ${partName} 下载失败`);
+                  chunkStrings.push(partUtf8);
+                }
+                const fullJsonStr = chunkStrings.join("");
+                chunkStrings.length = 0;
+                return JSON.parse(fullJsonStr);
+              } else {
+                const singleUtf8 = await fetchGitHubFileDecodedUtf8(user, repo, fileName, token);
+                if (singleUtf8 === null) return null;
+                return JSON.parse(singleUtf8);
+              }
+            };
+
+            updateStatusText("正在准备本地数据库...");
             for (const table of db.tables) {
               await table.clear();
             }
 
-            // --- 核心辅助函数：下载并合并 (包含分片逻辑) ---
-            const downloadAndMerge = async (taskName, taskType) => {
-              const fileName = `${basePath}_${taskName}.json`;
-              // 构造 meta 文件地址
-              const metaUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${fileName}.meta`;
-
-              let finalBase64 = "";
-              let isSplit = false;
-              let splitInfo = null;
-
-              // A. 尝试获取 .meta 文件，判断是否分片
-              try {
-                const metaRes = await fetch(metaUrl, {
-                  headers: { Authorization: `token ${githubToken}` },
-                });
-                if (metaRes.ok) {
-                  const metaJson = await metaRes.json();
-                  // 解码 meta 文件内容
-                  const metaStr = atob(metaJson.content.replace(/\s/g, ""));
-                  splitInfo = JSON.parse(metaStr);
-                  isSplit = true;
-                }
-              } catch (e) {
-                // 没找到 meta 文件，说明是单文件，继续走
-              }
-
-              if (isSplit && splitInfo) {
-                // === 分片模式 ===
-                console.log(
-                  `检测到 ${taskName} 为分片文件，共 ${splitInfo.totalChunks} 片`,
-                );
-                loadingText.textContent = `正在下载 ${taskName} (分片 ${splitInfo.totalChunks} 个)...`;
-
-                for (let i = 1; i <= splitInfo.totalChunks; i++) {
-                  // 构造分片文件名，例如 .001, .002
-                  const partName = `${fileName}.${String(i).padStart(3, "0")}`;
-                  const partUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${partName}`;
-
-                  const partRes = await fetch(partUrl, {
-                    headers: { Authorization: `token ${githubToken}` },
-                  });
-                  if (!partRes.ok) throw new Error(`分片 ${partName} 下载失败`);
-
-                  const partJson = await partRes.json();
-
-                  // 处理内容（兼容大文件返回 sha 的情况）
-                  if (partJson.content) {
-                    finalBase64 += partJson.content.replace(/\s/g, "");
-                  } else if (partJson.sha) {
-                    // 如果分片本身也很大，GitHub可能只返回sha，需要用Blob API
-                    const blobUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/git/blobs/${partJson.sha}`;
-                    const blobRes = await fetch(blobUrl, {
-                      headers: { Authorization: `token ${githubToken}` },
-                    });
-                    const blobJson = await blobRes.json();
-                    finalBase64 += blobJson.content.replace(/\s/g, "");
-                  }
-                }
-              } else {
-                // === 单文件模式 ===
-                const fileUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${fileName}`;
-                const res = await fetch(fileUrl, {
-                  headers: { Authorization: `token ${githubToken}` },
-                });
-
-                if (res.status === 404) return null; // 文件不存在，跳过
-                if (!res.ok) throw new Error(`文件 ${fileName} 下载失败`);
-
-                const json = await res.json();
-
-                if (json.content) {
-                  finalBase64 = json.content.replace(/\s/g, "");
-                } else if (json.sha) {
-                  const blobUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/git/blobs/${json.sha}`;
-                  const blobRes = await fetch(blobUrl, {
-                    headers: { Authorization: `token ${githubToken}` },
-                  });
-                  const blobJson = await blobRes.json();
-                  finalBase64 = blobJson.content.replace(/\s/g, "");
-                }
-              }
-
-              // B. 解码 Base64 -> UTF8 -> JSON
-              try {
-                // atob 解码 Base64
-                const binaryString = atob(finalBase64);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-                // TextDecoder 处理中文乱码
-                const decoder = new TextDecoder("utf-8");
-                const dataJson = JSON.parse(decoder.decode(bytes));
-                return dataJson;
-              } catch (parseError) {
-                console.error(`解析 ${taskName} 数据失败`, parseError);
-                throw new Error(`解析 ${taskName} 失败，数据可能损坏`);
-              }
-            };
-
-            // 2. 循环处理所有任务
             for (let i = 0; i < totalTasks; i++) {
               const task = allTasks[i];
-              loadingText.textContent = `[${completedTasks + 1}/${totalTasks}] 正在恢复: ${task.name}...`;
+              updateStatusText(`[${completedTasks + 1}/${totalTasks}] 正在恢复: ${task.name}...`);
 
               try {
-                const data = await downloadAndMerge(task.name, task.type);
-
-                if (data) {
+                let data = await downloadModuleJsonLowMemory(task.name);
+                if (data !== null && data !== undefined) {
                   if (task.type === "object") {
-                    // 恢复单对象配置
                     if (task.name === "apiConfig") {
-                      // 恢复时，如果备份里没有Key，保留当前内存里的Key
-                      if (!data.apiKey) data.apiKey = state.apiConfig.apiKey;
-                      if (!data.githubToken)
-                        data.githubToken = state.apiConfig.githubToken;
+                      if (!data.apiKey && state.apiConfig) data.apiKey = state.apiConfig.apiKey;
+                      if (!data.githubToken) data.githubToken = token;
+                      if (!data.githubUsername) data.githubUsername = user;
+                      if (!data.githubRepo) data.githubRepo = repo;
                     }
-                    await db[task.name].put(data);
-                  } else {
-                    // 恢复数组表数据
-                    if (Array.isArray(data) && data.length > 0) {
-                      await db[task.name].bulkPut(data);
+                    if (db[task.name]) await db[task.name].put(data);
+                  } else if (task.type === "table") {
+                    if (Array.isArray(data) && data.length > 0 && db[task.name]) {
+                      const BATCH_ROWS = 200;
+                      for (let r = 0; r < data.length; r += BATCH_ROWS) {
+                        await db[task.name].bulkPut(data.slice(r, r + BATCH_ROWS));
+                      }
+                    }
+                  } else if (task.name === "localStorageSnapshot" && typeof data === "object") {
+                    for (const [k, v] of Object.entries(data)) {
+                      if (typeof k === "string" && typeof v === "string") {
+                        if (
+                          k === "ephone_local_vault_config" ||
+                          k === "ephone_local_vault_config_v1" ||
+                          k === "tavern_state_v2" ||
+                          k === "tavern_state_v1"
+                        ) {
+                          continue;
+                        }
+                        try {
+                          localStorage.setItem(k, v);
+                        } catch (_) {}
+                      }
+                    }
+                  } else if (task.name === "tavernStateBackup" && typeof data === "object") {
+                    if (typeof window.restoreTavernStateFromFullBackup === "function") {
+                      await window.restoreTavernStateFromFullBackup(data);
                     }
                   }
                   successCount++;
                 }
+                data = null;
               } catch (err) {
-                console.warn(`恢复 ${task.name} 时出错，跳过:`, err);
+                console.warn(`恢复模块 ${task.name} 时跳过:`, err);
               }
               completedTasks++;
             }
 
             await showCustomAlert(
               "恢复完成",
-              `流式恢复结束！\n成功恢复了 ${successCount} 个数据模块。\n应用即将刷新。`,
+              `已成功恢复 ${successCount} 个数据模块（含手机数据与酒馆数据），即将刷新页面生效。`,
             );
-            setTimeout(() => window.location.reload(), 1500);
+            setTimeout(() => window.location.reload(), 1200);
           } catch (error) {
             console.error("流式恢复失败:", error);
             await showCustomAlert("恢复失败", `发生错误: ${error.message}`);
           } finally {
-            loadingOverlay.classList.remove("visible");
-          }
-        }
-
-        /**
-         * Git流式导入 (分表下载，节省内存)
-         */
-        async function restoreBackupFromGitHubStream() {
-          let { githubToken, githubUsername, githubRepo, githubPath } =
-            state.apiConfig;
-
-          if (!githubToken || !githubUsername || !githubRepo) {
-            alert("请先在 API 设置中填写 GitHub 配置！");
-            return;
-          }
-
-          // 整理路径
-          githubToken = githubToken.trim();
-          githubUsername = githubUsername.trim();
-          githubRepo = githubRepo
-            .trim()
-            .replace(/\/$/, "")
-            .split("/")
-            .pop()
-            .replace(".git", "");
-          let basePath = (githubPath || "ephone_backup").trim();
-          if (basePath.endsWith(".json")) {
-            basePath = basePath.replace(".json", "");
-          }
-
-          const confirmed = await showCustomConfirm(
-            "⚠️ 确认流式恢复",
-            `将从 GitHub 依次下载以 "${basePath}_" 开头的文件并覆盖当前数据。\n\n此操作会【清空】当前所有数据且不可撤销！\n确定要继续吗？`,
-            { confirmButtonClass: "btn-danger" },
-          );
-          if (!confirmed) return;
-
-          const loadingOverlay = document.getElementById("generation-overlay");
-          if (loadingOverlay) {
-            const loadingText = loadingOverlay.querySelector("p");
-            loadingOverlay.classList.add("visible");
-          }
-
-          try {
-            // 1. 定义需要恢复的表名和配置 (与上传时对应)
-            // 即使云端没有某些表，尝试下载404也会被忽略，保证健壮性
-            const tablesToImport = db.tables.map((t) => t.name);
-            const singleObjects = [
-              "apiConfig",
-              "globalSettings",
-              "musicLibrary",
-              "qzoneSettings",
-            ];
-
-            const totalTasks = tablesToImport.length + singleObjects.length;
-            let completedTasks = 0;
-            let successCount = 0;
-
-            // 先清空数据库 (为了保证数据纯净)
-            loadingText.textContent = "正在清空当前数据库...";
-            for (const table of db.tables) {
-              await table.clear();
-            }
-
-            // 2. 辅助下载函数
-            const downloadAndImport = async (
-              fileName,
-              targetStore,
-              isSingleObject = false,
-            ) => {
-              const apiUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${fileName}`;
-              try {
-                const res = await fetch(apiUrl, {
-                  headers: { Authorization: `token ${githubToken}` },
-                });
-
-                if (res.status === 404) {
-                  console.log(`跳过: ${fileName} 不存在`);
-                  return false;
-                }
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-                const json = await res.json();
-
-                // 处理大文件 Blob (如果是大文件 github api 会返回 sha 没 content)
-                let finalContentStr = "";
-                if (json.content) {
-                  finalContentStr = json.content.replace(/\s/g, "");
-                } else if (json.sha) {
-                  // Blob API for large files
-                  const blobUrl = `https://api.github.com/repos/${githubUsername}/${githubRepo}/git/blobs/${json.sha}`;
-                  const blobRes = await fetch(blobUrl, {
-                    headers: { Authorization: `token ${githubToken}` },
-                  });
-                  const blobJson = await blobRes.json();
-                  finalContentStr = blobJson.content.replace(/\s/g, "");
-                }
-
-                // 解码
-                const binaryString = atob(finalContentStr);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-                const decoder = new TextDecoder("utf-8");
-                const dataJson = JSON.parse(decoder.decode(bytes));
-
-                // 写入数据库
-                if (isSingleObject) {
-                  // 对于配置对象，如果是 apiConfig，保留当前的 Key 别被空值覆盖
-                  if (targetStore === "apiConfig") {
-                    // 恢复时，如果备份里是空的，就保留当前内存里的Key
-                    if (!dataJson.apiKey)
-                      dataJson.apiKey = state.apiConfig.apiKey;
-                    if (!dataJson.githubToken)
-                      dataJson.githubToken = state.apiConfig.githubToken;
-                  }
-                  await db[targetStore].put(dataJson);
-                } else {
-                  // 数组数据
-                  if (Array.isArray(dataJson) && dataJson.length > 0) {
-                    await db[targetStore].bulkPut(dataJson);
-                  }
-                }
-                return true;
-              } catch (e) {
-                console.warn(`下载/导入 ${fileName} 失败:`, e);
-                return false;
-              }
-            };
-
-            // 3. 循环恢复表
-            for (const tableName of tablesToImport) {
-              loadingText.textContent = `[${completedTasks + 1}/${totalTasks}] 正在下载并导入: ${tableName}...`;
-              const fileName = `${basePath}_${tableName}.json`;
-              if (await downloadAndImport(fileName, tableName, false)) {
-                successCount++;
-              }
-              completedTasks++;
-            }
-
-            // 4. 循环恢复配置
-            for (const configName of singleObjects) {
-              loadingText.textContent = `[${completedTasks + 1}/${totalTasks}] 正在下载并导入配置: ${configName}...`;
-              const fileName = `${basePath}_${configName}.json`;
-              if (await downloadAndImport(fileName, configName, true)) {
-                successCount++;
-              }
-              completedTasks++;
-            }
-
-            await showCustomAlert(
-              "恢复完成",
-              `流式恢复结束！\n成功恢复了 ${successCount} 个数据模块。\n应用即将刷新。`,
-            );
-            setTimeout(() => window.location.reload(), 1500);
-          } catch (error) {
-            console.error("流式恢复失败:", error);
-            await showCustomAlert("恢复失败", `发生错误: ${error.message}`);
-          } finally {
-            loadingOverlay.classList.remove("visible");
+            if (loadingOverlay) loadingOverlay.classList.remove("visible");
           }
         }
         // ---------------- [修改开始] 新增功能逻辑 ----------------
@@ -115246,9 +116000,8 @@ ${specificRules}`;
             "git-stream-upload-btn",
           );
           if (gitStreamUploadBtn) {
-            gitStreamUploadBtn.addEventListener(
-              "click",
-              uploadBackupToGitHubStream,
+            gitStreamUploadBtn.addEventListener("click", () =>
+              uploadBackupToGitHubStream(false),
             );
           }
 
