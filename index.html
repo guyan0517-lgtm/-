@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -34520,6 +34520,33 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               }
               window._cachedMashuThoughtChains = allPresets;
             }
+            if (typeof db !== "undefined" && db.modules) {
+              const allMods = await db.modules.toArray();
+              const allChaps = db.moduleChapters ? await db.moduleChapters.toArray() : [];
+              const chapMap = {};
+              allChaps.forEach(ch => {
+                if (!ch || !ch.moduleId) return;
+                if (!chapMap[ch.moduleId]) chapMap[ch.moduleId] = [];
+                chapMap[ch.moduleId].push(ch);
+              });
+              window._cachedMashuModules = allMods.map(m => ({
+                id: m.id,
+                name: m.name || m.title || "未命名模组",
+                system: m.system || "coc",
+                scale: m.scale || "1v1",
+                moduleType: m.moduleType || "线性",
+                description: m.description || m.summary || "",
+                tags: Array.isArray(m.tags) ? m.tags : [],
+                customTags: Array.isArray(m.customTags) ? m.customTags : [],
+                chapters: (chapMap[m.id] || m.chapters || []).map((c, idx) => ({
+                  id: c.id,
+                  index: idx + 1,
+                  title: c.title || c.name || `第${idx + 1}章`,
+                  category: c.category || "",
+                  content: String(c.content || "")
+                }))
+              }));
+            }
           } catch (_) {}
         };
         setTimeout(() => {
@@ -34528,9 +34555,201 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
         }, 1200);
 
+        window.applyMashuTextPatchOrRewrite = function (originalText, editSpec) {
+          const orig = String(originalText !== undefined && originalText !== null ? originalText : "");
+          if (!editSpec || typeof editSpec !== "object") return orig;
+
+          const patches = [];
+          if (Array.isArray(editSpec.patches)) {
+            patches.push(...editSpec.patches);
+          }
+          if (
+            editSpec.findText !== undefined ||
+            editSpec.oldText !== undefined ||
+            editSpec.search !== undefined ||
+            editSpec.startAnchor !== undefined ||
+            editSpec.startText !== undefined ||
+            editSpec.fromText !== undefined ||
+            editSpec.matchRegex !== undefined ||
+            editSpec.regex !== undefined
+          ) {
+            patches.push(editSpec);
+          }
+
+          let working = orig;
+          let appliedPatchCount = 0;
+          let attemptedPatchCount = patches.length;
+
+          for (const p of patches) {
+            if (!p || typeof p !== "object") continue;
+            const rep = p.replaceText !== undefined
+              ? String(p.replaceText)
+              : (p.newText !== undefined ? String(p.newText) : (p.replacement !== undefined ? String(p.replacement) : ""));
+            const startAnc = String(p.startAnchor !== undefined ? p.startAnchor : (p.startText !== undefined ? p.startText : (p.fromText !== undefined ? p.fromText : "")));
+            const endAnc = String(p.endAnchor !== undefined ? p.endAnchor : (p.endText !== undefined ? p.endText : (p.toText !== undefined ? p.toText : "")));
+            const findStr = String(p.findText !== undefined ? p.findText : (p.oldText !== undefined ? p.oldText : (p.search !== undefined ? p.search : "")));
+            const rxStr = String(p.matchRegex !== undefined ? p.matchRegex : (p.regex !== undefined ? p.regex : ""));
+
+            if (startAnc && endAnc) {
+              const sIdx = working.indexOf(startAnc);
+              if (sIdx !== -1) {
+                const eIdx = working.indexOf(endAnc, sIdx + startAnc.length);
+                if (eIdx !== -1) {
+                  if (p.keepAnchors === true) {
+                    working = working.slice(0, sIdx + startAnc.length) + rep + working.slice(eIdx);
+                  } else {
+                    working = working.slice(0, sIdx) + rep + working.slice(eIdx + endAnc.length);
+                  }
+                  appliedPatchCount++;
+                  continue;
+                }
+              }
+            }
+
+            if (findStr) {
+              if (working.includes(findStr)) {
+                if (p.replaceAll === true) {
+                  working = working.split(findStr).join(rep);
+                } else {
+                  working = working.replace(findStr, rep);
+                }
+                appliedPatchCount++;
+                continue;
+              }
+            }
+
+            if (rxStr) {
+              try {
+                let pattern = rxStr;
+                let flags = p.flags ? String(p.flags) : "g";
+                const m = rxStr.match(/^\/([\s\S]+)\/([gimsuy]*)$/);
+                if (m) {
+                  pattern = m[1];
+                  flags = m[2] || flags;
+                }
+                const rx = new RegExp(pattern, flags);
+                if (rx.test(working)) {
+                  working = working.replace(rx, rep);
+                  appliedPatchCount++;
+                  continue;
+                }
+              } catch (_) {}
+            }
+          }
+
+          if (typeof editSpec.prependText === "string" && editSpec.prependText) {
+            working = editSpec.prependText + working;
+            appliedPatchCount++;
+          }
+          if (typeof editSpec.appendText === "string" && editSpec.appendText) {
+            working = working + editSpec.appendText;
+            appliedPatchCount++;
+          }
+
+          if (appliedPatchCount > 0) {
+            return working;
+          }
+
+          if (attemptedPatchCount > 0 && orig.length > 0 && editSpec.mode !== "rewrite" && editSpec.rewrite !== true) {
+            return orig;
+          }
+
+          const fullCandidate = editSpec.content !== undefined
+            ? editSpec.content
+            : (editSpec.newContent !== undefined ? editSpec.newContent : (editSpec.value !== undefined ? editSpec.value : undefined));
+          if (typeof fullCandidate === "string") {
+            if (orig.length > 2500 && editSpec.mode !== "rewrite" && editSpec.rewrite !== true && fullCandidate.length < orig.length * 0.25) {
+              if (orig.includes(fullCandidate)) return orig;
+            }
+            return fullCandidate;
+          }
+          return orig;
+        };
+
         window.getMashuLiveInspectionSnapshot = function (targetType, targetName) {
           try {
             const qName = String(targetName || "").trim();
+            if (targetType === "nai_gen" || targetType === "nai_inspect" || targetType === "nai_both" || targetType === "nai") {
+              if (typeof window.getModuleNaiLiveStateForMashu === "function") {
+                let scope = targetType;
+                if (qName === "生图" || qName === "generate") scope = "nai_gen";
+                else if (qName === "提取" || qName === "inspect") scope = "nai_inspect";
+                else if (qName.includes("生图") && qName.includes("提取")) scope = "nai_both";
+                return JSON.stringify(window.getModuleNaiLiveStateForMashu(scope), null, 2);
+              }
+              return "生图与提取面板尚未初始化";
+            }
+            if (targetType === "module_writer" || targetType === "module") {
+              const mm = window.ModuleManager || null;
+              const writerState = (mm && mm.aiWriterState) || {};
+              let lsDraft = {};
+              try {
+                const rawLs = localStorage.getItem("ephone_ai_writer_form_draft_v1");
+                if (rawLs) lsDraft = JSON.parse(rawLs) || {};
+              } catch (_) {}
+              const fv = lsDraft.formValues || {};
+              const getDomOrDraft = (id, fallbackVal) => {
+                const el = document.getElementById(id);
+                if (el && el.value !== undefined && el.value !== "") return el.value;
+                return fallbackVal;
+              };
+              const writerSnapshot = {
+                title: getDomOrDraft("ai-mod-title-input", fv.title || ""),
+                author: getDomOrDraft("ai-mod-author-input", fv.author || "守秘人"),
+                ruleSystem: getDomOrDraft("ai-mod-rule-select", fv.ruleSystem || "coc"),
+                scaleType: getDomOrDraft("ai-mod-scale-select", fv.scaleType || "1v1"),
+                modType: getDomOrDraft("ai-mod-type-select", fv.modType || "线性"),
+                difficulty: getDomOrDraft("ai-mod-diff-select", fv.difficulty || "普通"),
+                lengthMode: getDomOrDraft("ai-mod-len-select", fv.lengthMode || "medium"),
+                drawMode: getDomOrDraft("ai-mod-draw-select", fv.drawMode || "off"),
+                refMode: getDomOrDraft("ai-mod-ref-select", fv.refMode || "free"),
+                hookAndBrainstorm: getDomOrDraft("ai-mod-hook-input", fv.hook || ""),
+                bgTags: Array.isArray(writerState.bgTags) ? writerState.bgTags : (lsDraft.bgTags || []),
+                relTags: Array.isArray(writerState.relTags) ? writerState.relTags : (lsDraft.relTags || []),
+                toneTags: Array.isArray(writerState.toneTags) ? writerState.toneTags : (lsDraft.toneTags || []),
+                tropeTags: Array.isArray(writerState.tropeTags) ? writerState.tropeTags : (lsDraft.tropeTags || []),
+                customTags: Array.isArray(writerState.customTags) ? writerState.customTags : (lsDraft.customTags || []),
+                selectedTcIds: Array.isArray(writerState.selectedTcIds) ? writerState.selectedTcIds : (lsDraft.selectedTcIds || []),
+                previewPublicText: document.getElementById("ai-mod-preview-public")?.textContent || ""
+              };
+              const wizardSnapshot = {
+                step2Summary: document.getElementById("module-step2-summary-text")?.textContent || "",
+                globalOpinion: document.getElementById("module-global-opinion-textarea")?.value || "",
+                globalImprovement: document.getElementById("module-global-improvement-textarea")?.value || ""
+              };
+              const cachedMods = Array.isArray(window._cachedMashuModules) ? window._cachedMashuModules : [];
+              const activeMod = (mm && mm.activeDetailModule) || null;
+              const matchedMods = qName && qName !== "写模组" && qName !== "全部"
+                ? cachedMods.filter(m => m && (String(m.name || "").includes(qName) || qName.includes(String(m.name || "")) || String(m.id) === qName))
+                : cachedMods;
+              const modList = (matchedMods.length > 0 ? matchedMods : cachedMods).slice(0, 12).map(m => ({
+                id: m.id,
+                name: m.name,
+                system: m.system,
+                scale: m.scale,
+                moduleType: m.moduleType,
+                description: m.description,
+                tags: m.tags,
+                customTags: m.customTags,
+                chapterCount: Array.isArray(m.chapters) ? m.chapters.length : 0,
+                chapters: Array.isArray(m.chapters)
+                  ? m.chapters.slice(0, 20).map(c => ({
+                      id: c.id,
+                      index: c.index,
+                      title: c.title,
+                      category: c.category,
+                      wordCount: String(c.content || "").length,
+                      content: String(c.content || "").slice(0, 12000)
+                    }))
+                  : []
+              }));
+              return JSON.stringify({
+                aiModuleWriterForm: writerSnapshot,
+                moduleCuttingWizard: wizardSnapshot,
+                activeViewingModuleName: activeMod ? (activeMod.name || activeMod.title || "") : "",
+                savedModulesInLibrary: modList
+              }, null, 2);
+            }
             if (targetType === "tavern_card" || targetType === "tavern") {
               if (typeof window.getTavernLiveInspectionData === "function") {
                 const tData = window.getTavernLiveInspectionData("tavern_card", qName);
@@ -34540,26 +34759,34 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
             if (targetType === "world_book" || targetType === "wb") {
               const allWbs = Array.isArray(state && state.worldBooks) ? state.worldBooks : [];
-              const matched = qName
+              const matched = qName && qName !== "全部"
                 ? allWbs.filter(w => w && (String(w.name || "").includes(qName) || qName.includes(String(w.name || "")) || String(w.id) === qName))
-                : allWbs.slice(0, 15);
-              const list = (matched.length > 0 ? matched : allWbs.slice(0, 12)).map(w => ({
-                id: w.id,
-                name: w.name,
-                enabled: w.enabled !== false,
-                constant: Boolean(w.constant),
-                keys: Array.isArray(w.keys) ? w.keys : [],
-                position: w.position || "before_char",
-                content: String(w.content || "").slice(0, 900)
-              }));
+                : allWbs;
+              let remainingBudget = 120000;
+              const targetList = matched.length > 0 ? matched : allWbs;
+              const list = targetList.slice(0, 30).map(w => {
+                const fullText = String(w.content || "");
+                const sliceLen = Math.max(2000, Math.min(fullText.length, remainingBudget));
+                remainingBudget = Math.max(2000, remainingBudget - sliceLen);
+                return {
+                  id: w.id,
+                  name: w.name,
+                  enabled: w.enabled !== false,
+                  constant: Boolean(w.constant),
+                  keys: Array.isArray(w.keys) ? w.keys : [],
+                  position: w.position || "before_char",
+                  totalLength: fullText.length,
+                  content: fullText.slice(0, sliceLen)
+                };
+              });
               return JSON.stringify({ totalWorldBooks: allWbs.length, matchedEntries: list }, null, 2);
             }
             if (targetType === "regex") {
               const allRules = typeof window.getStoredRegexRules === "function" ? window.getStoredRegexRules() : [];
-              const matched = qName
+              const matched = qName && qName !== "全部"
                 ? allRules.filter(r => r && (String(r.name || "").includes(qName) || qName.includes(String(r.name || "")) || String(r.id) === qName))
                 : allRules;
-              return JSON.stringify({ totalRegexRules: allRules.length, rules: matched.slice(0, 25) }, null, 2);
+              return JSON.stringify({ totalRegexRules: allRules.length, rules: matched.slice(0, 40) }, null, 2);
             }
             if (targetType === "thought_chain" || targetType === "cot") {
               const basePresets = Array.isArray(window._cachedMashuThoughtChains) ? window._cachedMashuThoughtChains : [];
@@ -34582,9 +34809,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
               }
               const presets = Array.from(mergedMap.values());
-              const matched = qName
-                ? presets.filter(p => p && (String(p.name || "").includes(qName) || qName.includes(String(p.name || "")) || String(p.id) === qName))
+              const parts = qName.split(/[#/:：]/).map(s => s.trim()).filter(Boolean);
+              const presetFilter = parts[0] || "";
+              const entryFilter = parts[1] || "";
+              const matched = presetFilter && presetFilter !== "全部" && presetFilter !== "默认"
+                ? presets.filter(p => p && (String(p.name || "").includes(presetFilter) || presetFilter.includes(String(p.name || "")) || String(p.id) === presetFilter))
                 : presets;
+              let remainingCharBudget = 130000;
               const list = (matched.length > 0 ? matched : presets).map(p => {
                 let effectivePreset = p;
                 if (
@@ -34605,16 +34836,41 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   });
                 }
                 const allEntries = Array.isArray(effectivePreset.entries) ? effectivePreset.entries : [];
-                const mappedEntries = allEntries.map(e => {
+                const excludedStyleEntries = [];
+                const nonStyleEntries = allEntries.filter(e => {
+                  if (!e) return false;
+                  const grp = e.groupId ? groupMap[e.groupId] : null;
+                  const gName = grp ? String(grp.name || "").trim() : "";
+                  const eKey = String(e.key || e.name || e.title || "").trim();
+                  if (/文风/.test(gName) || /文风/.test(eKey)) {
+                    excludedStyleEntries.push(eKey || gName || "文风条目");
+                    return false;
+                  }
+                  return true;
+                });
+                const filteredEntries = entryFilter
+                  ? nonStyleEntries.filter(e => {
+                      const ek = String(e.key || e.name || e.title || "");
+                      return ek.includes(entryFilter) || entryFilter.includes(ek) || String(e.content || "").includes(entryFilter);
+                    })
+                  : nonStyleEntries;
+                const entriesToMap = filteredEntries.length > 0 ? filteredEntries : nonStyleEntries;
+                const perEntryBudget = Math.max(4000, Math.floor(remainingCharBudget / Math.max(1, entriesToMap.length)));
+
+                const mappedEntries = entriesToMap.map(e => {
                   const grp = e && e.groupId ? groupMap[e.groupId] : null;
                   const isEntryEnabled = Boolean(e && e.enabled !== false && (!grp || grp.enabled !== false));
+                  const fullContent = String(e.content || "");
+                  const maxLen = entryFilter ? Math.min(fullContent.length, 100000) : Math.min(fullContent.length, Math.max(perEntryBudget, 15000));
+                  remainingCharBudget = Math.max(4000, remainingCharBudget - maxLen);
                   return {
                     id: e.id,
                     key: e.key || e.name || e.title || "未命名条目",
                     groupId: e.groupId || "",
                     groupName: grp ? (grp.name || "") : "",
                     enabled: isEntryEnabled,
-                    content: String(e.content || "").slice(0, 2000)
+                    totalLength: fullContent.length,
+                    content: fullContent.slice(0, maxLen)
                   };
                 });
                 const enabledEntryNames = mappedEntries.filter(e => e.enabled).map(e => e.key);
@@ -34622,17 +34878,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 return {
                   id: effectivePreset.id,
                   name: effectivePreset.name,
-                  structureNote: "注意：该思维链为【头部/正文骨架 + 下方entries独立小条目】双层结构！headerContent和generalContent是顶部与正文框架，正文里通过名字引用下方的entries小条目。修改、新增或开关下方小条目时，必须使用entryEdits操作entries数组，绝对禁止直接改写generalContent或把小条目内容塞进generalContent正文里！",
-                  headerContent: String(effectivePreset.headerContent || "").slice(0, 3000),
-                  generalContent: String(effectivePreset.generalContent || "").slice(0, 4000),
-                  cocContent: String(effectivePreset.cocContent || "").slice(0, 3000),
+                  structureNote: "注意：已自动过滤排除命名为「文风」的栏目！该思维链为【头部/正文骨架 + 下方entries独立小条目】双层结构。当你需要修改超长思维链中的某一段时，请优先使用 patches 局部查找替换或首尾锚点替换，无需把几万字全部重输一遍！",
+                  excludedStyleEntryNames: excludedStyleEntries,
+                  headerContent: String(effectivePreset.headerContent || "").slice(0, 12000),
+                  generalContent: String(effectivePreset.generalContent || "").slice(0, 18000),
+                  cocContent: String(effectivePreset.cocContent || "").slice(0, 12000),
                   groupCount: Array.isArray(effectivePreset.groups) ? effectivePreset.groups.length : 0,
-                  groups: Array.isArray(effectivePreset.groups) ? effectivePreset.groups.map(g => ({ id: g.id, name: g.name, enabled: g.enabled !== false })) : [],
-                  entryCount: allEntries.length,
+                  groups: Array.isArray(effectivePreset.groups)
+                    ? effectivePreset.groups.filter(g => !/文风/.test(String(g?.name || ""))).map(g => ({ id: g.id, name: g.name, enabled: g.enabled !== false }))
+                    : [],
+                  entryCount: nonStyleEntries.length,
                   enabledEntryCount: enabledEntryNames.length,
                   enabledEntryNames: enabledEntryNames,
                   disabledEntryNames: disabledEntryNames,
-                  entries: mappedEntries.slice(0, 100)
+                  entries: mappedEntries
                 };
               });
               return JSON.stringify({ totalPresets: presets.length, presets: list }, null, 2);
@@ -34853,7 +35112,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             unapprovedInspectReq = [...chat.history].slice(-8).reverse().find(m => m && m.type === "mashu_inspect_request_card" && !m.isExecuted && !m.isCancelled);
           }
 
-          const userWantsDirectEditOrCheck = /改|写|填|加|新增|新建|世界书|世界树|人设|正则|思维链|看|查|瞅/.test(lastUserMsg);
+          const userWantsDirectEditOrCheck = /改|写|填|加|新增|新建|替换|世界书|世界树|人设|正则|思维链|生图|提取|画师|正面|负面|写模|模组|脑洞|简介|看|查|瞅/.test(lastUserMsg);
 
           const availableChatsSummary = (() => {
             try {
@@ -34904,6 +35163,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 ? `【小手机思维链预设目录】：` + cotList.map(p => `「${p.name}」[ID=${p.id}]`).join("、")
                 : "【小手机思维链预设目录】：默认思维链";
 
+              const modList = Array.isArray(window._cachedMashuModules) ? window._cachedMashuModules : [];
+              const modBlock = modList.length > 0
+                ? `【小手机模组库目录】：共${modList.length}部，模组：` + modList.slice(0, 12).map(m => `「${m.name}」[${m.system}/${m.scale}]`).join("、")
+                : "【小手机模组库目录】：暂无已存模组";
+
               const mashuMyName = String(chat?.settings?.myName || chat?.settings?.myNickname || "我").trim();
               const mashuMyPersona = String(chat?.settings?.myPersona || "").trim();
               const mashuSummaries = Array.isArray(chat?.history)
@@ -34930,11 +35194,17 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   onDemandDetailBlock += `\n【按需读取的小手机正则库详情】：\n` + window.getMashuLiveInspectionSnapshot("regex", "");
                 }
                 if (/思维链/.test(lastUserMsg)) {
-                  onDemandDetailBlock += `\n【按需读取的小手机思维链详情】：\n` + window.getMashuLiveInspectionSnapshot("thought_chain", "");
+                  onDemandDetailBlock += `\n【按需读取的小手机思维链详情（已排除文风栏目）】：\n` + window.getMashuLiveInspectionSnapshot("thought_chain", "");
+                }
+                if (/生图|提取|画师|正面|负面/.test(lastUserMsg)) {
+                  onDemandDetailBlock += `\n【按需读取的生图与提取双面板实时数据】：\n` + window.getMashuLiveInspectionSnapshot("nai_both", "");
+                }
+                if (/写模|模组|脑洞|简介|引子/.test(lastUserMsg)) {
+                  onDemandDetailBlock += `\n【按需读取的写模组与模组库实时数据】：\n` + window.getMashuLiveInspectionSnapshot("module_writer", "");
                 }
               }
 
-              return [mashuSelfBlock, groupBlock, singleBlock, wbBlock, rxBlock, cotBlock, onDemandDetailBlock].filter(Boolean).join("\n");
+              return [mashuSelfBlock, groupBlock, singleBlock, wbBlock, rxBlock, cotBlock, modBlock, onDemandDetailBlock].filter(Boolean).join("\n");
             } catch (_) {
               return "暂无其他聊天";
             }
@@ -34951,7 +35221,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             peekedMouseBlock = `\n【你用虚拟鼠标偷偷打开并往下翻页看到的可视范围内容（目标：${savedPeek.targetName || "页面"}，共翻看了 ${savedPeek.screens || 2} 屏）】：\n${savedPeek.content}\n【重要提醒】：以上内容是你刚才挪动鼠标偷看时在屏幕可视区域里真实看到的内容！绝对不要去复述或总结里面的剧情、代码或动作，而是像语料库里那样，只甩一两个极简的反应、几个句号「。。。」或一个短梗（如「哎呦」「神人来的」「有病」「笑死我了」）。`;
           }
 
-          let activeInspectBlock = `当前未建立实时查看连接。默认情况下你看不见其他聊天记录的具体内容，只有目录概览：\n${availableChatsSummary}\n【严格规则】：\n1. 如果你想正经查看某个群聊记录、单聊记录、酒馆角色卡、世界书、正则或思维链，请优先使用「申请连接」（在文字末尾附上 \`[申请连接:qq_chat:名称:理由]\` 或 \`[申请连接:tavern_card:名称:理由]\` 或 \`[申请连接:world_book:名称:理由]\` 或 \`[申请连接:regex:名称:理由]\` 或 \`[申请连接:thought_chain:名称:理由]\`）。\n2. 虚拟鼠标 \`mouseActions\` 只有在两种情况下才允许移动：①你想偷偷去翻看某个聊天或页面（对方没点连接同意或你想自己偷瞄两眼）；②对方不懂怎么操作、让你手把手教他指给他看某个按钮在哪里。除此之外（尤其是正常通过连接查看、或者帮对方填写修改人设、添加世界书、添加正则、修改思维链时），绝对不要移动鼠标去点！${unapprovedInspectHint}${peekedMouseBlock}`;
+          let activeInspectBlock = `当前未建立实时查看连接。默认情况下你看不见其他聊天记录的具体内容，只有目录概览：\n${availableChatsSummary}\n【严格规则】：\n1. 如果你想正经查看某个群聊记录、单聊记录、酒馆角色卡、世界书、正则、思维链、生图面板、提取面板或写模组页面，请优先使用「申请连接」（在文字末尾附上 \`[申请连接:qq_chat:名称:理由]\` 或 \`[申请连接:tavern_card:名称:理由]\` 或 \`[申请连接:world_book:名称:理由]\` 或 \`[申请连接:regex:名称:理由]\` 或 \`[申请连接:thought_chain:名称:理由]\` 或 \`[申请连接:nai_gen:生图面板:理由]\` 或 \`[申请连接:nai_inspect:提取面板:理由]\` 或 \`[申请连接:nai_both:生图与提取双面板:理由]\` 或 \`[申请连接:module_writer:写模组:理由]\`）。\n2. 虚拟鼠标 \`mouseActions\` 只有在两种情况下才允许移动：①你想偷偷去翻看某个聊天或页面（对方没点连接同意或你想自己偷瞄两眼）；②对方不懂怎么操作、让你手把手教他指给他看某个按钮在哪里。除此之外（尤其是正常通过连接查看、或者帮对方填写修改人设、添加世界书、添加正则、修改思维链、修改生图提取词、修改写模组脑洞与简介时），绝对不要移动鼠标去点！${unapprovedInspectHint}${peekedMouseBlock}`;
           const activeInspectState = typeof window.getMashuActiveInspection === "function"
             ? window.getMashuActiveInspection(chat)
             : window.mashuActiveInspection;
@@ -35001,30 +35271,48 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
   麻薯本人很喜欢用的问句都是短促真性情的：①嫌弃暴躁反问（如「你有什么毛病？」「那你直接吃瘦肉粥不行吗」「你是在拉屎吗？」）；②短促追问与问号气泡（如「？」「。？」「干啥」「啥？」「咋回事」「不是吧」）；③好奇吃瓜直问（如「哪家好吃」「你的咋那么便宜啊」「这是啥」）；④顺着话头碎碎念发问（如「到底为什么没内存了啊」）。严禁客服式句末反问！
 - 除无语时发「（离开）」外，不要用括号写心理活动或动作旁白，严禁使用emoji表情符号。
 
-3. 麻薯的连接查看、直接修改小手机外部数据（人设/世界书/正则/思维链）与偷看/教学鼠标分工准则：
+3. 麻薯的连接查看、直接修改小手机外部数据（人设/世界书/正则/思维链/生图提取/写模组）与偷看/教学鼠标分工准则：
 - 【一、认真查看用「申请连接」】：
-  当你想认真去看某个聊天记录、群聊、角色卡、世界书、正则或思维链（或者对方说让你看看某样东西）时，优先使用申请连接，在气泡文字末尾附上：
+  当你想认真去看某个聊天记录、群聊、角色卡、世界书、正则、思维链、生图面板、提取面板或写模组（或者对方说让你连线看看某样东西）时，优先使用申请连接，在气泡文字末尾附上：
   - 查看QQ群聊或单聊记录与人设：\`[申请连接:qq_chat:群聊或单聊名称:让我看看]\`
   - 查看酒馆角色卡：\`[申请连接:tavern_card:角色名称:让我看看]\`
   - 查看小手机世界书：\`[申请连接:world_book:世界书名称或全部:让我看看]\`
   - 查看小手机正则库：\`[申请连接:regex:正则名称或全部:让我看看]\`
-  - 查看小手机思维链：\`[申请连接:thought_chain:思维链名称或默认:让我看看]\`
-- 【二、直接帮对方写人设/改人设/加世界书/改正则/改思维链（不用动鼠标，直接改完出系统提示）】：
-  当对方让你帮他在某个群聊或单聊里写/改「我的人设」（玩家人设）、改对面角色或某个群成员的人设、添加或修改小手机世界书、添加或修改小手机正则、或者修改小手机思维链时，**绝对不要用虚拟鼠标去点**！你只需要在返回的根JSON对象里附带顶级字段 \`"phoneEdits"\` 数组，系统会自动在后台直接改好并在聊天里弹出一条提示（例如「[麻薯已修改「xxx」中我的人设]」「[麻薯已新建世界书「xxx」]」）。支持的 \`phoneEdits\` 指令格式如下：
-  1. 修改某个单聊或群聊里「我的人设」（玩家自己的人设）或名字（注意：如果对方没提群聊或别的单聊名字，默认改的是「麻薯」窗口里我的人设，chatName填"麻薯"）：
-     \`{"action": "update_my_persona", "chatName": "麻薯或指定群聊单聊名称", "myName": "可选新名字", "myPersona": "写好的完整玩家人设内容"}\`
-  2. 修改某个单聊角色的人设，或修改某个群聊里特定群成员/KPC的人设：
-     \`{"action": "update_ai_persona", "chatName": "群聊或单聊名称", "memberName": "如果是群聊则填群成员名字，单聊留空", "persona": "写好的完整角色人设内容"}\`
-  3. 在小手机里新建或修改一条世界书（并可选自动挂载到某个聊天/群聊）：
-     \`{"action": "upsert_world_book", "name": "世界书条目名称", "content": "世界书具体设定内容", "enabled": true, "constant": true, "keys": ["触发词1"], "linkToChat": "可选要自动挂载到的群聊或单聊名称"}\`
-  4. 在小手机正则库里新建或修改一条正则（并设置启用或关闭）：
-     \`{"action": "upsert_regex", "name": "正则名称", "findRegex": "匹配正则如 /foo/g", "replaceString": "替换内容", "enabled": true}\`
-  5. 修改或新建小手机思维链预设（严格保持【头部/正文骨架 + 下方entries独立小条目】双层格式）：
-     - 如果该思维链包含下方独立小条目（entries），你要修改或新增下方小条目时，必须使用 \`entryEdits\` 数组直接修改对应的子条目，**绝对禁止把小条目的内容塞进 generalContent 正文里，也绝对禁止乱改原有的 headerContent 或 generalContent 正文引用结构**！格式：
-       \`{"action": "upsert_thought_chain", "name": "思维链预设名称", "entryEdits": [{"action": "upsert", "key": "小条目名称", "content": "修改后的小条目完整内容", "groupName": "可选分组名", "enabled": true}], "bindToChat": "可选要绑定到的聊天名称"}\`
-     - 只有当对方明确要求修改思维链顶部/通用正文骨架本身（或新建一个纯文本思维链）时，才传 \`"headerContent"\` 或 \`"generalContent"\` 且加上 \`"replaceGeneralSkeleton": true\`。
-  6. 修改酒馆内部数据（若操作对象是酒馆角色卡/酒馆世界书/酒馆正则）：
-     直接调上面的对应项或使用酒馆修改能力。
+  - 查看小手机思维链（系统已自动过滤排除命名为「文风」的栏目）：\`[申请连接:thought_chain:思维链名称或默认:让我看看]\`
+  - 查看生图面板：\`[申请连接:nai_gen:生图面板:让我看看]\`
+  - 查看提取面板（查看上传图片提取出来的画师串与正负面词）：\`[申请连接:nai_inspect:提取面板:让我看看]\`
+  - 同时连接「生图」与「提取」两个面板（两边同时看）：\`[申请连接:nai_both:生图与提取双面板:让我看看]\`
+  - 查看写模组与模组库（查看脑洞引子、简介、标签、章节与修改意见）：\`[申请连接:module_writer:写模组:让我看看]\`
+- 【二、直接帮对方改数据（支持「局部片段/首尾锚点替换」与「整条重写」，不用动鼠标，后台直接改好出系统提示）】：
+  当对方让你帮他改人设、世界书、正则、思维链、生图与提取面板的画师串/正面词/负面词、或者写模组里的脑洞/简介/标签/章节时，**绝对不要用虚拟鼠标去点**！你只需在返回的根JSON对象里附带顶级字段 \`"phoneEdits"\` 数组，系统会自动在后台直接修改并实时保存。
+  **【极其重要：针对十多万字超长思维链、长世界书、正则、长模组章节的「局部替换」机制】**：
+  对于几万字、十多万字的思维链或世界书，你绝对不可能也没必要一次性把十万字全输出来！你可以自由选择以下两种方式：
+  - **方式A（局部片段查找替换 / 首尾锚点替换，最推荐用于修改现有长文本中的某一段）**：在对应的修改指令中传入 \`"patches"\` 数组：
+    - 精确片段替换：\`{"findText": "要被替换的原句或原片段", "replaceText": "替换后的新内容"}\`
+    - 首尾锚点替换（只需写出要替换那一段的开头几个字和结尾几个字）：\`{"startAnchor": "那一段开头的原文字", "endAnchor": "那一段结尾的原文字", "replaceText": "替换后的完整新段落"}\`
+    - 正则匹配替换：\`{"matchRegex": "/匹配规则/g", "replaceText": "替换后的新内容"}\`
+    - 末尾追加或开头插入：传 \`"appendText": "追加在末尾的内容"\` 或 \`"prependText": "插在开头的内容"\`
+  - **方式B（整条重写，用于新建条目或整条彻底重写）**：直接传 \`"content": "完整重写内容", "mode": "rewrite"\`。
+  支持的 \`phoneEdits\` 指令格式如下：
+  1. 修改某个单聊或群聊里「我的人设」或名字（默认改「麻薯」窗口里我的人设）：
+     \`{"action": "update_my_persona", "chatName": "麻薯或指定群聊单聊名称", "myName": "可选新名字", "myPersona": "写好的完整玩家人设内容", "patches": [{"findText": "可选局部原词", "replaceText": "新词"}]}\`
+  2. 修改某个单聊角色或群成员/KPC的人设：
+     \`{"action": "update_ai_persona", "chatName": "群聊或单聊名称", "memberName": "群成员名字或留空", "persona": "完整人设内容", "patches": [{"findText": "可选局部原词", "replaceText": "新词"}]}\`
+  3. 新建、整条重写或局部替换小手机世界书：
+     - 局部替换某一段：\`{"action": "upsert_world_book", "name": "世界书条目名称", "patches": [{"startAnchor": "开头原句", "endAnchor": "结尾原句", "replaceText": "替换后的新段落"}]}\`
+     - 整条重写或新建：\`{"action": "upsert_world_book", "name": "世界书条目名称", "mode": "rewrite", "content": "世界书完整设定内容", "enabled": true, "constant": true, "keys": ["触发词1"], "linkToChat": "可选要挂载到的聊天名称"}\`
+  4. 新建、整条重写或局部替换小手机正则：
+     - 局部替换正则匹配式或替换式：\`{"action": "upsert_regex", "name": "正则名称", "findPatches": [{"findText": "原正则片段", "replaceText": "新正则片段"}], "replacePatches": [{"findText": "原替换片段", "replaceText": "新替换片段"}], "enabled": true}\`
+     - 整条重写或新建：\`{"action": "upsert_regex", "name": "正则名称", "findRegex": "匹配正则", "replaceString": "替换内容", "enabled": true}\`
+  5. 修改或新建小手机思维链预设（严格保持【头部/正文骨架 + 下方entries独立小条目】双层格式，支持局部替换与整条重写）：
+     - 局部替换某个小条目里的片段（推荐，无需重输几万字）：
+       \`{"action": "upsert_thought_chain", "name": "思维链预设名称", "entryEdits": [{"action": "patch", "key": "小条目名称", "patches": [{"startAnchor": "要改那段的开头字", "endAnchor": "要改那段的结尾字", "replaceText": "替换后的新内容"}]}]}\`
+     - 整条重写或新建某个小条目：
+       \`{"action": "upsert_thought_chain", "name": "思维链预设名称", "entryEdits": [{"action": "upsert", "mode": "rewrite", "key": "小条目名称", "content": "小条目完整内容", "groupName": "可选分组名", "enabled": true}], "bindToChat": "可选要绑定到的聊天名称"}\`
+  6. 修改「生图」面板与「提取」面板中的画师串、正面一、正面二、负面词、勾选状态或尺寸版本（支持直接改值或用 xxxPatches 局部替换）：
+     \`{"action": "update_nai_panel", "artistText": "可选新画师串", "artistPatches": [{"findText": "原画师词", "replaceText": "新画师词"}], "pos1Text": "可选正面一新词", "pos1Patches": [{"findText": "原词", "replaceText": "新词"}], "pos2Text": "可选正面二新词", "pos2Patches": [{"findText": "原词", "replaceText": "新词"}], "pos1Checked": true, "pos2Checked": false, "negText": "可选负面词", "inspectArtistText": "可选修改提取页画师串", "inspectPosText": "可选修改提取页正面词", "inspectNegText": "可选修改提取页负面词", "copyInspectToGen": false, "resolution": "可选如832x1216或1216x832或1024x1024", "model": "可选如nai-diffusion-4-5-full或nai-diffusion-5-full"}\`
+  7. 修改「写模组」页面（标题、作者、规格、标签、引子脑洞与简介）或修改模组库里现有模组的简介、修改意见、章节内容（支持整段填写与局部替换）：
+     \`{"action": "update_module_writer", "title": "可选模组名称", "author": "可选作者", "ruleSystem": "可选coc/coj/dnd", "scaleType": "可选1v1/单人/2ho/3ho/4ho", "modType": "可选线性/沙盒/箱庭/解密/循环/密室", "difficulty": "可选难度", "lengthMode": "可选short/medium/long", "hook": "可选完整脑洞引子与简介要求", "hookPatches": [{"findText": "原脑洞片段", "replaceText": "新脑洞片段"}], "bgTags": ["可选背景标签"], "relTags": ["可选关系标签"], "toneTags": ["可选风味标签"], "tropeTags": ["可选设定标签"], "addCustomTags": ["要添加的自定义标签"], "moduleName": "若改已存模组则填模组名", "description": "可选修改已存模组简介", "descriptionPatches": [{"findText": "原简介词", "replaceText": "新简介词"}], "globalOpinion": "可选修改切割方案的修改意见", "chapterTitle": "可选要修改的章节标题", "chapterPatches": [{"startAnchor": "章节内开头字", "endAnchor": "章节内结尾字", "replaceText": "替换后的章节段落"}]}\`
 - 【三、虚拟鼠标 \`mouseActions\` 仅限「偷看」或「教学指路」时使用】：
   - 只有当你**想偷偷去翻看**某个聊天/页面（比如对方没点同意连接、或者你自己手痒想偷瞄），或者**对方问某个功能在哪、让你教他怎么做**时，才在根JSON里附带 \`"mouseActions"\`：
     - 偷看某个群聊或单聊并翻页：\`"mouseActions": [{"target": "chat:群聊或KPC名称", "action": "open"}, {"target": "chat:群聊或KPC名称", "action": "peek_scroll", "screens": 3}]\`
@@ -35949,6 +36237,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         window.executeMashuDirectEdits = async function (mashuChat, editsArray) {
           if (!Array.isArray(editsArray) || editsArray.length === 0) return [];
           const notices = [];
+          const applyPatchHelper = typeof window.applyMashuTextPatchOrRewrite === "function"
+            ? window.applyMashuTextPatchOrRewrite
+            : (oldStr, payload, field) => ({
+                text: payload && payload[field] !== undefined ? String(payload[field]) : String(oldStr || ""),
+                changed: payload && payload[field] !== undefined,
+                summary: "重写"
+              });
+
           for (const edit of editsArray) {
             if (!edit || typeof edit !== "object") continue;
             const act = String(edit.action || edit.type || "").toLowerCase().trim();
@@ -35970,10 +36266,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (!targetChat) targetChat = mashuChat;
                 if (!targetChat) continue;
                 if (!targetChat.settings) targetChat.settings = {};
-                if (typeof edit.myPersona === "string" && edit.myPersona.trim()) {
-                  targetChat.settings.myPersona = edit.myPersona.trim();
-                } else if (typeof edit.persona === "string" && edit.persona.trim()) {
-                  targetChat.settings.myPersona = edit.persona.trim();
+                const oldMyPersona = String(targetChat.settings.myPersona || "");
+                const personaPatch = applyPatchHelper(
+                  oldMyPersona,
+                  {
+                    ...edit,
+                    content: edit.myPersona !== undefined ? edit.myPersona : (edit.persona !== undefined ? edit.persona : edit.content)
+                  },
+                  "content"
+                );
+                if (personaPatch.changed) {
+                  targetChat.settings.myPersona = personaPatch.text.trim();
                 }
                 if (typeof edit.myName === "string" && edit.myName.trim()) {
                   targetChat.settings.myName = edit.myName.trim();
@@ -36020,10 +36323,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   : null;
                 if (!targetChat) continue;
                 if (!targetChat.settings) targetChat.settings = {};
-                const newPersona = String(edit.persona || edit.aiPersona || edit.content || "").trim();
-                if (!newPersona) continue;
                 const memQuery = String(edit.memberName || "").trim();
                 const effTitle = (typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(targetChat) : "") || targetChat.mainGroupName || targetChat.name;
+                const incomingText = edit.persona !== undefined ? edit.persona : (edit.aiPersona !== undefined ? edit.aiPersona : edit.content);
                 if (targetChat.isGroup && memQuery && Array.isArray(targetChat.members)) {
                   const mem = targetChat.members.find(m => {
                     if (!m) return false;
@@ -36031,34 +36333,52 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     return mName === memQuery || mName.includes(memQuery) || memQuery.includes(mName);
                   });
                   if (mem) {
-                    mem.persona = newPersona;
-                    mem.aiPersona = newPersona;
+                    const oldMemPersona = String(mem.persona || mem.aiPersona || "");
+                    const memRes = applyPatchHelper(oldMemPersona, { ...edit, content: incomingText }, "content");
+                    if (!memRes.changed || !memRes.text.trim()) continue;
+                    mem.persona = memRes.text.trim();
+                    mem.aiPersona = memRes.text.trim();
                     if (typeof db !== "undefined" && db.chats) await db.chats.put(targetChat);
                     const mLabel = mem.groupNickname || mem.originalName || mem.name || memQuery;
                     notices.push(`[麻薯已修改群聊「${effTitle}」中「${mLabel}」的人设]`);
                     continue;
                   }
                 }
-                targetChat.settings.aiPersona = newPersona;
+                const oldAiPersona = String(targetChat.settings.aiPersona || "");
+                const aiRes = applyPatchHelper(oldAiPersona, { ...edit, content: incomingText }, "content");
+                if (!aiRes.changed || !aiRes.text.trim()) continue;
+                targetChat.settings.aiPersona = aiRes.text.trim();
                 if (typeof db !== "undefined" && db.chats) {
                   await db.chats.put(targetChat);
                 }
                 notices.push(`[麻薯已修改「${effTitle}」的人设]`);
               } else if (act === "upsert_world_book" || act === "add_world_book" || act === "update_world_book") {
-                const wbName = String(edit.name || edit.title || "麻薯编写的世界书").trim();
-                const wbContent = String(edit.content || "").trim();
-                if (!wbContent) continue;
                 if (!Array.isArray(state.worldBooks)) state.worldBooks = [];
-                const existing = state.worldBooks.find(w => w && String(w.name || "").trim() === wbName);
-                const isEnabled = edit.enabled !== undefined ? Boolean(edit.enabled) : true;
-                const isConstant = edit.constant !== undefined ? Boolean(edit.constant) : true;
+                const wbId = edit.id !== undefined ? String(edit.id).trim() : "";
+                const wbName = String(edit.name || edit.title || "麻薯编写的世界书").trim();
+                const existing = state.worldBooks.find(w => {
+                  if (!w) return false;
+                  if (wbId && String(w.id) === wbId) return true;
+                  const wn = String(w.name || "").trim();
+                  return wn === wbName;
+                }) || state.worldBooks.find(w => w && (String(w.name || "").includes(wbName) || wbName.includes(String(w.name || ""))));
+                const isEnabled = edit.enabled !== undefined ? Boolean(edit.enabled) : (existing ? Boolean(existing.enabled) : true);
+                const isConstant = edit.constant !== undefined ? Boolean(edit.constant) : (existing ? Boolean(existing.constant) : true);
                 const keysArr = Array.isArray(edit.keys)
                   ? edit.keys.map(k => String(k).trim()).filter(Boolean)
                   : (typeof edit.keys === "string" && edit.keys.trim() ? edit.keys.split(/[,，]/).map(k => k.trim()).filter(Boolean) : []);
                 let savedWbId = null;
                 let isNewWb = false;
+                let editModeLabel = "修改";
                 if (existing) {
-                  existing.content = wbContent;
+                  const patchRes = applyPatchHelper(String(existing.content || ""), edit, "content");
+                  if (patchRes.changed) {
+                    existing.content = patchRes.text;
+                    editModeLabel = patchRes.summary || "修改";
+                  }
+                  if (edit.newName && String(edit.newName).trim()) {
+                    existing.name = String(edit.newName).trim();
+                  }
                   existing.enabled = isEnabled;
                   existing.constant = isConstant;
                   if (keysArr.length > 0) existing.keys = keysArr;
@@ -36067,6 +36387,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   savedWbId = existing.id;
                 } else {
+                  const wbContent = String(edit.content || "").trim();
+                  if (!wbContent) continue;
                   isNewWb = true;
                   savedWbId = "wb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
                   const newWb = {
@@ -36084,11 +36406,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   if (!Array.isArray(state.worldBooks)) state.worldBooks = [];
                   state.worldBooks.push(newWb);
-                  if (typeof renderWorldBookScreen === "function") {
-                    try {
-                      renderWorldBookScreen();
-                    } catch (_) {}
-                  }
                 }
                 let linkedLabel = "";
                 if (edit.linkToChat && savedWbId !== null) {
@@ -36108,17 +36425,47 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (typeof renderWorldBookScreen === "function") {
                   try { renderWorldBookScreen(); } catch (_) {}
                 }
-                notices.push(`[麻薯已${isNewWb ? "新建" : "修改"}世界书「${wbName}」${linkedLabel}]`);
+                const finalWbTitle = existing ? existing.name : wbName;
+                notices.push(`[麻薯已${isNewWb ? "新建" : editModeLabel}世界书「${finalWbTitle}」${linkedLabel}]`);
               } else if (act === "upsert_regex" || act === "add_regex" || act === "update_regex" || act === "toggle_regex") {
                 if (typeof window.getStoredRegexRules !== "function" || typeof window.saveStoredRegexRules !== "function") continue;
                 const rules = window.getStoredRegexRules().slice();
+                const rxId = edit.id !== undefined ? String(edit.id).trim() : "";
                 const rxName = String(edit.name || edit.scriptName || "麻薯添加的正则").trim();
-                const isEnabled = edit.enabled !== undefined ? Boolean(edit.enabled) : true;
-                const existing = rules.find(r => r && String(r.name || "").trim() === rxName);
+                const existing = rules.find(r => {
+                  if (!r) return false;
+                  if (rxId && String(r.id) === rxId) return true;
+                  return String(r.name || "").trim() === rxName;
+                }) || rules.find(r => r && (String(r.name || "").includes(rxName) || rxName.includes(String(r.name || ""))));
+                const isEnabled = edit.enabled !== undefined ? Boolean(edit.enabled) : (existing ? Boolean(existing.enabled) : true);
                 let isNewRx = false;
+                let rxActionDesc = "修改";
                 if (existing) {
-                  if (edit.findRegex !== undefined) existing.findRegex = String(edit.findRegex);
-                  if (edit.replaceString !== undefined) existing.replaceString = String(edit.replaceString);
+                  if (Array.isArray(edit.findRegexPatches)) {
+                    const frRes = applyPatchHelper(String(existing.findRegex || ""), { patches: edit.findRegexPatches }, "findRegex");
+                    if (frRes.changed) existing.findRegex = frRes.text;
+                  } else if (edit.findRegex !== undefined) {
+                    existing.findRegex = String(edit.findRegex);
+                  }
+                  if (Array.isArray(edit.replaceStringPatches) || Array.isArray(edit.patches) || edit.findText || edit.startAnchor) {
+                    const rsRes = applyPatchHelper(
+                      String(existing.replaceString || ""),
+                      {
+                        ...edit,
+                        patches: edit.replaceStringPatches || edit.patches,
+                        content: edit.replaceString
+                      },
+                      "content"
+                    );
+                    if (rsRes.changed) {
+                      existing.replaceString = rsRes.text;
+                      rxActionDesc = rsRes.summary || "局部替换";
+                    }
+                  } else if (edit.replaceString !== undefined) {
+                    existing.replaceString = String(edit.replaceString);
+                  }
+                  if (edit.flags !== undefined) existing.flags = String(edit.flags);
+                  if (edit.newName && String(edit.newName).trim()) existing.name = String(edit.newName).trim();
                   existing.enabled = isEnabled;
                 } else {
                   if (!edit.findRegex) continue;
@@ -36138,7 +36485,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (typeof window.renderCustomRegexRulesList === "function") {
                   try { window.renderCustomRegexRulesList(); } catch (_) {}
                 }
-                notices.push(`[麻薯已${isNewRx ? "向正则库添加" : "修改"}正则「${rxName}」并设为${isEnabled ? "启用" : "关闭"}]`);
+                const finalRxName = existing ? existing.name : rxName;
+                notices.push(`[麻薯已${isNewRx ? "向正则库添加" : rxActionDesc}正则「${finalRxName}」并设为${isEnabled ? "启用" : "关闭"}]`);
               } else if (
                 act === "upsert_thought_chain" ||
                 act === "update_thought_chain" ||
@@ -36154,6 +36502,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   allPresets[0];
                 let isNewTc = false;
                 let editedSubEntriesCount = 0;
+                const editedSubEntryLabels = [];
 
                 const incomingEntryEdits = [];
                 if (Array.isArray(edit.entryEdits)) {
@@ -36161,12 +36510,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 } else if (Array.isArray(edit.entries)) {
                   incomingEntryEdits.push(...edit.entries);
                 }
-                if (edit.entryKey || edit.subEntryName || (act.includes("_entry") && (edit.key || edit.entryName))) {
+                if (
+                  edit.entryKey ||
+                  edit.subEntryName ||
+                  edit.entryId ||
+                  (act.includes("_entry") && (edit.key || edit.entryName))
+                ) {
                   incomingEntryEdits.push({
                     action: edit.entryAction || "upsert",
                     id: edit.entryId,
                     key: edit.entryKey || edit.subEntryName || edit.key || edit.entryName,
                     content: edit.entryContent !== undefined ? edit.entryContent : edit.content,
+                    mode: edit.mode,
+                    patches: edit.patches,
+                    findText: edit.findText,
+                    replaceText: edit.replaceText,
+                    startAnchor: edit.startAnchor,
+                    endAnchor: edit.endAnchor,
+                    matchRegex: edit.matchRegex,
+                    prependText: edit.prependText,
+                    appendText: edit.appendText,
                     groupName: edit.groupName || edit.entryGroup,
                     enabled: edit.entryEnabled !== undefined ? edit.entryEnabled : edit.enabled
                   });
@@ -36235,8 +36598,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       });
                       if (subAct === "delete" || subAct === "remove") {
                         if (existingIdx >= 0) {
-                          targetPreset.entries.splice(existingIdx, 1);
+                          const removed = targetPreset.entries.splice(existingIdx, 1)[0];
                           editedSubEntriesCount++;
+                          if (removed && removed.key) editedSubEntryLabels.push(`删除「${removed.key}」`);
                         }
                         continue;
                       }
@@ -36258,11 +36622,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       }
                       if (existingIdx >= 0) {
                         const ex = targetPreset.entries[existingIdx];
-                        if (subKey) ex.key = subKey;
-                        if (typeof sub.content === "string") ex.content = sub.content;
+                        if (sub.newKey && String(sub.newKey).trim()) {
+                          ex.key = String(sub.newKey).trim();
+                        } else if (subKey && (!ex.key || oldKey)) {
+                          ex.key = subKey;
+                        }
+                        const patchResult = applyPatchHelper(String(ex.content || ""), sub, "content");
+                        if (patchResult.changed) {
+                          ex.content = patchResult.text;
+                        }
                         if (sub.enabled !== undefined) ex.enabled = Boolean(sub.enabled);
                         if (resolvedGroupId) ex.groupId = resolvedGroupId;
                         editedSubEntriesCount++;
+                        editedSubEntryLabels.push(`${patchResult.summary || "修改"}「${ex.key || subKey}」`);
                       } else if (subKey) {
                         targetPreset.entries.push({
                           id: "tce_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -36273,6 +36645,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           content: String(sub.content || "")
                         });
                         editedSubEntriesCount++;
+                        editedSubEntryLabels.push(`新增「${subKey}」`);
+                      }
+                    }
+                  } else if (
+                    hasSubEntriesStructure &&
+                    (Array.isArray(edit.patches) || edit.findText || edit.startAnchor || edit.matchRegex)
+                  ) {
+                    for (const entryItem of targetPreset.entries) {
+                      if (!entryItem || !entryItem.content) continue;
+                      const gObj = targetPreset.groups.find(g => g && String(g.id) === String(entryItem.groupId || ""));
+                      if (/文风/.test(String(gObj ? gObj.name : "")) || /文风/.test(String(entryItem.key || ""))) continue;
+                      const res = applyPatchHelper(String(entryItem.content || ""), edit, "content");
+                      if (res.changed && res.text !== entryItem.content) {
+                        entryItem.content = res.text;
+                        editedSubEntriesCount++;
+                        editedSubEntryLabels.push(`${res.summary || "局部替换"}「${entryItem.key || "子条目"}」`);
                       }
                     }
                   } else if (hasSubEntriesStructure && (typeof edit.generalContent === "string" || typeof edit.content === "string") && !edit.replaceGeneralSkeleton) {
@@ -36284,21 +36672,52 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     if (matchedEntry && candidateText.length < 1800 && !candidateText.includes(String(targetPreset.generalContent || "").slice(0, 60))) {
                       matchedEntry.content = candidateText;
                       editedSubEntriesCount++;
+                      editedSubEntryLabels.push(`修改「${matchedEntry.key}」`);
                     } else if (edit.replaceGeneralSkeleton) {
                       targetPreset.generalContent = candidateText;
                     }
                   } else {
-                    if (typeof edit.generalContent === "string" && edit.generalContent.trim() && (!hasSubEntriesStructure || edit.replaceGeneralSkeleton)) {
-                      targetPreset.generalContent = edit.generalContent.trim();
-                    } else if (typeof edit.content === "string" && edit.content.trim() && !hasSubEntriesStructure) {
-                      targetPreset.generalContent = edit.content.trim();
+                    if (edit.generalContent !== undefined || edit.content !== undefined || Array.isArray(edit.patches)) {
+                      const genRes = applyPatchHelper(
+                        String(targetPreset.generalContent || ""),
+                        {
+                          ...edit,
+                          content: edit.generalContent !== undefined ? edit.generalContent : edit.content
+                        },
+                        "content"
+                      );
+                      if (genRes.changed && (!hasSubEntriesStructure || edit.replaceGeneralSkeleton || Array.isArray(edit.patches))) {
+                        targetPreset.generalContent = genRes.text;
+                      }
                     }
                   }
-                  if (typeof edit.headerContent === "string" && (edit.replaceGeneralSkeleton || !hasSubEntriesStructure || edit.headerContent.trim())) {
-                    targetPreset.headerContent = edit.headerContent;
+                  if (edit.headerContent !== undefined || Array.isArray(edit.headerPatches)) {
+                    const hdrRes = applyPatchHelper(
+                      String(targetPreset.headerContent || ""),
+                      {
+                        patches: edit.headerPatches,
+                        content: edit.headerContent,
+                        mode: edit.mode
+                      },
+                      "content"
+                    );
+                    if (hdrRes.changed && (edit.replaceGeneralSkeleton || !hasSubEntriesStructure || hdrRes.text.trim() || Array.isArray(edit.headerPatches))) {
+                      targetPreset.headerContent = hdrRes.text;
+                    }
                   }
-                  if (typeof edit.cocContent === "string" && edit.cocContent.trim()) {
-                    targetPreset.cocContent = edit.cocContent;
+                  if (edit.cocContent !== undefined || Array.isArray(edit.cocPatches)) {
+                    const cocRes = applyPatchHelper(
+                      String(targetPreset.cocContent || ""),
+                      {
+                        patches: edit.cocPatches,
+                        content: edit.cocContent,
+                        mode: edit.mode
+                      },
+                      "content"
+                    );
+                    if (cocRes.changed && cocRes.text.trim()) {
+                      targetPreset.cocContent = cocRes.text;
+                    }
                   }
                   targetPreset.updatedAt = Date.now();
                   await db.thoughtChainPresets.put(targetPreset);
@@ -36325,8 +36744,215 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     bindLabel = `并绑定到「${(typeof window.getEffectiveChatDisplayTitle === "function" ? window.getEffectiveChatDisplayTitle(tChat) : "") || tChat.mainGroupName || tChat.name}」`;
                   }
                 }
-                const entrySummary = editedSubEntriesCount > 0 ? `中的 ${editedSubEntriesCount} 个子条目` : "";
+                const entrySummary = editedSubEntryLabels.length > 0
+                  ? `：${editedSubEntryLabels.slice(0, 4).join("、")}${editedSubEntryLabels.length > 4 ? "等" : ""}`
+                  : (editedSubEntriesCount > 0 ? `中的 ${editedSubEntriesCount} 个子条目` : "");
                 notices.push(`[麻薯已${isNewTc ? "新建" : "修改"}思维链「${targetPreset.name}」${entrySummary}${bindLabel}]`);
+              } else if (
+                act === "update_nai_panel" ||
+                act === "edit_nai_panel" ||
+                act === "upsert_nai_panel" ||
+                act === "update_nai"
+              ) {
+                if (typeof window.applyMashuModuleNaiEdits === "function") {
+                  const changedNaiItems = window.applyMashuModuleNaiEdits(edit);
+                  if (Array.isArray(changedNaiItems) && changedNaiItems.length > 0) {
+                    notices.push(`[麻薯已修改生图与提取面板：${changedNaiItems.join("、")}，并已自动保存]`);
+                  }
+                }
+              } else if (
+                act === "update_module_writer" ||
+                act === "edit_module_writer" ||
+                act === "update_module" ||
+                act === "edit_module" ||
+                act === "upsert_module_writer"
+              ) {
+                const writerChanges = [];
+                const setDomInputValue = (elId, newVal, labelText) => {
+                  const domEl = document.getElementById(elId);
+                  if (!domEl) return;
+                  const oldVal = String(domEl.value || "");
+                  let finalVal = oldVal;
+                  if (newVal && typeof newVal === "object") {
+                    const pRes = applyPatchHelper(oldVal, newVal, "content");
+                    if (pRes.changed) finalVal = pRes.text;
+                  } else if (newVal !== undefined) {
+                    const pRes = applyPatchHelper(
+                      oldVal,
+                      {
+                        ...edit,
+                        content: String(newVal),
+                        patches: edit.patches
+                      },
+                      "content"
+                    );
+                    finalVal = pRes.changed ? pRes.text : String(newVal);
+                  }
+                  if (finalVal !== oldVal) {
+                    domEl.value = finalVal;
+                    domEl.dispatchEvent(new Event("input", { bubbles: true }));
+                    domEl.dispatchEvent(new Event("change", { bubbles: true }));
+                    writerChanges.push(labelText);
+                  }
+                };
+
+                if (edit.title !== undefined) setDomInputValue("ai-writer-title", edit.title, "模组标题");
+                if (edit.author !== undefined) setDomInputValue("ai-writer-author", edit.author, "模组作者");
+                if (edit.rule !== undefined) setDomInputValue("ai-writer-rule", edit.rule, "规则体系");
+                if (edit.scale !== undefined) setDomInputValue("ai-writer-scale", edit.scale, "人数规模");
+                if (edit.type !== undefined) setDomInputValue("ai-writer-type", edit.type, "结构类型");
+                if (edit.difficulty !== undefined) setDomInputValue("ai-writer-difficulty", edit.difficulty, "难度等级");
+                if (edit.length !== undefined) setDomInputValue("ai-writer-length", edit.length, "篇幅体量");
+                if (edit.drawMode !== undefined) setDomInputValue("ai-writer-draw-mode", edit.drawMode, "抽卡模式");
+                if (edit.refModuleId !== undefined) setDomInputValue("ai-writer-ref-module", edit.refModuleId, "参考节奏");
+
+                if (edit.hook !== undefined || edit.hookPatches || (edit.targetField === "hook" && (edit.patches || edit.findText || edit.startAnchor))) {
+                  const hookEl = document.getElementById("ai-writer-hook");
+                  if (hookEl) {
+                    const oldHook = String(hookEl.value || "");
+                    const hookPayload = (edit.hook && typeof edit.hook === "object")
+                      ? edit.hook
+                      : {
+                          ...edit,
+                          patches: edit.hookPatches || edit.patches,
+                          content: typeof edit.hook === "string" ? edit.hook : edit.content
+                        };
+                    const hRes = applyPatchHelper(oldHook, hookPayload, "content");
+                    if (hRes.changed && hRes.text !== oldHook) {
+                      hookEl.value = hRes.text;
+                      hookEl.dispatchEvent(new Event("input", { bubbles: true }));
+                      writerChanges.push(`写模组引子脑洞${hRes.summary ? " " + hRes.summary : ""}`);
+                    }
+                  }
+                }
+
+                if (Array.isArray(edit.tags) && typeof ModuleManager !== "undefined" && Array.isArray(ModuleManager.aiWriterSelectedTags)) {
+                  const cleanTags = edit.tags.map(t => String(t || "").trim()).filter(Boolean);
+                  ModuleManager.aiWriterSelectedTags = Array.from(new Set(cleanTags));
+                  if (typeof ModuleManager.renderAiWriterTags === "function") {
+                    ModuleManager.renderAiWriterTags();
+                  }
+                  writerChanges.push("写模组标签");
+                }
+
+                if (writerChanges.length > 0 && typeof ModuleManager !== "undefined" && typeof ModuleManager.saveAiWriterDraftToIDB === "function") {
+                  await ModuleManager.saveAiWriterDraftToIDB();
+                }
+
+                if (edit.globalOpinion !== undefined || edit.globalImprovement !== undefined || edit.globalOpinionPatches) {
+                  const opEl = document.getElementById("module-global-opinion-textarea");
+                  const rawOp = edit.globalOpinion !== undefined ? edit.globalOpinion : edit.globalImprovement;
+                  const oldOp = opEl ? String(opEl.value || "") : String(localStorage.getItem("ephone_module_global_improvement") || "");
+                  const opRes = applyPatchHelper(
+                    oldOp,
+                    {
+                      ...edit,
+                      patches: edit.globalOpinionPatches || edit.patches,
+                      content: typeof rawOp === "string" ? rawOp : edit.content
+                    },
+                    "content"
+                  );
+                  if (opRes.changed) {
+                    if (opEl) {
+                      opEl.value = opRes.text;
+                      opEl.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    try {
+                      localStorage.setItem("ephone_module_global_improvement", opRes.text);
+                    } catch (_) {}
+                    writerChanges.push("切割方案修改意见与改进要求");
+                  }
+                }
+
+                if (
+                  (edit.moduleId !== undefined || edit.moduleTitle !== undefined || edit.description !== undefined || Array.isArray(edit.chapterEdits)) &&
+                  typeof db !== "undefined" &&
+                  db.modules
+                ) {
+                  const allMods = await db.modules.toArray();
+                  const qId = edit.moduleId !== undefined ? String(edit.moduleId).trim() : "";
+                  const qTitle = String(edit.moduleTitle || edit.targetModule || edit.title || "").trim();
+                  const targetMod = allMods.find(m => {
+                    if (!m) return false;
+                    if (qId && String(m.id) === qId) return true;
+                    if (qTitle && String(m.title || "").trim() === qTitle) return true;
+                    return false;
+                  }) || (qTitle ? allMods.find(m => m && (String(m.title || "").includes(qTitle) || qTitle.includes(String(m.title || "")))) : null);
+
+                  if (targetMod) {
+                    let modUpdated = false;
+                    if (edit.newModuleTitle && String(edit.newModuleTitle).trim()) {
+                      targetMod.title = String(edit.newModuleTitle).trim();
+                      modUpdated = true;
+                    }
+                    if (edit.description !== undefined || edit.descriptionPatches) {
+                      const dRes = applyPatchHelper(
+                        String(targetMod.description || ""),
+                        {
+                          ...edit,
+                          patches: edit.descriptionPatches || edit.patches,
+                          content: edit.description
+                        },
+                        "content"
+                      );
+                      if (dRes.changed) {
+                        targetMod.description = dRes.text;
+                        modUpdated = true;
+                        writerChanges.push(`模组「${targetMod.title}」简介概述`);
+                      }
+                    }
+                    if (Array.isArray(edit.moduleTags)) {
+                      targetMod.tags = edit.moduleTags.map(t => String(t || "").trim()).filter(Boolean);
+                      modUpdated = true;
+                      writerChanges.push(`模组「${targetMod.title}」标签`);
+                    }
+                    if (modUpdated) {
+                      await db.modules.put(targetMod);
+                    }
+
+                    if (Array.isArray(edit.chapterEdits) && db.moduleChapters) {
+                      const modChs = await db.moduleChapters.where("moduleId").equals(targetMod.id).toArray();
+                      let editedChCount = 0;
+                      for (const chEdit of edit.chapterEdits) {
+                        if (!chEdit || typeof chEdit !== "object") continue;
+                        const chId = chEdit.chapterId !== undefined ? String(chEdit.chapterId).trim() : (chEdit.id !== undefined ? String(chEdit.id).trim() : "");
+                        const chTitle = String(chEdit.chapterTitle || chEdit.title || "").trim();
+                        const targetCh = modChs.find(c => {
+                          if (!c) return false;
+                          if (chId && String(c.id) === chId) return true;
+                          if (chTitle && String(c.title || "").trim() === chTitle) return true;
+                          return false;
+                        }) || (chTitle ? modChs.find(c => c && (String(c.title || "").includes(chTitle) || chTitle.includes(String(c.title || "")))) : null);
+
+                        if (targetCh) {
+                          if (chEdit.newTitle && String(chEdit.newTitle).trim()) {
+                            targetCh.title = String(chEdit.newTitle).trim();
+                          }
+                          const chRes = applyPatchHelper(String(targetCh.content || ""), chEdit, "content");
+                          if (chRes.changed) {
+                            targetCh.content = chRes.text;
+                          }
+                          await db.moduleChapters.put(targetCh);
+                          editedChCount++;
+                        }
+                      }
+                      if (editedChCount > 0) {
+                        writerChanges.push(`模组「${targetMod.title}」中的 ${editedChCount} 个章节内容`);
+                      }
+                    }
+
+                    if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                      await window.refreshMashuThoughtChainsCache();
+                    }
+                    if (typeof ModuleManager !== "undefined" && typeof ModuleManager.loadModulesList === "function") {
+                      try { await ModuleManager.loadModulesList(); } catch (_) {}
+                    }
+                  }
+                }
+
+                if (writerChanges.length > 0) {
+                  notices.push(`[麻薯已修改写模组与模组库：${writerChanges.join("、")}，并已实时保存]`);
+                }
               }
             } catch (err) {
               console.warn("麻薯直接修改小手机数据异常:", err);
@@ -42847,6 +43473,177 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             syncModuleNaiToGlobal();
           };
 
+          window.getModuleNaiLiveStateForMashu = function (scope) {
+            bindModuleNaiPanelEvents();
+            const st = loadPanelState();
+            const store = loadPresetsStore();
+            const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+            const pos2El = document.getElementById("mod-nai-gen-pos2-input");
+            const c1El = document.getElementById("mod-nai-pos1-check");
+            const c2El = document.getElementById("mod-nai-pos2-check");
+            const negEl = document.getElementById("mod-nai-gen-neg-input");
+            const resEl = document.getElementById("mod-nai-setting-resolution");
+            const modelEl = document.getElementById("mod-nai-setting-model");
+            const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
+            const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
+            const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
+            const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
+
+            const liveGen = {
+              artistText: artistEl ? artistEl.value : (st.artistText || ""),
+              pos1Checked: c1El ? Boolean(c1El.checked) : (st.pos1Checked !== false),
+              pos1Text: pos1El ? pos1El.value : (st.pos1Text || ""),
+              pos2Checked: c2El ? Boolean(c2El.checked) : Boolean(st.pos2Checked),
+              pos2Text: pos2El ? pos2El.value : (st.pos2Text || ""),
+              effectivePositivePrompt: computeActivePositivePrompt(),
+              negText: negEl ? negEl.value : (st.negText || ""),
+              resolution: (resEl && resEl.value) ? resEl.value : (st.resolution || "1024x1024"),
+              model: (modelEl && modelEl.value) ? modelEl.value : (st.model || "nai-diffusion-4-5-full"),
+              theme: st.theme || "apple",
+              savedPresets: {
+                artist: (store.artist || []).map(p => p.name),
+                positive: (store.positive || []).map(p => p.name),
+                negative: (store.negative || []).map(p => p.name)
+              }
+            };
+            const liveInspect = {
+              inspectStatusText: (inspectStatusEl && inspectStatusEl.textContent) ? inspectStatusEl.textContent : (st.inspectStatusText || ""),
+              inspectArtistText: inspectArtistEl ? inspectArtistEl.value : (st.inspectArtistText || ""),
+              inspectPosText: inspectPosEl ? inspectPosEl.value : (st.inspectPosText || ""),
+              inspectNegText: inspectNegEl ? inspectNegEl.value : (st.inspectNegText || "")
+            };
+            const normScope = String(scope || "both").toLowerCase();
+            if (normScope === "nai_gen" || normScope === "gen" || normScope === "generate") {
+              return { connectedScope: "生图面板", currentActiveSubPanel: st.mode || "generate", generatePanel: liveGen };
+            }
+            if (normScope === "nai_inspect" || normScope === "inspect") {
+              return { connectedScope: "提取面板", currentActiveSubPanel: st.mode || "generate", inspectPanel: liveInspect };
+            }
+            return {
+              connectedScope: "生图与提取双面板同时连接",
+              currentActiveSubPanel: st.mode || "generate",
+              generatePanel: liveGen,
+              inspectPanel: liveInspect
+            };
+          };
+
+          window.applyMashuModuleNaiEdits = function (edit) {
+            if (!edit || typeof edit !== "object") return [];
+            bindModuleNaiPanelEvents();
+            const st = loadPanelState();
+            const changedFields = [];
+            const patchFn = typeof window.applyMashuTextPatchOrRewrite === "function"
+              ? window.applyMashuTextPatchOrRewrite
+              : ((orig, spec) => (spec && typeof spec.content === "string" ? spec.content : orig));
+
+            const artistEl = document.getElementById("mod-nai-gen-artist-input");
+            const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+            const pos2El = document.getElementById("mod-nai-gen-pos2-input");
+            const c1El = document.getElementById("mod-nai-pos1-check");
+            const c2El = document.getElementById("mod-nai-pos2-check");
+            const negEl = document.getElementById("mod-nai-gen-neg-input");
+            const resEl = document.getElementById("mod-nai-setting-resolution");
+            const modelEl = document.getElementById("mod-nai-setting-model");
+            const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
+            const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
+            const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
+
+            if (edit.copyInspectToGen) {
+              const curInspArtist = inspectArtistEl ? inspectArtistEl.value : (st.inspectArtistText || "");
+              const curInspPos = inspectPosEl ? inspectPosEl.value : (st.inspectPosText || "");
+              const curInspNeg = inspectNegEl ? inspectNegEl.value : (st.inspectNegText || "");
+              if (curInspArtist && artistEl) {
+                artistEl.value = curInspArtist;
+                st.artistText = curInspArtist;
+                changedFields.push("同步提取画师到生图");
+              }
+              if (curInspPos) {
+                if (edit.copyToPos2 && pos2El) {
+                  pos2El.value = curInspPos;
+                  st.pos2Text = curInspPos;
+                  changedFields.push("同步提取正面词到正面二");
+                } else if (pos1El) {
+                  pos1El.value = curInspPos;
+                  st.pos1Text = curInspPos;
+                  changedFields.push("同步提取正面词到正面一");
+                }
+              }
+              if (curInspNeg && negEl) {
+                negEl.value = curInspNeg;
+                st.negText = curInspNeg;
+                changedFields.push("同步提取负面词到生图");
+              }
+            }
+
+            const applyFieldUpdate = (el, stateKey, label, directVal, patchSpec) => {
+              const curVal = el ? el.value : String(st[stateKey] || "");
+              let nextVal = curVal;
+              if (patchSpec && typeof patchSpec === "object") {
+                nextVal = patchFn(curVal, patchSpec);
+              } else if (Array.isArray(patchSpec)) {
+                nextVal = patchFn(curVal, { patches: patchSpec });
+              } else if (directVal !== undefined && directVal !== null) {
+                if (typeof directVal === "object") {
+                  nextVal = patchFn(curVal, directVal);
+                } else {
+                  nextVal = String(directVal);
+                }
+              } else {
+                return;
+              }
+              if (el) el.value = nextVal;
+              st[stateKey] = nextVal;
+              changedFields.push(label);
+            };
+
+            applyFieldUpdate(artistEl, "artistText", "生图画师串", edit.artistText !== undefined ? edit.artistText : edit.artist, edit.artistPatches || edit.artistPatch);
+            applyFieldUpdate(pos1El, "pos1Text", "生图正面一", edit.pos1Text !== undefined ? edit.pos1Text : edit.pos1, edit.pos1Patches || edit.pos1Patch);
+            applyFieldUpdate(pos2El, "pos2Text", "生图正面二", edit.pos2Text !== undefined ? edit.pos2Text : edit.pos2, edit.pos2Patches || edit.pos2Patch);
+            applyFieldUpdate(negEl, "negText", "生图负面词", edit.negText !== undefined ? edit.negText : edit.neg, edit.negPatches || edit.negPatch);
+            applyFieldUpdate(inspectArtistEl, "inspectArtistText", "提取画师串", edit.inspectArtistText !== undefined ? edit.inspectArtistText : edit.inspectArtist, edit.inspectArtistPatches || edit.inspectArtistPatch);
+            applyFieldUpdate(inspectPosEl, "inspectPosText", "提取正面词", edit.inspectPosText !== undefined ? edit.inspectPosText : edit.inspectPos, edit.inspectPosPatches || edit.inspectPosPatch);
+            applyFieldUpdate(inspectNegEl, "inspectNegText", "提取负面词", edit.inspectNegText !== undefined ? edit.inspectNegText : edit.inspectNeg, edit.inspectNegPatches || edit.inspectNegPatch);
+
+            if (edit.pos1Checked !== undefined) {
+              const b1 = Boolean(edit.pos1Checked);
+              if (c1El) c1El.checked = b1;
+              st.pos1Checked = b1;
+              changedFields.push("正面一勾选状态");
+            }
+            if (edit.pos2Checked !== undefined) {
+              const b2 = Boolean(edit.pos2Checked);
+              if (c2El) c2El.checked = b2;
+              st.pos2Checked = b2;
+              changedFields.push("正面二勾选状态");
+            }
+            if (edit.resolution) {
+              const rVal = String(edit.resolution).trim();
+              if (resEl) resEl.value = rVal;
+              st.resolution = rVal;
+              changedFields.push("生图尺寸");
+            }
+            if (edit.model) {
+              const mVal = String(edit.model).trim();
+              if (modelEl) modelEl.value = mVal;
+              st.model = mVal;
+              changedFields.push("生图版本");
+            }
+            if (edit.theme) {
+              applyThemeToPanel(String(edit.theme).trim());
+              st.theme = String(edit.theme).trim();
+              changedFields.push("面板美化主题");
+            }
+            if (edit.mode === "generate" || edit.mode === "inspect") {
+              applyModeView(edit.mode);
+              st.mode = edit.mode;
+            }
+
+            savePanelState(st);
+            syncModuleNaiToGlobal();
+            return changedFields;
+          };
+
           if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", () => {
               if (typeof window.openModuleNaiPanel === "function") {
@@ -45911,7 +46708,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               world_book: "小手机世界书",
               regex: "小手机正则库",
               thought_chain: "小手机思维链",
-              persona: "角色与玩家人设"
+              persona: "角色与玩家人设",
+              nai_gen: "生图面板",
+              nai_inspect: "提取面板",
+              nai_both: "生图与提取双面板",
+              module_writer: "写模组与模组库"
             };
             const typeLabel = typeLabelMap[targetType] || "酒馆角色卡与配置";
 
@@ -61944,12 +62745,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           cleanMsgText = cleanMsgText.replace(reqMatch[0], "").trim();
                           const rawType = String(reqMatch[1] || "tavern_card").trim();
                           let normType = "tavern_card";
-                          if (/world_book|wb|世界书|世界树/i.test(rawType)) normType = "world_book";
+                          if (/nai_both|生图与提取|提取与生图|生图和提取|提取和生图|双面板/i.test(rawType)) normType = "nai_both";
+                          else if (/nai_inspect|提取|解析|画师串提取/i.test(rawType)) normType = "nai_inspect";
+                          else if (/nai_gen|nai|生图|画师串/i.test(rawType)) normType = "nai_gen";
+                          else if (/module_writer|module|写模组|模组|脑洞|简介/i.test(rawType)) normType = "module_writer";
+                          else if (/world_book|wb|世界书|世界树/i.test(rawType)) normType = "world_book";
                           else if (/regex|正则/i.test(rawType)) normType = "regex";
                           else if (/thought_chain|cot|思维链/i.test(rawType)) normType = "thought_chain";
                           else if (/persona|人设/i.test(rawType)) normType = "persona";
                           else if (/chat|群|聊天|kpc|pc|qq|单聊/i.test(rawType)) normType = "qq_chat";
-                          const tName = String(reqMatch[2] || "当前角色").trim();
+                          const defaultNameByType = {
+                            nai_both: "生图与提取双面板",
+                            nai_gen: "生图面板",
+                            nai_inspect: "提取面板",
+                            module_writer: "写模组与模组库"
+                          };
+                          const tName = String(reqMatch[2] || defaultNameByType[normType] || "当前角色").trim();
                           const tReason = String(reqMatch[3] || "帮你检查设定与运行配置").trim();
                           const cardMsg = {
                             id: "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
