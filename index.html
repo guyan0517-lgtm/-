@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=20.2" defer></script>
+    <script src="game-hall.js?v=20.3" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -47116,6 +47116,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (window.PeerManager && typeof window.PeerManager.applyPeerChatInputUI === "function") {
             window.PeerManager.applyPeerChatInputUI(chat);
           }
+          if (messagesContainer && !messagesContainer._vaultScrollBound) {
+            messagesContainer._vaultScrollBound = true;
+            let chatScrollHydrateTimer = null;
+            messagesContainer.addEventListener("scroll", () => {
+              if (chatScrollHydrateTimer) return;
+              chatScrollHydrateTimer = setTimeout(() => {
+                chatScrollHydrateTimer = null;
+                if (typeof window.hydrateDomVaultImages === "function") {
+                  window.hydrateDomVaultImages();
+                }
+              }, 100);
+            }, { passive: true });
+          }
+          if (typeof window.hydrateDomVaultImages === "function") {
+            window.hydrateDomVaultImages();
+            setTimeout(() => {
+              if (typeof window.hydrateDomVaultImages === "function") {
+                window.hydrateDomVaultImages();
+              }
+            }, 60);
+          }
         }
 
         function prependLoadMoreButton(container) {
@@ -47185,6 +47206,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           messagesContainer.scrollTop += newScrollHeight - oldScrollHeight;
           if (totalMessages > currentRenderedCount) {
             prependLoadMoreButton(messagesContainer);
+          }
+          if (typeof window.hydrateDomVaultImages === "function") {
+            window.hydrateDomVaultImages();
+            setTimeout(() => {
+              if (typeof window.hydrateDomVaultImages === "function") {
+                window.hydrateDomVaultImages();
+              }
+            }, 60);
           }
         }
 
@@ -49463,9 +49492,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (typeof imageUrl === "string" && imageUrl.startsWith("vault://")) {
               const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(imageUrl) : null;
               if (cachedUrl) {
-                contentHtml = `<img src="${cachedUrl}" data-vault-ref="${imageUrl}" data-vault-hydrated-src="${cachedUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+                contentHtml = `<img src="${cachedUrl}" data-vault-ref="${imageUrl}" data-vault-hydrated-src="${cachedUrl}" class="chat-image" alt="User uploaded image" decoding="async">`;
               } else {
-                contentHtml = `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${imageUrl}" data-vault-pending="1" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
+                contentHtml = `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${imageUrl}" data-vault-pending="1" class="chat-image" alt="User uploaded image" decoding="async">`;
               }
             } else {
               contentHtml = `<img src="${imageUrl}" class="chat-image" alt="User uploaded image" loading="lazy" decoding="async">`;
@@ -49475,17 +49504,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const imageUrl = msg.imageUrl || msg.content;
             const imgName = msg.name || "模组插图";
             const imgDesc = msg.description ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">${msg.description}</div>` : "";
+            let pureImgTag = `<img src="${imageUrl}" class="chat-image" alt="${imgName}" loading="lazy" decoding="async" style="max-width: 100%; border-radius: 8px; display: block;" />`;
+            if (typeof imageUrl === "string" && imageUrl.startsWith("vault://")) {
+              const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(imageUrl) : null;
+              pureImgTag = cachedUrl
+                ? `<img src="${cachedUrl}" data-vault-ref="${imageUrl}" data-vault-hydrated-src="${cachedUrl}" class="chat-image" alt="${imgName}" decoding="async" style="max-width: 100%; border-radius: 8px; display: block;" />`
+                : `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${imageUrl}" data-vault-pending="1" class="chat-image" alt="${imgName}" decoding="async" style="max-width: 100%; border-radius: 8px; display: block;" />`;
+            }
             contentHtml = `
               <div class="chat-module-pure-image-card" style="cursor: pointer;">
-                <img src="${imageUrl}" class="chat-image" alt="${imgName}" loading="lazy" decoding="async" style="max-width: 100%; border-radius: 8px; display: block;" />
+                ${pureImgTag}
                 ${imgDesc}
               </div>
             `;
           } else if (msg.type === "inventory_card") {
             bubble.classList.add("is-inventory-card");
             const it = msg.item || {};
+            let invAvatarImgHtml = `<img src="${it.avatar}" alt="${it.name || "物品"}">`;
+            if (it.avatar && typeof it.avatar === "string" && it.avatar.startsWith("vault://")) {
+              const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(it.avatar) : null;
+              invAvatarImgHtml = cachedUrl
+                ? `<img src="${cachedUrl}" data-vault-ref="${it.avatar}" data-vault-hydrated-src="${cachedUrl}" alt="${it.name || "物品"}">`
+                : `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${it.avatar}" data-vault-pending="1" alt="${it.name || "物品"}">`;
+            }
             const avatarHtml = it.avatar
-              ? `<img src="${it.avatar}" alt="${it.name || "物品"}">`
+              ? invAvatarImgHtml
               : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M8 21v-5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v5"/></svg>`;
             
             let headerText = "";
@@ -49524,7 +49567,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (typeof realSrc === "string" && realSrc.startsWith("vault://")) {
                 const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(realSrc) : null;
                 if (cachedUrl) {
-                  contentHtml = `<img src="${cachedUrl}" data-vault-ref="${realSrc}" class="realimag-image" alt="NovelAI图片分享" loading="lazy" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
+                  contentHtml = `<img src="${cachedUrl}" data-vault-ref="${realSrc}" data-vault-hydrated-src="${cachedUrl}" class="realimag-image" alt="NovelAI图片分享" decoding="async" title="${safeTitle}" onerror="this.src='https://i.postimg.cc/KYr2qRCK/1.jpg'; this.className='cleared-image-placeholder ai-generated-image'; this.alt='图片已被肥鸭坐塌';">`;
                 } else {
                   contentHtml = `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${realSrc}" data-vault-pending="1" class="realimag-image" alt="NovelAI图片分享" decoding="async" title="${safeTitle}">`;
                 }
@@ -50405,6 +50448,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           messagesContainer.insertBefore(messageEl, typingIndicator);
 
           if (!isInitialLoad) {
+            if (typeof window.hydrateDomVaultImages === "function") {
+              window.hydrateDomVaultImages();
+            }
             if (wasNearBottom) {
               messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
@@ -121065,7 +121111,7 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
-          const MAX_BLOB_CACHE_ITEMS = 60;
+          const MAX_BLOB_CACHE_ITEMS = 300;
           function setVaultBlobCache(fileName, objUrl) {
             if (!fileName || !objUrl) return;
             const cleanName = fileName.startsWith("vault://") ? fileName.slice("vault://".length) : fileName;
@@ -121086,7 +121132,7 @@ ${specificRules}`;
                 if (oldUrl) {
                   let inUse = false;
                   try {
-                    const activeEls = document.querySelectorAll('img[data-vault-hydrated-src], [style*="blob:"]');
+                    const activeEls = document.querySelectorAll('img[src^="blob:"], img[data-vault-hydrated-src], [style*="blob:"]');
                     for (let i = 0; i < activeEls.length; i++) {
                       const el = activeEls[i];
                       if (
@@ -122248,7 +122294,7 @@ ${specificRules}`;
           let activeTermuxFetches = 0;
           const termuxFetchWaitQueue = [];
           async function acquireTermuxFetchSlot() {
-            if (activeTermuxFetches < 4) {
+            if (activeTermuxFetches < 6) {
               activeTermuxFetches++;
               return;
             }
@@ -123600,17 +123646,27 @@ ${specificRules}`;
           }
 
           function hydrateDomVaultImages() {
-            const imgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref]');
-            imgs.forEach((img) => {
+            const rawImgs = Array.from(document.querySelectorAll('img[src^="vault://"], img[data-vault-ref], img[data-vault-pending]'));
+            const vh = window.innerHeight || 800;
+            rawImgs.sort((a, b) => {
+              const ra = a.getBoundingClientRect();
+              const rb = b.getBoundingClientRect();
+              const aVis = ra.bottom >= -300 && ra.top <= vh + 300 ? 0 : 1;
+              const bVis = rb.bottom >= -300 && rb.top <= vh + 300 ? 0 : 1;
+              return aVis - bVis;
+            });
+            rawImgs.forEach((img) => {
               const attrSrc = img.getAttribute("src") || "";
               const existingRef = img.getAttribute("data-vault-ref");
               const hydratedSrc = img.getAttribute("data-vault-hydrated-src");
               const isTransparentPlaceholder = attrSrc.startsWith("data:image/gif;base64,R0lGODlhAQAB");
+              const isExpiredBlob = attrSrc.startsWith("blob:") && !liveSessionBlobUrls.has(attrSrc);
               if (
                 existingRef &&
                 !attrSrc.startsWith("vault://") &&
                 !img.hasAttribute("data-vault-pending") &&
-                !isTransparentPlaceholder
+                !isTransparentPlaceholder &&
+                !isExpiredBlob
               ) {
                 const isSameHydrated =
                   (hydratedSrc && attrSrc === hydratedSrc) ||
@@ -125316,7 +125372,12 @@ ${specificRules}`;
             // 自动侦测重连定时器：无论用户用悬浮小窗还是后台启动 Termux，只要尚未连接或页面仍有未加载出的 vault 图片，自动秒级探测并刷新图片
             setInterval(async () => {
               if (document.visibilityState && document.visibilityState !== "visible") return;
-              const hasUnresolvedDomImg = Boolean(document.querySelector('img[src^="vault://"]'));
+              const hasUnresolvedDomImg = Boolean(
+                document.querySelector('img[src^="vault://"], img[data-vault-pending], img[data-vault-ref]:not([data-vault-hydrated-src])')
+              );
+              if (hasUnresolvedDomImg && cachedTermuxOk) {
+                hydrateDomVaultImages();
+              }
               if (!cachedTermuxOk || hasUnresolvedDomImg) {
                 const curCfg = loadVaultConfig();
                 const baseUrl = (curCfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
@@ -125337,6 +125398,9 @@ ${specificRules}`;
             let hydrateTimer = null;
             function nodeContainsVaultRef(n) {
               if (!n || n.nodeType !== 1) return false;
+              if (n.hasAttribute && (n.hasAttribute("data-vault-pending") || n.hasAttribute("data-vault-ref") || n.hasAttribute("data-vault-bg-ref"))) {
+                return true;
+              }
               const srcVal = n.getAttribute && (n.getAttribute("src") || n.getAttribute("style") || "");
               if (srcVal && srcVal.includes("vault://")) return true;
               if (n.tagName === "STYLE") {
@@ -125344,7 +125408,7 @@ ${specificRules}`;
               }
               if (n.querySelector) {
                 return Boolean(
-                  n.querySelector('img[src^="vault://"], audio[src^="vault://"], [style*="vault://"]')
+                  n.querySelector('img[src^="vault://"], img[data-vault-pending], img[data-vault-ref], audio[src^="vault://"], [style*="vault://"], [data-vault-bg-ref]')
                 );
               }
               return false;
@@ -125359,6 +125423,10 @@ ${specificRules}`;
                   continue;
                 }
                 if (m.type === "attributes") {
+                  if (target.hasAttribute && (target.hasAttribute("data-vault-pending") || target.hasAttribute("data-vault-ref"))) {
+                    mayContainVaultImg = true;
+                    break;
+                  }
                   const val = target.getAttribute && (target.getAttribute("src") || target.getAttribute("style") || "");
                   if (val && val.includes("vault://")) {
                     mayContainVaultImg = true;
@@ -125378,13 +125446,13 @@ ${specificRules}`;
               hydrateTimer = setTimeout(() => {
                 hydrateTimer = null;
                 hydrateDomVaultImages();
-              }, 160);
+              }, 80);
             });
             obs.observe(document.body, {
               childList: true,
               subtree: true,
               attributes: true,
-              attributeFilter: ["src", "style"],
+              attributeFilter: ["src", "style", "data-vault-ref", "data-vault-pending"],
             });
           }
 
