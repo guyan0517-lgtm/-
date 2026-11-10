@@ -49,7 +49,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=19.9" defer></script>
+    <script src="game-hall.js?v=20.0" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2566,7 +2566,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v19.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -26381,6 +26381,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           return new Promise((resolve) => {
             modalResolve = resolve;
             modalTitle.textContent = title;
+            modalCancelBtn.style.display = "block";
+            modalConfirmBtn.textContent = "确定";
             const inputId = "custom-prompt-input";
 
             const inputHtml =
@@ -26408,17 +26410,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             });
 
             modalConfirmBtn.onclick = () => {
-              resolve(input.value);
+              const val = input ? input.value : "";
+              modalResolve = null;
+              resolve(val);
               hideCustomModal();
             };
             modalCancelBtn.onclick = () => {
+              modalResolve = null;
               resolve(null);
               hideCustomModal();
             };
             document.getElementById("custom-modal-overlay").style.zIndex =
               "20000";
             showCustomModal();
-            setTimeout(() => input.focus(), 100);
+            setTimeout(() => {
+              if (input) input.focus();
+            }, 100);
           });
         };
 
@@ -42651,6 +42658,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const PRESETS_STORE_KEY = "mod_nai_presets_v1";
           let inspectObjectUrl = null;
           let isBound = false;
+          let currentMode = "generate";
+          let memoryPanelState = null;
+          let memoryPresetsStore = null;
+          let memoryBookmarksList = null;
+
+          function safeNaiLocalSetItem(key, val) {
+            try {
+              localStorage.setItem(key, val);
+              return true;
+            } catch (_) {
+              try {
+                localStorage.removeItem("coc_module_draft_state_v1");
+                localStorage.removeItem("mod_nai_bookmarks_v1");
+                localStorage.setItem(key, val);
+                return true;
+              } catch (_2) {
+                return false;
+              }
+            }
+          }
 
           const THEME_ICONS = {
             folio: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path><polygon points="12 6 13.5 9.2 17 9.7 14.5 12.1 15.1 15.5 12 13.8 8.9 15.5 9.5 12.1 7 9.7 10.5 9.2 12 6"></polygon></svg>',
@@ -42689,6 +42716,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               pos2PresetSelected: "",
               negPresetSelected: ""
             };
+            if (memoryPanelState && typeof memoryPanelState === "object") {
+              return Object.assign({}, defaults, memoryPanelState);
+            }
+            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPanelState) {
+              memoryPanelState = Object.assign({}, defaults, window.state.globalSettings.naiPanelState);
+              return Object.assign({}, memoryPanelState);
+            }
             try {
               const raw = localStorage.getItem(PANEL_STATE_KEY);
               if (raw) {
@@ -42696,20 +42730,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (parsed && !parsed.folioThemeMigratedV199) {
                   parsed.theme = "folio";
                   parsed.folioThemeMigratedV199 = true;
-                  try {
-                    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(parsed));
-                  } catch (_) {}
+                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(parsed));
                 }
-                return Object.assign({}, defaults, parsed);
+                memoryPanelState = Object.assign({}, defaults, parsed);
+                return Object.assign({}, memoryPanelState);
               }
             } catch (_) {}
-            return defaults;
+            memoryPanelState = Object.assign({}, defaults);
+            return Object.assign({}, memoryPanelState);
           }
 
           function savePanelState(stateObj) {
-            try {
-              localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(stateObj));
-            } catch (_) {}
+            memoryPanelState = Object.assign({}, stateObj);
+            safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
+            if (window.state && window.state.globalSettings) {
+              window.state.globalSettings.naiPanelState = memoryPanelState;
+              if (window.db && window.db.globalSettings) {
+                window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
+              }
+            }
           }
 
           function loadPresetsStore() {
@@ -42718,24 +42757,59 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               positive: [],
               negative: []
             };
+            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+              return {
+                artist: Array.isArray(memoryPresetsStore.artist) ? memoryPresetsStore.artist : [],
+                positive: Array.isArray(memoryPresetsStore.positive) ? memoryPresetsStore.positive : [],
+                negative: Array.isArray(memoryPresetsStore.negative) ? memoryPresetsStore.negative : []
+              };
+            }
+            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore) {
+              const gs = window.state.globalSettings.naiPresetsStore;
+              memoryPresetsStore = {
+                artist: Array.isArray(gs.artist) ? gs.artist : [],
+                positive: Array.isArray(gs.positive) ? gs.positive : [],
+                negative: Array.isArray(gs.negative) ? gs.negative : []
+              };
+              return {
+                artist: [...memoryPresetsStore.artist],
+                positive: [...memoryPresetsStore.positive],
+                negative: [...memoryPresetsStore.negative]
+              };
+            }
             try {
               const raw = localStorage.getItem(PRESETS_STORE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
-                return {
+                memoryPresetsStore = {
                   artist: Array.isArray(parsed.artist) ? parsed.artist : [],
                   positive: Array.isArray(parsed.positive) ? parsed.positive : [],
                   negative: Array.isArray(parsed.negative) ? parsed.negative : []
                 };
+                return {
+                  artist: [...memoryPresetsStore.artist],
+                  positive: [...memoryPresetsStore.positive],
+                  negative: [...memoryPresetsStore.negative]
+                };
               }
             } catch (_) {}
-            return defaults;
+            memoryPresetsStore = defaults;
+            return { artist: [], positive: [], negative: [] };
           }
 
           function savePresetsStore(store) {
-            try {
-              localStorage.setItem(PRESETS_STORE_KEY, JSON.stringify(store));
-            } catch (_) {}
+            memoryPresetsStore = {
+              artist: Array.isArray(store && store.artist) ? store.artist : [],
+              positive: Array.isArray(store && store.positive) ? store.positive : [],
+              negative: Array.isArray(store && store.negative) ? store.negative : []
+            };
+            safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+            if (window.state && window.state.globalSettings) {
+              window.state.globalSettings.naiPresetsStore = memoryPresetsStore;
+              if (window.db && window.db.globalSettings) {
+                window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
+              }
+            }
           }
 
           function getShortModelLabel(modelVal) {
@@ -42791,11 +42865,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function applyModeView(mode) {
+            currentMode = mode === "inspect" ? "inspect" : "generate";
             const genView = document.getElementById("mod-nai-generate-view");
             const inspectView = document.getElementById("mod-nai-inspect-view");
             const modeLabel = document.getElementById("mod-nai-current-mode-label");
             const toggleText = document.getElementById("mod-nai-mode-toggle-text");
-            const isInspect = mode === "inspect";
+            const isInspect = currentMode === "inspect";
             if (genView) genView.style.display = isInspect ? "none" : "flex";
             if (inspectView) inspectView.style.display = isInspect ? "flex" : "none";
             if (modeLabel) modeLabel.textContent = isInspect ? "提取" : "生图";
@@ -42904,45 +42979,61 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const store = loadPresetsStore();
             const st = loadPanelState();
 
-            const fillSelect = (selectId, list, selectedName) => {
+            const fillSelect = (selectId, inputId, list, selectedName) => {
               const sel = document.getElementById(selectId);
               if (!sel) return;
+              const inp = inputId ? document.getElementById(inputId) : null;
+              const curInputVal = inp ? inp.value.trim() : "";
               sel.innerHTML = '<option value="">预设</option>';
-              list.forEach((item) => {
+              let matchedSelected = "";
+              (list || []).forEach((item) => {
                 if (!item || !item.name) return;
                 const opt = document.createElement("option");
                 opt.value = item.name;
                 opt.textContent = item.name;
-                if (item.name === selectedName) opt.selected = true;
+                if (item.name === selectedName && (!inp || curInputVal === String(item.value || "").trim())) {
+                  opt.selected = true;
+                  matchedSelected = item.name;
+                }
                 sel.appendChild(opt);
               });
+              sel.value = matchedSelected;
             };
 
-            fillSelect("mod-nai-artist-preset-select", store.artist, st.artistPresetSelected);
-            fillSelect("mod-nai-pos1-preset-select", store.positive, st.pos1PresetSelected);
-            fillSelect("mod-nai-pos2-preset-select", store.positive, st.pos2PresetSelected);
-            fillSelect("mod-nai-neg-preset-select", store.negative, st.negPresetSelected);
+            fillSelect("mod-nai-artist-preset-select", "mod-nai-gen-artist-input", store.artist, st.artistPresetSelected);
+            fillSelect("mod-nai-pos1-preset-select", "mod-nai-gen-pos1-input", store.positive, st.pos1PresetSelected);
+            fillSelect("mod-nai-pos2-preset-select", "mod-nai-gen-pos2-input", store.positive, st.pos2PresetSelected);
+            fillSelect("mod-nai-neg-preset-select", "mod-nai-gen-neg-input", store.negative, st.negPresetSelected);
           }
 
           async function handleSavePreset(category, inputId, selectId, stateKey) {
             const inputEl = document.getElementById(inputId);
             const selectEl = document.getElementById(selectId);
-            const val = inputEl ? inputEl.value.trim() : "";
-            if (!val) {
-              if (typeof window.showCustomAlert === "function") {
-                await window.showCustomAlert("提示", "请先填写内容后再保存预设");
-              }
-              return;
-            }
+            let val = inputEl ? inputEl.value.trim() : "";
             const defaultName = (selectEl && selectEl.value) ? selectEl.value : "";
             let name = "";
             if (typeof window.showCustomPrompt === "function") {
-              name = await window.showCustomPrompt("保存预设", "请输入预设名称", defaultName);
+              name = await window.showCustomPrompt("新建预设", "请输入预设名称", defaultName);
             } else {
               name = defaultName || ("预设" + Date.now().toString().slice(-4));
             }
             if (!name || !String(name).trim()) return;
             const cleanName = String(name).trim();
+
+            if (!val) {
+              if (typeof window.showCustomPrompt === "function") {
+                const enteredContent = await window.showCustomPrompt("预设内容", "请输入该预设的提示词内容", "", "textarea");
+                if (enteredContent === null) return;
+                val = String(enteredContent || "").trim();
+              }
+              if (!val) {
+                if (typeof window.showCustomAlert === "function") {
+                  await window.showCustomAlert("提示", "预设内容不能为空");
+                }
+                return;
+              }
+              if (inputEl) inputEl.value = val;
+            }
 
             const store = loadPresetsStore();
             const list = Array.isArray(store[category]) ? store[category] : [];
@@ -42959,6 +43050,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             st[stateKey] = cleanName;
             savePanelState(st);
             renderPresetSelectOptions();
+            syncModuleNaiToGlobal();
+            if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("已保存预设: " + cleanName, "success");
+            }
           }
 
           async function handleDeletePreset(category, selectId, stateKey) {
@@ -43177,52 +43272,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function splitPositiveIntoArtistAndTags(rawPrompt) {
-            const text = String(rawPrompt || "").trim();
+            const text = String(rawPrompt || "")
+              .replace(/#[^\r\n]*/g, "")
+              .trim();
             if (!text) return { artist: "", positive: "" };
 
-            // 按顶层逗号切分，同时保持 1.2::artist:a, artist:b:: 权重块完整
-            const tokens = [];
-            let buf = "";
-            let inWeightBlock = false;
-            for (let i = 0; i < text.length; i++) {
-              const ch = text[i];
-              if (ch === ":" && text[i + 1] === ":") {
-                buf += "::";
-                i++;
-                if (!inWeightBlock) {
-                  // 检查 :: 前面是否是数字权重或紧跟 artist
-                  inWeightBlock = true;
-                } else {
-                  inWeightBlock = false;
-                }
-                continue;
-              }
-              if (ch === "," && !inWeightBlock) {
-                if (buf.trim()) tokens.push(buf.trim());
-                buf = "";
-              } else {
-                buf += ch;
-              }
-            }
-            if (buf.trim()) tokens.push(buf.trim());
-
+            // 按英文逗号、中文逗号与换行切分，含 artist 的词条归入画师串，其余归入正面提示词
+            const rawTokens = text.split(/[,，\r\n]+/);
             const artistParts = [];
             const positiveParts = [];
 
             const isArtistToken = (tok) => {
               const s = tok.trim();
               if (!s) return false;
-              if (/artist\s*:/i.test(s)) return true;
-              if (/\\?\(artist\\?\)/i.test(s)) return true;
+              if (/artist/i.test(s)) return true;
               if (/^[\{\[\(\s0-9.\-:]*by\s+[a-z0-9_]/i.test(s)) return true;
               return false;
             };
 
-            tokens.forEach((tok) => {
-              if (isArtistToken(tok)) {
-                artistParts.push(tok);
+            rawTokens.forEach((tok) => {
+              const cleaned = tok.replace(/^[,\s，]+|[,\s，]+$/g, "").trim();
+              if (!cleaned) return;
+              if (isArtistToken(cleaned)) {
+                artistParts.push(cleaned);
               } else {
-                positiveParts.push(tok);
+                positiveParts.push(cleaned);
               }
             });
 
@@ -43397,13 +43471,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             // 1. 顶部单键切换 生图 / 提取
             const modeBtn = document.getElementById("mod-nai-mode-toggle-btn");
+            const modeTitleWrap = document.querySelector("#module-nai-panel .mod-nai-title-wrap");
+            const toggleModeNow = (e) => {
+              if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              const inspectView = document.getElementById("mod-nai-inspect-view");
+              const isCurrentlyInspect = currentMode === "inspect" || (inspectView && inspectView.style.display !== "none");
+              const nextMode = isCurrentlyInspect ? "generate" : "inspect";
+              applyModeView(nextMode);
+              const st = loadPanelState();
+              st.mode = nextMode;
+              savePanelState(st);
+              syncModuleNaiToGlobal();
+            };
             if (modeBtn) {
-              modeBtn.addEventListener("click", () => {
-                syncModuleNaiToGlobal();
-                const st = loadPanelState();
-                st.mode = st.mode === "inspect" ? "generate" : "inspect";
-                savePanelState(st);
-                applyModeView(st.mode);
+              modeBtn.addEventListener("click", toggleModeNow);
+            }
+            if (modeTitleWrap) {
+              modeTitleWrap.style.cursor = "pointer";
+              modeTitleWrap.addEventListener("click", () => {
+                if (currentMode === "inspect") {
+                  applyModeView("generate");
+                  const st = loadPanelState();
+                  st.mode = "generate";
+                  savePanelState(st);
+                  syncModuleNaiToGlobal();
+                }
               });
             }
 
@@ -43497,6 +43592,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // 4. 预设下拉切换、新建、删除、复制
             const bindPresetRow = (category, selectId, inputId, saveBtnId, delBtnId, copyBtnId, stateKey, checkId) => {
               const sel = document.getElementById(selectId);
+              const inp = document.getElementById(inputId);
               if (sel) {
                 sel.addEventListener("change", () => {
                   const chosenName = sel.value;
@@ -43507,13 +43603,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const store = loadPresetsStore();
                   const found = (store[category] || []).find((x) => x && x.name === chosenName);
                   if (found) {
-                    const inp = document.getElementById(inputId);
                     if (inp) inp.value = found.value || "";
                     if (checkId) {
                       const chk = document.getElementById(checkId);
                       if (chk && !chk.checked) chk.checked = true;
                     }
                     syncModuleNaiToGlobal();
+                  }
+                });
+              }
+              if (inp && sel) {
+                inp.addEventListener("input", () => {
+                  const chosenName = sel.value;
+                  if (!chosenName) return;
+                  const store = loadPresetsStore();
+                  const found = (store[category] || []).find((x) => x && x.name === chosenName);
+                  if (!found || inp.value.trim() !== String(found.value || "").trim()) {
+                    sel.value = "";
+                    const st = loadPanelState();
+                    st[stateKey] = "";
+                    savePanelState(st);
                   }
                 });
               }
@@ -43723,26 +43832,51 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><circle cx="11" cy="11" r="2"></circle></svg>';
 
           function loadLocalBookmarks() {
+            if (Array.isArray(memoryBookmarksList)) {
+              return memoryBookmarksList;
+            }
+            if (
+              window.state &&
+              window.state.globalSettings &&
+              Array.isArray(window.state.globalSettings.naiBookmarksCollection) &&
+              window.state.globalSettings.naiBookmarksCollection.length > 0
+            ) {
+              memoryBookmarksList = window.state.globalSettings.naiBookmarksCollection;
+              return memoryBookmarksList;
+            }
             try {
               const raw = localStorage.getItem(BOOKMARKS_STORE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) return parsed;
+                if (Array.isArray(parsed)) {
+                  memoryBookmarksList = parsed;
+                  return parsed;
+                }
               }
             } catch (_) {}
-            return [];
+            memoryBookmarksList = [];
+            return memoryBookmarksList;
           }
 
           function saveLocalBookmarks(list) {
             const cleanList = Array.isArray(list) ? list : [];
-            try {
-              localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(cleanList));
-            } catch (_) {}
+            memoryBookmarksList = cleanList;
             if (window.state && window.state.globalSettings) {
               window.state.globalSettings.naiBookmarksCollection = cleanList;
               if (window.db && window.db.globalSettings) {
                 window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
               }
+            }
+            try {
+              localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(cleanList));
+            } catch (_) {
+              try {
+                // 若图片过大触发 localStorage 5MB 上限，仅在 localStorage 保存轻量文本，完整带图版由 IndexedDB 保存
+                const lightList = cleanList.map((item) =>
+                  item && item.image && item.image.length > 2048 ? Object.assign({}, item, { image: "" }) : item
+                );
+                localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(lightList));
+              } catch (_2) {}
             }
           }
 
@@ -44477,9 +44611,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          window.openModuleNaiPanel = function () {
+          window.openModuleNaiPanel = function (forceGenerateMode) {
             bindModuleNaiPanelEvents();
             const st = loadPanelState();
+            if (forceGenerateMode === true) {
+              st.mode = "generate";
+              savePanelState(st);
+            }
 
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
             const pos1El = document.getElementById("mod-nai-gen-pos1-input");
@@ -44511,7 +44649,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               inspectStatusEl.textContent = st.inspectStatusText;
             }
 
-            applyThemeToPanel(st.theme || "apple");
+            applyThemeToPanel(st.theme || "folio");
             applyModeView(st.mode || "generate");
             renderPresetSelectOptions();
             syncModuleNaiToGlobal();
@@ -124324,16 +124462,17 @@ ${specificRules}`;
                 "# === EPhoneVault Auto Panel ===",
                 "ephone_vault_menu() {",
                 "  echo '----------------------------------------'",
-                "  echo '  [EPhone 本地后台与群控启动面板]'",
+                "  echo '  [EPhone 本地后台与群控手动面板]'",
                 "  if pgrep -f '[.]ephone_vault[.]py' >/dev/null 2>&1; then",
-                "    echo '  状态: 本地存储与对话转发运行中 127.0.0.1:8765'",
+                "    echo '  当前状态: 本地后台运行中 127.0.0.1:8765'",
                 "  else",
-                "    echo '  状态: 待启动 请按下方提示输入数字'",
+                "    echo '  当前状态: 未启动 不会开机自启 请手动输入数字'",
                 "  fi",
                 "  echo '  输入 1 回车: 启动本地后台并查看实时请求耗时状态'",
                 "  echo '  输入 2 回车: 直接打开 NapCat QQ'",
                 "  echo '  输入 3 回车: 查看 6099 登录密钥与 3001 链接'",
                 "  echo '  输入 4 回车: 查看 QQ 实时收发日志'",
+                "  echo '  输入 0 回车: 停止本地后台服务'",
                 "  echo '----------------------------------------'",
                 "}",
                 "ephone_vault_start() {",
@@ -124349,6 +124488,10 @@ ${specificRules}`;
                 "  echo '----------------------------------------'",
                 "  tail -n 25 -f ~/ephone_vault.log",
                 "}",
+                "ephone_vault_stop() {",
+                "  pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true",
+                "  echo '  [已停止本地后台服务]'",
+                "}",
                 "ephone_napcat_start() {",
                 "  proot-distro login napcat -- bash -c 'xvfb-run -a /root/Napcat/opt/QQ/qq --no-sandbox'",
                 "}",
@@ -124362,11 +124505,38 @@ ${specificRules}`;
                 "alias 2='ephone_napcat_start'",
                 "alias 3='ephone_qqbot_info'",
                 "alias 4='ephone_napcat_log'",
+                "alias 0='ephone_vault_stop'",
                 "ephone_vault_menu",
                 "# === End EPhoneVault ===",
               ].join("\n");
               const b64Panel = btoa(unescape(encodeURIComponent(bashPanel)));
-              cmd = `pkg install -y python >/dev/null 2>&1; python3 -c "import base64,os;open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'));open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Info}').decode('utf-8'));rc=os.path.expanduser('~/.bashrc');txt=open(rc).read() if os.path.exists(rc) else '';s='# === EPhoneVault Auto Panel ===';e='# === End EPhoneVault ===';nt=base64.b64decode('${b64Panel}').decode('utf-8');txt=(txt[:txt.find(s)]+txt[txt.find(e)+len(e):]).strip() if (s in txt and e in txt) else txt.strip();open(rc,'w').write((txt+'\\n\\n'+nt+'\\n').lstrip())" && . ~/.bashrc`;
+              const setupPy = [
+                "import base64,os,re",
+                `open(os.path.expanduser('~/.ephone_vault.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Script}').decode('utf-8'))`,
+                `open(os.path.expanduser('~/.ephone_qqbot_info.py'),'w',encoding='utf-8').write(base64.b64decode('${b64Info}').decode('utf-8'))`,
+                `nt=base64.b64decode('${b64Panel}').decode('utf-8')`,
+                "files=['~/.bashrc','~/.bash_profile','~/.profile','~/.zshrc','/data/data/com.termux/files/usr/etc/bash.bashrc','/data/data/com.termux/files/usr/etc/profile','/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/napcat/root/.bashrc']",
+                "bad=re.compile(r'(\\.ephone_vault\\.py|ephone_vault_start|ephone_napcat_start|proot-distro\\s+login\\s+napcat|xvfb-run.*qq|ephone_vault\\.log)',re.I)",
+                "for fp in files:",
+                "  p=os.path.expanduser(fp)",
+                "  if not os.path.exists(p): continue",
+                "  try:",
+                "    t=open(p,'r',encoding='utf-8',errors='ignore').read()",
+                "    t=re.sub(r'# === EPhoneVault Auto Panel ===[\\s\\S]*?# === End EPhoneVault ===','',t)",
+                "    lines=[ln for ln in t.splitlines() if not bad.search(ln)]",
+                "    clean='\\n'.join(lines).strip()",
+                "    if p==os.path.expanduser('~/.bashrc'):",
+                "      clean=(clean+'\\n\\n'+nt+'\\n').lstrip()",
+                "    else:",
+                "      clean=clean+'\\n' if clean else ''",
+                "    open(p,'w',encoding='utf-8').write(clean)",
+                "  except Exception: pass",
+                "bashrc=os.path.expanduser('~/.bashrc')",
+                "if not os.path.exists(bashrc):",
+                "  open(bashrc,'w',encoding='utf-8').write(nt+'\\n')"
+              ].join("\n");
+              const b64Setup = btoa(unescape(encodeURIComponent(setupPy)));
+              cmd = `pkill -9 -f '[.]ephone_vault[.]py' 2>/dev/null || true; pkg install -y python >/dev/null 2>&1; python3 -c "import base64;exec(base64.b64decode('${b64Setup}').decode('utf-8'))" && . ~/.bashrc`;
             }
             try {
               if (navigator.clipboard && navigator.clipboard.writeText) {

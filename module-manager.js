@@ -233,7 +233,30 @@
 ━━━━━━━━━━━━━━━━━━
 15. 逐项检查：每章内容与标题对应、无混入？归属按内容性质判定（KP信息里无HO残留）？HO信息整合去重完成、正文剧情未被挪动？导入独立不计人设？NPC与猫分开、猫按HO分、未从正文摘抄对话、未捏造行为模式？单人线按HO分？原目录已采用？杂质只删了允许的几类？未在正文段落间插入主观个人理解与总结？标注完整（正文/KP信息/秘密·HOX/检定/插图/KP批注）？结尾句每段都有？命名合规？若有不合格项，修正后再交付。`;
 
+  let _memPromptPresets = null;
+  let _memCuttingPresets = null;
+  let _memMusicPresets = null;
+
+  function _safeLocalSetItem(key, val) {
+    try {
+      localStorage.setItem(key, val);
+      return true;
+    } catch (e) {
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        localStorage.removeItem('mod_nai_bookmarks_v1');
+        localStorage.setItem(key, val);
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    }
+  }
+
   function getModulePromptPresets() {
+    if (Array.isArray(_memPromptPresets) && _memPromptPresets.length > 0) {
+      return _memPromptPresets;
+    }
     try {
       const raw = localStorage.getItem('coc_module_prompt_presets');
       if (raw) {
@@ -249,23 +272,24 @@
               prompt: DEFAULT_TRPG_ANALYSIS_PROMPT
             });
           }
+          _memPromptPresets = parsed;
           return parsed;
         }
       }
     } catch (e) {}
-    return [
+    _memPromptPresets = [
       {
         id: 'preset_default_analysis',
         name: '默认分析',
         prompt: DEFAULT_TRPG_ANALYSIS_PROMPT
       }
     ];
+    return _memPromptPresets;
   }
 
   function saveModulePromptPresets(presets) {
-    try {
-      localStorage.setItem('coc_module_prompt_presets', JSON.stringify(presets));
-    } catch (e) {}
+    _memPromptPresets = Array.isArray(presets) ? presets : [];
+    _safeLocalSetItem('coc_module_prompt_presets', JSON.stringify(_memPromptPresets));
   }
 
   function getDefaultModulePresetId() {
@@ -277,10 +301,10 @@
   }
 
   function setDefaultModulePresetId(id) {
-    try {
-      if (id) localStorage.setItem('coc_module_default_preset_id', id);
-      else localStorage.removeItem('coc_module_default_preset_id');
-    } catch (e) {}
+    if (id) _safeLocalSetItem('coc_module_default_preset_id', id);
+    else {
+      try { localStorage.removeItem('coc_module_default_preset_id'); } catch (e) {}
+    }
   }
 
   function renderModulePromptPresetsUI() {
@@ -305,6 +329,9 @@
   }
 
   function getModuleCuttingPresets() {
+    if (Array.isArray(_memCuttingPresets) && _memCuttingPresets.length > 0) {
+      return _memCuttingPresets;
+    }
     try {
       const raw = localStorage.getItem('coc_module_cutting_presets');
       if (raw) {
@@ -320,23 +347,24 @@
               prompt: DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT
             });
           }
+          _memCuttingPresets = parsed;
           return parsed;
         }
       }
     } catch (e) {}
-    return [
+    _memCuttingPresets = [
       {
         id: 'preset_default_cut',
         name: '默认切割',
         prompt: DEFAULT_TRPG_CUTTING_EXECUTION_PROMPT
       }
     ];
+    return _memCuttingPresets;
   }
 
   function saveModuleCuttingPresets(presets) {
-    try {
-      localStorage.setItem('coc_module_cutting_presets', JSON.stringify(presets));
-    } catch (e) {}
+    _memCuttingPresets = Array.isArray(presets) ? presets : [];
+    _safeLocalSetItem('coc_module_cutting_presets', JSON.stringify(_memCuttingPresets));
   }
 
   function getDefaultModuleCuttingPresetId() {
@@ -348,10 +376,10 @@
   }
 
   function setDefaultModuleCuttingPresetId(id) {
-    try {
-      if (id) localStorage.setItem('coc_module_default_cutting_preset_id', id);
-      else localStorage.removeItem('coc_module_default_cutting_preset_id');
-    } catch (e) {}
+    if (id) _safeLocalSetItem('coc_module_default_cutting_preset_id', id);
+    else {
+      try { localStorage.removeItem('coc_module_default_cutting_preset_id'); } catch (e) {}
+    }
   }
 
   function renderModuleCuttingPresetsUI() {
@@ -404,6 +432,9 @@
 ]`;
 
   function getModuleMusicPresets() {
+    if (Array.isArray(_memMusicPresets) && _memMusicPresets.length > 0) {
+      return _memMusicPresets;
+    }
     try {
       const raw = localStorage.getItem('coc_module_music_presets');
       if (raw) {
@@ -419,23 +450,24 @@
               prompt: DEFAULT_TRPG_MUSIC_PROMPT
             });
           }
+          _memMusicPresets = parsed;
           return parsed;
         }
       }
     } catch (e) {}
-    return [
+    _memMusicPresets = [
       {
         id: 'preset_default_music',
         name: '默认配乐',
         prompt: DEFAULT_TRPG_MUSIC_PROMPT
       }
     ];
+    return _memMusicPresets;
   }
 
   function saveModuleMusicPresets(presets) {
-    try {
-      localStorage.setItem('coc_module_music_presets', JSON.stringify(presets));
-    } catch (e) {}
+    _memMusicPresets = Array.isArray(presets) ? presets : [];
+    _safeLocalSetItem('coc_module_music_presets', JSON.stringify(_memMusicPresets));
   }
 
   function getDefaultModuleMusicPresetId() {
@@ -447,10 +479,10 @@
   }
 
   function setDefaultModuleMusicPresetId(id) {
-    try {
-      if (id) localStorage.setItem('coc_module_default_music_preset_id', id);
-      else localStorage.removeItem('coc_module_default_music_preset_id');
-    } catch (e) {}
+    if (id) _safeLocalSetItem('coc_module_default_music_preset_id', id);
+    else {
+      try { localStorage.removeItem('coc_module_default_music_preset_id'); } catch (e) {}
+    }
   }
 
   function renderModuleMusicPresetsUI() {
@@ -745,32 +777,11 @@
           }).catch(() => {});
         }
 
-        // 3. 尝试存入 localStorage（作为轻量同步副本，排除巨大base64图片防止爆配额异常）
+        // 3. 完整草稿已存入 IndexedDB，不在 localStorage 堆积大体积副本，避免挤占浏览器 5MB 配额导致其他预设无法保存
         try {
-          let lightParsedData = this.currentParsedData;
-          if (lightParsedData && Array.isArray(lightParsedData.images) && lightParsedData.images.length > 0) {
-            lightParsedData = {
-              ...lightParsedData,
-              images: lightParsedData.images.map(img => ({
-                name: img.name,
-                fileName: img.fileName,
-                pageNumber: img.pageNumber,
-                format: img.format,
-                isMap: img.isMap,
-                shouldInclude: img.shouldInclude
-              }))
-            };
-          }
-          const lightDraft = {
-            ...draftObj,
-            currentParsedData: lightParsedData
-          };
-          localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(lightDraft));
-        } catch (lsErr) {
-          try {
-            localStorage.setItem(DRAFT_STORAGE_KEY + '_has_idb', String(Date.now()));
-          } catch (e2) {}
-        }
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+          localStorage.setItem(DRAFT_STORAGE_KEY + '_has_idb', String(Date.now()));
+        } catch (lsErr) {}
       } catch (e) {
         console.warn('[模组] 草稿保存提示', e);
       }
@@ -1684,7 +1695,7 @@
         if (workshopPanel) workshopPanel.style.display = 'none';
         if (naiPanel) naiPanel.style.display = 'flex';
         if (typeof window.openModuleNaiPanel === 'function') {
-          window.openModuleNaiPanel();
+          window.openModuleNaiPanel(true);
         }
       } else {
         if (wizardPanel) wizardPanel.style.display = 'flex';
