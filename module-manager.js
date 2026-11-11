@@ -7937,6 +7937,7 @@ ${chap.content}
             if (dbInstance.moduleLocationNav && loc.id) {
               await dbInstance.moduleLocationNav.put(loc);
             }
+            const effectiveBatchUrl = loc.imageUrl || imgDataUrl;
             if (dbInstance.modules) {
               try {
                 const mod = await dbInstance.modules.get(moduleId);
@@ -7953,15 +7954,15 @@ ${chap.content}
                 let cChanged = false;
                 if (Array.isArray(c.settings.customLocations)) {
                   const match = c.settings.customLocations.find(cl => cl.name === loc.name);
-                  if (match && match.imageUrl !== imgDataUrl) {
-                    match.imageUrl = imgDataUrl;
+                  if (match && match.imageUrl !== effectiveBatchUrl) {
+                    match.imageUrl = effectiveBatchUrl;
                     cChanged = true;
                   }
                 }
                 if (Array.isArray(c.settings.contextMapData)) {
                   const match = c.settings.contextMapData.find(ctx => ctx.name === loc.name);
-                  if (match && match.imageUrl !== imgDataUrl) {
-                    match.imageUrl = imgDataUrl;
+                  if (match && match.imageUrl !== effectiveBatchUrl) {
+                    match.imageUrl = effectiveBatchUrl;
                     cChanged = true;
                   }
                 }
@@ -8173,46 +8174,50 @@ ${chap.content}
             if (typeof compressImage === 'function') {
               imgDataUrl = await compressImage(imgDataUrl, 0.5, 900);
             }
+            const prevLocImageUrl = (loc && typeof loc.imageUrl === 'string' && loc.imageUrl.startsWith('vault://')) ? loc.imageUrl : '';
             loc.imageUrl = imgDataUrl;
 
             if (dbInstance && dbInstance.moduleLocationNav) {
               await dbInstance.moduleLocationNav.put(loc);
             }
-            if (dbInstance && dbInstance.modules) {
-              try {
-                const mod = await dbInstance.modules.get(moduleId);
-                if (mod && Array.isArray(mod.mapNodes)) {
-                  const target = mod.mapNodes.find(m => m.name === loc.name);
-                  if (target) {
-                    target.imageUrl = imgDataUrl;
-                    target.prompt = loc.prompt;
-                    await dbInstance.modules.update(moduleId, { mapNodes: mod.mapNodes });
+            const effectiveUrl = loc.imageUrl || imgDataUrl;
+            if (typeof window.syncLocationImageGlobally === 'function' && loc.name) {
+              await window.syncLocationImageGlobally(loc.name, effectiveUrl, dbInstance);
+            } else {
+              if (dbInstance && dbInstance.modules) {
+                try {
+                  const mod = await dbInstance.modules.get(moduleId);
+                  if (mod && Array.isArray(mod.mapNodes)) {
+                    const target = mod.mapNodes.find(m => m.name === loc.name);
+                    if (target) {
+                      target.imageUrl = effectiveUrl;
+                      target.prompt = loc.prompt;
+                      await dbInstance.modules.update(moduleId, { mapNodes: mod.mapNodes });
+                    }
                   }
-                }
-              } catch (e) {}
+                } catch (e) {}
+              }
+              if (typeof state !== 'undefined' && state.chats) {
+                Object.values(state.chats).forEach(c => {
+                  if (!c || !c.settings) return;
+                  let cChanged = false;
+                  ['customLocations', 'contextMapData', 'temporaryLocations'].forEach(field => {
+                    if (Array.isArray(c.settings[field])) {
+                      const match = c.settings[field].find(cl => cl && cl.name === loc.name);
+                      if (match && match.imageUrl !== effectiveUrl) {
+                        match.imageUrl = effectiveUrl;
+                        cChanged = true;
+                      }
+                    }
+                  });
+                  if (cChanged && dbInstance && dbInstance.chats) {
+                    dbInstance.chats.put(c).catch(() => {});
+                  }
+                });
+              }
             }
-            if (typeof state !== 'undefined' && state.chats) {
-              Object.values(state.chats).forEach(c => {
-                if (!c || !c.settings) return;
-                let cChanged = false;
-                if (Array.isArray(c.settings.customLocations)) {
-                  const match = c.settings.customLocations.find(cl => cl.name === loc.name);
-                  if (match && match.imageUrl !== imgDataUrl) {
-                    match.imageUrl = imgDataUrl;
-                    cChanged = true;
-                  }
-                }
-                if (Array.isArray(c.settings.contextMapData)) {
-                  const match = c.settings.contextMapData.find(ctx => ctx.name === loc.name);
-                  if (match && match.imageUrl !== imgDataUrl) {
-                    match.imageUrl = imgDataUrl;
-                    cChanged = true;
-                  }
-                }
-                if (cChanged && dbInstance && dbInstance.chats) {
-                  dbInstance.chats.put(c).catch(() => {});
-                }
-              });
+            if (prevLocImageUrl && prevLocImageUrl !== effectiveUrl && typeof window.deleteVaultMediaRefIfUnreferenced === 'function') {
+              window.deleteVaultMediaRefIfUnreferenced(prevLocImageUrl).catch(() => {});
             }
 
             this.renderModuleDetailMap(chapters);

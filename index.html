@@ -43,7 +43,8 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Ma+Shan+Zheng&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&display=swap" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link rel="stylesheet" href="style.css" />
     <script src="/node_modules/dexie/dist/dexie.js"></script>
@@ -52,7 +53,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=21.1" defer></script>
+    <script src="game-hall.js?v=21.3" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2569,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3879,9 +3880,13 @@
                     <div class="mod-nai-specimen-title-block">
                       <div class="mod-nai-specimen-title-row">
                         <h4 class="mod-nai-specimen-title" id="mod-nai-col-detail-name">未命名书签</h4>
-                        <div class="mod-nai-specimen-model-switch" id="mod-nai-col-detail-model-switch">
-                          <button type="button" class="mod-nai-model-tag-btn is-active" data-model-tag="V4.5">V4.5</button>
-                          <button type="button" class="mod-nai-model-tag-btn" data-model-tag="V5">V5</button>
+                        <div class="mod-nai-specimen-model-switch is-readonly-single" id="mod-nai-col-detail-model-switch">
+                          <span class="mod-nai-model-tag-btn is-active" id="mod-nai-col-detail-model-single">
+                            <span class="mod-nai-model-tag-text">V4.5</span>
+                            <svg class="mod-nai-hand-circle-svg" viewBox="0 0 64 28" fill="none" aria-hidden="true">
+                              <path d="M9 16.2C6.8 9.8 18.2 3.8 34.2 4.2C49.5 4.5 58.6 9.2 56.8 15.6C55.1 21.8 41.8 25.1 26.8 24.2C13.8 23.4 6.2 18.8 10.6 11.8C13.2 7.5 24.4 5.2 36.8 5.9" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-6 32 14)" />
+                            </svg>
+                          </span>
                         </div>
                       </div>
                       <p class="mod-nai-specimen-sub" id="mod-nai-col-detail-remark" style="display: none;"></p>
@@ -3962,21 +3967,31 @@
                     </div>
                   </div>
 
-                  <input type="file" id="mod-nai-col-edit-file-input" accept="image/*" style="display: none;" />
+                  <input type="file" id="mod-nai-col-edit-file-input" accept="image/*" multiple style="display: none;" />
 
                   <div class="mod-nai-edit-clean-card">
                     <div class="mod-nai-edit-top-row">
-                      <div class="mod-nai-edit-cover-box" id="mod-nai-col-edit-img-stage" title="点击上传封面"></div>
+                      <div class="mod-nai-edit-cover-box" id="mod-nai-col-edit-img-stage" title="点击可多选上传图片"></div>
                       <div class="mod-nai-edit-title-col">
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
                           <label class="mod-nai-edit-field-label">名字</label>
                           <div class="mod-nai-specimen-model-switch" id="mod-nai-col-edit-model-switch">
-                            <button type="button" class="mod-nai-model-tag-btn is-active" data-model-tag="V4.5">V4.5</button>
-                            <button type="button" class="mod-nai-model-tag-btn" data-model-tag="V5">V5</button>
+                            <button type="button" class="mod-nai-model-tag-btn is-active" data-model-tag="V4.5">
+                              <span class="mod-nai-model-tag-text">V4.5</span>
+                              <svg class="mod-nai-hand-circle-svg" viewBox="0 0 64 28" fill="none" aria-hidden="true">
+                                <path d="M9 16.2C6.8 9.8 18.2 3.8 34.2 4.2C49.5 4.5 58.6 9.2 56.8 15.6C55.1 21.8 41.8 25.1 26.8 24.2C13.8 23.4 6.2 18.8 10.6 11.8C13.2 7.5 24.4 5.2 36.8 5.9" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-6 32 14)" />
+                              </svg>
+                            </button>
+                            <button type="button" class="mod-nai-model-tag-btn" data-model-tag="V5">
+                              <span class="mod-nai-model-tag-text">V5</span>
+                              <svg class="mod-nai-hand-circle-svg" viewBox="0 0 64 28" fill="none" aria-hidden="true">
+                                <path d="M9 16.2C6.8 9.8 18.2 3.8 34.2 4.2C49.5 4.5 58.6 9.2 56.8 15.6C55.1 21.8 41.8 25.1 26.8 24.2C13.8 23.4 6.2 18.8 10.6 11.8C13.2 7.5 24.4 5.2 36.8 5.9" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-6 32 14)" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                         <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入收藏卡片名称" />
-                        <span class="mod-nai-edit-hint">点击左侧方框上传封面，展开后自动按原图比例展示</span>
+                        <span class="mod-nai-edit-hint">点击左侧方框可多选上传图片，展开卡片后右滑图片即可翻看</span>
                       </div>
                     </div>
 
@@ -42619,12 +42634,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 });
                 console.log("图片 Blob 创建成功，大小:", imageBlob.size);
 
-                // 直接显示图片
+                // 直接显示图片并释放旧预览Blob内存
                 const imageUrl = URL.createObjectURL(imageBlob);
-                document.getElementById("nai-result-image").src = imageUrl;
+                const naiResImgEl = document.getElementById("nai-result-image");
+                if (naiResImgEl) {
+                  if (naiResImgEl.src && naiResImgEl.src.startsWith("blob:")) {
+                    try { URL.revokeObjectURL(naiResImgEl.src); } catch (_) {}
+                  }
+                  naiResImgEl.src = imageUrl;
+                }
                 statusDiv.style.display = "none";
                 resultDiv.style.display = "block";
-                console.log("✅ 图片显示成功！🎨");
+                console.log("✅ 图片显示成功！");
                 return;
               }
 
@@ -42679,11 +42700,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const imageBlob = await imageFile.async("blob");
               console.log("提取的图片大小:", imageBlob.size);
 
-              // 创建图片URL并显示
+              // 创建图片URL并显示，同时释放上一张测试图的Blob内存
               const imageUrl = URL.createObjectURL(imageBlob);
               console.log("生成的图片URL:", imageUrl);
 
-              document.getElementById("nai-result-image").src = imageUrl;
+              const naiResImgEl = document.getElementById("nai-result-image");
+              if (naiResImgEl) {
+                if (naiResImgEl.src && naiResImgEl.src.startsWith("blob:")) {
+                  try { URL.revokeObjectURL(naiResImgEl.src); } catch (_) {}
+                }
+                naiResImgEl.src = imageUrl;
+              }
               statusDiv.style.display = "none";
               resultDiv.style.display = "block";
             } catch (zipError) {
@@ -42693,7 +42720,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               if (zipBlob.type.startsWith("image/")) {
                 const imageUrl = URL.createObjectURL(zipBlob);
-                document.getElementById("nai-result-image").src = imageUrl;
+                const naiResImgEl = document.getElementById("nai-result-image");
+                if (naiResImgEl) {
+                  if (naiResImgEl.src && naiResImgEl.src.startsWith("blob:")) {
+                    try { URL.revokeObjectURL(naiResImgEl.src); } catch (_) {}
+                  }
+                  naiResImgEl.src = imageUrl;
+                }
                 statusDiv.style.display = "none";
                 resultDiv.style.display = "block";
               } else {
@@ -44209,6 +44242,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     model: modelVal
                   });
                   if (genResultImg && dataUrl) {
+                    if (genResultImg.src && genResultImg.src.startsWith("blob:")) {
+                      try { URL.revokeObjectURL(genResultImg.src); } catch (_) {}
+                    }
                     genResultImg.src = dataUrl;
                     genResultImg.title = activePosVal || activeArtistVal || "NAI_Image";
                     genResultImg.style.display = "block";
@@ -44369,21 +44405,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function saveLocalBookmarks(list) {
             const cleanList = Array.isArray(list) ? list : [];
             memoryBookmarksList = cleanList;
+            const syncToLocalStorage = (arr) => {
+              try {
+                localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(arr));
+              } catch (_) {
+                try {
+                  const lightList = arr.map((item) => {
+                    if (!item || typeof item !== "object") return item;
+                    const next = Object.assign({}, item);
+                    if (typeof next.image === "string" && next.image.startsWith("data:")) next.image = "";
+                    if (Array.isArray(next.images)) {
+                      next.images = next.images.filter((u) => typeof u === "string" && !u.startsWith("data:"));
+                    }
+                    return next;
+                  });
+                  localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(lightList));
+                } catch (_2) {}
+              }
+            };
+            syncToLocalStorage(cleanList);
             if (window.state && window.state.globalSettings) {
               window.state.globalSettings.naiBookmarksCollection = cleanList;
               if (window.db && window.db.globalSettings) {
-                window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
+                window.db.globalSettings
+                  .put(window.state.globalSettings)
+                  .then(() => {
+                    // 当自动分离将 data:image 转为 vault:// 后，同步把轻量 vault:// 列表写回 localStorage，释放 localStorage 内存
+                    if (window.state && window.state.globalSettings && Array.isArray(window.state.globalSettings.naiBookmarksCollection)) {
+                      memoryBookmarksList = window.state.globalSettings.naiBookmarksCollection;
+                      syncToLocalStorage(memoryBookmarksList);
+                    }
+                  })
+                  .catch(() => {});
               }
-            }
-            try {
-              localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(cleanList));
-            } catch (_) {
-              try {
-                const lightList = cleanList.map((item) =>
-                  item && item.image && item.image.length > 2048 ? Object.assign({}, item, { image: "" }) : item
-                );
-                localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(lightList));
-              } catch (_2) {}
             }
           }
 
@@ -44428,17 +44482,45 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           let colEditModelDraft = "V4.5";
+          let colEditImagesDraft = [];
+
+          const HAND_CIRCLE_SVG =
+            '<svg class="mod-nai-hand-circle-svg" viewBox="0 0 64 28" fill="none" aria-hidden="true">' +
+            '<path d="M9 16.2C6.8 9.8 18.2 3.8 34.2 4.2C49.5 4.5 58.6 9.2 56.8 15.6C55.1 21.8 41.8 25.1 26.8 24.2C13.8 23.4 6.2 18.8 10.6 11.8C13.2 7.5 24.4 5.2 36.8 5.9" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-6 32 14)" />' +
+            '</svg>';
 
           function normalizeModelTagValue(val) {
             return String(val || "").toUpperCase().includes("V5") ? "V5" : "V4.5";
+          }
+
+          function getBookmarkImagesArray(item) {
+            if (!item) return [];
+            if (Array.isArray(item.images)) {
+              const clean = item.images.filter((u) => typeof u === "string" && u.trim().length > 0);
+              if (clean.length > 0) return clean;
+            }
+            if (typeof item.image === "string" && item.image.trim().length > 0) {
+              return [item.image.trim()];
+            }
+            return [];
           }
 
           function syncModelSwitchButtons(containerId, activeTag) {
             const wrap = document.getElementById(containerId);
             if (!wrap) return;
             const norm = normalizeModelTagValue(activeTag);
+            if (containerId === "mod-nai-col-detail-model-switch") {
+              const singleEl = document.getElementById("mod-nai-col-detail-model-single");
+              if (singleEl) {
+                const txtSpan = singleEl.querySelector(".mod-nai-model-tag-text");
+                if (txtSpan) txtSpan.textContent = norm;
+              }
+              return;
+            }
             wrap.querySelectorAll(".mod-nai-model-tag-btn").forEach((btn) => {
-              btn.classList.toggle("is-active", btn.getAttribute("data-model-tag") === norm);
+              const matched = btn.getAttribute("data-model-tag") === norm;
+              btn.classList.toggle("is-active", matched);
+              btn.classList.toggle("active", matched);
             });
           }
 
@@ -44463,10 +44545,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             indexSpan.textContent = `[ ${idxNum}* ]`;
             indexRow.appendChild(indexSpan);
 
-            if (!isEmptyGuide && item && item.modelTag) {
+            if (!isEmptyGuide && item) {
               const modelBadge = document.createElement("span");
               modelBadge.className = "mod-nai-trace-grid-model";
-              modelBadge.textContent = normalizeModelTagValue(item.modelTag);
+              modelBadge.innerHTML =
+                `<span class="mod-nai-model-tag-text">${normalizeModelTagValue(item.modelTag)}</span>` +
+                HAND_CIRCLE_SVG;
               indexRow.appendChild(modelBadge);
             }
             traceEl.appendChild(indexRow);
@@ -44486,7 +44570,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             artBox.className = "mod-nai-trace-art-box";
             const img = document.createElement("img");
             img.loading = "lazy";
-            img.src = (item && item.image) ? item.image : getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx);
+            const itemImgs = getBookmarkImagesArray(item);
+            img.src = itemImgs.length > 0 ? itemImgs[0] : getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx);
             img.alt = (item && item.name) || "片段";
             artBox.appendChild(img);
             frame.appendChild(artBox);
@@ -44585,13 +44670,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          function renderEditSquarePreview(dataUrl) {
+          function renderEditSquarePreview(imagesOrUrl) {
             const stageEl = document.getElementById("mod-nai-col-edit-img-stage");
             if (!stageEl) return;
             stageEl.innerHTML = "";
-            if (dataUrl) {
+            const arr = Array.isArray(imagesOrUrl)
+              ? imagesOrUrl.filter((u) => typeof u === "string" && u.trim().length > 0)
+              : (typeof imagesOrUrl === "string" && imagesOrUrl.trim().length > 0 ? [imagesOrUrl.trim()] : []);
+            if (arr.length > 0) {
               const img = document.createElement("img");
-              img.src = dataUrl;
+              img.src = arr[0];
               img.alt = "封面";
               stageEl.appendChild(img);
             } else {
@@ -44620,6 +44708,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (delBtn) delBtn.style.display = colIsCreatingNew ? "none" : "inline-flex";
             if (upBtn) upBtn.style.display = isShared ? "none" : "inline-flex";
             if (saveBtn) saveBtn.style.display = isShared ? "none" : "inline-flex";
+          }
+
+          function applyHeroFrameOrientation(heroFrame, orient) {
+            if (!heroFrame) return;
+            heroFrame.setAttribute("data-orient", orient || "auto");
+            heroFrame.classList.remove("aspect-portrait", "aspect-landscape", "aspect-square");
+            if (orient === "portrait") heroFrame.classList.add("aspect-portrait");
+            else if (orient === "landscape") heroFrame.classList.add("aspect-landscape");
+            else if (orient === "square") heroFrame.classList.add("aspect-square");
           }
 
           function renderSpecimenDetailCard(item, idx) {
@@ -44662,24 +44759,56 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (stageEl) {
               stageEl.innerHTML = "";
-              if (heroFrame) heroFrame.setAttribute("data-orient", "auto");
-              const img = document.createElement("img");
-              img.onload = () => {
-                if (!heroFrame) return;
-                const w = img.naturalWidth || img.width || 1;
-                const h = img.naturalHeight || img.height || 1;
-                const ratio = w / h;
-                if (ratio < 0.88) {
-                  heroFrame.setAttribute("data-orient", "portrait");
-                } else if (ratio > 1.14) {
-                  heroFrame.setAttribute("data-orient", "landscape");
-                } else {
-                  heroFrame.setAttribute("data-orient", "square");
-                }
-              };
-              img.src = (item && item.image) ? item.image : getTraceDefaultCoverUrl(idx >= 0 ? idx : 0);
-              img.alt = (item && item.name) || "封面";
-              stageEl.appendChild(img);
+              applyHeroFrameOrientation(heroFrame, "auto");
+              const itemImgs = getBookmarkImagesArray(item);
+              const slidesToRender = itemImgs.length > 0
+                ? itemImgs
+                : [getTraceDefaultCoverUrl(idx >= 0 ? idx : 0)];
+
+              slidesToRender.forEach((srcUrl, sIdx) => {
+                const slide = document.createElement("div");
+                slide.className = "mod-nai-specimen-slide";
+                slide.dataset.orient = "square";
+                const img = document.createElement("img");
+                img.onload = () => {
+                  const w = img.naturalWidth || img.width || 1;
+                  const h = img.naturalHeight || img.height || 1;
+                  const ratio = w / h;
+                  let orient = "square";
+                  if (ratio < 0.88) orient = "portrait";
+                  else if (ratio > 1.14) orient = "landscape";
+                  slide.dataset.orient = orient;
+                  const curSlideIdx = stageEl.clientWidth > 0
+                    ? Math.round(stageEl.scrollLeft / stageEl.clientWidth)
+                    : 0;
+                  if (curSlideIdx === sIdx) {
+                    applyHeroFrameOrientation(heroFrame, orient);
+                  }
+                };
+                img.src = srcUrl;
+                img.alt = (item && item.name) || "封面";
+                img.draggable = false;
+                slide.appendChild(img);
+                stageEl.appendChild(slide);
+              });
+
+              stageEl.scrollLeft = 0;
+
+              if (!stageEl._hasSwipeListener) {
+                stageEl._hasSwipeListener = true;
+                stageEl.addEventListener("scroll", () => {
+                  const slides = stageEl.querySelectorAll(".mod-nai-specimen-slide");
+                  if (!slides.length || !stageEl.clientWidth) return;
+                  const activeIdx = Math.max(
+                    0,
+                    Math.min(slides.length - 1, Math.round(stageEl.scrollLeft / stageEl.clientWidth))
+                  );
+                  const activeSlide = slides[activeIdx];
+                  if (activeSlide && activeSlide.dataset.orient) {
+                    applyHeroFrameOrientation(heroFrame, activeSlide.dataset.orient);
+                  }
+                }, { passive: true });
+              }
             }
 
             if (editBtn) editBtn.style.display = "inline-flex";
@@ -44691,7 +44820,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colCurrentItem = item;
             colCurrentIndex = typeof idx === "number" ? idx : -1;
             colIsCreatingNew = false;
-            colEditImageDraft = item.image || "";
+            colEditImagesDraft = getBookmarkImagesArray(item);
+            colEditImageDraft = colEditImagesDraft[0] || "";
             colEditModelDraft = normalizeModelTagValue(item.modelTag);
             const isShared = colScope === "shared";
 
@@ -44706,7 +44836,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (fullData && typeof fullData === "object") {
                     Object.assign(item, fullData, { _detailLoaded: true });
                     if (colCurrentItem === item) {
-                      colEditImageDraft = item.image || "";
+                      colEditImagesDraft = getBookmarkImagesArray(item);
+                      colEditImageDraft = colEditImagesDraft[0] || "";
                       colEditModelDraft = normalizeModelTagValue(item.modelTag);
                       renderSpecimenDetailCard(item, colCurrentIndex);
                     }
@@ -44731,13 +44862,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               modelTag: defaultModelTag,
               remark: "",
               image: curGenSrc,
+              images: curGenSrc ? [curGenSrc] : [],
               artist: computeActiveArtistPrompt() || st.artistText || "",
               positive: computeActivePositivePrompt() || st.pos1Text || "",
               negative: st.negText || "",
               updatedAt: Date.now()
             };
             colCurrentIndex = -1;
-            colEditImageDraft = colCurrentItem.image || "";
+            colEditImagesDraft = getBookmarkImagesArray(colCurrentItem);
+            colEditImageDraft = colEditImagesDraft[0] || "";
             colEditModelDraft = defaultModelTag;
 
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
@@ -44752,7 +44885,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (posInp) posInp.value = colCurrentItem.positive;
             if (negInp) negInp.value = colCurrentItem.negative;
             syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
-            renderEditSquarePreview(colEditImageDraft);
+            renderEditSquarePreview(colEditImagesDraft);
             syncEditViewModeControls();
             switchCollectionSubView("edit");
           }
@@ -44760,7 +44893,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function openExistingBookmarkEditView() {
             if (!colCurrentItem) return;
             colIsCreatingNew = false;
-            colEditImageDraft = colCurrentItem.image || "";
+            colEditImagesDraft = getBookmarkImagesArray(colCurrentItem);
+            colEditImageDraft = colEditImagesDraft[0] || "";
             colEditModelDraft = normalizeModelTagValue(colCurrentItem.modelTag);
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
@@ -44774,7 +44908,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (posInp) posInp.value = colCurrentItem.positive || "";
             if (negInp) negInp.value = colCurrentItem.negative || "";
             syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
-            renderEditSquarePreview(colEditImageDraft);
+            renderEditSquarePreview(colEditImagesDraft);
             syncEditViewModeControls();
             switchCollectionSubView("edit");
           }
@@ -44793,14 +44927,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const posVal = (posInp ? posInp.value : "").trim();
             const negVal = (negInp ? negInp.value : "").trim();
 
-            if (requireNonEmpty && !nameVal && !remarkVal && !artistVal && !posVal && !colEditImageDraft) {
+            if (requireNonEmpty && !nameVal && !remarkVal && !artistVal && !posVal && colEditImagesDraft.length === 0) {
               return false;
             }
 
             colCurrentItem.name = nameVal || "未命名书签";
             colCurrentItem.modelTag = normalizeModelTagValue(colEditModelDraft);
             colCurrentItem.remark = remarkVal;
-            colCurrentItem.image = colEditImageDraft || "";
+            colCurrentItem.images = colEditImagesDraft.slice();
+            colCurrentItem.image = colEditImagesDraft[0] || "";
             colCurrentItem.artist = artistVal;
             colCurrentItem.positive = posVal;
             colCurrentItem.negative = negVal;
@@ -44811,7 +44946,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (existingIdx >= 0) {
               list[existingIdx] = colCurrentItem;
               colCurrentIndex = existingIdx;
-            } else if (nameVal || remarkVal || artistVal || posVal || negVal || colEditImageDraft) {
+            } else if (nameVal || remarkVal || artistVal || posVal || negVal || colEditImagesDraft.length > 0) {
               list.push(colCurrentItem);
               colCurrentIndex = list.length - 1;
               colIsCreatingNew = false;
@@ -44905,13 +45040,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             try {
               const itemId = colCurrentItem.id || ("bm_" + Date.now());
+              const imgsArr = getBookmarkImagesArray(colCurrentItem);
               const sharedItemPayload = {
                 id: itemId,
                 category: "nai_bookmark",
                 name: colCurrentItem.name || "未命名书签",
                 modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
                 remark: colCurrentItem.remark || "",
-                image: colCurrentItem.image || "",
+                image: imgsArr[0] || "",
+                images: imgsArr,
                 artist: colCurrentItem.artist || "",
                 positive: colCurrentItem.positive || "",
                 negative: colCurrentItem.negative || "",
@@ -44941,6 +45078,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 modelTag: sharedItemPayload.modelTag,
                 remark: sharedItemPayload.remark,
                 image: sharedItemPayload.image,
+                images: sharedItemPayload.images,
                 artist: sharedItemPayload.artist,
                 positive: sharedItemPayload.positive,
                 negative: sharedItemPayload.negative,
@@ -45157,13 +45295,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 视图二：高定典藏展示卡片事件（只读展示，支持展开词条抽屉、切换V4.5/V5与微图标复制）
+            // 视图二：高定典藏展示卡片事件（只读展示，支持展开词条抽屉与微图标复制）
             const detailBackBtn = document.getElementById("mod-nai-col-detail-back-btn");
             const detailEditBtn = document.getElementById("mod-nai-col-detail-edit-btn");
             const detailImportBtn = document.getElementById("mod-nai-col-detail-import-btn");
             const detailApplyBtn = document.getElementById("mod-nai-col-detail-apply-btn");
             const detailDrawerToggle = document.getElementById("mod-nai-col-detail-drawer-toggle");
-            const detailModelSwitch = document.getElementById("mod-nai-col-detail-model-switch");
             const detailCopyArtistBtn = document.getElementById("mod-nai-col-detail-copy-artist-btn");
             const detailCopyPosBtn = document.getElementById("mod-nai-col-detail-copy-pos-btn");
             const detailCopyNegBtn = document.getElementById("mod-nai-col-detail-copy-neg-btn");
@@ -45173,26 +45310,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const drawer = document.getElementById("mod-nai-col-detail-drawer");
                 const isNowOpen = !(drawer && drawer.classList.contains("is-open"));
                 setSpecimenDrawerOpen(isNowOpen);
-              });
-            }
-
-            if (detailModelSwitch) {
-              detailModelSwitch.querySelectorAll(".mod-nai-model-tag-btn").forEach((btn) => {
-                btn.addEventListener("click", (e) => {
-                  e.stopPropagation();
-                  if (colScope === "shared" || !colCurrentItem) return;
-                  const chosen = normalizeModelTagValue(btn.getAttribute("data-model-tag"));
-                  colCurrentItem.modelTag = chosen;
-                  colEditModelDraft = chosen;
-                  syncModelSwitchButtons("mod-nai-col-detail-model-switch", chosen);
-                  syncModelSwitchButtons("mod-nai-col-edit-model-switch", chosen);
-                  const list = loadLocalBookmarks();
-                  const existIdx = list.findIndex((x) => x && x.id === colCurrentItem.id);
-                  if (existIdx >= 0) {
-                    list[existIdx] = colCurrentItem;
-                    saveLocalBookmarks(list);
-                  }
-                });
               });
             }
 
@@ -45247,12 +45364,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               detailImportBtn.addEventListener("click", () => {
                 if (!colCurrentItem) return;
                 const list = loadLocalBookmarks();
+                const imgsArr = getBookmarkImagesArray(colCurrentItem);
                 const cloned = {
                   id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                   name: colCurrentItem.name || "收录书签",
                   modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
                   remark: colCurrentItem.remark || "",
-                  image: colCurrentItem.image || "",
+                  image: imgsArr[0] || "",
+                  images: imgsArr,
                   artist: colCurrentItem.artist || "",
                   positive: colCurrentItem.positive || "",
                   negative: colCurrentItem.negative || "",
@@ -45357,16 +45476,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 editFileInput.click();
               });
               editFileInput.addEventListener("change", async () => {
-                const f = editFileInput.files && editFileInput.files[0];
-                if (f) {
+                const files = Array.from(editFileInput.files || []);
+                editFileInput.value = "";
+                if (!files.length) return;
+                const newUrls = [];
+                for (const f of files) {
                   const sqUrl = await compressImageFileToSquareDataUrl(f);
-                  if (sqUrl) {
-                    colEditImageDraft = sqUrl;
-                    renderEditSquarePreview(colEditImageDraft);
-                    persistCurrentBookmarkEditDraft(false);
+                  if (sqUrl) newUrls.push(sqUrl);
+                }
+                if (!newUrls.length) return;
+
+                const prevVaultRefs = colEditImagesDraft.filter((u) => typeof u === "string" && u.startsWith("vault://"));
+                if (colEditImagesDraft.length > 0 && typeof window.showChoiceModal === "function") {
+                  const mode = await window.showChoiceModal("上传图片方式", [
+                    { text: "追加到当前图片后面", value: "append" },
+                    { text: "替换原有全部图片", value: "replace" }
+                  ]);
+                  if (!mode) return;
+                  if (mode === "append") {
+                    colEditImagesDraft = colEditImagesDraft.concat(newUrls);
+                  } else {
+                    colEditImagesDraft = newUrls;
+                  }
+                } else {
+                  colEditImagesDraft = newUrls;
+                }
+                colEditImageDraft = colEditImagesDraft[0] || "";
+                renderEditSquarePreview(colEditImagesDraft);
+                persistCurrentBookmarkEditDraft(false);
+                if (prevVaultRefs.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+                  const currentSet = new Set(colEditImagesDraft);
+                  for (const oldRef of prevVaultRefs) {
+                    if (!currentSet.has(oldRef)) {
+                      window.deleteVaultMediaRefIfUnreferenced(oldRef).catch(() => {});
+                    }
                   }
                 }
-                editFileInput.value = "";
               });
             }
 
@@ -45381,8 +45526,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (negInp) negInp.value = st.negText || "";
                 const genImg = document.getElementById("mod-nai-gen-result-img");
                 if (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) {
+                  colEditImagesDraft = [genImg.src];
                   colEditImageDraft = genImg.src;
-                  renderEditSquarePreview(colEditImageDraft);
+                  renderEditSquarePreview(colEditImagesDraft);
                 }
                 persistCurrentBookmarkEditDraft(false);
                 if (typeof window.showDownloadToast === "function") {
@@ -45464,8 +45610,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (choice === "both") {
                     await deleteSharedBookmarkFromGitHub(itemId, editDeleteBtn);
                   }
+                  const removedVaultRefs = getBookmarkImagesArray(colCurrentItem).filter((u) => typeof u === "string" && u.startsWith("vault://"));
                   const list = loadLocalBookmarks().filter((x) => x && x.id !== itemId);
                   saveLocalBookmarks(list);
+                  if (removedVaultRefs.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+                    for (const ref of removedVaultRefs) {
+                      window.deleteVaultMediaRefIfUnreferenced(ref).catch(() => {});
+                    }
+                  }
                   colCurrentItem = null;
                   switchCollectionSubView("grid");
                   renderCollectionGrid();
@@ -45476,8 +45628,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const ok = await window.showCustomConfirm("删除书签", "确定删除这条收藏吗？");
                   if (!ok) return;
                 }
+                const removedVaultRefs = getBookmarkImagesArray(colCurrentItem).filter((u) => typeof u === "string" && u.startsWith("vault://"));
                 const list = loadLocalBookmarks().filter((x) => x && x.id !== itemId);
                 saveLocalBookmarks(list);
+                if (removedVaultRefs.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+                  for (const ref of removedVaultRefs) {
+                    window.deleteVaultMediaRefIfUnreferenced(ref).catch(() => {});
+                  }
+                }
                 colCurrentItem = null;
                 switchCollectionSubView("grid");
                 renderCollectionGrid();
@@ -53979,8 +54137,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         async function saveLocationImage(chat, node, b64, newPrompt) {
           const dbInstance = typeof db !== "undefined" ? db : (window.database || null);
           const useModule = isChatModuleMapMode(chat);
+          const prevVaultUrls = new Set();
+          if (node && typeof node.imageUrl === "string" && node.imageUrl.startsWith("vault://")) {
+            prevVaultUrls.add(node.imageUrl);
+          }
 
           if (!chat.settings) chat.settings = {};
+          let targetNodeHolder = null;
 
           if (useModule && chat && chat.activeModuleId) {
             if (!Array.isArray(chat.settings.customLocations)) {
@@ -53989,16 +54152,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (node.isTemp && Array.isArray(chat.settings.temporaryLocations)) {
               const t = chat.settings.temporaryLocations.find((l) => l.id === node.id || l.name === node.name);
               if (t) {
+                if (typeof t.imageUrl === "string" && t.imageUrl.startsWith("vault://")) prevVaultUrls.add(t.imageUrl);
                 t.imageUrl = b64;
                 if (newPrompt !== undefined) t.prompt = newPrompt;
+                targetNodeHolder = t;
               }
             } else {
               const c = chat.settings.customLocations.find((l) => l.name === node.name || l.id === node.id);
               if (c) {
+                if (typeof c.imageUrl === "string" && c.imageUrl.startsWith("vault://")) prevVaultUrls.add(c.imageUrl);
                 c.imageUrl = b64;
                 if (newPrompt !== undefined) c.prompt = newPrompt;
+                targetNodeHolder = c;
               } else {
-                chat.settings.customLocations.push({
+                const newEntry = {
                   id: node.id || "custom_loc_" + Date.now(),
                   name: node.name,
                   level: node.level || 1,
@@ -54007,7 +54174,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   prompt: newPrompt !== undefined ? newPrompt : (node.prompt || ""),
                   imageUrl: b64,
                   originalName: node.name,
-                });
+                };
+                chat.settings.customLocations.push(newEntry);
+                targetNodeHolder = newEntry;
               }
             }
 
@@ -54018,9 +54187,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               state.chats[chat.id] = chat;
             }
 
-            // 单图全局同步：同步更新当前模组库主档案与导航库，使所有导入同一模组的群聊全部调用同一张图片
+            const effectiveUrl = (targetNodeHolder && targetNodeHolder.imageUrl) || b64;
+            if (node) node.imageUrl = effectiveUrl;
+
+            // 单图全局同步：使用已分离的 vault:// 地址同步更新模组库与所有群聊，避免重复写入多份图片副本
             if (node.name) {
-              await syncLocationImageGlobally(node.name, b64, dbInstance);
+              await syncLocationImageGlobally(node.name, effectiveUrl, dbInstance);
+            }
+            if (prevVaultUrls.size > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+              for (const oldRef of prevVaultUrls) {
+                if (oldRef !== effectiveUrl) {
+                  window.deleteVaultMediaRefIfUnreferenced(oldRef).catch(() => {});
+                }
+              }
             }
             return;
           }
@@ -54029,8 +54208,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (Array.isArray(chat.settings.temporaryLocations)) {
               const t = chat.settings.temporaryLocations.find((l) => l.id === node.id || l.name === node.name);
               if (t) {
+                if (typeof t.imageUrl === "string" && t.imageUrl.startsWith("vault://")) prevVaultUrls.add(t.imageUrl);
                 t.imageUrl = b64;
                 if (newPrompt !== undefined) t.prompt = newPrompt;
+                targetNodeHolder = t;
               }
             }
           } else {
@@ -54039,10 +54220,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             const t = chat.settings.contextMapData.find((l) => l.id === node.id || l.name === node.name);
             if (t) {
+              if (typeof t.imageUrl === "string" && t.imageUrl.startsWith("vault://")) prevVaultUrls.add(t.imageUrl);
               t.imageUrl = b64;
               if (newPrompt !== undefined) t.prompt = newPrompt;
+              targetNodeHolder = t;
             } else {
-              chat.settings.contextMapData.push({ id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, prompt: newPrompt || "", imageUrl: b64 });
+              const newEntry = { id: node.id, name: node.name, parent: node.parent, level: node.level, desc: node.desc, prompt: newPrompt || "", imageUrl: b64 };
+              chat.settings.contextMapData.push(newEntry);
+              targetNodeHolder = newEntry;
             }
           }
           if (dbInstance && chat.id) {
@@ -54051,8 +54236,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (typeof state !== "undefined" && state?.chats) {
             state.chats[chat.id] = chat;
           }
+          const effectiveUrl = (targetNodeHolder && targetNodeHolder.imageUrl) || b64;
+          if (node) node.imageUrl = effectiveUrl;
           if (node.name) {
-            await syncLocationImageGlobally(node.name, b64, dbInstance);
+            await syncLocationImageGlobally(node.name, effectiveUrl, dbInstance);
+          }
+          if (prevVaultUrls.size > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+            for (const oldRef of prevVaultUrls) {
+              if (oldRef !== effectiveUrl) {
+                window.deleteVaultMediaRefIfUnreferenced(oldRef).catch(() => {});
+              }
+            }
           }
         }
 
@@ -69130,6 +69324,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (imageDataUrl) {
+              const prevRerollImageUrl = message.imageUrl || "";
               // 更新原来的消息并保留参数
               message.imageUrl = imageDataUrl;
               message.fullPrompt = finalPositivePrompt;
@@ -69148,8 +69343,44 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 smea_dyn: settings.smea_dyn,
               };
 
+              if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
+                try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(message); } catch (_) {}
+              }
+
+              // 同步更新 mainLineHistory 与单线分流中的同一条消息，避免旧图 vault:// 引用残留导致无法被清理
+              const syncUpdatedMsgInList = (arr) => {
+                if (!Array.isArray(arr)) return;
+                for (let i = 0; i < arr.length; i++) {
+                  const m = arr[i];
+                  if (m && String(m.timestamp) === String(message.timestamp)) {
+                    m.imageUrl = message.imageUrl;
+                    m.fullPrompt = message.fullPrompt;
+                    m.negativePrompt = message.negativePrompt;
+                    m.model = message.model;
+                    m.naiSettings = message.naiSettings;
+                  }
+                }
+              };
+              syncUpdatedMsgInList(chat.mainLineHistory);
+              if (Array.isArray(chat.soloThreads)) {
+                chat.soloThreads.forEach((th) => syncUpdatedMsgInList(th && th.history));
+              }
+              if (Array.isArray(chat.settings?.soloLineConfig?.threads)) {
+                chat.settings.soloLineConfig.threads.forEach((th) => syncUpdatedMsgInList(th && th.history));
+              }
+
               // 保存数据库
               await db.chats.put(chat);
+
+              if (
+                prevRerollImageUrl &&
+                typeof prevRerollImageUrl === "string" &&
+                prevRerollImageUrl.startsWith("vault://") &&
+                prevRerollImageUrl !== message.imageUrl &&
+                typeof window.deleteVaultMediaRefIfUnreferenced === "function"
+              ) {
+                window.deleteVaultMediaRefIfUnreferenced(prevRerollImageUrl).catch(() => {});
+              }
 
               // 隐藏遮罩
               const overlay = document.getElementById("custom-modal-overlay");
@@ -76951,12 +77182,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             window.syncCurrentSoloThreadHistory(chat);
           }
 
-          // 3. 保存更新后的聊天记录到数据库
+          // 3. 保存更新后的聊天记录到数据库，并清理被重roll替换掉的旧生图文件
           await db.chats.put(chat);
           if (state.chats) {
             state.chats[chat.id] = chat;
             state.chats[String(chat.id)] = chat;
             state.chats[targetId] = chat;
+          }
+          if (removedMessages.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+            for (const rm of removedMessages) {
+              if (!rm || typeof rm !== "object") continue;
+              const candidates = [rm.imageUrl, rm.url, rm.image, rm.audioUrl];
+              for (const ref of candidates) {
+                if (typeof ref === "string" && ref.startsWith("vault://")) {
+                  window.deleteVaultMediaRefIfUnreferenced(ref).catch(() => {});
+                }
+              }
+            }
           }
 
           const isPeerGrpReroll = Boolean(chat.isGroup && (chat.isPeerGroup || (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat))));
@@ -84832,6 +85074,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (window.LocalVaultManager && typeof window.LocalVaultManager.maybeAutoOffloadSingleMessage === "function") {
               try { await window.LocalVaultManager.maybeAutoOffloadSingleMessage(message); } catch (_) {}
             }
+            // 同步更新 mainLineHistory 与单线分流中的同一条消息，防止旧 vault:// 引用残留
+            const syncRerollInList = (arr) => {
+              if (!Array.isArray(arr)) return;
+              for (let i = 0; i < arr.length; i++) {
+                const m = arr[i];
+                if (m && String(m.timestamp) === String(message.timestamp)) {
+                  m.imageUrl = message.imageUrl;
+                  m.prompt = message.prompt;
+                  m.fullPrompt = message.fullPrompt;
+                  delete m.content;
+                }
+              }
+            };
+            syncRerollInList(chat.mainLineHistory);
+            if (Array.isArray(chat.soloThreads)) {
+              chat.soloThreads.forEach((th) => syncRerollInList(th && th.history));
+            }
+            if (Array.isArray(chat.settings?.soloLineConfig?.threads)) {
+              chat.settings.soloLineConfig.threads.forEach((th) => syncRerollInList(th && th.history));
+            }
             await db.chats.put(chat);
             if (
               prevRerollImageUrl &&
@@ -85233,12 +85495,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             const chat = state.chats[state.activeChatId];
 
+            const prevAvatarRefs = new Set();
             if (avatarGenState.currentTarget === "ai") {
               const p = document.getElementById("ai-avatar-preview");
               if (typeof window.setCleanPreviewImgSrc === "function") window.setCleanPreviewImgSrc(p, finalDataUrl);
               else if (p) { p.removeAttribute("data-vault-ref"); p.src = finalDataUrl; }
               if (chat) {
                 if (!chat.settings) chat.settings = {};
+                if (typeof chat.settings.aiAvatar === "string" && chat.settings.aiAvatar.startsWith("vault://")) prevAvatarRefs.add(chat.settings.aiAvatar);
+                if (typeof chat.avatar === "string" && chat.avatar.startsWith("vault://")) prevAvatarRefs.add(chat.avatar);
                 chat.settings.aiAvatar = finalDataUrl;
                 chat.avatar = finalDataUrl;
                 chat.settings.lastAiAvatarPrompt = currentPromptVal;
@@ -85251,6 +85516,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               else if (p) { p.removeAttribute("data-vault-ref"); p.src = finalDataUrl; }
               if (chat) {
                 if (!chat.settings) chat.settings = {};
+                if (typeof chat.settings.myAvatar === "string" && chat.settings.myAvatar.startsWith("vault://")) prevAvatarRefs.add(chat.settings.myAvatar);
                 chat.settings.myAvatar = finalDataUrl;
                 chat.settings.lastMyAvatarPrompt = currentPromptVal;
                 if (currentDefaultVal) chat.settings.lastMyAvatarDefaultPrompt = currentDefaultVal;
@@ -85262,6 +85528,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               else if (p) { p.removeAttribute("data-vault-ref"); p.src = finalDataUrl; }
               if (chat) {
                 if (!chat.settings) chat.settings = {};
+                if (typeof chat.settings.groupAvatar === "string" && chat.settings.groupAvatar.startsWith("vault://")) prevAvatarRefs.add(chat.settings.groupAvatar);
+                if (typeof chat.avatar === "string" && chat.avatar.startsWith("vault://")) prevAvatarRefs.add(chat.avatar);
                 chat.settings.groupAvatar = finalDataUrl;
                 chat.avatar = finalDataUrl;
                 chat.settings.lastGroupAvatarPrompt = currentPromptVal;
@@ -85274,11 +85542,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (chat && editingMemberId) {
                 const member = (chat.members || []).find((m) => m.id === editingMemberId);
                 if (member) {
+                  if (typeof member.avatar === "string" && member.avatar.startsWith("vault://")) prevAvatarRefs.add(member.avatar);
                   member.avatar = finalDataUrl;
                   member.lastAvatarPrompt = currentPromptVal;
                   if (currentDefaultVal) member.lastAvatarDefaultPrompt = currentDefaultVal;
                   await db.chats.put(chat);
                 }
+              }
+            }
+            if (prevAvatarRefs.size > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+              for (const oldAvRef of prevAvatarRefs) {
+                window.deleteVaultMediaRefIfUnreferenced(oldAvRef).catch(() => {});
               }
             }
 
@@ -121912,7 +122186,44 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
-          const MAX_BLOB_CACHE_ITEMS = 300;
+          const MAX_BLOB_CACHE_ITEMS = 45;
+          function isBlobUrlMountedInDom(targetUrl) {
+            if (!targetUrl) return false;
+            try {
+              const activeEls = document.querySelectorAll('img[src^="blob:"], img[data-vault-hydrated-src], [style*="blob:"]');
+              for (let i = 0; i < activeEls.length; i++) {
+                const el = activeEls[i];
+                if (
+                  el.getAttribute("src") === targetUrl ||
+                  el.getAttribute("data-vault-hydrated-src") === targetUrl ||
+                  (el.getAttribute("style") || "").includes(targetUrl)
+                ) {
+                  return true;
+                }
+              }
+            } catch (_) {}
+            return false;
+          }
+
+          function releaseUnusedBrowserBlobCache() {
+            let released = 0;
+            try {
+              for (const [k, bUrl] of Array.from(blobUrlMemoryCache.entries())) {
+                if (!bUrl || !isBlobUrlMountedInDom(bUrl)) {
+                  blobUrlMemoryCache.delete(k);
+                  if (bUrl) {
+                    try { URL.revokeObjectURL(bUrl); } catch (_) {}
+                    liveSessionBlobUrls.delete(bUrl);
+                    blobUrlToVaultRefMap.delete(bUrl);
+                    released++;
+                  }
+                }
+              }
+            } catch (_) {}
+            return released;
+          }
+          window.releaseUnusedBrowserBlobCache = releaseUnusedBrowserBlobCache;
+
           function setVaultBlobCache(fileName, objUrl) {
             if (!fileName || !objUrl) return;
             const cleanName = fileName.startsWith("vault://") ? fileName.slice("vault://".length) : fileName;
@@ -121920,33 +122231,25 @@ ${specificRules}`;
               const prevUrl = blobUrlMemoryCache.get(cleanName);
               if (prevUrl && prevUrl !== objUrl) {
                 blobUrlMemoryCache.delete(cleanName);
+                if (!isBlobUrlMountedInDom(prevUrl)) {
+                  try {
+                    URL.revokeObjectURL(prevUrl);
+                    liveSessionBlobUrls.delete(prevUrl);
+                    blobUrlToVaultRefMap.delete(prevUrl);
+                  } catch (_) {}
+                }
               }
             }
             blobUrlMemoryCache.set(cleanName, objUrl);
             blobUrlToVaultRefMap.set(objUrl, "vault://" + cleanName);
             liveSessionBlobUrls.add(objUrl);
             if (blobUrlMemoryCache.size > MAX_BLOB_CACHE_ITEMS) {
-              const oldestKey = blobUrlMemoryCache.keys().next().value;
-              if (oldestKey && oldestKey !== cleanName) {
-                const oldUrl = blobUrlMemoryCache.get(oldestKey);
-                blobUrlMemoryCache.delete(oldestKey);
-                if (oldUrl) {
-                  let inUse = false;
-                  try {
-                    const activeEls = document.querySelectorAll('img[src^="blob:"], img[data-vault-hydrated-src], [style*="blob:"]');
-                    for (let i = 0; i < activeEls.length; i++) {
-                      const el = activeEls[i];
-                      if (
-                        el.getAttribute("src") === oldUrl ||
-                        el.getAttribute("data-vault-hydrated-src") === oldUrl ||
-                        (el.getAttribute("style") || "").includes(oldUrl)
-                      ) {
-                        inUse = true;
-                        break;
-                      }
-                    }
-                  } catch (_) {}
-                  if (!inUse) {
+              for (const [oldestKey, oldUrl] of Array.from(blobUrlMemoryCache.entries())) {
+                if (blobUrlMemoryCache.size <= MAX_BLOB_CACHE_ITEMS) break;
+                if (oldestKey === cleanName) continue;
+                if (!oldUrl || !isBlobUrlMountedInDom(oldUrl)) {
+                  blobUrlMemoryCache.delete(oldestKey);
+                  if (oldUrl) {
                     try {
                       URL.revokeObjectURL(oldUrl);
                       liveSessionBlobUrls.delete(oldUrl);
@@ -123956,7 +124259,7 @@ ${specificRules}`;
                 }
               }
 
-              // 同步分离 localStorage 中的大体积壁纸、背景与音频缓存
+              // 同步分离 localStorage 中的大体积壁纸、背景、音频与JSON内嵌图片（如生图收藏夹 mod_nai_bookmarks_v1）
               try {
                 for (let i = 0; i < localStorage.length; i++) {
                   const k = localStorage.key(i);
@@ -123968,10 +124271,25 @@ ${specificRules}`;
                     if (nextRef && nextRef !== rawVal) {
                       localStorage.setItem(k, nextRef);
                     }
+                  } else if (
+                    (rawVal.startsWith("[") || rawVal.startsWith("{")) &&
+                    (rawVal.includes("data:image/") || rawVal.includes("data:audio/"))
+                  ) {
+                    try {
+                      const parsedObj = JSON.parse(rawVal);
+                      if (parsedObj && typeof parsedObj === "object") {
+                        const objChanged = await offloadObjectImagesDeep(parsedObj, cfg, counter, sharedMediaDir, true);
+                        if (objChanged) {
+                          localStorage.setItem(k, JSON.stringify(parsedObj));
+                        }
+                      }
+                    } catch (_) {}
                   }
                 }
               } catch (_) {}
 
+              await purgeBrowserOpfsMediaCacheIfExternalActive();
+              releaseUnusedBrowserBlobCache();
               const mbSaved = (counter.savedBytes / (1024 * 1024)).toFixed(1);
               setVaultInfoText("已全量分离 " + counter.count + " 项图片与音频资源，释放约 " + mbSaved + " MB 浏览器内存");
               hydrateDomVaultImages();
@@ -124975,6 +125293,42 @@ ${specificRules}`;
               for (const table of db.tables) {
                 try {
                   const rows = await table.toArray();
+                  if (table.name === "chats" && Array.isArray(rows)) {
+                    for (const c of rows) {
+                      if (!c || typeof c !== "object") continue;
+                      // 若群聊处于主线模式，自动对齐 mainLineHistory 与 history，消除因重绘或重roll残留在 mainLineHistory 中的旧图幽灵引用
+                      if (
+                        c.isGroup &&
+                        c.activeLineMode !== "solo" &&
+                        Array.isArray(c.history) &&
+                        Array.isArray(c.mainLineHistory)
+                      ) {
+                        const histByTs = new Map();
+                        for (const hm of c.history) {
+                          if (hm && hm.timestamp != null) histByTs.set(String(hm.timestamp), hm);
+                        }
+                        let mlChanged = false;
+                        const cleanedMain = [];
+                        for (const mm of c.mainLineHistory) {
+                          if (!mm || mm.timestamp == null) continue;
+                          const latest = histByTs.get(String(mm.timestamp));
+                          if (!latest) {
+                            mlChanged = true;
+                            continue;
+                          }
+                          if (mm.imageUrl !== latest.imageUrl) {
+                            mm.imageUrl = latest.imageUrl;
+                            mlChanged = true;
+                          }
+                          cleanedMain.push(mm);
+                        }
+                        if (mlChanged || cleanedMain.length !== c.mainLineHistory.length) {
+                          c.mainLineHistory = [...c.history];
+                          try { await table.put(c); } catch (_) {}
+                        }
+                      }
+                    }
+                  }
                   walkAny(rows);
                 } catch (_) {}
               }
@@ -124999,6 +125353,16 @@ ${specificRules}`;
           async function deleteVaultMediaFilesBatch(fileNames) {
             if (!Array.isArray(fileNames) || fileNames.length === 0) return 0;
             const allTargets = new Set();
+            const revokeCachedFileKey = (key) => {
+              if (!blobUrlMemoryCache.has(key)) return;
+              const bUrl = blobUrlMemoryCache.get(key);
+              blobUrlMemoryCache.delete(key);
+              if (bUrl) {
+                try { URL.revokeObjectURL(bUrl); } catch (_) {}
+                liveSessionBlobUrls.delete(bUrl);
+                blobUrlToVaultRefMap.delete(bUrl);
+              }
+            };
             for (const raw of fileNames) {
               const fn = String(raw || "")
                 .replace(/^vault:\/\//, "")
@@ -125012,12 +125376,8 @@ ${specificRules}`;
               allTargets.add(stealth);
               writtenVaultFiles.delete(fn);
               writtenVaultFiles.delete(stealth);
-              if (blobUrlMemoryCache.has(fn)) {
-                blobUrlMemoryCache.delete(fn);
-              }
-              if (blobUrlMemoryCache.has(stealth)) {
-                blobUrlMemoryCache.delete(stealth);
-              }
+              revokeCachedFileKey(fn);
+              revokeCachedFileKey(stealth);
             }
             const targetList = Array.from(allTargets);
             if (targetList.length === 0) return 0;
@@ -125219,9 +125579,16 @@ ${specificRules}`;
               const orphanDbCount = orphanChapterIds.length + orphanNavIds.length;
 
               if (orphanFiles.length === 0 && orphanDbCount === 0) {
-                setVaultInfoText("清理扫描完成 · 当前没有发现未被引用的残留废图或无主残留数据");
+                await purgeBrowserOpfsMediaCacheIfExternalActive();
+                const releasedRamBlobs = releaseUnusedBrowserBlobCache();
+                setVaultInfoText(
+                  "清理扫描完成 · 已释放浏览器缓存句柄 " + releasedRamBlobs + " 项，本地无残留废图"
+                );
                 if (typeof window.showCustomAlert === "function") {
-                  window.showCustomAlert("提示", "扫描完成，当前所有本地图片均在正常使用中，没有发现任何残留废图或无主垃圾数据");
+                  window.showCustomAlert(
+                    "提示",
+                    "扫描完成，当前所有本地图片均在正常使用中，没有发现残留废图，并已为您顺手清理释放了浏览器运行内存中的临时图片缓存"
+                  );
                 }
                 return;
               }
@@ -125253,8 +125620,10 @@ ${specificRules}`;
                   try { await db.moduleLocationNav.delete(nid); } catch (_) {}
                 }
               }
+              await purgeBrowserOpfsMediaCacheIfExternalActive();
+              releaseUnusedBrowserBlobCache();
 
-              setVaultInfoText(`已完成清理 · 共清除 ${orphanFiles.length} 张残留废图，释放约 ${mbStr} MB 空间`);
+              setVaultInfoText(`已完成清理 · 共清除 ${orphanFiles.length} 张残留废图，释放约 ${mbStr} MB 空间与浏览器运行缓存`);
               if (typeof calculateAndRenderStorageBreakdown === "function") {
                 try { await calculateAndRenderStorageBreakdown(); } catch (_) {}
               }
@@ -125263,7 +125632,7 @@ ${specificRules}`;
                   "清理完成",
                   `已安全清除 ${orphanFiles.length} 张未被引用的残留废图` +
                     (orphanDbCount > 0 ? `与 ${orphanDbCount} 条无主残留记录` : "") +
-                    `，释放约 ${mbStr} MB 存储空间`
+                    `，释放约 ${mbStr} MB 存储空间，并已同步清空浏览器运行内存中的废旧图片缓存`
                 );
               }
             } catch (err) {
@@ -125789,6 +126158,14 @@ ${specificRules}`;
                   try {
                     if (changes && typeof changes === "object") {
                       restoreVaultRefsInObjectDeep(changes);
+                      const cfg = loadVaultConfig();
+                      if (cfg.auto) {
+                        const counter = { count: 0, savedBytes: 0 };
+                        await offloadObjectImagesDeep(changes, cfg, counter);
+                        if (counter.count > 0) {
+                          setTimeout(hydrateDomVaultImages, 50);
+                        }
+                      }
                     }
                   } catch (_) {}
                   const res = await origUpdate(key, changes, ...rest);
@@ -125814,6 +126191,15 @@ ${specificRules}`;
             if (_autoTermuxBackupTimer) clearTimeout(_autoTermuxBackupTimer);
             _autoTermuxBackupTimer = setTimeout(async () => {
               _autoTermuxBackupTimer = null;
+              // 若当前正处于 AI 回复生成或生图队列执行中，延后全量快照打包，防止大对象序列化阻塞浏览器主线程导致卡顿
+              const isBusyGen = Boolean(
+                (window.activeGeneratingChats && Object.keys(window.activeGeneratingChats).length > 0) ||
+                (window.activeGeneratingKeeperDraw && Object.keys(window.activeGeneratingKeeperDraw).length > 0)
+              );
+              if (isBusyGen) {
+                scheduleAutoTermuxBackupSave();
+                return;
+              }
               try {
                 if (typeof db === "undefined" || !db.chats) return;
                 const allChats = await db.chats.toArray();
@@ -125836,7 +126222,7 @@ ${specificRules}`;
                   body: JSON.stringify(snapshot),
                 });
               } catch (_) {}
-            }, 2500);
+            }, 30000);
           }
 
           window.getGlmTranslateConfig = function () {
