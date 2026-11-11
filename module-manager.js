@@ -2096,6 +2096,35 @@
       throw new Error(lastErrMsg || '写入GitHub仓库失败');
     },
 
+    async deleteWorkshopGithubFile(relPath, commitMsg) {
+      const { githubRepo, githubToken } = this.getWorkshopConfig();
+      if (!githubRepo || !githubRepo.includes('/') || !githubToken) {
+        throw new Error('请先在配置中填写有效的GitHub仓库链接与令牌');
+      }
+      const cleanRel = String(relPath || '').replace(/^\/+/, '');
+      const existingSha = await this.getRemoteWorkshopFileSha(cleanRel);
+      if (!existingSha) return true;
+      const apiUrl = `https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}`;
+      const headers = {
+        Accept: 'application/vnd.github.v3+json',
+        Authorization: `Bearer ${githubToken}`,
+        'Content-Type': 'application/json'
+      };
+      const rawFetch = window._rawNativeFetch || window.fetch;
+      const delRes = await rawFetch(apiUrl, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({
+          message: commitMsg || `Delete workshop ${cleanRel}`,
+          sha: existingSha
+        })
+      });
+      if (delRes.ok || delRes.status === 404) return true;
+      let errJson = null;
+      try { errJson = await delRes.json(); } catch (_) {}
+      throw new Error((errJson && errJson.message) ? errJson.message : `HTTP ${delRes.status}`);
+    },
+
     computeFastWorkshopHash(str) {
       const s = String(str || '');
       let h1 = 0xdeadbeef ^ s.length;

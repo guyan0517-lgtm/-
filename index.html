@@ -52,7 +52,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=20.9" defer></script>
+    <script src="game-hall.js?v=21.0" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2569,7 +2569,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3849,6 +3849,9 @@
                       <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-detail-upload-btn">
                         <span>上传</span>
                       </button>
+                      <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-detail-delete-btn">
+                        <span>删除</span>
+                      </button>
                       <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-detail-edit-btn">
                         <span>编辑</span>
                       </button>
@@ -4012,9 +4015,6 @@
                     </div>
 
                     <div class="mod-nai-edit-bottom-bar">
-                      <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-edit-delete-btn">
-                        <span>删除</span>
-                      </button>
                       <button type="button" class="mod-nai-trace-pill compact primary" id="mod-nai-col-edit-save-btn" style="flex: 1;">
                         <span>保存</span>
                       </button>
@@ -44633,6 +44633,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const negEl = document.getElementById("mod-nai-col-detail-neg-text");
 
             const uploadBtn = document.getElementById("mod-nai-col-detail-upload-btn");
+            const deleteBtn = document.getElementById("mod-nai-col-detail-delete-btn");
             const editBtn = document.getElementById("mod-nai-col-detail-edit-btn");
             const importBtn = document.getElementById("mod-nai-col-detail-import-btn");
 
@@ -44682,6 +44683,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (uploadBtn) uploadBtn.style.display = isShared ? "none" : "inline-flex";
+            if (deleteBtn) deleteBtn.style.display = "inline-flex";
             if (editBtn) editBtn.style.display = isShared ? "none" : "inline-flex";
             if (importBtn) importBtn.style.display = isShared ? "inline-flex" : "none";
           }
@@ -44963,6 +44965,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               colSharedList = currentIndex;
               colSharedLoadedOnce = true;
+              colCurrentItem._uploadedToShared = true;
+              const localListAfterUp = loadLocalBookmarks();
+              const localPosAfterUp = localListAfterUp.findIndex((x) => x && x.id === itemId);
+              if (localPosAfterUp >= 0) {
+                localListAfterUp[localPosAfterUp]._uploadedToShared = true;
+                saveLocalBookmarks(localListAfterUp);
+              }
 
               if (spanEl) spanEl.textContent = "已传";
               if (typeof window.showDownloadToast === "function") {
@@ -44977,6 +44986,83 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 await window.showCustomAlert("上传未成功", err && err.message ? err.message : "请检查GitHub令牌配置");
               }
             } finally {
+              if (btnEl) btnEl.disabled = false;
+            }
+          }
+
+          async function deleteSharedBookmarkFromGitHub(itemId, btnEl) {
+            if (!itemId) return false;
+            if (typeof ModuleManager === "undefined" || typeof ModuleManager.putWorkshopGithubFile !== "function") {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "共享组件尚未就绪");
+              }
+              return false;
+            }
+
+            const cfg = ModuleManager.getWorkshopConfig();
+            if (!cfg.githubToken && window.state && window.state.apiConfig && window.state.apiConfig.githubToken) {
+              localStorage.setItem("ephone_workshop_gh_token", window.state.apiConfig.githubToken.trim());
+            }
+
+            const spanEl = btnEl ? btnEl.querySelector("span") : null;
+            const prevTxt = spanEl ? spanEl.textContent : "删除";
+            if (btnEl) btnEl.disabled = true;
+            if (spanEl) spanEl.textContent = "删除中";
+
+            try {
+              let currentIndex = [];
+              try {
+                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson("nai-bookmarks/index.json");
+                if (remoteIdx && Array.isArray(remoteIdx.items)) {
+                  currentIndex = remoteIdx.items;
+                } else if (Array.isArray(remoteIdx)) {
+                  currentIndex = remoteIdx;
+                }
+              } catch (_) {
+                currentIndex = Array.isArray(colSharedList) ? colSharedList.slice() : [];
+              }
+
+              const filteredIndex = currentIndex.filter((x) => x && x.id !== itemId);
+
+              await ModuleManager.putWorkshopGithubFile(
+                "nai-bookmarks/index.json",
+                JSON.stringify({ version: 1, type: "nai_bookmarks_isolated_store", updatedAt: Date.now(), items: filteredIndex }),
+                `Delete NAI bookmark ${itemId} from index`
+              );
+
+              if (typeof ModuleManager.deleteWorkshopGithubFile === "function") {
+                try {
+                  await ModuleManager.deleteWorkshopGithubFile(
+                    `nai-bookmarks/items/${itemId}.json`,
+                    `Delete NAI bookmark file ${itemId}`
+                  );
+                } catch (_) {}
+              }
+
+              colSharedList = filteredIndex;
+              colSharedLoadedOnce = true;
+
+              const localList = loadLocalBookmarks();
+              const localPos = localList.findIndex((x) => x && x.id === itemId);
+              if (localPos >= 0) {
+                localList[localPos]._uploadedToShared = false;
+                saveLocalBookmarks(localList);
+              }
+              if (colCurrentItem && colCurrentItem.id === itemId) {
+                colCurrentItem._uploadedToShared = false;
+              }
+
+              if (typeof window.showDownloadToast === "function") {
+                window.showDownloadToast("已从共享集删除", "success");
+              }
+              return true;
+            } catch (err) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("删除未成功", err && err.message ? err.message : "请检查GitHub令牌配置");
+              }
+              return false;
+            } finally {
+              if (spanEl) spanEl.textContent = prevTxt;
               if (btnEl) btnEl.disabled = false;
             }
           }
@@ -45009,7 +45095,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 setColStatus("");
                 switchCollectionSubView("grid");
                 renderCollectionGrid();
-                applyModeView("collection");
+                applyModeView("generate" === "collection" ? "generate" : "collection");
                 const st = loadPanelState();
                 st.mode = "collection";
                 savePanelState(st);
@@ -45076,6 +45162,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // 视图二：高定典藏展示卡片事件（只读展示，支持展开词条抽屉、切换V4.5/V5与微图标复制）
             const detailBackBtn = document.getElementById("mod-nai-col-detail-back-btn");
             const detailUploadBtn = document.getElementById("mod-nai-col-detail-upload-btn");
+            const detailDeleteBtn = document.getElementById("mod-nai-col-detail-delete-btn");
             const detailEditBtn = document.getElementById("mod-nai-col-detail-edit-btn");
             const detailImportBtn = document.getElementById("mod-nai-col-detail-import-btn");
             const detailApplyBtn = document.getElementById("mod-nai-col-detail-apply-btn");
@@ -45163,6 +45250,62 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (detailUploadBtn) {
               detailUploadBtn.addEventListener("click", () => {
                 uploadCurrentBookmarkToShared(detailUploadBtn);
+              });
+            }
+            if (detailDeleteBtn) {
+              detailDeleteBtn.addEventListener("click", async () => {
+                if (!colCurrentItem) return;
+                const itemId = colCurrentItem.id;
+                if (colScope === "shared") {
+                  if (typeof window.showCustomConfirm === "function") {
+                    const ok = await window.showCustomConfirm("删除共享画师串", "确定从共享集删除这条已上传的画师串吗？");
+                    if (!ok) return;
+                  }
+                  const deleted = await deleteSharedBookmarkFromGitHub(itemId, detailDeleteBtn);
+                  if (deleted) {
+                    colCurrentItem = null;
+                    switchCollectionSubView("grid");
+                    renderCollectionGrid();
+                  }
+                  return;
+                }
+
+                const existsInShared = Boolean(
+                  colCurrentItem._uploadedToShared ||
+                  (Array.isArray(colSharedList) && colSharedList.some((x) => x && x.id === itemId))
+                );
+
+                if (existsInShared && typeof window.showChoiceModal === "function") {
+                  const choice = await window.showChoiceModal("删除书签", [
+                    { text: "删除已上传的共享画师串", value: "shared_only" },
+                    { text: "仅删除本地收藏", value: "local_only" },
+                    { text: "同时删除本地与共享", value: "both" }
+                  ]);
+                  if (!choice) return;
+                  if (choice === "shared_only") {
+                    await deleteSharedBookmarkFromGitHub(itemId, detailDeleteBtn);
+                    return;
+                  }
+                  if (choice === "both") {
+                    await deleteSharedBookmarkFromGitHub(itemId, detailDeleteBtn);
+                  }
+                  const list = loadLocalBookmarks().filter((x) => x && x.id !== itemId);
+                  saveLocalBookmarks(list);
+                  colCurrentItem = null;
+                  switchCollectionSubView("grid");
+                  renderCollectionGrid();
+                  return;
+                }
+
+                if (typeof window.showCustomConfirm === "function") {
+                  const ok = await window.showCustomConfirm("删除书签", "确定删除这条收藏吗？");
+                  if (!ok) return;
+                }
+                const list = loadLocalBookmarks().filter((x) => x && x.id !== itemId);
+                saveLocalBookmarks(list);
+                colCurrentItem = null;
+                switchCollectionSubView("grid");
+                renderCollectionGrid();
               });
             }
             if (detailImportBtn) {
