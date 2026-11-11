@@ -52,7 +52,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=20.8" defer></script>
+    <script src="game-hall.js?v=20.9" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2569,7 +2569,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v20.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3869,7 +3869,7 @@
                     </div>
 
                     <div class="mod-nai-specimen-stage-wrap">
-                      <div class="mod-nai-trace-dashed-frame specimen-hero">
+                      <div class="mod-nai-trace-dashed-frame specimen-hero" id="mod-nai-col-detail-hero-frame">
                         <i class="mod-nai-anchor-dot tl"></i>
                         <i class="mod-nai-anchor-dot tr"></i>
                         <i class="mod-nai-anchor-dot bl"></i>
@@ -3882,42 +3882,72 @@
                     <div class="mod-nai-specimen-title-block">
                       <div class="mod-nai-specimen-title-row">
                         <h4 class="mod-nai-specimen-title" id="mod-nai-col-detail-name">未命名书签</h4>
-                        <span class="mod-nai-specimen-arrow">↗</span>
+                        <div class="mod-nai-specimen-model-switch" id="mod-nai-col-detail-model-switch">
+                          <button type="button" class="mod-nai-model-tag-btn is-active" data-model-tag="V4.5">V4.5</button>
+                          <button type="button" class="mod-nai-model-tag-btn" data-model-tag="V5">V5</button>
+                        </div>
                       </div>
-                      <p class="mod-nai-specimen-sub">Not a body, a response · 記憶の残響</p>
+                      <p class="mod-nai-specimen-sub" id="mod-nai-col-detail-remark" style="display: none;"></p>
                     </div>
 
-                    <!-- 01 · 画师展示区 -->
-                    <div class="mod-nai-specimen-section">
-                      <div class="mod-nai-specimen-sec-head">
-                        <span class="mod-nai-specimen-sec-title">[ I · ARTIST / 画师 ]</span>
-                        <button type="button" class="mod-nai-trace-pill mini" id="mod-nai-col-detail-copy-artist-btn">
-                          <span>复制</span>
-                        </button>
-                      </div>
-                      <div class="mod-nai-specimen-text" id="mod-nai-col-detail-artist-text"></div>
-                    </div>
+                    <!-- 可展开的高定词条典藏模块 -->
+                    <div class="mod-nai-specimen-drawer" id="mod-nai-col-detail-drawer">
+                      <button type="button" class="mod-nai-specimen-drawer-toggle" id="mod-nai-col-detail-drawer-toggle">
+                        <span class="mod-nai-drawer-left">
+                          <i class="mod-nai-drawer-dot"></i>
+                          <span class="mod-nai-drawer-kicker">PROMPT ARCHIVE · 词条典藏</span>
+                        </span>
+                        <span class="mod-nai-drawer-right">
+                          <span class="mod-nai-drawer-state-label" id="mod-nai-col-drawer-state-text">展开</span>
+                          <svg class="mod-nai-drawer-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        </span>
+                      </button>
 
-                    <!-- 02 · 正面展示区 -->
-                    <div class="mod-nai-specimen-section">
-                      <div class="mod-nai-specimen-sec-head">
-                        <span class="mod-nai-specimen-sec-title">[ II · POSITIVE / 正面 ]</span>
-                        <button type="button" class="mod-nai-trace-pill mini" id="mod-nai-col-detail-copy-pos-btn">
-                          <span>复制</span>
-                        </button>
-                      </div>
-                      <div class="mod-nai-specimen-text" id="mod-nai-col-detail-pos-text"></div>
-                    </div>
+                      <div class="mod-nai-specimen-drawer-body" id="mod-nai-col-detail-drawer-body" style="display: none;">
+                        <!-- 01 · 画师展示区 -->
+                        <div class="mod-nai-specimen-section">
+                          <div class="mod-nai-specimen-sec-head">
+                            <span class="mod-nai-specimen-sec-title">[ I · ARTIST / 画师 ]</span>
+                            <button type="button" class="mod-nai-specimen-icon-copy" id="mod-nai-col-detail-copy-artist-btn" title="复制画师串" aria-label="复制画师串">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <div class="mod-nai-specimen-text" id="mod-nai-col-detail-artist-text"></div>
+                        </div>
 
-                    <!-- 03 · 负面展示区 -->
-                    <div class="mod-nai-specimen-section">
-                      <div class="mod-nai-specimen-sec-head">
-                        <span class="mod-nai-specimen-sec-title">[ III · NEGATIVE / 负面 ]</span>
-                        <button type="button" class="mod-nai-trace-pill mini" id="mod-nai-col-detail-copy-neg-btn">
-                          <span>复制</span>
-                        </button>
+                        <!-- 02 · 正面展示区 -->
+                        <div class="mod-nai-specimen-section">
+                          <div class="mod-nai-specimen-sec-head">
+                            <span class="mod-nai-specimen-sec-title">[ II · POSITIVE / 正面 ]</span>
+                            <button type="button" class="mod-nai-specimen-icon-copy" id="mod-nai-col-detail-copy-pos-btn" title="复制正面提示词" aria-label="复制正面提示词">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <div class="mod-nai-specimen-text" id="mod-nai-col-detail-pos-text"></div>
+                        </div>
+
+                        <!-- 03 · 负面展示区 -->
+                        <div class="mod-nai-specimen-section">
+                          <div class="mod-nai-specimen-sec-head">
+                            <span class="mod-nai-specimen-sec-title">[ III · NEGATIVE / 负面 ]</span>
+                            <button type="button" class="mod-nai-specimen-icon-copy" id="mod-nai-col-detail-copy-neg-btn" title="复制负面提示词" aria-label="复制负面提示词">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <div class="mod-nai-specimen-text" id="mod-nai-col-detail-neg-text"></div>
+                        </div>
                       </div>
-                      <div class="mod-nai-specimen-text" id="mod-nai-col-detail-neg-text"></div>
                     </div>
                   </div>
                 </div>
@@ -3941,10 +3971,23 @@
                     <div class="mod-nai-edit-top-row">
                       <div class="mod-nai-edit-cover-box" id="mod-nai-col-edit-img-stage" title="点击上传封面"></div>
                       <div class="mod-nai-edit-title-col">
-                        <label class="mod-nai-edit-field-label">名字</label>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                          <label class="mod-nai-edit-field-label">名字</label>
+                          <div class="mod-nai-specimen-model-switch" id="mod-nai-col-edit-model-switch">
+                            <button type="button" class="mod-nai-model-tag-btn is-active" data-model-tag="V4.5">V4.5</button>
+                            <button type="button" class="mod-nai-model-tag-btn" data-model-tag="V5">V5</button>
+                          </div>
+                        </div>
                         <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入收藏卡片名称" />
-                        <span class="mod-nai-edit-hint">点击左侧方框可上传或更换封面图</span>
+                        <span class="mod-nai-edit-hint">点击左侧方框上传封面，展开后自动按原图比例展示</span>
                       </div>
+                    </div>
+
+                    <div class="mod-nai-edit-group">
+                      <div class="mod-nai-edit-group-head">
+                        <label class="mod-nai-edit-field-label">备注</label>
+                      </div>
+                      <input type="text" id="mod-nai-col-edit-remark-input" class="moe-input mod-nai-edit-input" placeholder="选填，填写后在画廊与卡片显示，留空自动隐藏" />
                     </div>
 
                     <div class="mod-nai-edit-group">
@@ -6213,18 +6256,18 @@
       <div class="form-container" style="gap: 20px">
         <p
           style="
-            font-size: 13px;
-            color: #ff6b6b;
-            background-color: rgba(255, 107, 107, 0.1);
-            padding: 10px;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            background-color: var(--secondary-bg);
+            padding: 10px 12px;
             border-radius: 8px;
-            border: 1px solid rgba(255, 107, 107, 0.2);
+            border: 1px solid var(--border-color);
             text-align: center;
             width: 100%;
             box-sizing: border-box;
           "
         >
-          字体太大了导入本地字体会闪退！最好用url。
+          支持网络链接与本地字体导入，本地字体直接从本地存储调取，不占用网页内存。
         </p>
         <!-- 字体预设卡槽的容器 -->
         <div id="font-preset-container">
@@ -6252,7 +6295,7 @@
     <input
       type="file"
       id="font-preset-local-upload"
-      accept=".ttf,.otf,.woff,.woff2"
+      accept=".ttf,.otf,.woff,.woff2,.ttc,font/*,application/font-sfnt,application/x-font-ttf,application/x-font-opentype,application/octet-stream,*/*"
       style="display: none"
     />
 
@@ -32455,28 +32498,49 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
          */
         async function renderFontPresets() {
           const container = document.getElementById("font-preset-container");
+          if (!container) return;
           container.innerHTML = ""; // 清空旧内容
 
-          // 1. 从数据库读取所有已保存的预设，并确保它是一个数组
+          // 1. 从数据库读取所有已保存的预设，并自动将旧版残留的 Base64 大字体转移至本地存储
           const presets = (await db.fontPresets.toArray()) || [];
+          let migratedLegacyFont = false;
+          for (let idx = 0; idx < presets.length; idx++) {
+            const p = presets[idx];
+            if (p && typeof p.url === "string" && p.url.startsWith("data:") && typeof window.storeLocalFontFileInVault === "function") {
+              try {
+                const oldUrl = p.url;
+                const vaultRef = await window.storeLocalFontFileInVault(oldUrl, (p.name || "font") + ".ttf");
+                if (vaultRef && vaultRef.startsWith("vault://")) {
+                  p.url = vaultRef;
+                  await db.fontPresets.put(p);
+                  migratedLegacyFont = true;
+                  if (state && state.globalSettings && state.globalSettings.fontUrl === oldUrl) {
+                    state.globalSettings.fontUrl = vaultRef;
+                    await db.globalSettings.put(state.globalSettings);
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+          if (migratedLegacyFont) {
+            console.log("已自动将旧版浏览器内嵌大字体转移至本地存储，释放网页内存。");
+          }
 
-          // 我们不再依赖 presets 的长度来循环，而是无条件地循环10次，创建10个卡槽。
           for (let i = 0; i < 10; i++) {
             const slot = document.createElement("div");
             slot.className = "font-preset-slot";
 
-            // 3. 在循环内部，再判断当前索引 i 是否在已保存的 presets 数组中有对应的数据。
             const preset = presets[i];
 
             if (preset) {
-              const isDataUrl = preset.url && preset.url.startsWith("data:");
-              const displayUrl = isDataUrl ? "本地 Base64 数据" : (preset.url || "");
+              const isLocalVault = preset.url && (preset.url.startsWith("vault://") || preset.url.startsWith("data:"));
+              const displayUrl = isLocalVault ? "本地存储调取" : (preset.url || "");
               slot.innerHTML = `
                 <div class="font-preview-text" data-preset-id="${preset.id}">Abc 你好</div>
                 <div class="font-preset-info" style="font-weight: 600; margin-bottom: 4px;">名称: ${preset.name}</div>
                 <div class="font-url-edit-row" style="display: flex; gap: 4px; margin-bottom: 6px; align-items: center;">
-                  <input type="text" class="moe-input font-url-input" data-preset-id="${preset.id}" value="${displayUrl.replace(/"/g, '&quot;')}" ${isDataUrl ? "disabled" : ""} placeholder="字体 URL" style="flex: 1; font-size: 11px; padding: 2px 6px; height: 22px; box-sizing: border-box;">
-                  <button type="button" class="preset-btn update-font-url-btn" data-preset-id="${preset.id}" ${isDataUrl ? "disabled" : ""}>保存</button>
+                  <input type="text" class="moe-input font-url-input" data-preset-id="${preset.id}" value="${displayUrl.replace(/"/g, '&quot;')}" ${isLocalVault ? "disabled" : ""} placeholder="字体 URL" style="flex: 1; font-size: 11px; padding: 2px 6px; height: 22px; box-sizing: border-box;">
+                  <button type="button" class="preset-btn update-font-url-btn" data-preset-id="${preset.id}" ${isLocalVault ? "disabled" : ""}>保存</button>
                 </div>
                 <div class="font-preset-actions">
                   <button class="preset-btn apply-btn" data-preset-id="${preset.id}">应用</button>
@@ -32484,7 +32548,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 </div>
               `;
             } else {
-              // 如果这个卡槽在数据库中没有对应的数据，就渲染成“空卡槽”的样式
               slot.classList.add("empty");
               slot.innerHTML = `
 			                <div class="font-preset-info">卡槽 ${i + 1} 为空</div>
@@ -32494,11 +32557,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 			                </div>
 			            `;
             }
-            // 4. 将创建好的卡槽（无论空的还是满的）添加到容器中
             container.appendChild(slot);
           }
 
-          // 5. 预览字体和绑定事件的逻辑保持不变
           presets.forEach((preset) => {
             if (preset) {
               loadFontForPreview(preset);
@@ -32509,21 +32570,52 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         /**
-         * 为单个预设加载字体以供预览
+         * 为单个预设加载字体以供预览（本地存储字体按需解析为短链接，绝不往 style 标签塞 Base64）
          * @param {object} preset - 字体预设对象 {id, name, url}
          */
-        function loadFontForPreview(preset) {
+        async function loadFontForPreview(preset) {
+          if (!preset || !preset.url) return;
           const styleId = `font-style-${preset.id}`;
-          if (document.getElementById(styleId)) return;
+          let resolvedUrl = preset.url;
 
-          const style = document.createElement("style");
-          style.id = styleId;
+          if (resolvedUrl.startsWith("data:")) {
+            if (typeof window.storeLocalFontFileInVault === "function") {
+              try {
+                const vaultRef = await window.storeLocalFontFileInVault(resolvedUrl, (preset.name || "font") + ".ttf");
+                if (vaultRef && vaultRef.startsWith("vault://")) {
+                  preset.url = vaultRef;
+                  resolvedUrl = vaultRef;
+                  if (db && db.fontPresets) await db.fontPresets.put(preset);
+                }
+              } catch (_) {}
+            }
+            if (resolvedUrl.startsWith("data:")) {
+              return;
+            }
+          }
 
-          // 直接创建一条高优先级的CSS规则来应用字体
+          if (resolvedUrl.startsWith("vault://")) {
+            if (typeof window.resolveVaultRefToUrl === "function") {
+              try {
+                resolvedUrl = await window.resolveVaultRefToUrl(resolvedUrl);
+              } catch (_) {}
+            }
+            if (!resolvedUrl || resolvedUrl.startsWith("vault://")) {
+              return;
+            }
+          }
+
+          let style = document.getElementById(styleId);
+          if (!style) {
+            style = document.createElement("style");
+            style.id = styleId;
+            document.head.appendChild(style);
+          }
+
           style.innerHTML = `
 			        @font-face {
 			            font-family: 'preset-${preset.id}';
-			            src: url('${preset.url}');
+			            src: url('${resolvedUrl}');
 			            font-display: swap;
 			        }
 
@@ -32531,8 +32623,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 			            font-family: 'preset-${preset.id}', sans-serif !important;
 			        }
 			    `;
-
-          document.head.appendChild(style);
         }
 
         /**
@@ -32581,7 +32671,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         /**
          * 处理通过URL上传字体
-         * @param {number} slotIndex - 卡槽的索引 (0-4)
+         * @param {number} slotIndex - 卡槽的索引 (0-9)
          */
         async function handleUploadFontUrl(slotIndex) {
           const url = await showCustomPrompt(
@@ -32604,42 +32694,74 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         /**
-         * 处理通过本地文件上传字体
-         * @param {number} slotIndex - 卡槽的索引 (0-4)
+         * 处理通过本地文件导入字体（直接写入本地存储并以轻量 vault:// 引用调取，绝不转 Base64 塞入浏览器内存）
+         * @param {number} slotIndex - 卡槽的索引 (0-9)
          */
         function handleUploadFontLocal(slotIndex) {
           const input = document.getElementById("font-preset-local-upload");
+          if (!input) return;
+          input.value = "";
           input.onchange = async (e) => {
-            const file = e.target.files[0];
+            const file = e.target.files && e.target.files[0];
             if (!file) return;
+
+            const fileName = file.name || "custom_font.ttf";
+            const defaultFontTitle = fileName.replace(/\.[^/.]+$/, "") || "本地字体";
+
+            // 立即在文件选择回调同一事件帧读取二进制流，防止移动端在弹窗等待期间释放临时文件句柄导致无法读取
+            let rawBuffer = null;
+            try {
+              rawBuffer = await file.arrayBuffer();
+            } catch (readErr) {
+              console.error("读取本地字体文件失败:", readErr);
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "无法读取所选字体文件，请重新选择");
+              } else {
+                alert("无法读取所选字体文件，请重新选择");
+              }
+              input.value = "";
+              return;
+            }
+            input.value = "";
 
             const name = await showCustomPrompt(
               "字体命名",
               "请为这个字体起个名字",
-              file.name.replace(/\.[^/.]+$/, ""),
+              defaultFontTitle,
             );
             if (!name || !name.trim()) {
               if (name !== null) alert("名字不能为空！");
               return;
             }
 
-            // 使用FileReader将字体文件转为Base64 Data URL
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-              await saveFontPreset(slotIndex, name.trim(), event.target.result);
-            };
-
-            reader.readAsDataURL(file);
+            try {
+              if (typeof window.storeLocalFontFileInVault !== "function") {
+                throw new Error("本地存储通道尚未就绪，请稍后重试");
+              }
+              const fontBlob = new Blob([rawBuffer]);
+              const vaultRef = await window.storeLocalFontFileInVault(fontBlob, fileName);
+              if (!vaultRef) {
+                throw new Error("写入本地存储未成功");
+              }
+              await saveFontPreset(slotIndex, name.trim(), vaultRef);
+            } catch (err) {
+              console.error("导入本地字体失败:", err);
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("导入失败", err && err.message ? err.message : "请重试");
+              } else {
+                alert("导入失败: " + (err && err.message ? err.message : "请重试"));
+              }
+            }
           };
-          input.click(); // 触发文件选择框
+          input.click();
         }
+
         async function saveFontPreset(slotIndex, name, url) {
           try {
             const presets = await db.fontPresets.toArray();
             const newPreset = { id: "font_" + Date.now(), name, url };
             presets.splice(slotIndex, 0, newPreset);
 
-            // 将 slice(0, 5) 修改为 slice(0, 10)
             const presetsToSave = presets.slice(0, 10);
 
             await db.transaction("rw", db.fontPresets, async () => {
@@ -32648,7 +32770,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             });
 
             await renderFontPresets();
-            alert(`字体 "${name}" 已成功保存到卡槽 ${slotIndex + 1}！`);
+            if (typeof window.showCustomAlert === "function") {
+              await window.showCustomAlert("保存成功", `字体 "${name}" 已保存到本地并关联至卡槽 ${slotIndex + 1}`);
+            } else {
+              alert(`字体 "${name}" 已成功保存到卡槽 ${slotIndex + 1}！`);
+            }
           } catch (error) {
             console.error("保存字体预设失败:", error);
             alert(
@@ -32659,7 +32785,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         }
 
         /**
-         * 删除一个字体预设
+         * 删除一个字体预设（若是本地存储字体则同步清理本地无主字体文件）
          * @param {string} presetId - 要删除的预设的ID
          */
         async function deleteFontPreset(presetId) {
@@ -32673,11 +32799,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             },
           );
           if (confirmed) {
+            const oldUrl = preset.url;
             await db.fontPresets.delete(presetId);
 
-            // 从DOM中移除对应的预览样式
             const styleTag = document.getElementById(`font-style-${presetId}`);
             if (styleTag) styleTag.remove();
+
+            if (oldUrl && oldUrl.startsWith("vault://") && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+              window.deleteVaultMediaRefIfUnreferenced(oldUrl).catch(() => {});
+            }
 
             await renderFontPresets();
           }
@@ -32690,12 +32820,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         async function applyFontPreset(presetId) {
           const preset = await db.fontPresets.get(presetId);
           if (preset) {
-            // 调用你已有的全局字体应用函数
-            applyCustomFont(preset.url, false);
-            // 保存到全局设置
+            await applyCustomFont(preset.url, false);
             state.globalSettings.fontUrl = preset.url;
             await db.globalSettings.put(state.globalSettings);
-            alert(`已将全局字体更换为 "${preset.name}"！`);
+            if (typeof window.showCustomAlert === "function") {
+              await window.showCustomAlert("应用成功", `已将全局字体更换为 "${preset.name}"`);
+            } else {
+              alert(`已将全局字体更换为 "${preset.name}"！`);
+            }
           }
         }
 
@@ -39954,27 +40086,75 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
         }
 
-        function applyCustomFont(fontUrl, isPreviewOnly = false) {
+        async function applyCustomFont(fontUrl, isPreviewOnly = false) {
+          const previewEl = document.getElementById("font-preview");
           if (!fontUrl) {
-            // 如果没有提供字体链接（比如恢复默认），就清空样式
             dynamicFontStyle.innerHTML = "";
-            document.getElementById("font-preview").style.fontFamily = "";
+            if (previewEl) previewEl.style.fontFamily = "";
             return;
           }
 
-          // 这是一个统一的内部名字
-          const fontName = "custom-user-font";
+          let effectiveUrl = fontUrl;
 
-          // 这是定义字体的样式规则
+          // 若检测到历史残留的 Base64 字体数据，自动剥离存入本地存储并清理数据库，杜绝大体积 Base64 注入 DOM 导致崩溃
+          if (typeof effectiveUrl === "string" && effectiveUrl.startsWith("data:")) {
+            if (typeof window.storeLocalFontFileInVault === "function") {
+              try {
+                const vaultRef = await window.storeLocalFontFileInVault(effectiveUrl, "custom_font.ttf");
+                if (vaultRef && vaultRef.startsWith("vault://")) {
+                  effectiveUrl = vaultRef;
+                  if (state && state.globalSettings && state.globalSettings.fontUrl === fontUrl) {
+                    state.globalSettings.fontUrl = vaultRef;
+                    if (db && db.globalSettings) {
+                      await db.globalSettings.put(state.globalSettings);
+                    }
+                  }
+                }
+              } catch (_) {}
+            } else {
+              setTimeout(() => {
+                applyCustomFont(fontUrl, isPreviewOnly);
+              }, 350);
+              return;
+            }
+            if (effectiveUrl.startsWith("data:")) {
+              return;
+            }
+          }
+
+          // 若是 vault:// 本地字体引用，从本地存储按需调取为短链接
+          if (typeof effectiveUrl === "string" && effectiveUrl.startsWith("vault://")) {
+            if (typeof window.resolveVaultRefToUrl === "function") {
+              try {
+                const resolved = await window.resolveVaultRefToUrl(effectiveUrl);
+                if (resolved && !resolved.startsWith("vault://")) {
+                  effectiveUrl = resolved;
+                } else {
+                  setTimeout(() => {
+                    applyCustomFont(fontUrl, isPreviewOnly);
+                  }, 600);
+                  return;
+                }
+              } catch (_) {
+                return;
+              }
+            } else {
+              setTimeout(() => {
+                applyCustomFont(fontUrl, isPreviewOnly);
+              }, 250);
+              return;
+            }
+          }
+
+          const fontName = "custom-user-font";
           const newStyle = `
 			        @font-face {
 			          font-family: '${fontName}';
-			          src: url('${fontUrl}');
+			          src: url('${effectiveUrl}');
 			          font-display: swap;
 			        }`;
 
           if (isPreviewOnly) {
-            // 如果只是预览，这个逻辑保持不变
             const previewStyle =
               document.getElementById("preview-font-style") ||
               document.createElement("style");
@@ -39982,17 +40162,33 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             previewStyle.innerHTML = newStyle;
             if (!document.getElementById("preview-font-style"))
               document.head.appendChild(previewStyle);
-            document.getElementById("font-preview").style.fontFamily =
-              `'${fontName}', 'bulangni', sans-serif`;
+            if (previewEl) {
+              previewEl.style.fontFamily = `'${fontName}', 'bulangni', sans-serif`;
+            }
           } else {
-            // 如果是全局应用，就同时定义字体并告诉整个 body 去使用它
             dynamicFontStyle.innerHTML = `
 			            ${newStyle}
 			            body {
 			              font-family: '${fontName}', 'bulangni', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 			            }`;
+            if (previewEl) {
+              previewEl.style.fontFamily = `'${fontName}', 'bulangni', sans-serif`;
+            }
           }
         }
+        window.refreshCustomFontsFromVault = function () {
+          try {
+            if (state && state.globalSettings && state.globalSettings.fontUrl) {
+              applyCustomFont(state.globalSettings.fontUrl, false);
+            }
+            if (typeof renderFontPresets === "function") {
+              const fontScreen = document.getElementById("font-settings-screen");
+              if (fontScreen && fontScreen.classList.contains("active")) {
+                renderFontPresets();
+              }
+            }
+          } catch (_) {}
+        };
 
         async function resetToDefaultFont() {
           // 1. 清除全局字体样式
@@ -44231,6 +44427,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (tabShared) tabShared.classList.toggle("is-active", isShared);
           }
 
+          let colEditModelDraft = "V4.5";
+
+          function normalizeModelTagValue(val) {
+            return String(val || "").toUpperCase().includes("V5") ? "V5" : "V4.5";
+          }
+
+          function syncModelSwitchButtons(containerId, activeTag) {
+            const wrap = document.getElementById(containerId);
+            if (!wrap) return;
+            const norm = normalizeModelTagValue(activeTag);
+            wrap.querySelectorAll(".mod-nai-model-tag-btn").forEach((btn) => {
+              btn.classList.toggle("is-active", btn.getAttribute("data-model-tag") === norm);
+            });
+          }
+
+          function setSpecimenDrawerOpen(isOpen) {
+            const drawer = document.getElementById("mod-nai-col-detail-drawer");
+            const body = document.getElementById("mod-nai-col-detail-drawer-body");
+            const stateTxt = document.getElementById("mod-nai-col-drawer-state-text");
+            if (drawer) drawer.classList.toggle("is-open", Boolean(isOpen));
+            if (body) body.style.display = isOpen ? "flex" : "none";
+            if (stateTxt) stateTxt.textContent = isOpen ? "收起" : "展开";
+          }
+
           function buildTraceCardElement(item, itemIdx, slotIdx, isEmptyGuide) {
             const traceEl = document.createElement("div");
             traceEl.className = "mod-nai-trace-item " + (slotIdx % 2 === 0 ? "col-right-lead" : "col-left-lag");
@@ -44242,6 +44462,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             indexSpan.className = "mod-nai-trace-index";
             indexSpan.textContent = `[ ${idxNum}* ]`;
             indexRow.appendChild(indexSpan);
+
+            if (!isEmptyGuide && item && item.modelTag) {
+              const modelBadge = document.createElement("span");
+              modelBadge.className = "mod-nai-trace-grid-model";
+              modelBadge.textContent = normalizeModelTagValue(item.modelTag);
+              indexRow.appendChild(modelBadge);
+            }
             traceEl.appendChild(indexRow);
 
             const frameWrap = document.createElement("div");
@@ -44278,16 +44505,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             titleLine.className = "mod-nai-trace-caption-title";
             const rawTitle = isEmptyGuide ? "空白の断片" : (item && item.name ? item.name : "未命名片段");
             titleLine.innerHTML = `<span><em>Trace</em> / ${rawTitle.replace(/</g, "&lt;")}</span><i class="mod-nai-specimen-arrow">↗</i>`;
-
-            const subLine = document.createElement("div");
-            subLine.className = "mod-nai-trace-caption-sub";
-            const excerpt = isEmptyGuide
-              ? "Awaiting the first signal."
-              : ((item && (item.artist || item.positive)) || "Not a body, a response.").replace(/\s+/g, " ").trim();
-            subLine.textContent = excerpt;
-
             caption.appendChild(titleLine);
-            caption.appendChild(subLine);
+
+            // 外层收藏画廊只显示填写的备注，不直接暴露画师串；若未填写备注则隐藏副标题行
+            const remarkStr = isEmptyGuide
+              ? "点击新建第一枚典藏片段"
+              : (item && typeof item.remark === "string" ? item.remark.trim() : "");
+            if (remarkStr) {
+              const subLine = document.createElement("div");
+              subLine.className = "mod-nai-trace-caption-sub";
+              subLine.textContent = remarkStr;
+              caption.appendChild(subLine);
+            }
+
             traceEl.appendChild(caption);
 
             return traceEl;
@@ -44374,6 +44604,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function syncEditViewModeControls() {
             const isShared = colScope === "shared";
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
             const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
@@ -44381,7 +44612,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const delBtn = document.getElementById("mod-nai-col-edit-delete-btn");
             const saveBtn = document.getElementById("mod-nai-col-edit-save-btn");
 
-            [nameInp, artistInp, posInp, negInp].forEach((el) => {
+            [nameInp, remarkInp, artistInp, posInp, negInp].forEach((el) => {
               if (el) el.readOnly = isShared;
             });
             if (grabBtn) grabBtn.style.display = isShared ? "none" : "inline-flex";
@@ -44393,8 +44624,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const isShared = colScope === "shared";
             const idxEl = document.getElementById("mod-nai-col-detail-index");
             const sealEl = document.getElementById("mod-nai-col-wax-seal");
+            const heroFrame = document.getElementById("mod-nai-col-detail-hero-frame");
             const stageEl = document.getElementById("mod-nai-col-detail-img-stage");
             const nameEl = document.getElementById("mod-nai-col-detail-name");
+            const remarkEl = document.getElementById("mod-nai-col-detail-remark");
             const artistEl = document.getElementById("mod-nai-col-detail-artist-text");
             const posEl = document.getElementById("mod-nai-col-detail-pos-text");
             const negEl = document.getElementById("mod-nai-col-detail-neg-text");
@@ -44407,13 +44640,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (idxEl) idxEl.textContent = `[ ${dispIdx}* ]`;
             if (sealEl) sealEl.textContent = isShared ? "SHARED TRACE · CLOUD" : "TRACE SPECIMEN · ARCHIVE";
             if (nameEl) nameEl.textContent = (item && item.name) || "未命名书签";
+
+            const modelTag = normalizeModelTagValue(item && item.modelTag);
+            syncModelSwitchButtons("mod-nai-col-detail-model-switch", modelTag);
+
+            const remarkVal = item && typeof item.remark === "string" ? item.remark.trim() : "";
+            if (remarkEl) {
+              if (remarkVal) {
+                remarkEl.textContent = remarkVal;
+                remarkEl.style.display = "block";
+              } else {
+                remarkEl.textContent = "";
+                remarkEl.style.display = "none";
+              }
+            }
+
             if (artistEl) artistEl.textContent = (item && item.artist && item.artist.trim()) ? item.artist : "— 暂无画师串 —";
             if (posEl) posEl.textContent = (item && item.positive && item.positive.trim()) ? item.positive : "— 暂无正面提示词 —";
             if (negEl) negEl.textContent = (item && item.negative && item.negative.trim()) ? item.negative : "— 暂无负面提示词 —";
 
             if (stageEl) {
               stageEl.innerHTML = "";
+              if (heroFrame) heroFrame.setAttribute("data-orient", "auto");
               const img = document.createElement("img");
+              img.onload = () => {
+                if (!heroFrame) return;
+                const w = img.naturalWidth || img.width || 1;
+                const h = img.naturalHeight || img.height || 1;
+                const ratio = w / h;
+                if (ratio < 0.88) {
+                  heroFrame.setAttribute("data-orient", "portrait");
+                } else if (ratio > 1.14) {
+                  heroFrame.setAttribute("data-orient", "landscape");
+                } else {
+                  heroFrame.setAttribute("data-orient", "square");
+                }
+              };
               img.src = (item && item.image) ? item.image : getTraceDefaultCoverUrl(idx >= 0 ? idx : 0);
               img.alt = (item && item.name) || "封面";
               stageEl.appendChild(img);
@@ -44430,8 +44692,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colCurrentIndex = typeof idx === "number" ? idx : -1;
             colIsCreatingNew = false;
             colEditImageDraft = item.image || "";
+            colEditModelDraft = normalizeModelTagValue(item.modelTag);
             const isShared = colScope === "shared";
 
+            // 默认收起词条抽屉，点击展开后再查看画师串、正面提示词与负面提示词
+            setSpecimenDrawerOpen(false);
             renderSpecimenDetailCard(item, colCurrentIndex);
             switchCollectionSubView("detail");
 
@@ -44442,6 +44707,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     Object.assign(item, fullData, { _detailLoaded: true });
                     if (colCurrentItem === item) {
                       colEditImageDraft = item.image || "";
+                      colEditModelDraft = normalizeModelTagValue(item.modelTag);
                       renderSpecimenDetailCard(item, colCurrentIndex);
                     }
                   }
@@ -44457,10 +44723,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const st = loadPanelState();
             const genImg = document.getElementById("mod-nai-gen-result-img");
             const curGenSrc = (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) ? genImg.src : "";
+            const defaultModelTag = st.model && String(st.model).includes("-5-") ? "V5" : "V4.5";
 
             colCurrentItem = {
               id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
               name: "",
+              modelTag: defaultModelTag,
+              remark: "",
               image: curGenSrc,
               artist: computeActiveArtistPrompt() || st.artistText || "",
               positive: computeActivePositivePrompt() || st.pos1Text || "",
@@ -44469,16 +44738,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             };
             colCurrentIndex = -1;
             colEditImageDraft = colCurrentItem.image || "";
+            colEditModelDraft = defaultModelTag;
 
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
             const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
 
             if (nameInp) nameInp.value = "";
+            if (remarkInp) remarkInp.value = "";
             if (artistInp) artistInp.value = colCurrentItem.artist;
             if (posInp) posInp.value = colCurrentItem.positive;
             if (negInp) negInp.value = colCurrentItem.negative;
+            syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
             renderEditSquarePreview(colEditImageDraft);
             syncEditViewModeControls();
             switchCollectionSubView("edit");
@@ -44488,15 +44761,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!colCurrentItem) return;
             colIsCreatingNew = false;
             colEditImageDraft = colCurrentItem.image || "";
+            colEditModelDraft = normalizeModelTagValue(colCurrentItem.modelTag);
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
             const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
 
             if (nameInp) nameInp.value = colCurrentItem.name || "";
+            if (remarkInp) remarkInp.value = colCurrentItem.remark || "";
             if (artistInp) artistInp.value = colCurrentItem.artist || "";
             if (posInp) posInp.value = colCurrentItem.positive || "";
             if (negInp) negInp.value = colCurrentItem.negative || "";
+            syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
             renderEditSquarePreview(colEditImageDraft);
             syncEditViewModeControls();
             switchCollectionSubView("edit");
@@ -44505,20 +44782,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function persistCurrentBookmarkEditDraft(requireNonEmpty = false) {
             if (!colCurrentItem || colScope === "shared") return false;
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
+            const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
             const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
 
             const nameVal = (nameInp ? nameInp.value : "").trim();
+            const remarkVal = (remarkInp ? remarkInp.value : "").trim();
             const artistVal = (artistInp ? artistInp.value : "").trim();
             const posVal = (posInp ? posInp.value : "").trim();
             const negVal = (negInp ? negInp.value : "").trim();
 
-            if (requireNonEmpty && !nameVal && !artistVal && !posVal && !colEditImageDraft) {
+            if (requireNonEmpty && !nameVal && !remarkVal && !artistVal && !posVal && !colEditImageDraft) {
               return false;
             }
 
             colCurrentItem.name = nameVal || "未命名书签";
+            colCurrentItem.modelTag = normalizeModelTagValue(colEditModelDraft);
+            colCurrentItem.remark = remarkVal;
             colCurrentItem.image = colEditImageDraft || "";
             colCurrentItem.artist = artistVal;
             colCurrentItem.positive = posVal;
@@ -44530,7 +44811,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (existingIdx >= 0) {
               list[existingIdx] = colCurrentItem;
               colCurrentIndex = existingIdx;
-            } else if (nameVal || artistVal || posVal || negVal || colEditImageDraft) {
+            } else if (nameVal || remarkVal || artistVal || posVal || negVal || colEditImageDraft) {
               list.push(colCurrentItem);
               colCurrentIndex = list.length - 1;
               colIsCreatingNew = false;
@@ -44539,24 +44820,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return true;
           }
 
+          // 保留原图自然横竖方比例压缩（外层缩略图由 CSS 1:1 裁切展示，展开详情卡片则按真实竖图/横图/方图比例完整呈现）
           async function compressImageFileToSquareDataUrl(file) {
             return await new Promise((resolve) => {
               const url = URL.createObjectURL(file);
               const img = new Image();
               img.onload = () => {
                 try {
-                  const side = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
-                  const sx = Math.max(0, Math.floor(((img.naturalWidth || img.width) - side) / 2));
-                  const sy = Math.max(0, Math.floor(((img.naturalHeight || img.height) - side) / 2));
-                  const targetSize = Math.min(480, side || 480);
+                  const origW = img.naturalWidth || img.width || 600;
+                  const origH = img.naturalHeight || img.height || 600;
+                  const maxEdge = 840;
+                  const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+                  const targetW = Math.max(1, Math.round(origW * scale));
+                  const targetH = Math.max(1, Math.round(origH * scale));
                   const canvas = document.createElement("canvas");
-                  canvas.width = targetSize;
-                  canvas.height = targetSize;
+                  canvas.width = targetW;
+                  canvas.height = targetH;
                   const ctx = canvas.getContext("2d");
-                  ctx.drawImage(img, sx, sy, side, side, 0, 0, targetSize, targetSize);
-                  let out = canvas.toDataURL("image/webp", 0.82);
+                  ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
+                  let out = canvas.toDataURL("image/webp", 0.84);
                   if (!out || out.length < 32 || !out.startsWith("data:image/webp")) {
-                    out = canvas.toDataURL("image/jpeg", 0.84);
+                    out = canvas.toDataURL("image/jpeg", 0.86);
                   }
                   canvas.width = 0;
                   canvas.height = 0;
@@ -44625,6 +44909,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 id: itemId,
                 category: "nai_bookmark",
                 name: colCurrentItem.name || "未命名书签",
+                modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
+                remark: colCurrentItem.remark || "",
                 image: colCurrentItem.image || "",
                 artist: colCurrentItem.artist || "",
                 positive: colCurrentItem.positive || "",
@@ -44652,6 +44938,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 id: itemId,
                 category: "nai_bookmark",
                 name: sharedItemPayload.name,
+                modelTag: sharedItemPayload.modelTag,
+                remark: sharedItemPayload.remark,
                 image: sharedItemPayload.image,
                 artist: sharedItemPayload.artist,
                 positive: sharedItemPayload.positive,
@@ -44785,15 +45073,50 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 视图二：高定典藏展示卡片事件（只读展示，点编辑才进入编辑页）
+            // 视图二：高定典藏展示卡片事件（只读展示，支持展开词条抽屉、切换V4.5/V5与微图标复制）
             const detailBackBtn = document.getElementById("mod-nai-col-detail-back-btn");
             const detailUploadBtn = document.getElementById("mod-nai-col-detail-upload-btn");
             const detailEditBtn = document.getElementById("mod-nai-col-detail-edit-btn");
             const detailImportBtn = document.getElementById("mod-nai-col-detail-import-btn");
             const detailApplyBtn = document.getElementById("mod-nai-col-detail-apply-btn");
+            const detailDrawerToggle = document.getElementById("mod-nai-col-detail-drawer-toggle");
+            const detailModelSwitch = document.getElementById("mod-nai-col-detail-model-switch");
             const detailCopyArtistBtn = document.getElementById("mod-nai-col-detail-copy-artist-btn");
             const detailCopyPosBtn = document.getElementById("mod-nai-col-detail-copy-pos-btn");
             const detailCopyNegBtn = document.getElementById("mod-nai-col-detail-copy-neg-btn");
+
+            if (detailDrawerToggle) {
+              detailDrawerToggle.addEventListener("click", () => {
+                const drawer = document.getElementById("mod-nai-col-detail-drawer");
+                const isNowOpen = !(drawer && drawer.classList.contains("is-open"));
+                setSpecimenDrawerOpen(isNowOpen);
+              });
+            }
+
+            if (detailModelSwitch) {
+              detailModelSwitch.querySelectorAll(".mod-nai-model-tag-btn").forEach((btn) => {
+                btn.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  if (colScope === "shared" || !colCurrentItem) return;
+                  const chosen = normalizeModelTagValue(btn.getAttribute("data-model-tag"));
+                  colCurrentItem.modelTag = chosen;
+                  colEditModelDraft = chosen;
+                  syncModelSwitchButtons("mod-nai-col-detail-model-switch", chosen);
+                  syncModelSwitchButtons("mod-nai-col-edit-model-switch", chosen);
+                  const list = loadLocalBookmarks();
+                  const existIdx = list.findIndex((x) => x && x.id === colCurrentItem.id);
+                  if (existIdx >= 0) {
+                    list[existIdx] = colCurrentItem;
+                    saveLocalBookmarks(list);
+                  }
+                });
+              });
+            }
+
+            const COPY_ICON_SVG =
+              '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+            const CHECK_ICON_SVG =
+              '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
             const copyRawTextWithFeedback = async (rawStr, btnEl) => {
               const text = String(rawStr || "").trim();
@@ -44813,13 +45136,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 document.execCommand("copy");
                 document.body.removeChild(ta);
               }
-              const spanEl = btnEl ? btnEl.querySelector("span") || btnEl : null;
-              if (spanEl) {
-                const prev = spanEl.textContent;
-                spanEl.textContent = "已复";
+              if (btnEl) {
+                btnEl.classList.add("is-copied");
+                btnEl.innerHTML = CHECK_ICON_SVG;
                 setTimeout(() => {
-                  spanEl.textContent = prev || "复制";
+                  btnEl.classList.remove("is-copied");
+                  btnEl.innerHTML = COPY_ICON_SVG;
                 }, 1000);
+              }
+              if (typeof window.showDownloadToast === "function") {
+                window.showDownloadToast("已复制", "success");
               }
             };
 
@@ -44846,6 +45172,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const cloned = {
                   id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                   name: colCurrentItem.name || "收录书签",
+                  modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
+                  remark: colCurrentItem.remark || "",
                   image: colCurrentItem.image || "",
                   artist: colCurrentItem.artist || "",
                   positive: colCurrentItem.positive || "",
@@ -44914,11 +45242,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const editGrabBtn = document.getElementById("mod-nai-col-edit-grab-current-btn");
             const editImgStage = document.getElementById("mod-nai-col-edit-img-stage");
             const editFileInput = document.getElementById("mod-nai-col-edit-file-input");
+            const editModelSwitch = document.getElementById("mod-nai-col-edit-model-switch");
             const editDeleteBtn = document.getElementById("mod-nai-col-edit-delete-btn");
             const editSaveBtn = document.getElementById("mod-nai-col-edit-save-btn");
 
+            if (editModelSwitch) {
+              editModelSwitch.querySelectorAll(".mod-nai-model-tag-btn").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                  if (colScope === "shared") return;
+                  colEditModelDraft = normalizeModelTagValue(btn.getAttribute("data-model-tag"));
+                  syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
+                  persistCurrentBookmarkEditDraft(false);
+                });
+              });
+            }
+
             [
               "mod-nai-col-edit-name-input",
+              "mod-nai-col-edit-remark-input",
               "mod-nai-col-edit-artist-input",
               "mod-nai-col-edit-pos-input",
               "mod-nai-col-edit-neg-input"
@@ -122288,11 +122629,16 @@ ${specificRules}`;
           const VAULT_MAGIC_BYTES = new Uint8Array([69, 80, 72, 86, 65, 85, 76, 84]); // "EPHVAULT"
 
           function toStealthVaultFileName(fileName) {
-            return String(fileName || "").replace(/\.(png|jpe?g|webp|gif|mp3|wav|ogg|epdat)$/i, "") + ".epdat";
+            return String(fileName || "").replace(/\.(png|jpe?g|webp|gif|mp3|wav|ogg|ttf|otf|woff2?|ttc|epdat)$/i, "") + ".epdat";
           }
 
           function getMimeFromVaultFileName(fileName) {
             const lower = String(fileName || "").toLowerCase();
+            if (lower.endsWith(".ttf") || lower.endsWith(".ttc")) return "font/ttf";
+            if (lower.endsWith(".otf")) return "font/otf";
+            if (lower.endsWith(".woff2")) return "font/woff2";
+            if (lower.endsWith(".woff")) return "font/woff";
+            if (lower.startsWith("font_")) return "font/ttf";
             if (lower.endsWith(".mp3") || lower.endsWith(".mpeg") || lower.startsWith("aud_")) return "audio/mpeg";
             if (lower.endsWith(".wav")) return "audio/wav";
             if (lower.endsWith(".ogg")) return "audio/ogg";
@@ -123005,6 +123351,120 @@ ${specificRules}`;
             }
           }
           window.resolveVaultRefToUrl = resolveVaultRefToUrl;
+
+          window.storeLocalFontFileInVault = async function (fileOrDataUrl, fileNameHint = "") {
+            let rawBytes = null;
+            let ext = "ttf";
+            const lowerHint = String(fileNameHint || "").toLowerCase();
+            if (lowerHint.endsWith(".otf")) ext = "otf";
+            else if (lowerHint.endsWith(".woff2")) ext = "woff2";
+            else if (lowerHint.endsWith(".woff")) ext = "woff";
+            else if (lowerHint.endsWith(".ttc")) ext = "ttc";
+
+            if (typeof fileOrDataUrl === "string" && fileOrDataUrl.startsWith("data:")) {
+              const commaIdx = fileOrDataUrl.indexOf(",");
+              if (commaIdx > 0) {
+                const header = fileOrDataUrl.slice(0, commaIdx).toLowerCase();
+                if (header.includes("otf") || header.includes("opentype")) ext = "otf";
+                else if (header.includes("woff2")) ext = "woff2";
+                else if (header.includes("woff")) ext = "woff";
+                rawBytes = base64ToUint8Array(fileOrDataUrl.slice(commaIdx + 1));
+              }
+            } else if (fileOrDataUrl instanceof Uint8Array) {
+              rawBytes = fileOrDataUrl;
+            } else if (fileOrDataUrl instanceof ArrayBuffer) {
+              rawBytes = new Uint8Array(fileOrDataUrl);
+            } else if (fileOrDataUrl && typeof fileOrDataUrl.arrayBuffer === "function") {
+              const ab = await fileOrDataUrl.arrayBuffer();
+              rawBytes = new Uint8Array(ab);
+            }
+
+            if (!rawBytes || rawBytes.byteLength === 0) {
+              throw new Error("字体文件为空或无法读取");
+            }
+
+            // 计算二进制指纹，完全不经过 Base64 字符串转换，避免大体积字体引发内存峰值
+            let h1 = 0xdeadbeef ^ rawBytes.byteLength;
+            let h2 = 0x41c6ce57 ^ rawBytes.byteLength;
+            const step = Math.max(1, Math.floor(rawBytes.byteLength / 4096));
+            for (let i = 0; i < rawBytes.byteLength; i += step) {
+              const b = rawBytes[i];
+              h1 = Math.imul(h1 ^ b, 2654435761);
+              h2 = Math.imul(h2 ^ b, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            const hashStr =
+              (h2 >>> 0).toString(16).padStart(8, "0") +
+              (h1 >>> 0).toString(16).padStart(8, "0") +
+              "_" +
+              rawBytes.byteLength.toString(16);
+
+            const fileName = "font_" + hashStr + "." + ext;
+            const stealthName = toStealthVaultFileName(fileName);
+            const wrappedBytes = wrapVaultBinary(rawBytes);
+            const cfg = loadVaultConfig();
+            const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+
+            let savedOk = false;
+            let termuxSaved = false;
+
+            // 1. 若 Termux 本地服务在线，直接将二进制字体写入手机本地磁盘，绝不在浏览器留存副本
+            if (cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl))) {
+              termuxSaved = await uploadToTermuxWithRetry(baseUrl, stealthName, wrappedBytes);
+              if (termuxSaved) {
+                savedOk = true;
+              }
+            }
+
+            // 2. 若用户已授权外部本地文件夹，直接写入本地文件夹
+            if (!termuxSaved) {
+              try {
+                const savedHandle = await getSavedDirectoryHandle();
+                if (savedHandle) {
+                  let perm = "granted";
+                  if (typeof savedHandle.queryPermission === "function") {
+                    perm = await savedHandle.queryPermission({ mode: "readwrite" });
+                  }
+                  if (perm === "granted") {
+                    await writeNoMediaFileInDir(savedHandle);
+                    const mediaDir = await savedHandle.getDirectoryHandle("media", { create: true });
+                    await writeNoMediaFileInDir(mediaDir);
+                    const fh = await mediaDir.getFileHandle(stealthName, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(wrappedBytes);
+                    await w.close();
+                    savedOk = true;
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // 3. 若未开启 Termux 或外部文件夹，回退写入本地文件系统句柄（一旦 Termux 连接会自动迁移并清空）
+            if (!savedOk) {
+              try {
+                const opfsRoot = await getAutoOpfsDirectoryHandle();
+                if (opfsRoot) {
+                  const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: true });
+                  const fh = await opfsMedia.getFileHandle(stealthName, { create: true });
+                  const w = await fh.createWritable();
+                  await w.write(wrappedBytes);
+                  await w.close();
+                  savedOk = true;
+                }
+              } catch (_) {}
+            }
+
+            if (!savedOk) {
+              throw new Error("无法写入本地字体存储，请检查存储权限或启动本地服务");
+            }
+
+            writtenVaultFiles.add(fileName);
+            const mime = getMimeFromVaultFileName(fileName);
+            const blobUrl = URL.createObjectURL(new Blob([rawBytes], { type: mime }));
+            setVaultBlobCache(fileName, blobUrl);
+            return "vault://" + fileName;
+          };
 
           async function resolveVaultRefToDataUrl(refOrUrl) {
             if (typeof refOrUrl !== "string") return refOrUrl;
@@ -124702,6 +125162,9 @@ ${specificRules}`;
                 el._vaultBgResolvingRef = null;
               });
               hydrateDomVaultImages();
+              if (typeof window.refreshCustomFontsFromVault === "function") {
+                window.refreshCustomFontsFromVault();
+              }
             } catch (_) {}
           }
 

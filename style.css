@@ -37304,6 +37304,20 @@ select,
   color: var(--trace-ink);
 }
 
+#module-nai-panel .mod-nai-trace-grid-model {
+  font-family: "Playfair Display", "Cinzel", "Georgia", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  color: var(--trace-muted);
+  padding: 1px 6px;
+  border: 1px solid var(--trace-border-soft);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--trace-soft) 72%, transparent);
+}
+
 #module-nai-panel .mod-nai-trace-frame-wrap {
   display: flex;
   align-items: stretch;
@@ -37314,7 +37328,7 @@ select,
 #module-nai-panel .mod-nai-trace-dashed-frame {
   flex: 1;
   min-width: 0;
-  aspect-ratio: 4 / 4.6;
+  aspect-ratio: 1 / 1;
   border: 1px dashed var(--trace-line);
   background-color: color-mix(in srgb, var(--trace-card) 82%, transparent);
   padding: 7px;
@@ -37417,10 +37431,10 @@ select,
 }
 
 #module-nai-panel .mod-nai-trace-caption-sub {
-  font-family: "Cormorant Garamond", "Playfair Display", "Georgia", serif;
+  font-family: "Cormorant Garamond", "Playfair Display", "Noto Serif SC", "Georgia", serif;
   font-style: italic;
-  font-size: 12px;
-  line-height: 1.32;
+  font-size: 11.5px;
+  line-height: 1.35;
   color: var(--trace-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -37448,7 +37462,7 @@ select,
   color: var(--trace-muted);
 }
 
-/* 视图二：高定典藏展示卡片视图（只读精排，完整展示不截断） */
+/* 视图二：高定典藏展示卡片视图（大图自适应竖图/横图/方图 + 折叠词条抽屉） */
 #module-nai-panel .mod-nai-trace-bar {
   display: flex;
   align-items: center;
@@ -37464,7 +37478,7 @@ select,
   flex-shrink: 0 !important;
   height: auto !important;
   overflow: visible !important;
-  gap: 12px;
+  gap: 14px;
   padding: 14px 12px 18px 12px;
   border: 1px solid var(--trace-border-soft);
   border-radius: 14px;
@@ -37490,20 +37504,40 @@ select,
   display: flex;
   align-items: stretch;
   gap: 8px;
+  width: 100%;
 }
 
 #module-nai-panel .mod-nai-trace-dashed-frame.specimen-hero {
-  aspect-ratio: auto;
-  min-height: 175px;
-  max-height: 225px;
-  padding: 8px;
+  flex: 1;
+  width: 100%;
+  aspect-ratio: auto !important;
+  min-height: 270px;
+  height: auto;
+  padding: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#module-nai-panel .mod-nai-trace-dashed-frame.specimen-hero.aspect-square {
+  aspect-ratio: 1 / 1 !important;
+  min-height: 275px;
+}
+
+#module-nai-panel .mod-nai-trace-dashed-frame.specimen-hero.aspect-portrait {
+  aspect-ratio: auto !important;
+  min-height: 340px;
+}
+
+#module-nai-panel .mod-nai-trace-dashed-frame.specimen-hero.aspect-landscape {
+  aspect-ratio: auto !important;
+  min-height: 215px;
 }
 
 #module-nai-panel .mod-nai-specimen-img-box {
   width: 100%;
-  height: 100%;
-  min-height: 158px;
-  max-height: 208px;
+  height: auto;
+  min-height: 252px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -37511,12 +37545,27 @@ select,
   background-color: color-mix(in srgb, var(--trace-soft) 55%, transparent);
 }
 
+#module-nai-panel .mod-nai-trace-dashed-frame.specimen-hero.aspect-portrait .mod-nai-specimen-img-box {
+  min-height: 320px;
+}
+
+#module-nai-panel .mod-nai-trace-dashed-frame.specimen-hero.aspect-landscape .mod-nai-specimen-img-box {
+  min-height: 196px;
+}
+
 #module-nai-panel .mod-nai-specimen-img-box img {
   width: 100%;
-  height: 100%;
-  max-height: 208px;
-  object-fit: cover;
+  height: auto;
+  max-height: 460px;
+  object-fit: contain;
   display: block;
+}
+
+#module-nai-panel .mod-nai-specimen-img-box .mod-nai-trace-art-svg {
+  width: 220px;
+  height: 220px;
+  max-width: 85%;
+  max-height: 85%;
 }
 
 #module-nai-panel .mod-nai-specimen-side-note {
@@ -37536,40 +37585,181 @@ select,
   border-bottom: 1px dashed var(--trace-line);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 #module-nai-panel .mod-nai-specimen-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 }
 
 #module-nai-panel .mod-nai-specimen-title {
   margin: 0;
+  flex: 1;
+  min-width: 0;
   font-family: "Cormorant Garamond", "Playfair Display", "Noto Serif SC", serif;
-  font-size: 17.5px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--trace-ink);
   letter-spacing: 0.6px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+#module-nai-panel .mod-nai-specimen-model-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--trace-border-soft);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--trace-soft) 72%, transparent);
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-model-tag-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--trace-muted);
+  font-family: "Playfair Display", "Cinzel", "Georgia", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.16s ease;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-model-tag-btn.active {
+  background-color: var(--trace-ink);
+  color: var(--trace-paper);
 }
 
 #module-nai-panel .mod-nai-specimen-sub {
   margin: 0;
   font-family: "Cormorant Garamond", "Playfair Display", "Noto Serif SC", serif;
   font-style: italic;
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
   color: var(--trace-muted);
+  word-break: break-word;
+}
+
+/* 精心设计的可展开词条档案抽屉模块 */
+#module-nai-panel .mod-nai-specimen-drawer {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--trace-border-soft);
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--trace-paper) 68%, var(--card-bg));
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+#module-nai-panel .mod-nai-specimen-drawer.expanded {
+  border-color: var(--trace-line);
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-toggle {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--trace-ink);
+  box-sizing: border-box;
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-toggle:active {
+  background-color: color-mix(in srgb, var(--trace-soft) 50%, transparent);
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-tag {
+  font-family: "Cinzel", "Playfair Display", "Cormorant Garamond", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  color: var(--trace-ink);
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-hint {
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  font-size: 11.5px;
+  color: var(--trace-muted);
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  color: var(--trace-muted);
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-action-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--trace-ink);
+}
+
+#module-nai-panel .mod-nai-drawer-chevron {
+  width: 13px;
+  height: 13px;
+  color: var(--trace-muted);
+  transition: transform 0.22s ease;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-specimen-drawer.expanded .mod-nai-drawer-chevron {
+  transform: rotate(180deg);
+}
+
+#module-nai-panel .mod-nai-specimen-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 10px 12px 10px;
+  border-top: 1px dashed var(--trace-line);
 }
 
 #module-nai-panel .mod-nai-specimen-section {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 11px;
+  gap: 6px;
+  padding: 9px 11px;
   border: 1px dashed var(--trace-line);
-  background-color: color-mix(in srgb, var(--trace-paper) 75%, var(--card-bg));
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--trace-paper) 82%, var(--card-bg));
   box-sizing: border-box;
 }
 
@@ -37582,10 +37772,44 @@ select,
 
 #module-nai-panel .mod-nai-specimen-sec-title {
   font-family: "Cinzel", "Cormorant Garamond", "Noto Serif SC", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 1px;
   color: var(--trace-ink);
+}
+
+#module-nai-panel .mod-nai-specimen-icon-copy {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--trace-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.78;
+  transition: opacity 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+#module-nai-panel .mod-nai-specimen-icon-copy:hover,
+#module-nai-panel .mod-nai-specimen-icon-copy:active {
+  opacity: 1;
+  color: var(--trace-ink);
+  background-color: color-mix(in srgb, var(--trace-soft) 75%, transparent);
+}
+
+#module-nai-panel .mod-nai-specimen-icon-copy svg {
+  width: 13px;
+  height: 13px;
+  display: block;
 }
 
 #module-nai-panel .mod-nai-specimen-text {
@@ -37594,7 +37818,7 @@ select,
   color: var(--trace-ink);
   white-space: pre-wrap;
   word-break: break-word;
-  min-height: 44px;
+  min-height: 36px;
   height: auto;
   overflow: visible;
   padding-top: 2px;
