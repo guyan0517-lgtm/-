@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43545,7 +43545,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               wrap.className = "mod-nai-preset-dropdown";
               sel.parentNode.insertBefore(wrap, sel);
               wrap.appendChild(sel);
-              sel.style.display = "none";
+              sel.style.setProperty("display", "none", "important");
 
               const triggerBtn = document.createElement("button");
               triggerBtn.type = "button";

@@ -36922,6 +36922,22 @@ select,
   z-index: 10;
 }
 
+#module-nai-panel .mod-nai-preset-dropdown > select,
+#module-nai-panel .mod-nai-preset-dropdown > select.moe-input,
+#module-nai-panel .mod-nai-preset-dropdown > select.mod-nai-select {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
 #module-nai-panel .mod-nai-preset-dropdown.is-open {
   z-index: 60;
 }
@@ -36984,7 +37000,7 @@ select,
   left: 0;
   width: 100%;
   min-width: 148px;
-  max-width: 250px;
+  max-width: 100%;
   max-height: 156px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -38507,11 +38523,11 @@ select,
 }
 
 #module-nai-panel .mod-nai-lex-script-accent {
-  font-family: "Pinyon Script", "Cormorant Garamond", "Playfair Display", cursive, serif;
+  font-family: "Cormorant Garamond", "Playfair Display", "Georgia", serif;
   font-style: italic;
-  font-weight: 400;
-  font-size: 19px;
-  letter-spacing: 0.6px;
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.5px;
   color: var(--trace-klein);
   line-height: 1;
 }
@@ -38526,21 +38542,21 @@ select,
 
 #module-nai-panel .mod-nai-lex-verse-cn {
   margin: 2px 0 0 0;
-  font-family: "Zhi Mang Xing", "Long Cang", "Ma Shan Zheng", "LXGW WenKai", cursive, serif;
-  font-size: 14.5px;
-  font-weight: 400;
-  letter-spacing: 1.2px;
-  line-height: 1.38;
+  font-family: "LXGW WenKai", "LXGW WenKai Screen", "STKaiti", "Kaiti SC", "ZCOOL XiaoWei", serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  line-height: 1.45;
   color: var(--trace-ink);
-  transform: skewX(-7deg);
+  transform: skewX(-3.5deg);
   transform-origin: left center;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 #module-nai-panel .mod-nai-lex-verse-cn span:nth-child(2) {
-  padding-left: 14px;
+  padding-left: 10px;
   color: var(--trace-klein-deep);
 }
 
@@ -38591,15 +38607,16 @@ select,
   font-size: 11px;
   font-style: italic;
   letter-spacing: 0.4px;
-  line-height: 1.26;
+  line-height: 1.28;
   color: var(--card-bg);
 }
 
 #module-nai-panel .mod-nai-lex-keyline-script {
-  font-family: "Pinyon Script", "Cormorant Garamond", cursive, serif;
-  font-size: 14px;
-  font-style: normal;
-  letter-spacing: 0.5px;
+  font-family: "Cormorant Garamond", "Playfair Display", "Georgia", serif;
+  font-size: 12.5px;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0.4px;
   margin-right: 3px;
 }
 
