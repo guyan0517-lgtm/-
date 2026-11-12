@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43175,6 +43175,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return "http://127.0.0.1:8765";
           }
 
+          const predecodedImageCache = new Map();
+          function predecodeResolvedUrl(url) {
+            if (!url || typeof url !== "string" || url.startsWith("vault://")) return;
+            if (predecodedImageCache.has(url)) return;
+            const preImg = new Image();
+            preImg.decoding = "sync";
+            preImg.src = url;
+            predecodedImageCache.set(url, preImg);
+          }
+
           function bindNaiVaultAwareImage(imgEl, rawSrcUrl) {
             if (!imgEl) return;
             const srcStr = String(rawSrcUrl || "").trim();
@@ -43182,31 +43192,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               imgEl.removeAttribute("src");
               return;
             }
+            imgEl.loading = "eager";
+            imgEl.decoding = "sync";
             if (srcStr.startsWith("vault://")) {
               imgEl.setAttribute("data-vault-ref", srcStr);
               const fastCached = typeof window.getCachedVaultBlobUrl === "function"
                 ? window.getCachedVaultBlobUrl(srcStr)
                 : null;
               if (fastCached) {
-                imgEl.setAttribute("data-vault-hydrated-src", fastCached);
-                imgEl.src = fastCached;
+                if (imgEl.getAttribute("src") !== fastCached) {
+                  imgEl.setAttribute("data-vault-hydrated-src", fastCached);
+                  imgEl.src = fastCached;
+                }
+                predecodeResolvedUrl(fastCached);
                 return;
               }
               if (typeof window.resolveVaultRefToUrl === "function") {
                 window.resolveVaultRefToUrl(srcStr).then((resolved) => {
                   if (resolved && resolved !== srcStr && !resolved.startsWith("vault://")) {
-                    imgEl.setAttribute("data-vault-hydrated-src", resolved);
-                    imgEl.src = resolved;
+                    predecodeResolvedUrl(resolved);
+                    if (imgEl.getAttribute("data-vault-ref") === srcStr && imgEl.getAttribute("src") !== resolved) {
+                      imgEl.setAttribute("data-vault-hydrated-src", resolved);
+                      imgEl.src = resolved;
+                    }
                   }
                 }).catch(() => {});
-              } else {
+              } else if (imgEl.getAttribute("src") !== srcStr) {
                 imgEl.src = srcStr;
               }
             } else {
-              if (typeof window.setCleanPreviewImgSrc === "function") {
-                window.setCleanPreviewImgSrc(imgEl, srcStr);
-              } else {
-                imgEl.src = srcStr;
+              predecodeResolvedUrl(srcStr);
+              if (imgEl.getAttribute("src") !== srcStr) {
+                if (typeof window.setCleanPreviewImgSrc === "function") {
+                  window.setCleanPreviewImgSrc(imgEl, srcStr);
+                } else {
+                  imgEl.src = srcStr;
+                }
               }
             }
           }
@@ -44899,7 +44920,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const LEXICON_STORE_KEY = "mod_nai_lexicon_v1";
           const BOOKMARKS_TEXT_BACKUP_KEY = "mod_nai_bookmarks_text_backup_v1";
           const LEXICON_TEXT_BACKUP_KEY = "mod_nai_lexicon_text_backup_v1";
-          const ITEMS_PER_PAGE = 6;
+          const ITEMS_PER_PAGE = 9999;
           let colScope = "local"; // "local" | "shared"
           let colLocalPage = 1;
           let colSharedPage = 1;
@@ -44916,6 +44937,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let colSortSourceIndex = -1;
           let colActiveSubView = "grid";
           let colEditingCategory = "";
+          let colSavedGridScrollTop = 0;
+          const traceCardElementCache = new Map();
 
           const PLACEHOLDER_BOOKMARK_SVG =
             '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path><path d="M12 7v6"></path><path d="M9 10h6"></path></svg>';
@@ -45082,7 +45105,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function switchCollectionSubView(viewName) {
+            const prevSubView = colActiveSubView;
             colActiveSubView = viewName;
+            const scrollContainer = document.querySelector("#module-nai-panel .mod-nai-scroll");
+            if (prevSubView === "grid" && viewName !== "grid" && scrollContainer) {
+              colSavedGridScrollTop = scrollContainer.scrollTop || 0;
+            }
             const gridPage = document.getElementById("mod-nai-col-grid-page");
             const detailPage = document.getElementById("mod-nai-col-detail-page");
             const editPage = document.getElementById("mod-nai-col-edit-page");
@@ -45099,10 +45127,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               colEditImagesDraft = [];
               colEditImageDraft = "";
               clearEditFormDomInputs();
+              if (scrollContainer && prevSubView === "detail") {
+                scrollContainer.scrollTop = colSavedGridScrollTop;
+                return;
+              }
             } else {
               colSortSourceIndex = -1;
             }
-            const scrollContainer = document.querySelector("#module-nai-panel .mod-nai-scroll");
             if (scrollContainer) {
               scrollContainer.scrollTop = 0;
             }
@@ -45293,7 +45324,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const artBox = document.createElement("div");
             artBox.className = "mod-nai-trace-art-box";
             const img = document.createElement("img");
-            img.loading = "lazy";
+            img.loading = "eager";
+            img.decoding = "sync";
             const itemImgs = getBookmarkImagesArray(item);
             const isDefaultCover = itemImgs.length === 0;
             const coverSrc = isDefaultCover ? getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx) : itemImgs[0];
@@ -45345,18 +45377,55 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return traceEl;
           }
 
-          function renderCollectionGrid() {
+          function prewarmNaiCollectionImages() {
+            const lists = [
+              Array.isArray(memoryBookmarksList) ? memoryBookmarksList : [],
+              Array.isArray(memoryLexiconList) ? memoryLexiconList : []
+            ];
+            lists.forEach((arr) => {
+              arr.forEach((item) => {
+                if (!item || typeof item !== "object") return;
+                const imgs = getBookmarkImagesArray(item);
+                imgs.forEach((u) => {
+                  if (!u || typeof u !== "string") return;
+                  const s = u.trim();
+                  if (!s) return;
+                  if (s.startsWith("vault://")) {
+                    const fast = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(s) : null;
+                    if (fast) {
+                      predecodeResolvedUrl(fast);
+                    } else if (typeof window.resolveVaultRefToUrl === "function") {
+                      window.resolveVaultRefToUrl(s).then((resolved) => {
+                        if (resolved && !resolved.startsWith("vault://")) {
+                          predecodeResolvedUrl(resolved);
+                          // 若画廊中已有对应图片节点但尚未水合，立即填入
+                          document.querySelectorAll(`#module-nai-panel img[data-vault-ref="${s}"]`).forEach((el) => {
+                            if (el.getAttribute("src") !== resolved) {
+                              el.setAttribute("data-vault-hydrated-src", resolved);
+                              el.src = resolved;
+                            }
+                          });
+                        }
+                      }).catch(() => {});
+                    }
+                  } else {
+                    predecodeResolvedUrl(s);
+                  }
+                });
+              });
+            });
+            TRACE_DEFAULT_COVERS.forEach(predecodeResolvedUrl);
+            LEXICON_DEFAULT_COVERS.forEach(predecodeResolvedUrl);
+          }
+
+          function renderCollectionGrid(forceRebuild = false) {
             updateCollectionHeaderUI();
             const gridEl = document.getElementById("mod-nai-col-grid-container");
+            const footerEl = document.querySelector("#mod-nai-col-grid-page .mod-nai-trace-footer");
             const pageTextEl = document.getElementById("mod-nai-col-page-indicator");
             const prevBtn = document.getElementById("mod-nai-col-prev-btn");
             const nextBtn = document.getElementById("mod-nai-col-next-btn");
             if (!gridEl) return;
-
-            gridEl.querySelectorAll("img").forEach((img) => {
-              img.removeAttribute("src");
-            });
-            gridEl.innerHTML = "";
 
             const isShared = colScope === "shared";
             const isLex = isLexiconCategory();
@@ -45392,29 +45461,78 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
             const pageItems = sourceList.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
-            if (pageItems.length === 0) {
-              const emptyCard = buildTraceCardElement(null, 0, 0, true);
-              if (!isShared) {
-                emptyCard.addEventListener("click", () => {
-                  openCreateNewBookmarkEditView();
+            const sigParts = pageItems.map((it, sIdx) => {
+              if (!it) return "";
+              const imgs = getBookmarkImagesArray(it);
+              return `${it.id || sIdx}:${it.name || ""}:${normalizeModelTagValue(it.modelTag)}:${imgs[0] || ""}`;
+            });
+            const nextGridSig = `${colScope}|${colCategory}|${curPage}|${pageItems.length}|${sigParts.join("||")}`;
+
+            if (!forceRebuild && gridEl._renderedGridSig === nextGridSig && gridEl.children.length > 0) {
+              // 列表未变化时绝不销毁或重建 DOM 与图片节点，仅更新排序高亮与补充未水合的图片
+              Array.from(gridEl.children).forEach((child, idx) => {
+                const absIdx = startIdx + idx;
+                child.classList.toggle("is-sort-source", !isShared && pageItems.length > 0 && colSortSourceIndex === absIdx);
+                const imgEl = child.querySelector("img[data-vault-ref]");
+                if (imgEl) {
+                  const ref = imgEl.getAttribute("data-vault-ref");
+                  const curSrc = imgEl.getAttribute("src") || "";
+                  if (ref && (!curSrc || curSrc.startsWith("vault://"))) {
+                    bindNaiVaultAwareImage(imgEl, ref);
+                  }
+                }
+              });
+            } else {
+              gridEl._renderedGridSig = nextGridSig;
+              const frag = document.createDocumentFragment();
+              if (pageItems.length === 0) {
+                const emptyCard = buildTraceCardElement(null, 0, 0, true);
+                if (!isShared) {
+                  emptyCard.addEventListener("click", () => {
+                    openCreateNewBookmarkEditView();
+                  });
+                }
+                frag.appendChild(emptyCard);
+              } else {
+                pageItems.forEach((item, slotIdx) => {
+                  const absIdx = startIdx + slotIdx;
+                  const itemImgs = getBookmarkImagesArray(item);
+                  const coverSrc = itemImgs.length === 0
+                    ? getTraceDefaultCoverUrl(absIdx >= 0 ? absIdx : slotIdx)
+                    : itemImgs[0];
+                  const cacheKey = `${isLex ? "lex" : "bm"}|${colScope}|${item && item.id ? item.id : absIdx}|${absIdx}|${slotIdx}|${(item && item.name) || ""}|${normalizeModelTagValue(item && item.modelTag)}|${coverSrc}`;
+
+                  let cardEl = traceCardElementCache.get(cacheKey);
+                  if (!cardEl) {
+                    cardEl = buildTraceCardElement(item, absIdx, slotIdx, false);
+                    cardEl.addEventListener("click", () => {
+                      const bIdx = typeof cardEl._boundAbsIdx === "number" ? cardEl._boundAbsIdx : absIdx;
+                      const bItem = cardEl._boundItem || item;
+                      if (colScope === "local" && colSortSourceIndex !== -1) {
+                        handleTraceIndexReorderClick(bIdx);
+                        return;
+                      }
+                      openBookmarkDetailView(bItem, bIdx);
+                    });
+                    traceCardElementCache.set(cacheKey, cardEl);
+                  } else {
+                    const imgEl = cardEl.querySelector("img");
+                    if (imgEl && (!imgEl.getAttribute("src") || imgEl.getAttribute("src").startsWith("vault://"))) {
+                      bindNaiVaultAwareImage(imgEl, coverSrc);
+                    }
+                  }
+                  cardEl._boundItem = item;
+                  cardEl._boundAbsIdx = absIdx;
+                  cardEl.classList.toggle("is-sort-source", colScope === "local" && colSortSourceIndex === absIdx);
+                  frag.appendChild(cardEl);
                 });
               }
-              gridEl.appendChild(emptyCard);
-            } else {
-              pageItems.forEach((item, slotIdx) => {
-                const absIdx = startIdx + slotIdx;
-                const cardEl = buildTraceCardElement(item, absIdx, slotIdx, false);
-                cardEl.addEventListener("click", () => {
-                  if (colScope === "local" && colSortSourceIndex !== -1) {
-                    handleTraceIndexReorderClick(absIdx);
-                    return;
-                  }
-                  openBookmarkDetailView(item, absIdx);
-                });
-                gridEl.appendChild(cardEl);
-              });
+              gridEl.replaceChildren(frag);
             }
 
+            if (footerEl) {
+              footerEl.style.display = totalPages > 1 ? "flex" : "none";
+            }
             if (pageTextEl) {
               pageTextEl.textContent = `${String(curPage).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`;
             }
@@ -46662,10 +46780,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             applyThemeToPanel(st.theme || "folio");
+            prewarmNaiCollectionImages();
             if (st.mode === "collection") {
               switchCollectionSubView("grid");
-              renderCollectionGrid();
             }
+            renderCollectionGrid();
             applyModeView(st.mode || "generate");
             computeActiveArtistPrompt();
             computeActivePositivePrompt();
@@ -47049,11 +47168,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 purgeBrowserDuplicateNaiCopies();
               }
 
+              prewarmNaiCollectionImages();
               if (changed) {
                 renderPresetSelectOptions();
-                if (currentMode === "collection") {
-                  renderCollectionGrid();
-                }
+                renderCollectionGrid();
               }
             })().finally(() => {
               _termuxNaiSyncInFlight = null;
@@ -123479,7 +123597,7 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
-          const MAX_BLOB_CACHE_ITEMS = 45;
+          const MAX_BLOB_CACHE_ITEMS = 200;
           function isBlobUrlMountedInDom(targetUrl) {
             if (!targetUrl) return false;
             try {
