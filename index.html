@@ -53,7 +53,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
     <script src="main-app.js" defer></script>
-    <script src="game-hall.js?v=21.3" defer></script>
+    <script src="game-hall.js?v=21.4" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
     <script src="taobao.js" defer></script>
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -38810,296 +38810,441 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           textImageModeContent.classList.remove("active");
         }
 
-        async function exportBackup(customFileName = null, customDirHandle = null) {
-          try {
-            const backupData = {
-              version: 1,
-              timestamp: Date.now(),
-            };
+        function collectHomeScreenStateForBackup() {
+          return {
+            "profile-banner-img":
+              document.getElementById("profile-banner-img")?.src || "",
+            "profile-avatar-img":
+              document.getElementById("profile-avatar-img")?.src || "",
+            homeAvatarFrame:
+              document.getElementById("profile-avatar-frame")?.src || "",
+            "profile-username":
+              document.getElementById("profile-username")?.textContent ||
+              "你的昵称",
+            "profile-sub-username":
+              document.getElementById("profile-sub-username")?.textContent ||
+              "@your_id",
+            "profile-bio":
+              document.getElementById("profile-bio")?.textContent ||
+              "点击这里编辑你的个性签名",
+            "profile-location":
+              document.getElementById("profile-location")?.innerHTML || "",
+            "widget-bubble-1":
+              document.getElementById("widget-bubble-1")?.textContent ||
+              "点击编辑文字",
+            "widget-image-1":
+              document.getElementById("widget-image-1")?.src || "",
+            "widget-subtext-1":
+              document.getElementById("widget-subtext-1")?.textContent ||
+              "点击编辑文字",
+            "widget-bubble-2":
+              document.getElementById("widget-bubble-2")?.textContent ||
+              "点击编辑文字",
+            "widget-image-2":
+              document.getElementById("widget-image-2")?.src || "",
+            "widget-subtext-2":
+              document.getElementById("widget-subtext-2")?.textContent ||
+              "点击编辑文字",
+            "widget-image-3":
+              document.getElementById("widget-image-3")?.src || "",
+            "second-page-bubble":
+              document.getElementById("second-page-bubble")?.textContent ||
+              "点击编辑文字",
+            "flat-capsule-bubble":
+              document.getElementById("flat-capsule-bubble")?.textContent ||
+              "可编辑",
+            "circular-bubble":
+              document.getElementById("circular-bubble")?.textContent ||
+              "文字",
+            "music-rect-img":
+              document.getElementById("music-rect-img")?.src || "",
+            "music-record-img":
+              document.getElementById("music-record-img")?.src || "",
+            "music-text-line":
+              document.getElementById("music-text-line")?.textContent ||
+              "点击编辑歌名",
+            "widget-month-display":
+              document.getElementById("widget-month-display")?.textContent ||
+              "12",
+            "new-widget-avatar":
+              document.getElementById("new-widget-avatar")?.src || "",
+            "new-widget-text-1":
+              document.getElementById("new-widget-text-1")?.textContent ||
+              "可编辑文字",
+            "new-widget-text-2":
+              document.getElementById("new-widget-text-2")?.textContent ||
+              "可编辑文字",
+            "new-widget-text-3":
+              document.getElementById("new-widget-text-3")?.textContent ||
+              "可编辑文字",
+            appIcons: { ...(state?.globalSettings?.appIcons || {}) },
+            appLabels: { ...(state?.globalSettings?.appLabels || {}) },
+            wallpaper: state?.globalSettings?.wallpaper,
+            lockscreenWallpaper: state?.globalSettings?.lockscreenWallpaper,
+          };
+        }
 
-            const [
-              chats,
-              worldBooks,
-              userStickers,
-              charStickers,
-              apiConfig,
-              globalSettings,
-              personaPresets,
-              musicLibrary,
-              qzoneSettings,
-              qzonePosts,
-              qzoneAlbums,
-              qzonePhotos,
-              favorites,
-              qzoneGroups,
-              memories,
-              worldBookCategories,
-              callRecords,
-              customAvatarFrames,
-              themes,
-              apiPresets,
-              bubbleStylePresets,
-              fontPresets,
-              homeScreenPresets,
-              datingScenes,
-              datingPresets,
-              datingSpriteGroups,
-              datingSprites,
-              datingHistory,
-              pomodoroSessions,
-              ludoQuestionBanks,
-              ludoQuestions,
-              scriptKillScripts,
-              taobaoProducts,
-              taobaoOrders,
-              taobaoCart,
-              userWalletTransactions,
-              userStickerCategories,
-              thoughtChainPresets,
-              modules,
-              moduleChapters,
-              moduleGroups,
-              moduleImages,
-              moduleCluePointers,
-              moduleLocationNav,
-              moduleHoRoles,
-              moduleConfigs,
-              moduleRawFiles,
-            ] = await Promise.all([
-              db.chats.toArray(),
-              db.worldBooks.toArray(),
-              db.userStickers.toArray(),
-              db.charStickers.toArray(), // <--- 新增的这一行！
-              db.apiConfig.get("main"),
-              db.globalSettings.get("main"),
-              db.personaPresets.toArray(),
-              db.musicLibrary.get("main"),
-              db.qzoneSettings.get("main"),
-              db.qzonePosts.toArray(),
-              db.qzoneAlbums.toArray(),
-              db.qzonePhotos.toArray(),
-              db.favorites.toArray(),
-              db.qzoneGroups.toArray(),
-              db.memories.toArray(),
-              db.worldBookCategories.toArray(),
-              db.callRecords.toArray(),
-              db.customAvatarFrames.toArray(),
-              db.themes.toArray(),
-              db.apiPresets.toArray(),
-              db.bubbleStylePresets.toArray(),
-              db.fontPresets.toArray(),
-              db.homeScreenPresets.toArray(),
-              db.datingScenes.toArray(),
-              db.datingPresets.toArray(),
-              db.datingSpriteGroups.toArray(),
-              db.datingSprites.toArray(),
-              db.datingHistory.toArray(),
-              db.pomodoroSessions.toArray(),
-              db.ludoQuestionBanks.toArray(),
-              db.ludoQuestions.toArray(),
-              db.scriptKillScripts.toArray(),
-              db.taobaoProducts.toArray(),
-              db.taobaoOrders.toArray(),
-              db.taobaoCart.toArray(),
-              db.userWalletTransactions.toArray(),
-              db.userStickerCategories.toArray(),
-              db.thoughtChainPresets ? db.thoughtChainPresets.toArray() : Promise.resolve([]),
-              db.modules ? db.modules.toArray() : Promise.resolve([]),
-              db.moduleChapters ? db.moduleChapters.toArray() : Promise.resolve([]),
-              db.moduleGroups ? db.moduleGroups.toArray() : Promise.resolve([]),
-              db.moduleImages ? db.moduleImages.toArray() : Promise.resolve([]),
-              db.moduleCluePointers ? db.moduleCluePointers.toArray() : Promise.resolve([]),
-              db.moduleLocationNav ? db.moduleLocationNav.toArray() : Promise.resolve([]),
-              db.moduleHoRoles ? db.moduleHoRoles.toArray() : Promise.resolve([]),
-              db.moduleConfigs ? db.moduleConfigs.toArray() : Promise.resolve([]),
-              db.moduleRawFiles ? db.moduleRawFiles.toArray() : Promise.resolve([]),
-            ]);
+        function createLowMemoryJsonBlobWriter(sanitizeSecrets = false) {
+          const blobParts = [];
+          let strBuf = "";
+          const FLUSH_THRESHOLD = 2 * 1024 * 1024;
 
-            Object.assign(backupData, {
-              chats,
-              worldBooks,
-              userStickers,
-              charStickers,
-              apiConfig,
-              globalSettings,
-              personaPresets,
-              musicLibrary,
-              qzoneSettings,
-              qzonePosts,
-              qzoneAlbums,
-              qzonePhotos,
-              favorites,
-              qzoneGroups,
-              memories,
-              worldBookCategories,
-              callRecords,
-              customAvatarFrames,
-              themes,
-              apiPresets,
-              bubbleStylePresets,
-              fontPresets,
-              homeScreenPresets,
-              datingScenes,
-              datingPresets,
-              datingSpriteGroups,
-              datingSprites,
-              datingHistory,
-              pomodoroSessions,
-              ludoQuestionBanks,
-              ludoQuestions,
-              scriptKillScripts,
-              taobaoProducts,
-              taobaoOrders,
-              taobaoCart,
-              userWalletTransactions,
-              userStickerCategories,
-              thoughtChainPresets,
-              modules,
-              moduleChapters,
-              moduleGroups,
-              moduleImages,
-              moduleCluePointers,
-              moduleLocationNav,
-              moduleHoRoles,
-              moduleConfigs,
-              moduleRawFiles,
-              modulePromptPresets: typeof getModulePromptPresets === "function" ? getModulePromptPresets() : JSON.parse(localStorage.getItem("coc_module_prompt_presets") || "[]"),
-              moduleDefaultPresetId: localStorage.getItem("coc_module_default_preset_id") || "",
-              moduleDraftState: localStorage.getItem("coc_module_draft_state_v1") || "",
-              novelaiSettings: {
-                enabled: localStorage.getItem("novelai-enabled"),
-                model: localStorage.getItem("novelai-model"),
-                apiKey: localStorage.getItem("novelai-api-key"),
-                settings: typeof getNovelAISettings === "function" ? getNovelAISettings() : localStorage.getItem("novelai-settings"),
-              },
-              peerIdentityBackup: window.PeerManager && typeof window.PeerManager.buildPeerIdentityBackupData === "function"
-                ? window.PeerManager.buildPeerIdentityBackupData()
-                : {
-                    myPeerCode: localStorage.getItem("tukey_my_peer_code") || "",
-                    peerFriendsBackup: JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}"),
-                    deletedPeerCodes: JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]"),
-                  },
-            });
-            if (backupData.globalSettings && typeof backupData.globalSettings === "object") {
-              backupData.globalSettings.myPeerCode = localStorage.getItem("tukey_my_peer_code") || backupData.globalSettings.myPeerCode || "";
-              backupData.globalSettings.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
-              backupData.globalSettings.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
+          const flush = () => {
+            if (strBuf.length > 0) {
+              const outStr = sanitizeSecrets ? sanitizeSecretStringValue(strBuf) : strBuf;
+              blobParts.push(new Blob([outStr], { type: "text/plain; charset=utf-8" }));
+              strBuf = "";
             }
+          };
 
-            backupData.homeScreenState = {
-              // --- 1. 个人资料卡 ---
-              "profile-banner-img":
-                document.getElementById("profile-banner-img")?.src || "",
-              "profile-avatar-img":
-                document.getElementById("profile-avatar-img")?.src || "",
-              homeAvatarFrame:
-                document.getElementById("profile-avatar-frame")?.src || "",
-              "profile-username":
-                document.getElementById("profile-username")?.textContent ||
-                "你的昵称",
-              "profile-sub-username":
-                document.getElementById("profile-sub-username")?.textContent ||
-                "@your_id",
-              "profile-bio":
-                document.getElementById("profile-bio")?.textContent ||
-                "点击这里编辑你的个性签名",
-              "profile-location":
-                document.getElementById("profile-location")?.innerHTML || "",
-
-              // --- 2. 第一页小组件 (保持不变) ---
-              "widget-bubble-1":
-                document.getElementById("widget-bubble-1")?.textContent ||
-                "点击编辑文字",
-              "widget-image-1":
-                document.getElementById("widget-image-1")?.src || "",
-              "widget-subtext-1":
-                document.getElementById("widget-subtext-1")?.textContent ||
-                "点击编辑文字",
-              "widget-bubble-2":
-                document.getElementById("widget-bubble-2")?.textContent ||
-                "点击编辑文字",
-              "widget-image-2":
-                document.getElementById("widget-image-2")?.src || "",
-              "widget-subtext-2":
-                document.getElementById("widget-subtext-2")?.textContent ||
-                "点击编辑文字",
-
-              // --- 3. 第二页：左侧组合 (图片 + 气泡) ---
-              "widget-image-3":
-                document.getElementById("widget-image-3")?.src || "",
-              "second-page-bubble":
-                document.getElementById("second-page-bubble")?.textContent ||
-                "点击编辑文字",
-              "flat-capsule-bubble":
-                document.getElementById("flat-capsule-bubble")?.textContent ||
-                "可编辑",
-              "circular-bubble":
-                document.getElementById("circular-bubble")?.textContent ||
-                "文字",
-
-              // --- 4. 第二页：透明音乐组件 (核心新增) ---
-              "music-rect-img":
-                document.getElementById("music-rect-img")?.src || "",
-              "music-record-img":
-                document.getElementById("music-record-img")?.src || "",
-              "music-text-line":
-                document.getElementById("music-text-line")?.textContent ||
-                "点击编辑歌名",
-
-              // --- 5. 第二页：月份/头像组合组件 (核心新增) ---
-              "widget-month-display":
-                document.getElementById("widget-month-display")?.textContent ||
-                "12",
-              "new-widget-avatar":
-                document.getElementById("new-widget-avatar")?.src || "",
-              "new-widget-text-1":
-                document.getElementById("new-widget-text-1")?.textContent ||
-                "可编辑文字",
-              "new-widget-text-2":
-                document.getElementById("new-widget-text-2")?.textContent ||
-                "可编辑文字",
-              "new-widget-text-3":
-                document.getElementById("new-widget-text-3")?.textContent ||
-                "可编辑文字",
-
-              // --- 全局设置 ---
-              appIcons: { ...state.globalSettings.appIcons },
-              appLabels: { ...state.globalSettings.appLabels },
-              wallpaper: state.globalSettings.wallpaper,
-              lockscreenWallpaper: state.globalSettings.lockscreenWallpaper,
-            };
-
-            backupData.localStorageSnapshot = {};
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k) backupData.localStorageSnapshot[k] = localStorage.getItem(k);
+          const appendRaw = (s) => {
+            if (!s) return;
+            strBuf += s;
+            if (strBuf.length >= FLUSH_THRESHOLD) {
+              flush();
             }
-            backupData.extraDbTables = {};
-            for (const table of db.tables) {
-              if (!(table.name in backupData)) {
+          };
+
+          const appendValue = (val, depth = 0) => {
+            if (val === undefined || typeof val === "function" || typeof val === "symbol") {
+              appendRaw("null");
+              return;
+            }
+            if (val === null || typeof val === "number" || typeof val === "boolean") {
+              appendRaw(JSON.stringify(val));
+              return;
+            }
+            if (typeof val === "string") {
+              appendRaw(JSON.stringify(val));
+              return;
+            }
+            if (Array.isArray(val)) {
+              appendRaw("[");
+              for (let i = 0; i < val.length; i++) {
+                if (i > 0) appendRaw(",");
+                const item = val[i];
+                if (depth < 2 && item && typeof item === "object") {
+                  appendValue(item, depth + 1);
+                } else {
+                  try {
+                    const s = JSON.stringify(item);
+                    appendRaw(s === undefined ? "null" : s);
+                  } catch (_) {
+                    appendValue(item, depth + 1);
+                  }
+                }
+              }
+              appendRaw("]");
+              return;
+            }
+            if (typeof val === "object") {
+              if (depth >= 2) {
                 try {
-                  backupData.extraDbTables[table.name] = await table.toArray();
+                  const s = JSON.stringify(val);
+                  if (s !== undefined) {
+                    appendRaw(s);
+                    return;
+                  }
                 } catch (_) {}
               }
+              appendRaw("{");
+              const keys = Object.keys(val);
+              let wroteAny = false;
+              for (let i = 0; i < keys.length; i++) {
+                const k = keys[i];
+                const v = val[k];
+                if (v === undefined || typeof v === "function" || typeof v === "symbol") continue;
+                if (wroteAny) appendRaw(",");
+                wroteAny = true;
+                appendRaw(JSON.stringify(k) + ":");
+                appendValue(v, depth + 1);
+              }
+              appendRaw("}");
+              return;
             }
-            if (typeof window.getTavernStateForFullBackup === "function") {
+            appendRaw("null");
+          };
+
+          const finish = (mimeType = "application/json") => {
+            flush();
+            const finalBlob = new Blob(blobParts, { type: mimeType });
+            blobParts.length = 0;
+            return finalBlob;
+          };
+
+          return { appendRaw, appendValue, flush, finish };
+        }
+        window.createLowMemoryJsonBlobWriter = createLowMemoryJsonBlobWriter;
+
+        async function serializeValueToJsonBlobLowMemory(val, sanitizeSecrets = false) {
+          const writer = createLowMemoryJsonBlobWriter(sanitizeSecrets);
+          writer.appendValue(val, 0);
+          return writer.finish("application/json");
+        }
+        window.serializeValueToJsonBlobLowMemory = serializeValueToJsonBlobLowMemory;
+
+        async function parseBackupBlobOrFileLowMemory(fileOrBlob) {
+          if (!fileOrBlob) throw new Error("备份文件为空");
+          try {
+            const headBuf = await fileOrBlob.slice(0, 2).arrayBuffer();
+            const headBytes = new Uint8Array(headBuf);
+            if (
+              headBytes.length >= 2 &&
+              headBytes[0] === 0x1f &&
+              headBytes[1] === 0x8b &&
+              typeof DecompressionStream !== "undefined"
+            ) {
+              const decompressedStream = fileOrBlob
+                .stream()
+                .pipeThrough(new DecompressionStream("gzip"));
+              return await new Response(decompressedStream).json();
+            }
+          } catch (_) {}
+          try {
+            return await new Response(fileOrBlob).json();
+          } catch (nativeErr) {
+            const text = await fileOrBlob.text();
+            return JSON.parse(text);
+          }
+        }
+        window.parseBackupBlobOrFileLowMemory = parseBackupBlobOrFileLowMemory;
+
+        async function buildFullBackupBlobLowMemory(onProgress = null) {
+          const writer = createLowMemoryJsonBlobWriter(false);
+          const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
+
+          writer.appendRaw("{\n");
+          writer.appendRaw(`"version":1,\n"timestamp":${Date.now()}`);
+
+          const writeField = async (key, val) => {
+            writer.appendRaw(",\n" + JSON.stringify(key) + ":");
+            writer.appendValue(val, 0);
+            writer.flush();
+          };
+
+          const singleObjectTables = [
+            "apiConfig",
+            "globalSettings",
+            "musicLibrary",
+            "qzoneSettings",
+          ];
+
+          const knownTopLevelArrayTables = [
+            "chats",
+            "worldBooks",
+            "userStickers",
+            "charStickers",
+            "personaPresets",
+            "qzonePosts",
+            "qzoneAlbums",
+            "qzonePhotos",
+            "favorites",
+            "qzoneGroups",
+            "memories",
+            "worldBookCategories",
+            "callRecords",
+            "customAvatarFrames",
+            "themes",
+            "apiPresets",
+            "bubbleStylePresets",
+            "fontPresets",
+            "homeScreenPresets",
+            "datingScenes",
+            "datingPresets",
+            "datingSpriteGroups",
+            "datingSprites",
+            "datingHistory",
+            "pomodoroSessions",
+            "ludoQuestionBanks",
+            "ludoQuestions",
+            "scriptKillScripts",
+            "taobaoProducts",
+            "taobaoOrders",
+            "taobaoCart",
+            "userWalletTransactions",
+            "userStickerCategories",
+            "thoughtChainPresets",
+            "modules",
+            "moduleChapters",
+            "moduleGroups",
+            "moduleImages",
+            "moduleCluePointers",
+            "moduleLocationNav",
+            "moduleHoRoles",
+            "moduleConfigs",
+            "moduleRawFiles",
+            "weiboPosts",
+            "forumGroups",
+            "forumPosts",
+            "forumComments",
+            "forumCategories",
+            "forumSeries",
+            "forumChapters",
+            "tarotReadings",
+          ];
+
+          const handledTableNames = new Set();
+
+          for (const tName of singleObjectTables) {
+            handledTableNames.add(tName);
+            let objVal = null;
+            try {
+              if (db[tName]) {
+                objVal = (await db[tName].get("main")) || (await db[tName].toCollection().first()) || null;
+              }
+            } catch (_) {}
+            if (tName === "globalSettings" && objVal && typeof objVal === "object") {
+              objVal = { ...objVal };
+              objVal.myPeerCode = localStorage.getItem("tukey_my_peer_code") || objVal.myPeerCode || "";
               try {
-                const tvBackup = await window.getTavernStateForFullBackup();
-                if (tvBackup) backupData.tavernStateBackup = tvBackup;
+                objVal.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
+                objVal.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
               } catch (_) {}
             }
-            if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
-              await window.resolveAllVaultUrlsDeepForBackup(backupData);
+            await writeField(tName, objVal);
+          }
+
+          for (let i = 0; i < knownTopLevelArrayTables.length; i++) {
+            const tName = knownTopLevelArrayTables[i];
+            handledTableNames.add(tName);
+            if (typeof onProgress === "function") {
+              onProgress(`正在流式打包表 ${tName} (${i + 1}/${knownTopLevelArrayTables.length})...`);
+            }
+            let rows = [];
+            try {
+              if (db[tName]) {
+                rows = await db[tName].toArray();
+              }
+            } catch (_) {
+              rows = [];
+            }
+            writer.appendRaw(",\n" + JSON.stringify(tName) + ":[");
+            for (let r = 0; r < rows.length; r++) {
+              if (r > 0) writer.appendRaw(",");
+              writer.appendValue(rows[r], 1);
+              rows[r] = null;
+              if (r % 50 === 0) {
+                writer.flush();
+                await yieldToUi();
+              }
+            }
+            writer.appendRaw("]");
+            writer.flush();
+            rows = null;
+            await yieldToUi();
+          }
+
+          writer.appendRaw(',\n"extraDbTables":{');
+          let wroteExtra = false;
+          if (db && Array.isArray(db.tables)) {
+            for (const table of db.tables) {
+              if (!table || !table.name || handledTableNames.has(table.name)) continue;
+              handledTableNames.add(table.name);
+              let rows = [];
+              try {
+                rows = await table.toArray();
+              } catch (_) {
+                rows = [];
+              }
+              if (wroteExtra) writer.appendRaw(",");
+              wroteExtra = true;
+              writer.appendRaw(JSON.stringify(table.name) + ":[");
+              for (let r = 0; r < rows.length; r++) {
+                if (r > 0) writer.appendRaw(",");
+                writer.appendValue(rows[r], 1);
+                rows[r] = null;
+              }
+              writer.appendRaw("]");
+              writer.flush();
+              rows = null;
+              await yieldToUi();
+            }
+          }
+          writer.appendRaw("}");
+          writer.flush();
+
+          await writeField(
+            "modulePromptPresets",
+            typeof getModulePromptPresets === "function"
+              ? getModulePromptPresets()
+              : JSON.parse(localStorage.getItem("coc_module_prompt_presets") || "[]")
+          );
+          await writeField("moduleDefaultPresetId", localStorage.getItem("coc_module_default_preset_id") || "");
+          await writeField("moduleDraftState", localStorage.getItem("coc_module_draft_state_v1") || "");
+          await writeField("novelaiSettings", {
+            enabled: localStorage.getItem("novelai-enabled"),
+            model: localStorage.getItem("novelai-model"),
+            apiKey: localStorage.getItem("novelai-api-key"),
+            settings:
+              typeof getNovelAISettings === "function"
+                ? getNovelAISettings()
+                : localStorage.getItem("novelai-settings"),
+          });
+          await writeField(
+            "peerIdentityBackup",
+            window.PeerManager && typeof window.PeerManager.buildPeerIdentityBackupData === "function"
+              ? window.PeerManager.buildPeerIdentityBackupData()
+              : {
+                  myPeerCode: localStorage.getItem("tukey_my_peer_code") || "",
+                  peerFriendsBackup: JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}"),
+                  deletedPeerCodes: JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]"),
+                }
+          );
+          await writeField("homeScreenState", collectHomeScreenStateForBackup());
+
+          const lsSnapshot = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k) lsSnapshot[k] = localStorage.getItem(k);
+          }
+          await writeField("localStorageSnapshot", lsSnapshot);
+
+          if (typeof window.getTavernStateForFullBackup === "function") {
+            if (typeof onProgress === "function") {
+              onProgress("正在流式打包酒馆全量数据...");
+            }
+            try {
+              const tvBackup = await window.getTavernStateForFullBackup();
+              if (tvBackup) {
+                await writeField("tavernStateBackup", tvBackup);
+              }
+            } catch (_) {}
+          }
+
+          writer.appendRaw("\n}");
+          return writer.finish("application/json");
+        }
+        window.buildFullBackupBlobLowMemory = buildFullBackupBlobLowMemory;
+
+        async function exportFullBackupUnified(customFileName = null, customDirHandle = null) {
+          if (window._isExportingFullBackup) {
+            if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("正在打包导出全量备份中，请稍候...");
+            }
+            return;
+          }
+          window._isExportingFullBackup = true;
+          try {
+            if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("正在后台分块打包全量备份，请稍候...");
             }
 
-            let actualFileName = (typeof customFileName === "string" && customFileName.trim())
-              ? customFileName
-              : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+            const blob = await buildFullBackupBlobLowMemory();
+
+            let actualFileName =
+              typeof customFileName === "string" && customFileName.trim()
+                ? customFileName
+                : typeof formatAutoExportDateTime === "function"
+                ? formatAutoExportDateTime()
+                : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
             if (!actualFileName.endsWith(".json")) actualFileName += ".json";
-            const jsonText = JSON.stringify(backupData, null, 2);
 
             const isAutoExport = Boolean(customDirHandle);
-            if (isAutoExport && customDirHandle && typeof customDirHandle.getFileHandle === "function") {
+            if (
+              isAutoExport &&
+              customDirHandle &&
+              typeof customDirHandle.getFileHandle === "function"
+            ) {
               try {
                 if (typeof customDirHandle.queryPermission === "function") {
                   const perm = await customDirHandle.queryPermission({ mode: "readwrite" });
@@ -39107,20 +39252,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     await customDirHandle.requestPermission({ mode: "readwrite" });
                   }
                 }
-                const fileHandle = await customDirHandle.getFileHandle(actualFileName, { create: true });
+                const fileHandle = await customDirHandle.getFileHandle(actualFileName, {
+                  create: true,
+                });
                 const writable = await fileHandle.createWritable();
-                await writable.write(jsonText);
+                await writable.write(blob);
                 await writable.close();
-                await showCustomAlert("导出成功", `已自动备份至指定目录: ${actualFileName}`);
+                if (typeof hideCustomModal === "function") hideCustomModal();
+                await showCustomAlert("导出成功", `已自动全量备份至指定目录: ${actualFileName}`);
                 return;
               } catch (fsErr) {
                 console.warn("写入选定目录失败，将使用浏览器下载:", fsErr);
               }
             }
 
-            const blob = new Blob([jsonText], {
-              type: "application/json",
-            });
             const url = URL.createObjectURL(blob);
             const link = Object.assign(document.createElement("a"), {
               href: url,
@@ -39129,16 +39274,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            setTimeout(() => URL.revokeObjectURL(url), 15000);
 
-            await showCustomAlert("导出成功", `备份文件已开始下载: ${actualFileName}`);
+            if (typeof hideCustomModal === "function") hideCustomModal();
+            await showCustomAlert("导出成功", `全量备份文件已开始下载: ${actualFileName}`);
           } catch (error) {
             console.error("导出数据时出错:", error);
-            await showCustomAlert(
-              "导出失败",
-              `发生了一个错误: ${error.message}`,
-            );
+            if (typeof hideCustomModal === "function") hideCustomModal();
+            await showCustomAlert("导出失败", `发生了一个错误: ${error.message}`);
+          } finally {
+            window._isExportingFullBackup = false;
           }
+        }
+        window.exportFullBackupUnified = exportFullBackupUnified;
+
+        async function exportBackup(customFileName = null, customDirHandle = null) {
+          return await exportFullBackupUnified(customFileName, customDirHandle);
         }
 
         let githubBackupTimer = null;
@@ -39737,8 +39888,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (!confirmed) return;
 
           try {
-            const text = await file.text();
-            const data = JSON.parse(text);
+            const data = await parseBackupBlobOrFileLowMemory(file);
 
             // 0. 在清空前先保存当前浏览器内已有的非初始最新数据，以便导入旧包后按最新进度合并
             const preImportSnapshot = {
@@ -94373,188 +94523,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          * 利用 ReadableStream 和 Response 流式传输给用户，从而极大降低内存占用。
          */
         async function exportDataStream(customFileName = null, customDirHandle = null) {
-          await showCustomAlert(
-            "请稍候...",
-            "正在准备流式导出，这可能需要一些时间，但不会使浏览器崩溃。",
-          );
-
-          // 定义所有需要备份的数据库表名
-          const tablesToExport = [
-            "chats",
-            "apiConfig",
-            "globalSettings",
-            "userStickers",
-            "charStickers",
-            "worldBooks",
-            "musicLibrary",
-            "personaPresets",
-            "qzoneSettings",
-            "qzonePosts",
-            "qzoneAlbums",
-            "qzonePhotos",
-            "favorites",
-            "qzoneGroups",
-            "memories",
-            "worldBookCategories",
-            "callRecords",
-            "customAvatarFrames",
-            "themes",
-            "apiPresets",
-            "bubbleStylePresets",
-            "fontPresets",
-            "homeScreenPresets",
-            "weiboPosts",
-            "forumGroups",
-            "forumPosts",
-            "forumComments",
-            "forumCategories",
-            "forumSeries",
-            "forumChapters",
-            "tarotReadings",
-            "pomodoroSessions",
-            "scriptKillScripts",
-            "taobaoProducts",
-            "taobaoOrders",
-            "taobaoCart",
-            "userWalletTransactions",
-            "userStickerCategories",
-            "datingScenes",
-            "datingPresets",
-            "datingSpriteGroups",
-            "datingSprites",
-            "datingHistory",
-            "modules",
-            "moduleChapters",
-            "moduleGroups",
-            "moduleImages",
-            "moduleCluePointers",
-            "moduleLocationNav",
-            "moduleHoRoles",
-            "moduleConfigs",
-            "moduleRawFiles",
-          ];
-
-          const stream = new ReadableStream({
-            async start(controller) {
-              const encoder = new TextEncoder();
-
-              // 1. 写入JSON文件的开头
-              controller.enqueue(encoder.encode("{\n"));
-
-              // 2. 添加版本和时间戳元数据
-              const metaData = `"version": 1,\n"timestamp": ${Date.now()},\n`;
-              controller.enqueue(encoder.encode(metaData));
-
-              // 3. 逐个处理数据库表
-              for (let i = 0; i < tablesToExport.length; i++) {
-                const tableName = tablesToExport[i];
-                console.log(`流式导出：正在处理表 ${tableName}...`);
-
-                try {
-                  // 1. 定义哪些表是单个对象的设置表
-                  const singleObjectTables = [
-                    "apiConfig",
-                    "globalSettings",
-                    "musicLibrary",
-                    "qzoneSettings",
-                    "tukeyUserSettings",
-                    "tukeyCustomConfig",
-                    "tukeyAccountingGroups",
-                  ];
-
-                  let tableData;
-                  // 2. 判断当前表是否是单个对象的设置表
-                  if (singleObjectTables.includes(tableName)) {
-                    // 如果是，就只获取第一个（也可能是唯一一个）对象
-                    tableData = await db[tableName].toCollection().first();
-                    // 如果表是空的，first()会返回undefined，JSON.stringify(undefined)会出问题，所以转为null
-                    if (tableData === undefined) {
-                      tableData = null;
-                    } else if (tableName === "globalSettings" && typeof tableData === "object") {
-                      tableData.myPeerCode = localStorage.getItem("tukey_my_peer_code") || tableData.myPeerCode || "";
-                      try {
-                        tableData.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
-                        tableData.deletedPeerCodes = JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]");
-                      } catch (e) {}
-                    }
-                  } else {
-                    // 如果是普通的多条记录表，就还是获取整个数组
-                    tableData = await db[tableName].toArray();
-                  }
-
-                  const jsonString = JSON.stringify(tableData);
-
-                  // 写入 "tableName": [...] 或 "tableName": {...}
-                  controller.enqueue(
-                    encoder.encode(`"${tableName}": ${jsonString}`),
-                  );
-
-                  // 如果不是最后一个表，就加上逗号和换行符
-                  if (i < tablesToExport.length - 1) {
-                    controller.enqueue(encoder.encode(",\n"));
-                  } else {
-                    controller.enqueue(encoder.encode("\n"));
-                  }
-                } catch (e) {
-                  console.error(`流式导出时，处理表 ${tableName} 失败:`, e);
-                  // 即使某个表失败，也继续尝试下一个
-                }
-              }
-
-              // 4. 写入JSON文件的结尾
-              controller.enqueue(encoder.encode("}"));
-
-              // 5. 通知流已经结束
-              controller.close();
-              console.log("流式导出：所有数据写入完成。");
-            },
-          });
-
-          // 6. 使用 Response 将流包装成可下载的文件
-          const response = new Response(stream, {
-            headers: { "Content-Type": "application/json" },
-          });
-
-          const blobData = await response.blob();
-          let actualFileName = (typeof customFileName === "string" && customFileName.trim())
-            ? customFileName
-            : (typeof formatAutoExportDateTime === "function" ? formatAutoExportDateTime() : `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-          if (!actualFileName.endsWith(".json")) actualFileName += ".json";
-
-          const isAutoExport = Boolean(customDirHandle);
-          if (isAutoExport && customDirHandle && typeof customDirHandle.getFileHandle === "function") {
-            try {
-              if (typeof customDirHandle.queryPermission === "function") {
-                const perm = await customDirHandle.queryPermission({ mode: "readwrite" });
-                if (perm !== "granted") {
-                  await customDirHandle.requestPermission({ mode: "readwrite" });
-                }
-              }
-              const fileHandle = await customDirHandle.getFileHandle(actualFileName, { create: true });
-              const writable = await fileHandle.createWritable();
-              await writable.write(blobData);
-              await writable.close();
-              hideCustomModal();
-              await showCustomAlert("导出成功", `已自动流式备份至指定目录: ${actualFileName}`);
-              return;
-            } catch (fsErr) {
-              console.warn("写入选定目录失败，将使用浏览器下载:", fsErr);
-            }
-          }
-
-          // 7. 创建并触发下载链接
-          const url = URL.createObjectURL(blobData);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = actualFileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-          // 关闭提示弹窗
-          hideCustomModal();
-          await showCustomAlert("导出成功", `流式备份文件已开始下载: ${actualFileName}`);
+          return await exportFullBackupUnified(customFileName, customDirHandle);
         }
         /**
          * 恢复所有App名称为默认值
@@ -102216,6 +102185,72 @@ ${specificRules}`;
          * 3. 500-600MB 本地数据库一次性 JSON.stringify + btoa 导致浏览器内存溢出崩溃
          * 4. 完整包含所有数据库表、localStorageSnapshot 以及酒馆 (tavernStateBackup)
          */
+        async function computeGitBlobSha1FromBytes(uint8Bytes) {
+          try {
+            if (!window.crypto || !window.crypto.subtle) return null;
+            const headerBytes = new TextEncoder().encode(`blob ${uint8Bytes.byteLength}\0`);
+            const combined = new Uint8Array(headerBytes.byteLength + uint8Bytes.byteLength);
+            combined.set(headerBytes, 0);
+            combined.set(uint8Bytes, headerBytes.byteLength);
+            const hashBuf = await window.crypto.subtle.digest("SHA-1", combined);
+            const hashArr = new Uint8Array(hashBuf);
+            let hex = "";
+            for (let i = 0; i < hashArr.length; i++) {
+              hex += hashArr[i].toString(16).padStart(2, "0");
+            }
+            return hex;
+          } catch (_) {
+            return null;
+          }
+        }
+
+        function decodeBase64ToUint8Array(b64Str) {
+          const clean = String(b64Str || "").replace(/[\r\n\s]+/g, "");
+          if (!clean) return new Uint8Array(0);
+          const bin = atob(clean);
+          const out = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) {
+            out[i] = bin.charCodeAt(i);
+          }
+          return out;
+        }
+
+        async function fetchGitHubFileRawBytes(user, repo, path, token) {
+          const cleanPath = String(path || "").replace(/^\/+/, "");
+          const rawFetch = window._rawNativeFetch || window.fetch;
+          const headers = {
+            Accept: "application/vnd.github.v3+json",
+            Authorization: `token ${token}`,
+          };
+
+          const fetchBlobBytesBySha = async (sha) => {
+            if (!sha) return null;
+            const blobUrl = `https://api.github.com/repos/${user}/${repo}/git/blobs/${sha}?t=${Date.now()}`;
+            const blobRes = await rawFetch(blobUrl, { headers, cache: "no-store" });
+            if (!blobRes.ok) throw new Error(`Blob 下载失败: ${blobRes.status}`);
+            const blobJson = await blobRes.json();
+            return decodeBase64ToUint8Array(blobJson.content || "");
+          };
+
+          const singleUrl = `https://api.github.com/repos/${user}/${repo}/contents/${cleanPath}?t=${Date.now()}`;
+          const res = await rawFetch(singleUrl, { headers, cache: "no-store" });
+          if (res.status === 404) return null;
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.content) {
+              return decodeBase64ToUint8Array(json.content);
+            }
+            if (json && json.sha) {
+              return await fetchBlobBytesBySha(json.sha);
+            }
+          }
+          const fallbackSha = await getGitHubRemoteFileSha(user, repo, cleanPath, token, false);
+          if (fallbackSha) {
+            return await fetchBlobBytesBySha(fallbackSha);
+          }
+          return null;
+        }
+
         async function uploadBackupToGitHubStream(isAuto = false, skipConfirm = false) {
           const autoMode = typeof isAuto === "boolean" ? isAuto : false;
           let { githubToken, githubUsername, githubRepo, githubPath } =
@@ -102223,6 +102258,13 @@ ${specificRules}`;
 
           if (!githubToken || !githubUsername || !githubRepo) {
             if (!autoMode) alert("请先在 API 设置中填写 GitHub 配置！");
+            return;
+          }
+
+          if (window._isGithubBackupUploading) {
+            if (!autoMode && typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("GitHub 云端备份正在后台上传中，您可以继续正常游玩");
+            }
             return;
           }
 
@@ -102235,96 +102277,120 @@ ${specificRules}`;
           let basePath = path.endsWith(".json") ? path.slice(0, -5) : path;
           if (!basePath) basePath = "ephone_backup";
 
-          if (!autoMode && !skipConfirm) {
-            const confirmed = await showCustomConfirm(
-              "开始云端备份上传",
-              "将采用低内存分片模式上传全部手机数据与酒馆数据，防止大内存崩溃。确定开始吗？",
-            );
-            if (!confirmed) return;
-          }
+          window._isGithubBackupUploading = true;
+          const uploadBtn = document.getElementById("manual-github-backup-btn");
+          const origBtnText = uploadBtn ? uploadBtn.textContent : "上传";
 
-          const loadingOverlay = document.getElementById("generation-overlay");
-          const loadingText = loadingOverlay ? loadingOverlay.querySelector("p") : null;
-          if (loadingOverlay && !autoMode) {
-            loadingOverlay.classList.add("visible");
-          }
-
-          const updateStatusText = (txt) => {
-            if (loadingText && !autoMode) loadingText.textContent = txt;
+          const setBackgroundStatus = (txt, notifyToast = false) => {
+            if (uploadBtn) {
+              uploadBtn.textContent = txt;
+            }
+            if (!autoMode && notifyToast && typeof window.showDownloadToast === "function") {
+              window.showDownloadToast(txt);
+            }
           };
 
-          // 单个上传分片控制在 8MB Base64 以内，内存峰值不超过 18MB
-          const CHUNK_SIZE = 8 * 1024 * 1024;
-          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          setBackgroundStatus("后台同步索引...", true);
 
-          const uploadWithRetry = async (targetPath, contentB64, retries = 3) => {
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const cacheKey = `${user}/${repo}`;
+
+          const uploadWithRetryAndShaSkip = async (targetPath, sliceBytes, retries = 3) => {
+            const cleanTargetPath = String(targetPath || "").replace(/^\/+/, "");
+            const existingSha =
+              window._ghRepoShaCacheMap &&
+              window._ghRepoShaCacheMap[cacheKey] &&
+              window._ghRepoShaCacheMap[cacheKey][cleanTargetPath];
+            if (existingSha) {
+              const localSha = await computeGitBlobSha1FromBytes(sliceBytes);
+              if (localSha && localSha === existingSha) {
+                return "skipped";
+              }
+            }
+            const contentB64 = encodeUtf8BytesToBase64Chunked(sliceBytes);
             for (let i = 0; i < retries; i++) {
               try {
-                await uploadSingleFile(user, repo, targetPath, token, contentB64, true);
-                return;
+                await uploadSingleFile(user, repo, cleanTargetPath, token, contentB64, true);
+                return "uploaded";
               } catch (error) {
-                console.warn(`上传 ${targetPath} 异常，正在重试 (${i + 1}/${retries}):`, error);
+                console.warn(`上传 ${cleanTargetPath} 异常，正在重试 (${i + 1}/${retries}):`, error);
                 if (i === retries - 1) throw error;
-                await sleep(1500 * (i + 1));
+                await sleep(1000 * (i + 1));
               }
             }
           };
 
-          const uploadModuleObjectLowMemory = async (moduleKey, payloadObj, stepLabel) => {
-            if (payloadObj === undefined || payloadObj === null) return false;
-            updateStatusText(`${stepLabel} 正在编码: ${moduleKey}...`);
-            await sleep(25);
+          const uploadBundledModuleLowMemory = async (moduleKey, payloadObj, stepIndex, totalSteps) => {
+            if (payloadObj === undefined || payloadObj === null) return null;
+            setBackgroundStatus(`后台打包 ${stepIndex}/${totalSteps}...`, false);
+            await sleep(10);
 
-            let jsonStr = JSON.stringify(payloadObj);
-            // 释放原对象引用辅助 GC
+            const jsonBlob = await serializeValueToJsonBlobLowMemory(payloadObj, true);
+            const rawByteLength = jsonBlob.size;
             payloadObj = null;
-            jsonStr = sanitizeSecretStringValue(jsonStr);
 
-            const utf8Bytes = new TextEncoder().encode(jsonStr);
-            jsonStr = ""; // 立即释放大字符串引用
+            let finalBlob = jsonBlob;
+            let compressionMode = "none";
+            if (typeof CompressionStream !== "undefined") {
+              try {
+                const compressedStream = jsonBlob
+                  .stream()
+                  .pipeThrough(new CompressionStream("gzip"));
+                finalBlob = await new Response(compressedStream).blob();
+                compressionMode = "gzip";
+              } catch (_) {
+                finalBlob = jsonBlob;
+                compressionMode = "none";
+              }
+            }
 
             const fileName = `${basePath}_${moduleKey}.json`;
-            // 6MB 原始字节对应 8MB Base64（必须是3的倍数以保证Base64分片无缝拼接）
-            const RAW_SLICE_BYTES = 6 * 1024 * 1024;
+            // 12MB 原始压缩字节对应 16MB Base64（3的倍数）
+            const RAW_SLICE_BYTES = 12 * 1024 * 1024;
+            const totalSize = finalBlob.size;
 
-            if (utf8Bytes.length > RAW_SLICE_BYTES) {
-              const totalChunks = Math.ceil(utf8Bytes.length / RAW_SLICE_BYTES);
+            if (totalSize > RAW_SLICE_BYTES) {
+              const totalChunks = Math.ceil(totalSize / RAW_SLICE_BYTES);
               for (let c = 0; c < totalChunks; c++) {
-                updateStatusText(`${stepLabel} 上传 ${moduleKey} 分片 ${c + 1}/${totalChunks}...`);
-                const start = c * RAW_SLICE_BYTES;
-                const end = Math.min(start + RAW_SLICE_BYTES, utf8Bytes.length);
-                const sliceB64 = encodeUtf8BytesToBase64Chunked(utf8Bytes.subarray(start, end));
-                const partName = `${fileName}.${String(c + 1).padStart(3, "0")}`;
-                await uploadWithRetry(partName, sliceB64);
-                await sleep(350);
-              }
-              const metaInfo = {
-                split: true,
-                totalChunks: totalChunks,
-                originalByteLength: utf8Bytes.length,
-                timestamp: Date.now()
-              };
-              const metaB64 = encodeUtf8BytesToBase64Chunked(new TextEncoder().encode(JSON.stringify(metaInfo)));
-              await uploadWithRetry(`${fileName}.meta`, metaB64);
-            } else {
-              updateStatusText(`${stepLabel} 正在上传: ${moduleKey}...`);
-              const fullB64 = encodeUtf8BytesToBase64Chunked(utf8Bytes);
-              await uploadWithRetry(fileName, fullB64);
-              // 如果之前该表是分片的，现在变小了，写一个 split:false 的 meta 覆盖旧分片标记
-              const cacheMap = window._ghRepoShaCacheMap[`${user}/${repo}`] || {};
-              if (cacheMap[`${fileName}.meta`]) {
-                const resetMeta = encodeUtf8BytesToBase64Chunked(
-                  new TextEncoder().encode(JSON.stringify({ split: false, totalChunks: 0, timestamp: Date.now() }))
+                setBackgroundStatus(
+                  `后台上传 ${stepIndex}/${totalSteps} (${c + 1}/${totalChunks})`
                 );
-                await uploadWithRetry(`${fileName}.meta`, resetMeta);
+                const start = c * RAW_SLICE_BYTES;
+                const end = Math.min(start + RAW_SLICE_BYTES, totalSize);
+                const sliceBuf = await finalBlob.slice(start, end).arrayBuffer();
+                const sliceBytes = new Uint8Array(sliceBuf);
+                const partName = `${fileName}.${String(c + 1).padStart(3, "0")}`;
+                const status = await uploadWithRetryAndShaSkip(partName, sliceBytes);
+                if (status === "uploaded") await sleep(60);
               }
-              await sleep(200);
+              return {
+                version: 4,
+                split: true,
+                totalChunks,
+                compressed: compressionMode,
+                originalByteLength: rawByteLength,
+                compressedByteLength: totalSize,
+                timestamp: Date.now(),
+              };
+            } else {
+              setBackgroundStatus(`后台上传 ${stepIndex}/${totalSteps}...`);
+              const fullBuf = await finalBlob.arrayBuffer();
+              const fullBytes = new Uint8Array(fullBuf);
+              const status = await uploadWithRetryAndShaSkip(fileName, fullBytes);
+              if (status === "uploaded") await sleep(50);
+              return {
+                version: 4,
+                split: false,
+                totalChunks: 1,
+                compressed: compressionMode,
+                originalByteLength: rawByteLength,
+                compressedByteLength: totalSize,
+                timestamp: Date.now(),
+              };
             }
-            return true;
           };
 
           try {
-            updateStatusText("正在连接 GitHub 仓库并同步文件索引...");
             await prefetchGitHubRepoTreeShas(user, repo, token);
 
             const singleObjects = [
@@ -102333,112 +102399,178 @@ ${specificRules}`;
               "musicLibrary",
               "qzoneSettings",
             ];
-            const tablesToExport = db.tables
-              .map((t) => t.name)
-              .filter((name) => !singleObjects.includes(name));
-
-            const allTasks = [
-              ...tablesToExport.map((name) => ({ type: "table", name })),
-              ...singleObjects.map((name) => ({ type: "object", name })),
-              { type: "special", name: "localStorageSnapshot" },
-              { type: "special", name: "tavernStateBackup" },
+            const moduleTableNames = [
+              "modules",
+              "moduleChapters",
+              "moduleGroups",
+              "moduleImages",
+              "moduleCluePointers",
+              "moduleLocationNav",
+              "moduleHoRoles",
+              "moduleConfigs",
+              "moduleRawFiles",
             ];
 
-            const totalTasks = allTasks.length;
+            const modulesMetaMap = {};
+            const TOTAL_STEPS = 4;
 
-            for (let i = 0; i < totalTasks; i++) {
-              const task = allTasks[i];
-              const stepLabel = `[${i + 1}/${totalTasks}]`;
-              updateStatusText(`${stepLabel} 读取本地数据: ${task.name}...`);
-              await sleep(30);
+            // 模块 1/4: 聊天记录 (去除群聊重复双份 mainLineHistory 体积减半)
+            setBackgroundStatus("后台读取 1/4...", false);
+            if (db.chats) {
+              const rawChats = await db.chats.toArray();
+              const compactChats = rawChats.map((c) => {
+                if (
+                  c &&
+                  typeof c === "object" &&
+                  c.isGroup &&
+                  c.activeLineMode !== "solo" &&
+                  Array.isArray(c.mainLineHistory) &&
+                  Array.isArray(c.history) &&
+                  c.mainLineHistory.length === c.history.length
+                ) {
+                  const copy = { ...c, _syncMainLineFromHistory: true };
+                  delete copy.mainLineHistory;
+                  return copy;
+                }
+                return c;
+              });
+              const m1 = await uploadBundledModuleLowMemory("chats", compactChats, 1, TOTAL_STEPS);
+              if (m1) modulesMetaMap.chats = m1;
+            }
 
-              let data = null;
-              if (task.type === "table") {
-                data = await db[task.name].toArray();
-                if (task.name === "apiPresets" && Array.isArray(data)) {
-                  data = data.map((p) => (p ? { ...p, apiKey: "" } : p));
-                }
-              } else if (task.type === "object") {
-                const rawObj = await db[task.name].get("main");
-                if (rawObj) {
-                  data = JSON.parse(JSON.stringify(rawObj));
-                  if (task.name === "apiConfig") {
-                    data.apiKey = "";
-                    data.githubToken = "";
-                    data.minimaxApiKey = "";
+            // 模块 2/4: 模组与生图资源包合并打包
+            setBackgroundStatus("后台读取 2/4...", false);
+            const modulesBundle = {};
+            for (const mName of moduleTableNames) {
+              if (db[mName]) {
+                try {
+                  const rows = await db[mName].toArray();
+                  if (Array.isArray(rows) && rows.length > 0) {
+                    modulesBundle[mName] = rows;
                   }
-                }
-              } else if (task.name === "localStorageSnapshot") {
-                const lsSnap = {};
-                for (let kIdx = 0; kIdx < localStorage.length; kIdx++) {
-                  const k = localStorage.key(kIdx);
-                  if (!k) continue;
-                  if (
-                    k === "github-token" ||
-                    k === "ephone_workshop_gh_token" ||
-                    k === "workshop-github-token" ||
-                    k === "novelai-api-key"
-                  ) {
-                    continue;
-                  }
-                  lsSnap[k] = sanitizeSecretStringValue(localStorage.getItem(k) || "");
-                }
-                data = lsSnap;
-              } else if (task.name === "tavernStateBackup") {
-                if (typeof window.getTavernStateForFullBackup === "function") {
-                  try {
-                    data = await window.getTavernStateForFullBackup();
-                  } catch (_) {}
-                }
+                } catch (_) {}
               }
+            }
+            const m2 = await uploadBundledModuleLowMemory(
+              "modules_bundle",
+              modulesBundle,
+              2,
+              TOTAL_STEPS
+            );
+            if (m2) modulesMetaMap.modules_bundle = m2;
 
-              if (!data) continue;
-              await uploadModuleObjectLowMemory(task.name, data, stepLabel);
-              data = null;
-              await sleep(40);
+            // 模块 3/4: 其余全部手机数据表 + 单例配置 + localStorage 合一打包 (告别72个空表逐个请求)
+            setBackgroundStatus("后台读取 3/4...", false);
+            const coreBundle = {
+              tables: {},
+              configs: {},
+              localStorageSnapshot: {},
+            };
+            const skipInCore = new Set(["chats", ...singleObjects, ...moduleTableNames]);
+            for (const table of db.tables) {
+              if (!table || !table.name || skipInCore.has(table.name)) continue;
+              try {
+                let rows = await table.toArray();
+                if (table.name === "apiPresets" && Array.isArray(rows)) {
+                  rows = rows.map((p) => (p ? { ...p, apiKey: "" } : p));
+                }
+                if (Array.isArray(rows) && rows.length > 0) {
+                  coreBundle.tables[table.name] = rows;
+                }
+              } catch (_) {}
+            }
+            for (const cfgName of singleObjects) {
+              if (db[cfgName]) {
+                try {
+                  const rawObj = await db[cfgName].get("main");
+                  if (rawObj) {
+                    const copy = JSON.parse(JSON.stringify(rawObj));
+                    if (cfgName === "apiConfig") {
+                      copy.apiKey = "";
+                      copy.githubToken = "";
+                      copy.minimaxApiKey = "";
+                    }
+                    coreBundle.configs[cfgName] = copy;
+                  }
+                } catch (_) {}
+              }
+            }
+            for (let kIdx = 0; kIdx < localStorage.length; kIdx++) {
+              const k = localStorage.key(kIdx);
+              if (!k) continue;
+              if (
+                k === "github-token" ||
+                k === "ephone_workshop_gh_token" ||
+                k === "workshop-github-token" ||
+                k === "novelai-api-key"
+              ) {
+                continue;
+              }
+              coreBundle.localStorageSnapshot[k] = sanitizeSecretStringValue(
+                localStorage.getItem(k) || ""
+              );
+            }
+            const m3 = await uploadBundledModuleLowMemory(
+              "core_bundle",
+              coreBundle,
+              3,
+              TOTAL_STEPS
+            );
+            if (m3) modulesMetaMap.core_bundle = m3;
+
+            // 模块 4/4: 酒馆全量数据
+            setBackgroundStatus("后台读取 4/4...", false);
+            if (typeof window.getTavernStateForFullBackup === "function") {
+              try {
+                const tvData = await window.getTavernStateForFullBackup();
+                if (tvData) {
+                  const m4 = await uploadBundledModuleLowMemory(
+                    "tavernStateBackup",
+                    tvData,
+                    4,
+                    TOTAL_STEPS
+                  );
+                  if (m4) modulesMetaMap.tavernStateBackup = m4;
+                }
+              } catch (_) {}
             }
 
             const masterMeta = {
-              type: "stream_backup_v3",
+              type: "stream_backup_v4_bundled",
               timestamp: Date.now(),
-              tables: tablesToExport,
-              configs: singleObjects,
-              extras: ["localStorageSnapshot", "tavernStateBackup"],
+              modules: modulesMetaMap,
             };
-            const masterMetaB64 = encodeUtf8BytesToBase64Chunked(
-              new TextEncoder().encode(JSON.stringify(masterMeta))
-            );
-            await uploadWithRetry(`${basePath}_master_meta.json`, masterMetaB64);
+            const masterMetaBytes = new TextEncoder().encode(JSON.stringify(masterMeta));
+            await uploadWithRetryAndShaSkip(`${basePath}_master_meta.json`, masterMetaBytes);
 
             if (autoMode) {
               if (typeof showNotification === "function") {
                 showNotification(
                   state.activeChatId || "system",
-                  "GitHub 自动备份已完成",
+                  "GitHub 自动备份已完成"
                 );
               }
-              console.log("GitHub 自动备份已完成");
-            } else {
-              await showCustomAlert(
-                "上传完成",
-                "全部手机数据与酒馆数据已安全分片上传至 GitHub！",
-              );
+            } else if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("GitHub 云端全量压缩备份已在后台上传完成");
             }
           } catch (error) {
             console.error("GitHub 备份上传失败:", error);
             if (!autoMode) {
               await showCustomAlert(
                 "上传中断",
-                `错误信息: ${error.message}\n请检查网络连接与 GitHub Token 权限。`,
+                `错误信息: ${error.message}\n请检查网络连接与 GitHub Token 权限。`
               );
             }
           } finally {
-            if (loadingOverlay) loadingOverlay.classList.remove("visible");
+            window._isGithubBackupUploading = false;
+            if (uploadBtn) {
+              uploadBtn.textContent = origBtnText || "上传";
+            }
           }
         }
 
         /**
-         * Git流式低内存全量恢复 (支持全表、单对象配置、localStorageSnapshot 与酒馆数据)
+         * Git流式低内存全量恢复 (兼容 v4 合并压缩流式备份与 v3 历史72表分片备份)
          */
         async function restoreBackupFromGitHubStream() {
           let { githubToken, githubUsername, githubRepo, githubPath } =
@@ -102461,7 +102593,7 @@ ${specificRules}`;
           const confirmed = await showCustomConfirm(
             "⚠️ 确认从 GitHub 恢复",
             `将从 GitHub 下载备份并覆盖当前数据（包含全部聊天、世界书、思维链、模组、收藏夹与酒馆数据）。\n\n确定要继续吗？`,
-            { confirmButtonClass: "btn-danger" },
+            { confirmButtonClass: "btn-danger" }
           );
           if (!confirmed) return;
 
@@ -102476,6 +102608,172 @@ ${specificRules}`;
             updateStatusText("正在同步 GitHub 仓库文件索引...");
             await prefetchGitHubRepoTreeShas(user, repo, token);
 
+            let masterMeta = null;
+            try {
+              const masterStr = await fetchGitHubFileDecodedUtf8(
+                user,
+                repo,
+                `${basePath}_master_meta.json`,
+                token
+              );
+              if (masterStr) {
+                masterMeta = JSON.parse(masterStr);
+              }
+            } catch (_) {}
+
+            const restoreLocalStorageMap = (lsMap) => {
+              if (!lsMap || typeof lsMap !== "object") return;
+              for (const [k, v] of Object.entries(lsMap)) {
+                if (typeof k === "string" && typeof v === "string") {
+                  if (
+                    k === "ephone_local_vault_config" ||
+                    k === "ephone_local_vault_config_v1" ||
+                    k === "tavern_state_v2" ||
+                    k === "tavern_state_v1"
+                  ) {
+                    continue;
+                  }
+                  try {
+                    localStorage.setItem(k, v);
+                  } catch (_) {}
+                }
+              }
+            };
+
+            const restoreSingleConfigObject = async (cfgName, data) => {
+              if (!data || typeof data !== "object" || !db[cfgName]) return;
+              if (cfgName === "apiConfig") {
+                if (!data.apiKey && state.apiConfig) data.apiKey = state.apiConfig.apiKey;
+                if (!data.githubToken) data.githubToken = token;
+                if (!data.githubUsername) data.githubUsername = user;
+                if (!data.githubRepo) data.githubRepo = repo;
+              }
+              await db[cfgName].put(data);
+            };
+
+            const restoreTableArrayBatched = async (tableName, rows) => {
+              if (!Array.isArray(rows) || rows.length === 0 || !db[tableName]) return;
+              if (tableName === "chats") {
+                for (let i = 0; i < rows.length; i++) {
+                  const c = rows[i];
+                  if (c && typeof c === "object" && c._syncMainLineFromHistory) {
+                    c.mainLineHistory = Array.isArray(c.history) ? c.history.slice() : [];
+                    delete c._syncMainLineFromHistory;
+                  }
+                }
+              }
+              const BATCH_ROWS = 200;
+              for (let r = 0; r < rows.length; r += BATCH_ROWS) {
+                await db[tableName].bulkPut(rows.slice(r, r + BATCH_ROWS));
+              }
+            };
+
+            if (masterMeta && masterMeta.type === "stream_backup_v4_bundled" && masterMeta.modules) {
+              updateStatusText("正在准备本地数据库...");
+              for (const table of db.tables) {
+                await table.clear();
+              }
+
+              const downloadV4Module = async (modKey, modMeta, stepLabel) => {
+                if (!modMeta) return null;
+                const fileName = `${basePath}_${modKey}.json`;
+                const byteParts = [];
+                if (modMeta.split && modMeta.totalChunks > 0) {
+                  for (let c = 1; c <= modMeta.totalChunks; c++) {
+                    updateStatusText(
+                      `${stepLabel} 下载 ${modKey} 分片 ${c}/${modMeta.totalChunks}...`
+                    );
+                    const partName = `${fileName}.${String(c).padStart(3, "0")}`;
+                    const partBytes = await fetchGitHubFileRawBytes(user, repo, partName, token);
+                    if (!partBytes) throw new Error(`分片 ${partName} 下载失败`);
+                    byteParts.push(partBytes);
+                  }
+                } else {
+                  updateStatusText(`${stepLabel} 下载 ${modKey}...`);
+                  const singleBytes = await fetchGitHubFileRawBytes(user, repo, fileName, token);
+                  if (!singleBytes) return null;
+                  byteParts.push(singleBytes);
+                }
+                const combinedBlob = new Blob(byteParts);
+                byteParts.length = 0;
+                if (modMeta.compressed === "gzip" && typeof DecompressionStream !== "undefined") {
+                  const decompressedStream = combinedBlob
+                    .stream()
+                    .pipeThrough(new DecompressionStream("gzip"));
+                  return await new Response(decompressedStream).json();
+                }
+                return await new Response(combinedBlob).json();
+              };
+
+              let restoredModules = 0;
+              if (masterMeta.modules.chats) {
+                const chatsData = await downloadV4Module("chats", masterMeta.modules.chats, "[1/4]");
+                if (Array.isArray(chatsData)) {
+                  await restoreTableArrayBatched("chats", chatsData);
+                  restoredModules++;
+                }
+              }
+              if (masterMeta.modules.modules_bundle) {
+                const modBundle = await downloadV4Module(
+                  "modules_bundle",
+                  masterMeta.modules.modules_bundle,
+                  "[2/4]"
+                );
+                if (modBundle && typeof modBundle === "object") {
+                  for (const [tName, rows] of Object.entries(modBundle)) {
+                    await restoreTableArrayBatched(tName, rows);
+                  }
+                  restoredModules++;
+                }
+              }
+              if (masterMeta.modules.core_bundle) {
+                const coreBundle = await downloadV4Module(
+                  "core_bundle",
+                  masterMeta.modules.core_bundle,
+                  "[3/4]"
+                );
+                if (coreBundle && typeof coreBundle === "object") {
+                  if (coreBundle.tables && typeof coreBundle.tables === "object") {
+                    for (const [tName, rows] of Object.entries(coreBundle.tables)) {
+                      await restoreTableArrayBatched(tName, rows);
+                    }
+                  }
+                  if (coreBundle.configs && typeof coreBundle.configs === "object") {
+                    for (const [cfgName, cfgObj] of Object.entries(coreBundle.configs)) {
+                      await restoreSingleConfigObject(cfgName, cfgObj);
+                    }
+                  }
+                  if (coreBundle.localStorageSnapshot) {
+                    restoreLocalStorageMap(coreBundle.localStorageSnapshot);
+                  }
+                  restoredModules++;
+                }
+              }
+              if (masterMeta.modules.tavernStateBackup) {
+                const tvBackup = await downloadV4Module(
+                  "tavernStateBackup",
+                  masterMeta.modules.tavernStateBackup,
+                  "[4/4]"
+                );
+                if (
+                  tvBackup &&
+                  typeof tvBackup === "object" &&
+                  typeof window.restoreTavernStateFromFullBackup === "function"
+                ) {
+                  await window.restoreTavernStateFromFullBackup(tvBackup);
+                  restoredModules++;
+                }
+              }
+
+              await showCustomAlert(
+                "恢复完成",
+                `已成功恢复 ${restoredModules} 个核心聚合数据包（含全部手机数据与酒馆数据），即将刷新页面生效。`
+              );
+              setTimeout(() => window.location.reload(), 1200);
+              return;
+            }
+
+            // 兼容旧版 v3 72表逐表恢复
             const singleObjects = [
               "apiConfig",
               "globalSettings",
@@ -102511,7 +102809,7 @@ ${specificRules}`;
               } catch (_) {}
 
               if (splitInfo && splitInfo.totalChunks > 0) {
-                const chunkStrings = [];
+                const chunkBlobs = [];
                 for (let c = 1; c <= splitInfo.totalChunks; c++) {
                   updateStatusText(
                     `正在下载 ${taskName} 分片 ${c}/${splitInfo.totalChunks}...`
@@ -102519,11 +102817,11 @@ ${specificRules}`;
                   const partName = `${fileName}.${String(c).padStart(3, "0")}`;
                   const partUtf8 = await fetchGitHubFileDecodedUtf8(user, repo, partName, token);
                   if (partUtf8 === null) throw new Error(`分片 ${partName} 下载失败`);
-                  chunkStrings.push(partUtf8);
+                  chunkBlobs.push(new Blob([partUtf8], { type: "text/plain; charset=utf-8" }));
                 }
-                const fullJsonStr = chunkStrings.join("");
-                chunkStrings.length = 0;
-                return JSON.parse(fullJsonStr);
+                const combined = new Blob(chunkBlobs, { type: "application/json" });
+                chunkBlobs.length = 0;
+                return await parseBackupBlobOrFileLowMemory(combined);
               } else {
                 const singleUtf8 = await fetchGitHubFileDecodedUtf8(user, repo, fileName, token);
                 if (singleUtf8 === null) return null;
@@ -102544,36 +102842,11 @@ ${specificRules}`;
                 let data = await downloadModuleJsonLowMemory(task.name);
                 if (data !== null && data !== undefined) {
                   if (task.type === "object") {
-                    if (task.name === "apiConfig") {
-                      if (!data.apiKey && state.apiConfig) data.apiKey = state.apiConfig.apiKey;
-                      if (!data.githubToken) data.githubToken = token;
-                      if (!data.githubUsername) data.githubUsername = user;
-                      if (!data.githubRepo) data.githubRepo = repo;
-                    }
-                    if (db[task.name]) await db[task.name].put(data);
+                    await restoreSingleConfigObject(task.name, data);
                   } else if (task.type === "table") {
-                    if (Array.isArray(data) && data.length > 0 && db[task.name]) {
-                      const BATCH_ROWS = 200;
-                      for (let r = 0; r < data.length; r += BATCH_ROWS) {
-                        await db[task.name].bulkPut(data.slice(r, r + BATCH_ROWS));
-                      }
-                    }
+                    await restoreTableArrayBatched(task.name, data);
                   } else if (task.name === "localStorageSnapshot" && typeof data === "object") {
-                    for (const [k, v] of Object.entries(data)) {
-                      if (typeof k === "string" && typeof v === "string") {
-                        if (
-                          k === "ephone_local_vault_config" ||
-                          k === "ephone_local_vault_config_v1" ||
-                          k === "tavern_state_v2" ||
-                          k === "tavern_state_v1"
-                        ) {
-                          continue;
-                        }
-                        try {
-                          localStorage.setItem(k, v);
-                        } catch (_) {}
-                      }
-                    }
+                    restoreLocalStorageMap(data);
                   } else if (task.name === "tavernStateBackup" && typeof data === "object") {
                     if (typeof window.restoreTavernStateFromFullBackup === "function") {
                       await window.restoreTavernStateFromFullBackup(data);
@@ -102590,7 +102863,7 @@ ${specificRules}`;
 
             await showCustomAlert(
               "恢复完成",
-              `已成功恢复 ${successCount} 个数据模块（含手机数据与酒馆数据），即将刷新页面生效。`,
+              `已成功恢复 ${successCount} 个数据模块（含手机数据与酒馆数据），即将刷新页面生效。`
             );
             setTimeout(() => window.location.reload(), 1200);
           } catch (error) {
@@ -124359,6 +124632,66 @@ ${specificRules}`;
             }
           }
 
+          async function buildFullDatabaseSnapshotBlobLowMemory() {
+            const writer =
+              typeof window.createLowMemoryJsonBlobWriter === "function"
+                ? window.createLowMemoryJsonBlobWriter(false)
+                : null;
+            if (!writer) {
+              const snap = await collectFullDatabaseSnapshot();
+              return new Blob([JSON.stringify(snap)], { type: "application/json" });
+            }
+            const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
+            writer.appendRaw(`{"version":1,"timestamp":${Date.now()},"localStorageData":`);
+            const lsData = {};
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k) lsData[k] = localStorage.getItem(k);
+            }
+            writer.appendValue(lsData, 0);
+            writer.flush();
+
+            writer.appendRaw(',"tables":{');
+            let wroteTable = false;
+            if (typeof db !== "undefined" && db.tables) {
+              for (const table of db.tables) {
+                if (!table || !table.name) continue;
+                let rows = [];
+                try {
+                  rows = await table.toArray();
+                } catch (_) {
+                  rows = [];
+                }
+                if (wroteTable) writer.appendRaw(",");
+                wroteTable = true;
+                writer.appendRaw(JSON.stringify(table.name) + ":[");
+                for (let r = 0; r < rows.length; r++) {
+                  if (r > 0) writer.appendRaw(",");
+                  writer.appendValue(rows[r], 1);
+                  rows[r] = null;
+                  if (r % 50 === 0) {
+                    writer.flush();
+                    await yieldToUi();
+                  }
+                }
+                writer.appendRaw("]");
+                writer.flush();
+                rows = null;
+                await yieldToUi();
+              }
+            }
+            writer.appendRaw('},"tavernStateBackup":');
+            let tvBackup = null;
+            if (typeof window.getTavernStateForFullBackup === "function") {
+              try {
+                tvBackup = await window.getTavernStateForFullBackup();
+              } catch (_) {}
+            }
+            writer.appendValue(tvBackup, 0);
+            writer.appendRaw("}");
+            return writer.finish("application/json");
+          }
+
           async function runVaultBackup() {
             const ok = await testVaultConnection(true);
             if (!ok) {
@@ -124369,10 +124702,9 @@ ${specificRules}`;
             }
             const cfg = getCurrentFormVaultConfig();
             const mode = normalizeVaultMode(cfg.mode);
-            setVaultInfoText("正在打包全量数据并写入本地存储...");
+            setVaultInfoText("正在分块打包全量数据并写入本地存储...");
             try {
-              const snap = await collectFullDatabaseSnapshot();
-              const jsonStr = JSON.stringify(snap);
+              const snapBlob = await buildFullDatabaseSnapshotBlobLowMemory();
               if (mode === "server" || mode === "folder") {
                 let savedAny = false;
                 const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
@@ -124381,7 +124713,7 @@ ${specificRules}`;
                     const res = await fetch(baseUrl + "/backup.json", {
                       method: "PUT",
                       headers: { "Content-Type": "application/json; charset=utf-8" },
-                      body: jsonStr,
+                      body: snapBlob,
                     });
                     if (res.ok) savedAny = true;
                   } catch (_) {}
@@ -124391,7 +124723,7 @@ ${specificRules}`;
                     const apiRes = await fetch("/api/local-vault/backup.json", {
                       method: "PUT",
                       headers: { "Content-Type": "text/plain; charset=utf-8" },
-                      body: jsonStr,
+                      body: snapBlob,
                     });
                     if (apiRes.ok) savedAny = true;
                   } catch (_) {}
@@ -124401,7 +124733,7 @@ ${specificRules}`;
                   if (handle) {
                     const fileHandle = await handle.getFileHandle("EPhoneBackup.json", { create: true });
                     const writable = await fileHandle.createWritable();
-                    await writable.write(jsonStr);
+                    await writable.write(snapBlob);
                     await writable.close();
                     savedAny = true;
                   }
@@ -124409,7 +124741,8 @@ ${specificRules}`;
                 if (!savedAny) throw new Error("写入本地目录备份失败");
               } else if (mode === "webdav") {
                 const targetUrl = cfg.url.replace(/\/+$/, "") + "/EPhoneVault/backup.json";
-                const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+                const rawBytes = new Uint8Array(await snapBlob.arrayBuffer());
+                const b64 = encodeUtf8BytesToBase64Chunked(rawBytes);
                 const res = await fetch("/api/webdav-proxy", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -124779,11 +125112,11 @@ ${specificRules}`;
             // 3. 合并完成后，如果当前 Termux 在线，立即将合并后的全量快照同步写入 Termux backup.json
             if (termuxReachable) {
               try {
-                const mergedSnap = await collectFullDatabaseSnapshot();
+                const mergedSnapBlob = await buildFullDatabaseSnapshotBlobLowMemory();
                 await fetch(baseUrl + "/backup.json", {
                   method: "PUT",
                   headers: { "Content-Type": "application/json; charset=utf-8" },
-                  body: JSON.stringify(mergedSnap),
+                  body: mergedSnapBlob,
                 });
               } catch (_) {}
             }
@@ -124804,35 +125137,40 @@ ${specificRules}`;
             const mode = normalizeVaultMode(cfg.mode);
             setVaultInfoText("正在从外部存储读取备份并合并本地最新进度...");
             try {
-              let jsonStr = "";
+              let parsedSnap = null;
               const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
               if (mode === "server" || mode === "folder") {
                 if (await checkTermuxEndpointReachable(baseUrl)) {
                   try {
                     const res = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
                     if (res.ok) {
-                      const txt = await res.text();
-                      if (txt && txt.trim().startsWith("{")) jsonStr = txt;
+                      const blob = await res.blob();
+                      if (blob && blob.size > 2) {
+                        parsedSnap = await parseBackupBlobOrFileLowMemory(blob);
+                      }
                     }
                   } catch (_) {}
                 }
-                if (!jsonStr) {
+                if (!parsedSnap) {
                   try {
                     const handle = await getEffectiveDirectoryHandle();
                     if (handle) {
                       const fileHandle = await handle.getFileHandle("EPhoneBackup.json", { create: false });
                       const file = await fileHandle.getFile();
-                      const txt = await file.text();
-                      if (txt && txt.trim().startsWith("{")) jsonStr = txt;
+                      if (file && file.size > 2) {
+                        parsedSnap = await parseBackupBlobOrFileLowMemory(file);
+                      }
                     }
                   } catch (_) {}
                 }
-                if (!jsonStr && !isStaticPagesHost() && _builtInServerAvailable === true) {
+                if (!parsedSnap && !isStaticPagesHost() && _builtInServerAvailable === true) {
                   try {
                     const apiRes = await fetch("/api/local-vault/backup.json", { method: "GET", cache: "no-store" });
                     if (apiRes.ok) {
-                      const txt = await apiRes.text();
-                      if (txt && txt.trim().startsWith("{")) jsonStr = txt;
+                      const blob = await apiRes.blob();
+                      if (blob && blob.size > 2) {
+                        parsedSnap = await parseBackupBlobOrFileLowMemory(blob);
+                      }
                     }
                   } catch (_) {}
                 }
@@ -124850,18 +125188,18 @@ ${specificRules}`;
                 });
                 const data = await res.json();
                 if (data && data.ok && data.contentBase64) {
-                  jsonStr = decodeURIComponent(escape(atob(data.contentBase64)));
+                  const bytes = decodeBase64ToUint8Array(data.contentBase64);
+                  parsedSnap = await parseBackupBlobOrFileLowMemory(new Blob([bytes]));
                 }
               }
 
-              if (jsonStr) {
-                const snap = JSON.parse(jsonStr);
-                await applyFullDatabaseSnapshot(snap);
+              if (parsedSnap && typeof parsedSnap === "object") {
+                await applyFullDatabaseSnapshot(parsedSnap);
               }
 
-              // 无论是否存在 backup.json，均从 Termux 本地实时存储 (qqbot_store.json / qqbot_thoughts / tavern_store.json) 提取并合并最新进度
+              // 无论是否存在 backup.json，均从 Termux 本地实时存储提取并合并最新进度
               const recoveredCount = await mergeNewerSnapshotAndTermuxIntoDb(null);
-              if (!jsonStr && recoveredCount === 0) {
+              if (!parsedSnap && recoveredCount === 0) {
                 throw new Error("未找到备份文件，请先导入旧备份包或确认 Termux 已连接");
               }
 
@@ -124869,7 +125207,7 @@ ${specificRules}`;
               if (typeof window.showCustomAlert === "function") {
                 window.showCustomAlert(
                   "提示",
-                  jsonStr
+                  parsedSnap
                     ? "全量备份与Termux本地最新进度已合并恢复成功，即将重新加载页面"
                     : "已从Termux本地存档逆向提取并恢复最新群聊、人设、思维链与世界书，即将重新加载页面",
                 );
@@ -126215,11 +126553,11 @@ ${specificRules}`;
                 if (realChats.length === 0) return;
                 const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
                 if (!(await checkTermuxEndpointReachable(baseUrl))) return;
-                const snapshot = await collectFullDatabaseSnapshot();
+                const snapBlob = await buildFullDatabaseSnapshotBlobLowMemory();
                 await fetch(baseUrl + "/backup.json", {
                   method: "PUT",
                   headers: { "Content-Type": "application/json; charset=utf-8" },
-                  body: JSON.stringify(snapshot),
+                  body: snapBlob,
                 });
               } catch (_) {}
             }, 30000);
