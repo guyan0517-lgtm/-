@@ -38380,21 +38380,38 @@ select,
 
 /* ============================================================
    克莱因蓝双生姐妹面板（词典模式 · 21 GRAMS / WAITING / 入藍）
-   60% 艺术馆宣白纸底 : 30% 深炭墨骨骼线 : 10% 深邃克莱因蓝印章点睛
+   独立专属变量体系（--klein-lex-*），不受外部全局 CSS 美化覆盖变灰
    ============================================================ */
+:root {
+  --klein-lex-blue: #1b3fa6;
+  --klein-lex-deep: #132c78;
+  --klein-lex-mist: #eef3fb;
+  --klein-lex-paper: #f7f8fc;
+  --klein-lex-card: #ffffff;
+  --klein-lex-soft: #f0f3f9;
+  --klein-lex-ink: #1e2436;
+  --klein-lex-muted: #5c667d;
+  --klein-lex-line: #b8c2d8;
+  --klein-lex-border: #dce2ef;
+  --klein-lex-on-blue: #f9fbff;
+}
+
 #module-nai-panel #mod-nai-collection-view.mod-nai-trace-panel.is-lexicon-mode {
-  --trace-paper: color-mix(in srgb, var(--tukey-text-light) 9%, var(--card-bg));
-  --trace-card: color-mix(in srgb, var(--card-bg) 95%, var(--secondary-bg));
-  --trace-soft: color-mix(in srgb, var(--secondary-bg) 48%, var(--card-bg));
-  --trace-ink: color-mix(in srgb, var(--text-primary) 90%, var(--text-secondary));
-  --trace-muted: color-mix(in srgb, var(--text-secondary) 84%, var(--text-primary));
-  --trace-line: color-mix(in srgb, var(--text-primary) 30%, var(--border-color));
-  --trace-border-soft: color-mix(in srgb, var(--border-color) 82%, transparent);
-  --trace-klein: color-mix(in srgb, color-mix(in srgb, var(--accent-color) 76%, var(--tukey-accent)) 64%, var(--text-primary));
-  --trace-klein-deep: color-mix(in srgb, var(--trace-klein) 82%, var(--text-primary));
-  --trace-klein-mist: color-mix(in srgb, var(--trace-klein) 14%, var(--trace-paper));
-  --trace-accent: var(--trace-klein);
-  --trace-circle-ink: var(--trace-klein-deep);
+  --trace-paper: var(--klein-lex-paper);
+  --trace-card: var(--klein-lex-card);
+  --trace-soft: var(--klein-lex-soft);
+  --trace-ink: var(--klein-lex-ink);
+  --trace-muted: var(--klein-lex-muted);
+  --trace-line: var(--klein-lex-line);
+  --trace-border-soft: var(--klein-lex-border);
+  --trace-klein: var(--klein-lex-blue);
+  --trace-klein-deep: var(--klein-lex-deep);
+  --trace-klein-mist: var(--klein-lex-mist);
+  --trace-accent: var(--klein-lex-blue);
+  --trace-circle-ink: var(--klein-lex-deep);
+  background-color: var(--klein-lex-paper);
+  color: var(--klein-lex-ink);
+  border-color: var(--klein-lex-border);
 }
 
 #module-nai-panel #mod-nai-collection-view.is-lexicon-mode #mod-nai-trace-bg-svg-lexicon {
@@ -38441,7 +38458,7 @@ select,
   height: 15px;
   padding: 0 6px;
   background-color: var(--trace-klein);
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
   font-family: "Cinzel", "Playfair Display", "Georgia", serif;
   font-variant-numeric: lining-nums tabular-nums;
   font-size: 8.5px;
@@ -38473,7 +38490,7 @@ select,
   justify-content: space-between;
   padding: 5px 3.5px;
   background-color: var(--trace-klein);
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
   flex-shrink: 0;
   position: relative;
 }
@@ -38484,7 +38501,7 @@ select,
   font-weight: 600;
   letter-spacing: 0.5px;
   line-height: 1;
-  border-bottom: 1px solid color-mix(in srgb, var(--card-bg) 45%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--klein-lex-on-blue) 45%, transparent);
   padding-bottom: 3px;
   margin-bottom: 3px;
 }
@@ -38568,7 +38585,7 @@ select,
   margin-top: 3px;
   padding: 7px 10px 7px 10px;
   background-color: var(--trace-klein);
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
   max-width: 208px;
   box-sizing: border-box;
 }
@@ -38610,7 +38627,7 @@ select,
   font-style: italic;
   letter-spacing: 0.4px;
   line-height: 1.28;
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
 }
 
 #module-nai-panel .mod-nai-lex-keyline-script {
@@ -38626,7 +38643,7 @@ select,
 #module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill {
   border-color: var(--trace-ink);
   color: var(--trace-ink);
-  background-color: color-mix(in srgb, var(--trace-paper) 92%, var(--card-bg));
+  background-color: color-mix(in srgb, var(--trace-paper) 92%, var(--trace-card));
 }
 
 #module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill-dot {
@@ -38640,12 +38657,12 @@ select,
 #module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.primary {
   background-color: var(--trace-klein-deep);
   border-color: var(--trace-klein-deep);
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
 }
 
 #module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.is-active .mod-nai-trace-pill-dot,
 #module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.primary .mod-nai-trace-pill-dot {
-  background-color: var(--card-bg);
+  background-color: var(--klein-lex-on-blue);
 }
 
 /* 双生姐妹画廊错位镜像：收藏夹左列下沉，词典右列下沉 */
@@ -38666,7 +38683,7 @@ select,
   height: 15px;
   padding: 0 4px;
   background-color: var(--trace-klein);
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
   font-family: "Cinzel", "Playfair Display", serif;
   font-variant-numeric: lining-nums tabular-nums;
   font-size: 9.5px;
@@ -38746,7 +38763,7 @@ select,
   z-index: 4;
   padding: 1.5px 5px;
   background-color: var(--trace-klein);
-  color: var(--card-bg);
+  color: var(--klein-lex-on-blue);
   font-family: "Cinzel", "Cormorant Garamond", serif;
   font-variant-numeric: lining-nums tabular-nums;
   font-size: 7.5px;

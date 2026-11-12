@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -45533,10 +45533,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               name: "",
               modelTag: defaultModelTag,
               remark: "",
-              image: curGenSrc,
-              images: curGenSrc ? [curGenSrc] : [],
+              image: isLex ? "" : curGenSrc,
+              images: isLex ? [] : (curGenSrc ? [curGenSrc] : []),
               artist: isLex ? "" : (computeActiveArtistPrompt() || st.artistText || ""),
-              positive: computeActivePositivePrompt() || st.pos1Text || "",
+              positive: isLex ? "" : (computeActivePositivePrompt() || st.pos1Text || ""),
               negative: isLex ? "" : (st.negText || ""),
               updatedAt: Date.now()
             };
@@ -46283,11 +46283,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (editSaveBtn) {
               editSaveBtn.addEventListener("click", () => {
-                persistCurrentBookmarkEditDraft(false);
+                const saved = persistCurrentBookmarkEditDraft(true);
+                if (!saved && colIsCreatingNew) {
+                  switchCollectionSubView("grid");
+                  renderCollectionGrid();
+                  return;
+                }
                 if (typeof window.showDownloadToast === "function") {
                   window.showDownloadToast(isLexiconCategory() ? "已保存词条" : "已保存书签", "success");
                 }
-                if (colCurrentItem) {
+                if (colCurrentItem && colCurrentIndex >= 0) {
                   openBookmarkDetailView(colCurrentItem, colCurrentIndex);
                 } else {
                   switchCollectionSubView("grid");
