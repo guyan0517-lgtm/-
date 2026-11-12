@@ -36900,6 +36900,191 @@ select,
   width: 100% !important;
 }
 
+/* ============================================================
+   生图预设小巧可滑动下拉框（告别全屏原生弹窗，原位精致展开）
+   ============================================================ */
+#module-nai-panel .mod-nai-card.is-dropdown-open {
+  overflow: visible !important;
+  z-index: 45 !important;
+}
+
+#module-nai-panel .mod-nai-card.is-dropdown-open .mod-nai-card-row {
+  z-index: 50 !important;
+}
+
+#module-nai-panel .mod-nai-preset-dropdown {
+  position: relative;
+  flex: 1 1 0%;
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  z-index: 10;
+}
+
+#module-nai-panel .mod-nai-preset-dropdown.is-open {
+  z-index: 60;
+}
+
+#module-nai-panel .mod-nai-preset-trigger {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 9px 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--nai-border, var(--border-color));
+  background-color: var(--nai-sub-bg, var(--secondary-bg));
+  color: var(--nai-text, var(--text-primary));
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-preset-trigger,
+#module-nai-panel.nai-theme-folio .mod-nai-preset-trigger {
+  border-radius: 999px;
+  border: 1px solid var(--nai-text);
+  background-color: var(--card-bg);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 600;
+}
+
+#module-nai-panel .mod-nai-preset-trigger-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+#module-nai-panel .mod-nai-preset-trigger-arrow {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  flex-shrink: 0;
+  color: var(--nai-muted, var(--text-secondary));
+  transition: transform 0.18s ease;
+}
+
+#module-nai-panel .mod-nai-preset-dropdown.is-open .mod-nai-preset-trigger-arrow {
+  transform: rotate(180deg);
+}
+
+#module-nai-panel .mod-nai-preset-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  min-width: 148px;
+  max-width: 250px;
+  max-height: 156px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  padding: 4px;
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid var(--nai-border-strong, var(--border-color));
+  background-color: var(--card-bg);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--text-primary) 12%, transparent);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  z-index: 99;
+}
+
+#module-nai-panel .mod-nai-preset-dropdown.is-open .mod-nai-preset-menu {
+  display: flex;
+}
+
+#module-nai-panel .mod-nai-preset-menu::-webkit-scrollbar {
+  width: 3.5px;
+}
+
+#module-nai-panel .mod-nai-preset-menu::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--nai-muted, var(--text-secondary)) 45%, transparent);
+  border-radius: 999px;
+}
+
+#module-nai-panel .mod-nai-preset-item {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--nai-text, var(--text-primary));
+  font-family: "Noto Serif SC", "Songti SC", inherit;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  transition: background-color 0.14s ease;
+}
+
+#module-nai-panel .mod-nai-preset-item:hover,
+#module-nai-panel .mod-nai-preset-item:active {
+  background-color: color-mix(in srgb, var(--nai-sub-bg, var(--secondary-bg)) 70%, transparent);
+}
+
+#module-nai-panel .mod-nai-preset-item.is-selected {
+  background-color: color-mix(in srgb, var(--nai-sub-bg, var(--secondary-bg)) 92%, transparent);
+  font-weight: 600;
+}
+
+#module-nai-panel .mod-nai-preset-item-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--nai-muted, var(--text-secondary)) 45%, transparent);
+}
+
+#module-nai-panel .mod-nai-preset-item.is-selected .mod-nai-preset-item-dot {
+  background-color: var(--nai-seal, var(--accent-color));
+}
+
+#module-nai-panel .mod-nai-preset-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+#module-nai-panel .mod-nai-preset-item-check {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  flex-shrink: 0;
+  color: var(--nai-seal, var(--accent-color));
+  opacity: 0;
+}
+
+#module-nai-panel .mod-nai-preset-item.is-selected .mod-nai-preset-item-check {
+  opacity: 1;
+}
+
+
 #module-nai-panel .mod-nai-btn {
   height: 30px;
   padding: 0 9px;
@@ -36917,7 +37102,7 @@ select,
   flex-shrink: 0;
   white-space: nowrap;
   box-sizing: border-box;
-  transition: transform 0.12s ease, background-color 0.15s ease;
+  transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   position: relative;
   z-index: 1;
 }
@@ -36933,6 +37118,41 @@ select,
   font-weight: 600;
   letter-spacing: 0.4px;
   padding: 0 9.5px;
+}
+
+#module-nai-panel .mod-nai-btn.mod-nai-icon-btn {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+  flex: 0 0 28px !important;
+  border-radius: 8px;
+  color: var(--nai-text);
+}
+
+#module-nai-panel.nai-theme-tavern .mod-nai-btn.mod-nai-icon-btn,
+#module-nai-panel.nai-theme-folio .mod-nai-btn.mod-nai-icon-btn {
+  border-radius: 999px;
+}
+
+#module-nai-panel .mod-nai-btn.mod-nai-icon-btn svg {
+  width: 13.5px;
+  height: 13.5px;
+  display: block;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-btn.mod-nai-icon-btn.is-accent-icon {
+  color: var(--nai-seal, var(--nai-accent));
+}
+
+#module-nai-panel .mod-nai-btn.mod-nai-icon-btn.is-muted-icon {
+  color: var(--nai-muted);
+}
+
+#module-nai-panel .mod-nai-btn.mod-nai-icon-btn.is-success-flash {
+  color: var(--nai-seal, var(--accent-color));
+  border-color: var(--nai-seal, var(--accent-color));
 }
 
 #module-nai-panel .mod-nai-btn:active {
@@ -38010,5 +38230,545 @@ select,
   gap: 10px;
   padding-top: 6px;
 }
+
+/* 编辑模式下多图封面切换与单图管理栏 */
+#module-nai-panel .mod-nai-edit-thumbs-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 6px 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+#module-nai-panel .mod-nai-edit-thumbs-strip::-webkit-scrollbar {
+  display: none;
+}
+
+#module-nai-panel .mod-nai-edit-thumb-item {
+  position: relative;
+  width: 60px;
+  min-width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-edit-thumb-pic {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  border: 1px dashed var(--trace-line);
+  background-color: var(--trace-soft);
+  overflow: hidden;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+#module-nai-panel .mod-nai-edit-thumb-item.is-cover .mod-nai-edit-thumb-pic {
+  border: 1.5px solid var(--trace-accent);
+}
+
+#module-nai-panel .mod-nai-edit-thumb-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#module-nai-panel .mod-nai-edit-thumb-del {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--trace-border-soft);
+  background-color: color-mix(in srgb, var(--card-bg) 90%, transparent);
+  color: var(--trace-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+#module-nai-panel .mod-nai-edit-thumb-cover-btn {
+  width: 100%;
+  height: 21px;
+  border-radius: 999px;
+  border: 1px solid var(--trace-line);
+  background-color: color-mix(in srgb, var(--trace-paper) 88%, var(--card-bg));
+  color: var(--trace-ink);
+  font-family: var(--trace-cn-font);
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+#module-nai-panel .mod-nai-edit-thumb-item.is-cover .mod-nai-edit-thumb-cover-btn {
+  background-color: var(--trace-accent);
+  border-color: var(--trace-accent);
+  color: var(--card-bg);
+}
+
+/* 隐蔽式序号互换排序：手绘墨圈与画廊微浮态（无突兀蓝块、无多余提示文字） */
+#module-nai-panel .mod-nai-trace-index {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: 0;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+#module-nai-panel .mod-nai-trace-index .mod-nai-hand-circle-svg {
+  inset: -4px -7px;
+  width: calc(100% + 14px);
+  height: calc(100% + 8px);
+  color: var(--trace-ink);
+}
+
+#module-nai-panel .mod-nai-trace-item.is-sort-source {
+  transform: translateY(-3px);
+}
+
+#module-nai-panel .mod-nai-trace-item.is-sort-source .mod-nai-trace-index .mod-nai-hand-circle-svg {
+  opacity: 1;
+  transform: scale(1) rotate(-2deg);
+}
+
+#module-nai-panel .mod-nai-trace-item.is-sort-source .mod-nai-trace-dashed-frame {
+  border-color: var(--trace-ink);
+  outline: 1px dashed var(--trace-line);
+  outline-offset: 3px;
+}
+
+#module-nai-panel .mod-nai-trace-item.is-sort-source .mod-nai-anchor-dot {
+  transform: rotate(45deg) scale(1.16);
+}
+
+/* ============================================================
+   克莱因蓝双生姐妹面板（词典模式 · 21 GRAMS / WAITING / 入藍）
+   60% 艺术馆宣白纸底 : 30% 深炭墨骨骼线 : 10% 深邃克莱因蓝印章点睛
+   ============================================================ */
+#module-nai-panel #mod-nai-collection-view.mod-nai-trace-panel.is-lexicon-mode {
+  --trace-paper: color-mix(in srgb, var(--tukey-text-light) 9%, var(--card-bg));
+  --trace-card: color-mix(in srgb, var(--card-bg) 95%, var(--secondary-bg));
+  --trace-soft: color-mix(in srgb, var(--secondary-bg) 48%, var(--card-bg));
+  --trace-ink: color-mix(in srgb, var(--text-primary) 90%, var(--text-secondary));
+  --trace-muted: color-mix(in srgb, var(--text-secondary) 84%, var(--text-primary));
+  --trace-line: color-mix(in srgb, var(--text-primary) 30%, var(--border-color));
+  --trace-border-soft: color-mix(in srgb, var(--border-color) 82%, transparent);
+  --trace-klein: color-mix(in srgb, color-mix(in srgb, var(--accent-color) 76%, var(--tukey-accent)) 64%, var(--text-primary));
+  --trace-klein-deep: color-mix(in srgb, var(--trace-klein) 82%, var(--text-primary));
+  --trace-klein-mist: color-mix(in srgb, var(--trace-klein) 14%, var(--trace-paper));
+  --trace-accent: var(--trace-klein);
+  --trace-circle-ink: var(--trace-klein-deep);
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode #mod-nai-trace-bg-svg-lexicon {
+  color: var(--trace-klein);
+}
+
+/* 双生姐妹头部切换：收藏夹显示 SELECT A TRACE，词典显示 21 GRAMS / WAITING 展签刊头 */
+#module-nai-panel .mod-nai-lexicon-masthead {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode #mod-nai-bookmark-title-col {
+  display: none;
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode #mod-nai-lexicon-title-col {
+  display: flex;
+}
+
+/* 词典刊头第一行：CHAPTER 01 + CH.01 / 21G 蓝底微章 + 月相星轨 */
+#module-nai-panel .mod-nai-lex-top-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+#module-nai-panel .mod-nai-lex-chapter-txt {
+  font-family: "Cinzel", "Cormorant Garamond", "Georgia", serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  color: var(--trace-muted);
+}
+
+#module-nai-panel .mod-nai-lex-stamp-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 0 6px;
+  background-color: var(--trace-klein);
+  color: var(--card-bg);
+  font-family: "Cinzel", "Playfair Display", "Georgia", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  line-height: 1;
+}
+
+#module-nai-panel .mod-nai-lex-moon-svg {
+  width: 58px;
+  height: 10px;
+  color: var(--trace-ink);
+  flex-shrink: 0;
+}
+
+/* 词典刊头主视觉：竖排蓝印「01 入藍」+ 折线星轨 + WAITING 展题 */
+#module-nai-panel .mod-nai-lex-hero-row {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  position: relative;
+  padding-top: 2px;
+}
+
+#module-nai-panel .mod-nai-lex-vert-seal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 3.5px;
+  background-color: var(--trace-klein);
+  color: var(--card-bg);
+  flex-shrink: 0;
+  position: relative;
+}
+
+#module-nai-panel .mod-nai-lex-vert-seal-num {
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  border-bottom: 1px solid color-mix(in srgb, var(--card-bg) 45%, transparent);
+  padding-bottom: 3px;
+  margin-bottom: 3px;
+}
+
+#module-nai-panel .mod-nai-lex-vert-seal-cn {
+  writing-mode: vertical-rl;
+  font-family: var(--trace-cn-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  line-height: 1.1;
+}
+
+#module-nai-panel .mod-nai-lex-title-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  position: relative;
+}
+
+#module-nai-panel .mod-nai-lex-en-waiting {
+  margin: 0;
+  font-family: "Cinzel", "Playfair Display", "Cormorant Garamond", serif;
+  font-size: 18.5px;
+  font-weight: 500;
+  letter-spacing: 3.4px;
+  color: var(--trace-klein-deep);
+  line-height: 1.12;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#module-nai-panel .mod-nai-lex-script-accent {
+  font-family: "Pinyon Script", "Cormorant Garamond", "Playfair Display", cursive, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 19px;
+  letter-spacing: 0.6px;
+  color: var(--trace-klein);
+  line-height: 1;
+}
+
+#module-nai-panel .mod-nai-lex-bird-svg {
+  width: 34px;
+  height: 18px;
+  color: var(--trace-klein);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+#module-nai-panel .mod-nai-lex-verse-cn {
+  margin: 2px 0 0 0;
+  font-family: "Zhi Mang Xing", "Long Cang", "Ma Shan Zheng", "LXGW WenKai", cursive, serif;
+  font-size: 14.5px;
+  font-weight: 400;
+  letter-spacing: 1.2px;
+  line-height: 1.38;
+  color: var(--trace-ink);
+  transform: skewX(-7deg);
+  transform-origin: left center;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+#module-nai-panel .mod-nai-lex-verse-cn span:nth-child(2) {
+  padding-left: 14px;
+  color: var(--trace-klein-deep);
+}
+
+/* 词典刊头 KEY LINE / 01 克莱因蓝实心印章块（对角方点锚定，还原 21 GRAMS 海报神韵） */
+#module-nai-panel .mod-nai-lex-keyline-box {
+  position: relative;
+  margin-top: 3px;
+  padding: 7px 10px 7px 10px;
+  background-color: var(--trace-klein);
+  color: var(--card-bg);
+  max-width: 208px;
+  box-sizing: border-box;
+}
+
+#module-nai-panel .mod-nai-lex-keyline-box::before,
+#module-nai-panel .mod-nai-lex-keyline-box::after {
+  content: "";
+  position: absolute;
+  width: 4.5px;
+  height: 4.5px;
+  background-color: var(--trace-klein-deep);
+  pointer-events: none;
+}
+
+#module-nai-panel .mod-nai-lex-keyline-box::before {
+  top: -5.5px;
+  left: -5.5px;
+}
+
+#module-nai-panel .mod-nai-lex-keyline-box::after {
+  bottom: -5.5px;
+  right: -5.5px;
+}
+
+#module-nai-panel .mod-nai-lex-keyline-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: "Cinzel", "Cormorant Garamond", serif;
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  opacity: 0.86;
+  margin-bottom: 2px;
+}
+
+#module-nai-panel .mod-nai-lex-keyline-main {
+  font-family: "Cormorant Garamond", "Playfair Display", serif;
+  font-size: 11px;
+  font-style: italic;
+  letter-spacing: 0.4px;
+  line-height: 1.26;
+  color: var(--card-bg);
+}
+
+#module-nai-panel .mod-nai-lex-keyline-script {
+  font-family: "Pinyon Script", "Cormorant Garamond", cursive, serif;
+  font-size: 14px;
+  font-style: normal;
+  letter-spacing: 0.5px;
+  margin-right: 3px;
+}
+
+/* 词典模式胶囊导航：保持炭墨细框与深海蓝印章克制对比 */
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill {
+  border-color: var(--trace-ink);
+  color: var(--trace-ink);
+  background-color: color-mix(in srgb, var(--trace-paper) 92%, var(--card-bg));
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill-dot {
+  border-radius: 0;
+  width: 4.5px;
+  height: 4.5px;
+  background-color: var(--trace-klein);
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.is-active,
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.primary {
+  background-color: var(--trace-klein-deep);
+  border-color: var(--trace-klein-deep);
+  color: var(--card-bg);
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.is-active .mod-nai-trace-pill-dot,
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-pill.primary .mod-nai-trace-pill-dot {
+  background-color: var(--card-bg);
+}
+
+/* 双生姐妹画廊错位镜像：收藏夹左列下沉，词典右列下沉 */
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-item.col-left-lag {
+  margin-top: 0;
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-item.col-right-lead {
+  margin-top: 24px;
+}
+
+/* 词典卡片顶部坐标栏：蓝底微章 01 + 21G 节点连线 */
+#module-nai-panel .mod-nai-lex-idx-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 15px;
+  padding: 0 4px;
+  background-color: var(--trace-klein);
+  color: var(--card-bg);
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  line-height: 1;
+}
+
+#module-nai-panel .mod-nai-lex-idx-kicker {
+  font-family: "Cinzel", "Cormorant Garamond", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  color: var(--trace-muted);
+}
+
+#module-nai-panel .mod-nai-lex-node-line {
+  flex: 1;
+  height: 1px;
+  margin: 0 6px;
+  background: linear-gradient(90deg, var(--trace-line) 0%, transparent 100%);
+  position: relative;
+  min-width: 10px;
+}
+
+#module-nai-panel .mod-nai-lex-node-line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -2px;
+  width: 3.5px;
+  height: 3.5px;
+  border: 1px solid var(--trace-klein);
+  background-color: var(--trace-paper);
+  box-sizing: border-box;
+}
+
+/* 词典卡片画框：实线建筑双层框 + 对角实心/空心方点 + 21 GRAMS 压边微签 */
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-dashed-frame {
+  border: 1px solid var(--trace-line);
+  background-color: var(--trace-card);
+  box-shadow: 3px 3px 0 -1px var(--trace-paper), 3px 3px 0 0 color-mix(in srgb, var(--trace-klein) 36%, var(--trace-line));
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-anchor-dot {
+  border-radius: 0;
+  width: 5px;
+  height: 5px;
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-anchor-dot.tl {
+  background-color: var(--trace-klein);
+  top: -3px;
+  left: -3px;
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-anchor-dot.br {
+  background-color: var(--trace-paper);
+  border: 1px solid var(--trace-klein);
+  box-sizing: border-box;
+  bottom: -3px;
+  right: -3px;
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-anchor-dot.tr,
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-anchor-dot.bl {
+  width: 3px;
+  height: 3px;
+  background-color: var(--trace-line);
+}
+
+#module-nai-panel .mod-nai-lex-frame-ribbon {
+  position: absolute;
+  bottom: 4px;
+  left: -2px;
+  z-index: 4;
+  padding: 1.5px 5px;
+  background-color: var(--trace-klein);
+  color: var(--card-bg);
+  font-family: "Cinzel", "Cormorant Garamond", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+/* 词典默认铜版画插画：无损裁除画纸外侧灰底阴影，呈现满幅纸感版画 */
+#module-nai-panel .mod-nai-trace-art-box img.is-lex-default-cover,
+#module-nai-panel .mod-nai-specimen-slide img.is-lex-default-cover {
+  transform: scale(1.36);
+  transform-origin: center center;
+}
+
+/* 词典卡片侧边竖排题跋：带细竖线分隔（复刻「私人稿件 | 万咒皆终」竖排骨线） */
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-trace-marginalia {
+  border-left: 1px solid color-mix(in srgb, var(--trace-line) 75%, transparent);
+  padding-left: 3px;
+  margin-left: 1px;
+  color: var(--trace-muted);
+  font-size: 8px;
+  letter-spacing: 1.5px;
+}
+
+#module-nai-panel .mod-nai-lex-caption-bracket {
+  color: var(--trace-klein);
+  font-weight: 600;
+  font-style: normal;
+}
+
+#module-nai-panel .mod-nai-lex-caption-page {
+  font-family: "Cinzel", "Cormorant Garamond", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.8px;
+  color: var(--trace-muted);
+  flex-shrink: 0;
+}
+
 
 

@@ -43,7 +43,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Ma+Shan+Zheng&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link rel="stylesheet" href="style.css" />
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3571,10 +3571,18 @@
                       <select id="mod-nai-artist-preset-select" class="moe-input mod-nai-select">
                         <option value="">预设</option>
                       </select>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-preset-overwrite-btn">保存</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-preset-save-btn">新建</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-preset-del-btn">删除</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist-copy-btn">复制</button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-accent-icon" id="mod-nai-artist-preset-overwrite-btn" title="保存当前预设" aria-label="保存">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-artist-preset-save-btn" title="新建预设" aria-label="新建">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-muted-icon" id="mod-nai-artist-preset-del-btn" title="删除预设" aria-label="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-artist-copy-btn" title="复制画师串" aria-label="复制">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
                     </div>
                   </div>
                   <textarea id="mod-nai-gen-artist-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="输入第一组画师串，勾选即可启用"></textarea>
@@ -3591,10 +3599,18 @@
                       <select id="mod-nai-artist2-preset-select" class="moe-input mod-nai-select">
                         <option value="">预设</option>
                       </select>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-preset-overwrite-btn">保存</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-preset-save-btn">新建</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-preset-del-btn">删除</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-artist2-copy-btn">复制</button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-accent-icon" id="mod-nai-artist2-preset-overwrite-btn" title="保存当前预设" aria-label="保存">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-artist2-preset-save-btn" title="新建预设" aria-label="新建">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-muted-icon" id="mod-nai-artist2-preset-del-btn" title="删除预设" aria-label="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-artist2-copy-btn" title="复制画师串" aria-label="复制">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
                     </div>
                   </div>
                   <textarea id="mod-nai-gen-artist2-input" class="module-prompt-textarea mod-nai-textarea" rows="2" placeholder="输入第二组画师串，可随时切换勾选进行对比"></textarea>
@@ -3611,10 +3627,18 @@
                       <select id="mod-nai-pos1-preset-select" class="moe-input mod-nai-select">
                         <option value="">预设</option>
                       </select>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-preset-overwrite-btn">保存</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-preset-save-btn">新建</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-preset-del-btn">删除</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos1-copy-btn">复制</button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-accent-icon" id="mod-nai-pos1-preset-overwrite-btn" title="保存当前预设" aria-label="保存">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-pos1-preset-save-btn" title="新建预设" aria-label="新建">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-muted-icon" id="mod-nai-pos1-preset-del-btn" title="删除预设" aria-label="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-pos1-copy-btn" title="复制正面词" aria-label="复制">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
                     </div>
                   </div>
                   <textarea id="mod-nai-gen-pos1-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入第一组正面词，勾选即可启用"></textarea>
@@ -3631,10 +3655,18 @@
                       <select id="mod-nai-pos2-preset-select" class="moe-input mod-nai-select">
                         <option value="">预设</option>
                       </select>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-preset-overwrite-btn">保存</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-preset-save-btn">新建</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-preset-del-btn">删除</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-pos2-copy-btn">复制</button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-accent-icon" id="mod-nai-pos2-preset-overwrite-btn" title="保存当前预设" aria-label="保存">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-pos2-preset-save-btn" title="新建预设" aria-label="新建">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-muted-icon" id="mod-nai-pos2-preset-del-btn" title="删除预设" aria-label="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-pos2-copy-btn" title="复制正面词" aria-label="复制">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
                     </div>
                   </div>
                   <textarea id="mod-nai-gen-pos2-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入第二组正面词，可随时切换勾选进行对比"></textarea>
@@ -3654,10 +3686,18 @@
                       <select id="mod-nai-neg-preset-select" class="moe-input mod-nai-select">
                         <option value="">预设</option>
                       </select>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-preset-overwrite-btn">保存</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-preset-save-btn">新建</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-preset-del-btn">删除</button>
-                      <button type="button" class="mod-nai-btn" id="mod-nai-neg-copy-btn">复制</button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-accent-icon" id="mod-nai-neg-preset-overwrite-btn" title="保存当前预设" aria-label="保存">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-neg-preset-save-btn" title="新建预设" aria-label="新建">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-muted-icon" id="mod-nai-neg-preset-del-btn" title="删除预设" aria-label="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-neg-copy-btn" title="复制负面词" aria-label="复制">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
                     </div>
                   </div>
                   <textarea id="mod-nai-gen-neg-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入负面词，修改后实时自动保存"></textarea>
@@ -3726,7 +3766,9 @@
                       </svg>
                       <span class="mod-nai-label-text" data-trace-idx="[ 01* ]">画师</span>
                     </div>
-                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-copy-artist-btn">复制</button>
+                    <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-inspect-copy-artist-btn" title="复制提取出的画师串" aria-label="复制">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
                   </div>
                   <textarea id="mod-nai-inspect-artist-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="提取出的画师串显示在此，实时自动保存"></textarea>
                 </div>
@@ -3740,7 +3782,9 @@
                       </svg>
                       <span class="mod-nai-label-text" data-trace-idx="[ 02* ]">正面</span>
                     </div>
-                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-copy-pos-btn">复制</button>
+                    <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-inspect-copy-pos-btn" title="复制提取出的正面词" aria-label="复制">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
                   </div>
                   <textarea id="mod-nai-inspect-pos-input" class="module-prompt-textarea mod-nai-textarea" rows="5" placeholder="提取出的正面词显示在此，实时自动保存"></textarea>
                 </div>
@@ -3755,7 +3799,9 @@
                       </svg>
                       <span class="mod-nai-label-text" data-trace-idx="[ 03* ]">负面</span>
                     </div>
-                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-copy-neg-btn">复制</button>
+                    <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-inspect-copy-neg-btn" title="复制提取出的负面词" aria-label="复制">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
                   </div>
                   <textarea id="mod-nai-inspect-neg-input" class="module-prompt-textarea mod-nai-textarea" rows="5" placeholder="提取出的负面词显示在此，实时自动保存"></textarea>
                 </div>
@@ -3771,10 +3817,10 @@
                 </button>
               </div>
 
-              <!-- 面板三：高定展览级收藏面板（SELECT A TRACE 画廊 + 典藏展示卡片 + 一目了然编辑模式） -->
+              <!-- 面板三：高定展览级收藏与词典双生面板（SELECT A TRACE 画廊 + 21 GRAMS 词典 + 典藏展示卡片 + 一目了然编辑模式） -->
               <div id="mod-nai-collection-view" class="mod-nai-trace-panel" style="display: none; flex-direction: column; gap: 12px;">
-                <!-- 星轨与几何辅助线背景层 -->
-                <svg class="mod-nai-trace-bg-svg" viewBox="0 0 400 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <!-- 收藏模式：星轨与几何辅助线背景层 -->
+                <svg class="mod-nai-trace-bg-svg" id="mod-nai-trace-bg-svg-bookmark" viewBox="0 0 400 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
                   <circle cx="285" cy="235" r="195" fill="none" stroke="currentColor" stroke-width="0.65" opacity="0.28"></circle>
                   <circle cx="285" cy="235" r="128" fill="none" stroke="currentColor" stroke-width="0.55" stroke-dasharray="3 4" opacity="0.24"></circle>
                   <ellipse cx="145" cy="430" rx="92" ry="155" transform="rotate(-18 145 430)" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.24"></ellipse>
@@ -3787,21 +3833,83 @@
                   <circle cx="222" cy="340" r="2" fill="currentColor" opacity="0.45"></circle>
                 </svg>
 
-                <!-- 视图一：SELECT A TRACE 展览画廊视图 -->
+                <!-- 词典模式（克莱因蓝双生姐妹 · 21 GRAMS / 万咒皆终）：等高线、飞鸟轨迹、四角星芒与方框节点背景层 -->
+                <svg class="mod-nai-trace-bg-svg" id="mod-nai-trace-bg-svg-lexicon" viewBox="0 0 400 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="display: none;">
+                  <path d="M120 26 C 195 58, 275 18, 412 64" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.18"></path>
+                  <path d="M108 46 C 190 82, 282 36, 412 88" fill="none" stroke="currentColor" stroke-width="0.45" stroke-dasharray="3 4" opacity="0.16"></path>
+                  <path d="M135 68 C 210 102, 295 58, 412 112" fill="none" stroke="currentColor" stroke-width="0.45" opacity="0.13"></path>
+                  <path d="M-16 540 C 110 492, 248 568, 416 508" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.16"></path>
+                  <path d="M-16 566 C 118 518, 256 592, 416 534" fill="none" stroke="currentColor" stroke-width="0.45" stroke-dasharray="4 4" opacity="0.14"></path>
+                  <line x1="142" y1="128" x2="292" y2="54" stroke="currentColor" stroke-width="0.55" opacity="0.22"></line>
+                  <line x1="200" y1="0" x2="200" y2="680" stroke="currentColor" stroke-width="0.45" stroke-dasharray="2 6" opacity="0.14"></line>
+                  <rect x="210" y="88" width="5.5" height="5.5" fill="none" stroke="currentColor" stroke-width="0.8" opacity="0.34"></rect>
+                  <rect x="289" y="51" width="5" height="5" fill="currentColor" opacity="0.38"></rect>
+                  <path d="M292 22 L295.2 37.8 L311 41 L295.2 44.2 L292 60 L288.8 44.2 L273 41 L288.8 37.8 Z" fill="currentColor" opacity="0.32"></path>
+                </svg>
+
+                <!-- 视图一：SELECT A TRACE / 21 GRAMS 双生展览画廊视图 -->
                 <div id="mod-nai-col-grid-page" class="mod-nai-trace-subpage" style="display: flex; flex-direction: column; gap: 14px;">
                   <div class="mod-nai-trace-header">
-                    <div class="mod-nai-trace-title-col">
+                    <!-- 姐姐面板刊头：收藏（SELECT A TRACE） -->
+                    <div class="mod-nai-trace-title-col" id="mod-nai-bookmark-title-col">
                       <span class="mod-nai-trace-cn-sub" id="mod-nai-col-title">断片の記憶 · ARCHIVE</span>
-                      <h3 class="mod-nai-trace-en-title">SELECT A TRACE</h3>
+                      <h3 class="mod-nai-trace-en-title" id="mod-nai-col-en-heading">SELECT A TRACE</h3>
                       <div class="mod-nai-trace-epigraph">
                         <span class="mod-nai-trace-node-dot accent"></span>
-                        <p class="mod-nai-trace-epigraph-en">Some conversations<br/>change their shape.</p>
-                        <p class="mod-nai-trace-epigraph-cn">言葉の余白に、消えない残響を。</p>
+                        <p class="mod-nai-trace-epigraph-en" id="mod-nai-col-epigraph-en">Some conversations<br/>change their shape.</p>
+                        <p class="mod-nai-trace-epigraph-cn" id="mod-nai-col-epigraph-cn">言葉の余白に、消えない残響を。</p>
                       </div>
                     </div>
+
+                    <!-- 妹妹面板刊头：词典（21 GRAMS · WAITING · 入藍） -->
+                    <div class="mod-nai-lexicon-masthead" id="mod-nai-lexicon-title-col">
+                      <div class="mod-nai-lex-top-meta">
+                        <span class="mod-nai-lex-chapter-txt">CHAPTER 01</span>
+                        <span class="mod-nai-lex-stamp-chip" id="mod-nai-lex-stamp-chip-text">CH.01 / 21G</span>
+                        <svg class="mod-nai-lex-moon-svg" viewBox="0 0 84 12" fill="none" aria-hidden="true">
+                          <path d="M5 2.5 A3.5 3.5 0 1 1 5 9.5 A2.6 2.6 0 1 0 5 2.5 Z" fill="currentColor" opacity="0.55"></path>
+                          <path d="M18 2.2 A3.8 3.8 0 1 1 18 9.8 A1.8 1.8 0 1 0 18 2.2 Z" fill="currentColor" opacity="0.7"></path>
+                          <circle cx="31" cy="6" r="3.6" fill="currentColor" opacity="0.85"></circle>
+                          <circle cx="44" cy="6" r="3.8" fill="var(--trace-klein)"></circle>
+                          <circle cx="57" cy="6" r="3.6" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.75"></circle>
+                          <path d="M70 2.2 A3.8 3.8 0 1 0 70 9.8 A1.8 1.8 0 1 1 70 2.2 Z" fill="currentColor" opacity="0.7"></path>
+                          <path d="M80 2.5 A3.5 3.5 0 1 0 80 9.5 A2.6 2.6 0 1 1 80 2.5 Z" fill="currentColor" opacity="0.55"></path>
+                        </svg>
+                      </div>
+
+                      <div class="mod-nai-lex-hero-row">
+                        <div class="mod-nai-lex-vert-seal">
+                          <span class="mod-nai-lex-vert-seal-num">01</span>
+                          <span class="mod-nai-lex-vert-seal-cn">入藍</span>
+                        </div>
+                        <div class="mod-nai-lex-title-stack">
+                          <h3 class="mod-nai-lex-en-waiting">
+                            <span>WAITING</span>
+                            <span class="mod-nai-lex-script-accent">Finite</span>
+                            <svg class="mod-nai-lex-bird-svg" viewBox="0 0 48 24" fill="none" aria-hidden="true">
+                              <path d="M3 16 C10 11, 14 7, 19 3 C17 9, 19 12, 25 13 C18 14, 13 17, 9 21 C11 16, 8 15, 3 16 Z" fill="currentColor"></path>
+                              <path d="M26 10 C31 6, 35 3, 40 1 C38 5, 40 8, 45 9 C39 10, 35 12, 32 16 C33 12, 30 10, 26 10 Z" fill="currentColor" opacity="0.78"></path>
+                            </svg>
+                          </h3>
+                          <p class="mod-nai-lex-verse-cn">
+                            <span>「等桃子腐烂，等大海变成克莱因蓝，</span>
+                            <span>等我变成 21 克。」</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div class="mod-nai-lex-keyline-box">
+                        <div class="mod-nai-lex-keyline-kicker">
+                          <span>KEY LINE / 01</span>
+                          <span>21 GRAMS</span>
+                        </div>
+                        <div class="mod-nai-lex-keyline-main"><span class="mod-nai-lex-keyline-script">Klein Blue</span> is the color of eyes after death.</div>
+                      </div>
+                    </div>
+
                     <div class="mod-nai-trace-pill-col">
-                      <button type="button" class="mod-nai-trace-pill is-active" id="mod-nai-col-tab-local">
-                        <span>收藏</span>
+                      <button type="button" class="mod-nai-trace-pill is-active" id="mod-nai-col-tab-local" title="点击切换收藏与词典">
+                        <span id="mod-nai-col-tab-local-text">收藏</span>
                         <i class="mod-nai-trace-pill-dot"></i>
                       </button>
                       <button type="button" class="mod-nai-trace-pill" id="mod-nai-col-tab-shared">
@@ -3814,10 +3922,6 @@
                       </button>
                       <button type="button" class="mod-nai-trace-pill" id="mod-nai-col-refresh-shared-btn" style="display: none;">
                         <span>刷新</span>
-                        <i class="mod-nai-trace-pill-dot"></i>
-                      </button>
-                      <button type="button" class="mod-nai-trace-pill" id="mod-nai-col-close-btn">
-                        <span>返回</span>
                         <i class="mod-nai-trace-pill-dot"></i>
                       </button>
                     </div>
@@ -3874,7 +3978,7 @@
                         <i class="mod-nai-anchor-dot br"></i>
                         <div class="mod-nai-specimen-img-box" id="mod-nai-col-detail-img-stage"></div>
                       </div>
-                      <div class="mod-nai-specimen-side-note">A PRESENCE BETWEEN SIGNALS</div>
+                      <div class="mod-nai-specimen-side-note" id="mod-nai-col-detail-side-note">A PRESENCE BETWEEN SIGNALS</div>
                     </div>
 
                     <div class="mod-nai-specimen-title-block">
@@ -3897,7 +4001,7 @@
                       <button type="button" class="mod-nai-specimen-drawer-toggle" id="mod-nai-col-detail-drawer-toggle">
                         <span class="mod-nai-drawer-left">
                           <i class="mod-nai-drawer-dot"></i>
-                          <span class="mod-nai-drawer-kicker">PROMPT ARCHIVE · 词条典藏</span>
+                          <span class="mod-nai-drawer-kicker" id="mod-nai-col-drawer-kicker">PROMPT ARCHIVE · 词条典藏</span>
                         </span>
                         <span class="mod-nai-drawer-right">
                           <span class="mod-nai-drawer-state-label" id="mod-nai-col-drawer-state-text">展开</span>
@@ -3909,7 +4013,7 @@
 
                       <div class="mod-nai-specimen-drawer-body" id="mod-nai-col-detail-drawer-body" style="display: none;">
                         <!-- 01 · 画师展示区 -->
-                        <div class="mod-nai-specimen-section">
+                        <div class="mod-nai-specimen-section" id="mod-nai-col-detail-artist-sec">
                           <div class="mod-nai-specimen-sec-head">
                             <span class="mod-nai-specimen-sec-title">[ I · ARTIST / 画师 ]</span>
                             <button type="button" class="mod-nai-specimen-icon-copy" id="mod-nai-col-detail-copy-artist-btn" title="复制画师串" aria-label="复制画师串">
@@ -3923,9 +4027,9 @@
                         </div>
 
                         <!-- 02 · 正面展示区 -->
-                        <div class="mod-nai-specimen-section">
+                        <div class="mod-nai-specimen-section" id="mod-nai-col-detail-pos-sec">
                           <div class="mod-nai-specimen-sec-head">
-                            <span class="mod-nai-specimen-sec-title">[ II · POSITIVE / 正面 ]</span>
+                            <span class="mod-nai-specimen-sec-title" id="mod-nai-col-detail-pos-sec-title">[ II · POSITIVE / 正面 ]</span>
                             <button type="button" class="mod-nai-specimen-icon-copy" id="mod-nai-col-detail-copy-pos-btn" title="复制正面提示词" aria-label="复制正面提示词">
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -3937,7 +4041,7 @@
                         </div>
 
                         <!-- 03 · 负面展示区 -->
-                        <div class="mod-nai-specimen-section">
+                        <div class="mod-nai-specimen-section" id="mod-nai-col-detail-neg-sec">
                           <div class="mod-nai-specimen-sec-head">
                             <span class="mod-nai-specimen-sec-title">[ III · NEGATIVE / 负面 ]</span>
                             <button type="button" class="mod-nai-specimen-icon-copy" id="mod-nai-col-detail-copy-neg-btn" title="复制负面提示词" aria-label="复制负面提示词">
@@ -3990,33 +4094,36 @@
                             </button>
                           </div>
                         </div>
-                        <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入收藏卡片名称" />
-                        <span class="mod-nai-edit-hint">点击左侧方框可多选上传图片，展开卡片后右滑图片即可翻看</span>
+                        <input type="text" id="mod-nai-col-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入卡片名称" />
+                        <span class="mod-nai-edit-hint">点击左侧方框可多选上传图片，下方可一键设为封面</span>
                       </div>
                     </div>
+
+                    <!-- 多图封面设置与单图删除横栏 -->
+                    <div id="mod-nai-col-edit-thumbs-strip" class="mod-nai-edit-thumbs-strip" style="display: none;"></div>
 
                     <div class="mod-nai-edit-group">
                       <div class="mod-nai-edit-group-head">
                         <label class="mod-nai-edit-field-label">备注</label>
                       </div>
-                      <input type="text" id="mod-nai-col-edit-remark-input" class="moe-input mod-nai-edit-input" placeholder="选填，填写后在画廊与卡片显示，留空自动隐藏" />
+                      <input type="text" id="mod-nai-col-edit-remark-input" class="moe-input mod-nai-edit-input" placeholder="选填，点进详情卡片后显示，外层画廊不露出" />
                     </div>
 
-                    <div class="mod-nai-edit-group">
+                    <div class="mod-nai-edit-group" id="mod-nai-col-edit-artist-group">
                       <div class="mod-nai-edit-group-head">
                         <label class="mod-nai-edit-field-label">画师</label>
                       </div>
                       <textarea id="mod-nai-col-edit-artist-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="4" placeholder="输入画师串，可自由上下滑动"></textarea>
                     </div>
 
-                    <div class="mod-nai-edit-group">
+                    <div class="mod-nai-edit-group" id="mod-nai-col-edit-pos-group">
                       <div class="mod-nai-edit-group-head">
                         <label class="mod-nai-edit-field-label">正面</label>
                       </div>
                       <textarea id="mod-nai-col-edit-pos-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="5" placeholder="输入正面提示词，可自由上下滑动"></textarea>
                     </div>
 
-                    <div class="mod-nai-edit-group">
+                    <div class="mod-nai-edit-group" id="mod-nai-col-edit-neg-group">
                       <div class="mod-nai-edit-group-head">
                         <label class="mod-nai-edit-field-label">负面</label>
                       </div>
@@ -43047,6 +43154,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let memoryPanelState = null;
           let memoryPresetsStore = null;
           let memoryBookmarksList = null;
+          let memoryLexiconList = null;
+          let colCategory = "bookmark"; // "bookmark" | "lexicon"
 
           function safeNaiLocalSetItem(key, val) {
             try {
@@ -43056,6 +43165,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               try {
                 localStorage.removeItem("coc_module_draft_state_v1");
                 localStorage.removeItem("mod_nai_bookmarks_v1");
+                localStorage.removeItem("mod_nai_lexicon_v1");
                 localStorage.setItem(key, val);
                 return true;
               } catch (_2) {
@@ -43280,7 +43390,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (inspectView) inspectView.style.display = currentMode === "inspect" ? "flex" : "none";
             if (colView) colView.style.display = currentMode === "collection" ? "flex" : "none";
             if (modeLabel) {
-              modeLabel.textContent = currentMode === "inspect" ? "提取" : currentMode === "collection" ? "收藏" : "生图";
+              modeLabel.textContent =
+                currentMode === "inspect"
+                  ? "提取"
+                  : currentMode === "collection"
+                    ? (colCategory === "lexicon" ? "词典" : "收藏")
+                    : "生图";
             }
             if (toggleText) {
               toggleText.textContent = currentMode === "generate" ? "提取" : "生图";
@@ -43378,6 +43493,130 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             updateHeaderSummary();
           }
 
+          const ACTION_CHECK_SVG =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+          function flashActionButtonSuccess(btnEl) {
+            if (!btnEl) return;
+            if (!btnEl._origInnerHtml) {
+              btnEl._origInnerHtml = btnEl.innerHTML;
+            }
+            if (btnEl._flashTimer) {
+              clearTimeout(btnEl._flashTimer);
+            }
+            btnEl.classList.add("is-success-flash");
+            btnEl.innerHTML = ACTION_CHECK_SVG;
+            btnEl._flashTimer = setTimeout(() => {
+              btnEl.classList.remove("is-success-flash");
+              if (btnEl._origInnerHtml) {
+                btnEl.innerHTML = btnEl._origInnerHtml;
+              }
+              btnEl._flashTimer = null;
+            }, 950);
+          }
+
+          let presetDropdownOutsideBound = false;
+          function closeAllPresetDropdowns(exceptWrap) {
+            document.querySelectorAll("#module-nai-panel .mod-nai-preset-dropdown.is-open").forEach((wrap) => {
+              if (exceptWrap && wrap === exceptWrap) return;
+              wrap.classList.remove("is-open");
+              const parentCard = wrap.closest(".mod-nai-card");
+              if (parentCard) parentCard.classList.remove("is-dropdown-open");
+            });
+          }
+
+          function syncPresetCustomDropdown(sel) {
+            if (!sel || !sel.parentNode) return;
+            if (!presetDropdownOutsideBound) {
+              presetDropdownOutsideBound = true;
+              document.addEventListener("click", (e) => {
+                if (!e.target || !e.target.closest || !e.target.closest(".mod-nai-preset-dropdown")) {
+                  closeAllPresetDropdowns(null);
+                }
+              });
+            }
+
+            let wrap = sel.parentNode.classList && sel.parentNode.classList.contains("mod-nai-preset-dropdown")
+              ? sel.parentNode
+              : null;
+
+            if (!wrap) {
+              wrap = document.createElement("div");
+              wrap.className = "mod-nai-preset-dropdown";
+              sel.parentNode.insertBefore(wrap, sel);
+              wrap.appendChild(sel);
+              sel.style.display = "none";
+
+              const triggerBtn = document.createElement("button");
+              triggerBtn.type = "button";
+              triggerBtn.className = "mod-nai-preset-trigger";
+              triggerBtn.innerHTML =
+                '<span class="mod-nai-preset-trigger-text">预设</span>' +
+                '<svg class="mod-nai-preset-trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+              const menuEl = document.createElement("div");
+              menuEl.className = "mod-nai-preset-menu";
+
+              triggerBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const willOpen = !wrap.classList.contains("is-open");
+                closeAllPresetDropdowns(wrap);
+                wrap.classList.toggle("is-open", willOpen);
+                const parentCard = wrap.closest(".mod-nai-card");
+                if (parentCard) parentCard.classList.toggle("is-dropdown-open", willOpen);
+              });
+
+              menuEl.addEventListener("click", (e) => {
+                e.stopPropagation();
+              });
+
+              wrap.appendChild(triggerBtn);
+              wrap.appendChild(menuEl);
+            }
+
+            const triggerTxt = wrap.querySelector(".mod-nai-preset-trigger-text");
+            const menuEl = wrap.querySelector(".mod-nai-preset-menu");
+            if (!triggerTxt || !menuEl) return;
+
+            const curVal = sel.value || "";
+            triggerTxt.textContent = curVal ? curVal : "预设";
+            menuEl.innerHTML = "";
+
+            const opts = Array.from(sel.options || []);
+            opts.forEach((opt) => {
+              const itemBtn = document.createElement("button");
+              itemBtn.type = "button";
+              const isSelected = (opt.value || "") === curVal;
+              itemBtn.className = "mod-nai-preset-item" + (isSelected ? " is-selected" : "");
+
+              const dot = document.createElement("i");
+              dot.className = "mod-nai-preset-item-dot";
+
+              const labelSpan = document.createElement("span");
+              labelSpan.className = "mod-nai-preset-item-label";
+              labelSpan.textContent = opt.textContent || "预设";
+
+              const checkSpan = document.createElement("span");
+              checkSpan.className = "mod-nai-preset-item-check";
+              checkSpan.innerHTML = ACTION_CHECK_SVG;
+
+              itemBtn.appendChild(dot);
+              itemBtn.appendChild(labelSpan);
+              itemBtn.appendChild(checkSpan);
+
+              itemBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                sel.value = opt.value;
+                triggerTxt.textContent = opt.value ? opt.value : "预设";
+                closeAllPresetDropdowns(null);
+                syncPresetCustomDropdown(sel);
+                sel.dispatchEvent(new Event("change", { bubbles: true }));
+              });
+
+              menuEl.appendChild(itemBtn);
+            });
+          }
+
           function renderPresetSelectOptions() {
             const store = loadPresetsStore();
             const st = loadPanelState();
@@ -43399,6 +43638,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 sel.appendChild(opt);
               });
               sel.value = matchedSelected;
+              syncPresetCustomDropdown(sel);
             };
 
             fillSelect("mod-nai-artist-preset-select", "mod-nai-gen-artist-input", store.artist, st.artistPresetSelected);
@@ -43435,13 +43675,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             renderPresetSelectOptions();
             syncModuleNaiToGlobal();
 
-            if (btnEl) {
-              const prev = btnEl.textContent;
-              btnEl.textContent = "已存";
-              setTimeout(() => {
-                btnEl.textContent = prev || "保存";
-              }, 1000);
-            }
+            flashActionButtonSuccess(btnEl);
             if (typeof window.showDownloadToast === "function") {
               window.showDownloadToast("已更新预设: " + selectedName, "success");
             }
@@ -43534,13 +43768,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 el.select();
                 document.execCommand("copy");
               }
-              if (btnEl) {
-                const prev = btnEl.textContent;
-                btnEl.textContent = "已复";
-                setTimeout(() => {
-                  btnEl.textContent = prev;
-                }, 1000);
-              }
+              flashActionButtonSuccess(btnEl);
             } catch (_) {
               if (typeof window.showCustomAlert === "function") {
                 await window.showCustomAlert("提示", "复制未成功，请长按文本框手动复制");
@@ -44487,29 +44715,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // ============================================================
-          // 生图收藏夹与云端共享集控制器（9宫格分页 + 详情面 + 编辑面 + GitHub隔离目录共享）
+          // 生图收藏夹与词典双生面板控制器（分页画廊 + 详情面 + 编辑面 + 封面设置 + 隐蔽序号互换排序 + 云端隔离目录共享）
           // ============================================================
           const BOOKMARKS_STORE_KEY = "mod_nai_bookmarks_v1";
+          const LEXICON_STORE_KEY = "mod_nai_lexicon_v1";
           const ITEMS_PER_PAGE = 6;
           let colScope = "local"; // "local" | "shared"
           let colLocalPage = 1;
           let colSharedPage = 1;
+          let colLexiconLocalPage = 1;
+          let colLexiconSharedPage = 1;
           let colSharedList = [];
           let colSharedLoadedOnce = false;
+          let colLexiconSharedList = [];
+          let colLexiconSharedLoadedOnce = false;
           let colCurrentItem = null;
           let colCurrentIndex = -1;
           let colEditImageDraft = "";
           let colIsCreatingNew = false;
+          let colSortSourceIndex = -1;
 
           const PLACEHOLDER_BOOKMARK_SVG =
             '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path><path d="M12 7v6"></path><path d="M9 10h6"></path></svg>';
 
-          // 四幅高精度素描版画插画素材，供未上传自定义封面的片段呈现展览级视觉效果
+          // 收藏模式四幅高精度素描版画插画素材
           const TRACE_DEFAULT_COVERS = [
             "assets/trace/trace_01.jpg",
             "assets/trace/trace_02.jpg",
             "assets/trace/trace_03.jpg",
             "assets/trace/trace_04.jpg"
+          ];
+          // 词典模式四幅克莱因蓝双生姐妹版画插画素材
+          const LEXICON_DEFAULT_COVERS = [
+            "assets/trace/lexicon_01.jpg",
+            "assets/trace/lexicon_02.jpg",
+            "assets/trace/lexicon_03.jpg",
+            "assets/trace/lexicon_04.jpg"
           ];
           const TRACE_SIDE_NOTES = [
             "HUMAN / AI",
@@ -44519,13 +44760,53 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             "SILENT ECHO",
             "FRAGMENT NOTE"
           ];
+          const LEXICON_SIDE_NOTES = [
+            "21 GRAMS · KLEIN",
+            "INTO THE SEA",
+            "EYES AFTER DEATH",
+            "WORLD RECORD",
+            "FINITE FLIGHT",
+            "AZURE SIGNAL"
+          ];
+
+          function isLexiconCategory() {
+            return colCategory === "lexicon";
+          }
 
           function getTraceDefaultCoverUrl(idx) {
-            const safeIdx = Math.abs(typeof idx === "number" ? idx : 0) % TRACE_DEFAULT_COVERS.length;
-            return TRACE_DEFAULT_COVERS[safeIdx];
+            const covers = isLexiconCategory() ? LEXICON_DEFAULT_COVERS : TRACE_DEFAULT_COVERS;
+            const safeIdx = Math.abs(typeof idx === "number" ? idx : 0) % covers.length;
+            return covers[safeIdx];
           }
 
           function loadLocalBookmarks() {
+            if (isLexiconCategory()) {
+              if (Array.isArray(memoryLexiconList)) {
+                return memoryLexiconList;
+              }
+              if (
+                window.state &&
+                window.state.globalSettings &&
+                Array.isArray(window.state.globalSettings.naiLexiconCollection) &&
+                window.state.globalSettings.naiLexiconCollection.length > 0
+              ) {
+                memoryLexiconList = window.state.globalSettings.naiLexiconCollection;
+                return memoryLexiconList;
+              }
+              try {
+                const raw = localStorage.getItem(LEXICON_STORE_KEY);
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed)) {
+                    memoryLexiconList = parsed;
+                    return parsed;
+                  }
+                }
+              } catch (_) {}
+              memoryLexiconList = [];
+              return memoryLexiconList;
+            }
+
             if (Array.isArray(memoryBookmarksList)) {
               return memoryBookmarksList;
             }
@@ -44554,10 +44835,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function saveLocalBookmarks(list) {
             const cleanList = Array.isArray(list) ? list : [];
-            memoryBookmarksList = cleanList;
+            const isLex = isLexiconCategory();
+            const storeKey = isLex ? LEXICON_STORE_KEY : BOOKMARKS_STORE_KEY;
+            const gsField = isLex ? "naiLexiconCollection" : "naiBookmarksCollection";
+
+            if (isLex) {
+              memoryLexiconList = cleanList;
+            } else {
+              memoryBookmarksList = cleanList;
+            }
+
             const syncToLocalStorage = (arr) => {
               try {
-                localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(arr));
+                localStorage.setItem(storeKey, JSON.stringify(arr));
               } catch (_) {
                 try {
                   const lightList = arr.map((item) => {
@@ -44569,21 +44859,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     }
                     return next;
                   });
-                  localStorage.setItem(BOOKMARKS_STORE_KEY, JSON.stringify(lightList));
+                  localStorage.setItem(storeKey, JSON.stringify(lightList));
                 } catch (_2) {}
               }
             };
             syncToLocalStorage(cleanList);
             if (window.state && window.state.globalSettings) {
-              window.state.globalSettings.naiBookmarksCollection = cleanList;
+              window.state.globalSettings[gsField] = cleanList;
               if (window.db && window.db.globalSettings) {
                 window.db.globalSettings
                   .put(window.state.globalSettings)
                   .then(() => {
                     // 当自动分离将 data:image 转为 vault:// 后，同步把轻量 vault:// 列表写回 localStorage，释放 localStorage 内存
-                    if (window.state && window.state.globalSettings && Array.isArray(window.state.globalSettings.naiBookmarksCollection)) {
-                      memoryBookmarksList = window.state.globalSettings.naiBookmarksCollection;
-                      syncToLocalStorage(memoryBookmarksList);
+                    if (window.state && window.state.globalSettings && Array.isArray(window.state.globalSettings[gsField])) {
+                      if (isLex) {
+                        memoryLexiconList = window.state.globalSettings[gsField];
+                        syncToLocalStorage(memoryLexiconList);
+                      } else {
+                        memoryBookmarksList = window.state.globalSettings[gsField];
+                        syncToLocalStorage(memoryBookmarksList);
+                      }
                     }
                   })
                   .catch(() => {});
@@ -44610,6 +44905,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (gridPage) gridPage.style.display = viewName === "grid" ? "flex" : "none";
             if (detailPage) detailPage.style.display = viewName === "detail" ? "flex" : "none";
             if (editPage) editPage.style.display = viewName === "edit" ? "flex" : "none";
+            if (viewName !== "grid") {
+              colSortSourceIndex = -1;
+            }
             const scrollContainer = document.querySelector("#module-nai-panel .mod-nai-scroll");
             if (scrollContainer) {
               scrollContainer.scrollTop = 0;
@@ -44617,14 +44915,36 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function updateCollectionHeaderUI() {
+            const colView = document.getElementById("mod-nai-collection-view");
+            const bgBookmark = document.getElementById("mod-nai-trace-bg-svg-bookmark");
+            const bgLexicon = document.getElementById("mod-nai-trace-bg-svg-lexicon");
             const titleEl = document.getElementById("mod-nai-col-title");
+            const lexChipEl = document.getElementById("mod-nai-lex-stamp-chip-text");
+            const tabLocalTxt = document.getElementById("mod-nai-col-tab-local-text");
             const refreshBtn = document.getElementById("mod-nai-col-refresh-shared-btn");
             const newBtn = document.getElementById("mod-nai-col-new-btn");
             const tabLocal = document.getElementById("mod-nai-col-tab-local");
             const tabShared = document.getElementById("mod-nai-col-tab-shared");
-            const isShared = colScope === "shared";
+            const modeLabel = document.getElementById("mod-nai-current-mode-label");
 
-            if (titleEl) titleEl.textContent = isShared ? "共鳴の記録 · CLOUD" : "断片の記憶 · ARCHIVE";
+            const isShared = colScope === "shared";
+            const isLex = isLexiconCategory();
+
+            if (colView) colView.classList.toggle("is-lexicon-mode", isLex);
+            if (bgBookmark) bgBookmark.style.display = isLex ? "none" : "block";
+            if (bgLexicon) bgLexicon.style.display = isLex ? "block" : "none";
+            if (modeLabel && currentMode === "collection") {
+              modeLabel.textContent = isLex ? "词典" : "收藏";
+            }
+
+            if (isLex) {
+              if (lexChipEl) lexChipEl.textContent = isShared ? "CLOUD / 21G" : "CH.01 / 21G";
+              if (tabLocalTxt) tabLocalTxt.textContent = "词典";
+            } else {
+              if (titleEl) titleEl.textContent = isShared ? "共鳴の記録 · CLOUD" : "断片の記憶 · ARCHIVE";
+              if (tabLocalTxt) tabLocalTxt.textContent = "收藏";
+            }
+
             if (refreshBtn) refreshBtn.style.display = isShared ? "inline-flex" : "none";
             if (newBtn) newBtn.style.display = isShared ? "none" : "inline-flex";
             if (tabLocal) tabLocal.classList.toggle("is-active", !isShared);
@@ -44683,17 +45003,70 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (stateTxt) stateTxt.textContent = isOpen ? "收起" : "展开";
           }
 
+          function handleTraceIndexReorderClick(targetIdx) {
+            if (colScope === "shared" || typeof targetIdx !== "number" || targetIdx < 0) return;
+            const list = loadLocalBookmarks();
+            if (targetIdx >= list.length) return;
+
+            if (colSortSourceIndex === -1) {
+              colSortSourceIndex = targetIdx;
+              renderCollectionGrid();
+              return;
+            }
+
+            if (colSortSourceIndex === targetIdx) {
+              colSortSourceIndex = -1;
+              renderCollectionGrid();
+              return;
+            }
+
+            const fromIdx = colSortSourceIndex;
+            colSortSourceIndex = -1;
+            if (fromIdx >= 0 && fromIdx < list.length) {
+              const temp = list[fromIdx];
+              list[fromIdx] = list[targetIdx];
+              list[targetIdx] = temp;
+              saveLocalBookmarks(list);
+              renderCollectionGrid();
+            }
+          }
+
           function buildTraceCardElement(item, itemIdx, slotIdx, isEmptyGuide) {
+            const isLex = isLexiconCategory();
             const traceEl = document.createElement("div");
             traceEl.className = "mod-nai-trace-item " + (slotIdx % 2 === 0 ? "col-right-lead" : "col-left-lag");
+            if (!isEmptyGuide && colScope === "local" && colSortSourceIndex === itemIdx) {
+              traceEl.classList.add("is-sort-source");
+            }
 
             const idxNum = String((typeof itemIdx === "number" && itemIdx >= 0 ? itemIdx : 0) + 1).padStart(2, "0");
             const indexRow = document.createElement("div");
             indexRow.className = "mod-nai-trace-index-row";
             const indexSpan = document.createElement("span");
             indexSpan.className = "mod-nai-trace-index";
-            indexSpan.textContent = `[ ${idxNum}* ]`;
+            if (isLex) {
+              indexSpan.innerHTML =
+                `<span class="mod-nai-lex-idx-badge">${idxNum}</span>` +
+                `<span class="mod-nai-lex-idx-kicker">21G</span>` +
+                HAND_CIRCLE_SVG;
+            } else {
+              indexSpan.innerHTML =
+                `<span>[ ${idxNum}* ]</span>` +
+                HAND_CIRCLE_SVG;
+            }
+            if (!isEmptyGuide && colScope === "local") {
+              indexSpan.addEventListener("click", (e) => {
+                e.stopPropagation();
+                handleTraceIndexReorderClick(itemIdx);
+              });
+            }
             indexRow.appendChild(indexSpan);
+
+            if (isLex) {
+              const nodeLine = document.createElement("span");
+              nodeLine.className = "mod-nai-lex-node-line";
+              indexRow.appendChild(nodeLine);
+            }
 
             if (!isEmptyGuide && item) {
               const modelBadge = document.createElement("span");
@@ -44716,20 +45089,32 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               frame.appendChild(dot);
             });
 
+            if (isLex) {
+              const ribbon = document.createElement("span");
+              ribbon.className = "mod-nai-lex-frame-ribbon";
+              ribbon.textContent = `KEY · ${idxNum}`;
+              frame.appendChild(ribbon);
+            }
+
             const artBox = document.createElement("div");
             artBox.className = "mod-nai-trace-art-box";
             const img = document.createElement("img");
             img.loading = "lazy";
             const itemImgs = getBookmarkImagesArray(item);
-            img.src = itemImgs.length > 0 ? itemImgs[0] : getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx);
+            const isDefaultCover = itemImgs.length === 0;
+            img.src = isDefaultCover ? getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx) : itemImgs[0];
+            if (isDefaultCover && isLex) {
+              img.className = "is-lex-default-cover";
+            }
             img.alt = (item && item.name) || "片段";
             artBox.appendChild(img);
             frame.appendChild(artBox);
             frameWrap.appendChild(frame);
 
+            const sideNotesPool = isLex ? LEXICON_SIDE_NOTES : TRACE_SIDE_NOTES;
             const sideNote = document.createElement("span");
             sideNote.className = "mod-nai-trace-marginalia";
-            sideNote.textContent = TRACE_SIDE_NOTES[(itemIdx >= 0 ? itemIdx : slotIdx) % TRACE_SIDE_NOTES.length];
+            sideNote.textContent = sideNotesPool[(itemIdx >= 0 ? itemIdx : slotIdx) % sideNotesPool.length];
             frameWrap.appendChild(sideNote);
 
             traceEl.appendChild(frameWrap);
@@ -44738,18 +45123,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             caption.className = "mod-nai-trace-caption";
             const titleLine = document.createElement("div");
             titleLine.className = "mod-nai-trace-caption-title";
-            const rawTitle = isEmptyGuide ? "空白の断片" : (item && item.name ? item.name : "未命名片段");
-            titleLine.innerHTML = `<span><em>Trace</em> / ${rawTitle.replace(/</g, "&lt;")}</span><i class="mod-nai-specimen-arrow">↗</i>`;
+            const safeRawTitle = (
+              isEmptyGuide
+                ? (isLex ? "入藍の詞条" : "空白の断片")
+                : (item && item.name ? item.name : (isLex ? "未命名词条" : "未命名片段"))
+            ).replace(/</g, "&lt;");
+
+            if (isLex) {
+              titleLine.innerHTML =
+                `<span><i class="mod-nai-lex-caption-bracket">「</i>${safeRawTitle}<i class="mod-nai-lex-caption-bracket">」</i></span>` +
+                `<i class="mod-nai-lex-caption-page">P.${idxNum} ↗</i>`;
+            } else {
+              titleLine.innerHTML = `<span><em>Trace</em> / ${safeRawTitle}</span><i class="mod-nai-specimen-arrow">↗</i>`;
+            }
             caption.appendChild(titleLine);
 
-            // 外层收藏画廊只显示填写的备注，不直接暴露画师串；若未填写备注则隐藏副标题行
-            const remarkStr = isEmptyGuide
-              ? "点击新建第一枚典藏片段"
-              : (item && typeof item.remark === "string" ? item.remark.trim() : "");
-            if (remarkStr) {
+            if (isEmptyGuide && !isLex) {
               const subLine = document.createElement("div");
               subLine.className = "mod-nai-trace-caption-sub";
-              subLine.textContent = remarkStr;
+              subLine.textContent = "点击新建第一枚典藏片段";
               caption.appendChild(subLine);
             }
 
@@ -44772,19 +45164,36 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             gridEl.innerHTML = "";
 
             const isShared = colScope === "shared";
-            const sourceList = isShared ? colSharedList : loadLocalBookmarks();
+            const isLex = isLexiconCategory();
+            const sourceList = isShared
+              ? (isLex ? colLexiconSharedList : colSharedList)
+              : loadLocalBookmarks();
             const totalItems = sourceList.length;
             const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
 
-            if (isShared) {
-              if (colSharedPage > totalPages) colSharedPage = totalPages;
-              if (colSharedPage < 1) colSharedPage = 1;
+            let curPage = 1;
+            if (isLex) {
+              if (isShared) {
+                if (colLexiconSharedPage > totalPages) colLexiconSharedPage = totalPages;
+                if (colLexiconSharedPage < 1) colLexiconSharedPage = 1;
+                curPage = colLexiconSharedPage;
+              } else {
+                if (colLexiconLocalPage > totalPages) colLexiconLocalPage = totalPages;
+                if (colLexiconLocalPage < 1) colLexiconLocalPage = 1;
+                curPage = colLexiconLocalPage;
+              }
             } else {
-              if (colLocalPage > totalPages) colLocalPage = totalPages;
-              if (colLocalPage < 1) colLocalPage = 1;
+              if (isShared) {
+                if (colSharedPage > totalPages) colSharedPage = totalPages;
+                if (colSharedPage < 1) colSharedPage = 1;
+                curPage = colSharedPage;
+              } else {
+                if (colLocalPage > totalPages) colLocalPage = totalPages;
+                if (colLocalPage < 1) colLocalPage = 1;
+                curPage = colLocalPage;
+              }
             }
 
-            const curPage = isShared ? colSharedPage : colLocalPage;
             const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
             const pageItems = sourceList.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
@@ -44801,6 +45210,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const absIdx = startIdx + slotIdx;
                 const cardEl = buildTraceCardElement(item, absIdx, slotIdx, false);
                 cardEl.addEventListener("click", () => {
+                  if (colScope === "local" && colSortSourceIndex !== -1) {
+                    handleTraceIndexReorderClick(absIdx);
+                    return;
+                  }
                   openBookmarkDetailView(item, absIdx);
                 });
                 gridEl.appendChild(cardEl);
@@ -44822,6 +45235,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function renderEditSquarePreview(imagesOrUrl) {
             const stageEl = document.getElementById("mod-nai-col-edit-img-stage");
+            const stripEl = document.getElementById("mod-nai-col-edit-thumbs-strip");
             if (!stageEl) return;
             stageEl.innerHTML = "";
             const arr = Array.isArray(imagesOrUrl)
@@ -44837,15 +45251,88 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 PLACEHOLDER_BOOKMARK_SVG +
                 '<span style="font-size:10.5px;margin-top:4px;">上传封面</span>';
             }
+
+            if (!stripEl) return;
+            stripEl.innerHTML = "";
+            if (arr.length <= 0 || colScope === "shared") {
+              stripEl.style.display = "none";
+              return;
+            }
+            stripEl.style.display = "flex";
+            arr.forEach((srcUrl, idx) => {
+              const itemWrap = document.createElement("div");
+              itemWrap.className = "mod-nai-edit-thumb-item" + (idx === 0 ? " is-cover" : "");
+
+              const picBox = document.createElement("div");
+              picBox.className = "mod-nai-edit-thumb-pic";
+              const thumbImg = document.createElement("img");
+              thumbImg.src = srcUrl;
+              thumbImg.alt = `图${idx + 1}`;
+              picBox.appendChild(thumbImg);
+
+              const delBtn = document.createElement("button");
+              delBtn.type = "button";
+              delBtn.className = "mod-nai-edit-thumb-del";
+              delBtn.title = "移除此图";
+              delBtn.innerHTML =
+                '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+              delBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (colScope === "shared") return;
+                const removedUrl = colEditImagesDraft[idx];
+                colEditImagesDraft.splice(idx, 1);
+                colEditImageDraft = colEditImagesDraft[0] || "";
+                renderEditSquarePreview(colEditImagesDraft);
+                persistCurrentBookmarkEditDraft(false);
+                if (
+                  removedUrl &&
+                  typeof removedUrl === "string" &&
+                  removedUrl.startsWith("vault://") &&
+                  typeof window.deleteVaultMediaRefIfUnreferenced === "function"
+                ) {
+                  window.deleteVaultMediaRefIfUnreferenced(removedUrl).catch(() => {});
+                }
+              });
+              picBox.appendChild(delBtn);
+
+              const setAsCoverNow = () => {
+                if (colScope === "shared" || idx === 0) return;
+                const chosen = colEditImagesDraft.splice(idx, 1)[0];
+                if (chosen) {
+                  colEditImagesDraft.unshift(chosen);
+                  colEditImageDraft = colEditImagesDraft[0] || "";
+                  renderEditSquarePreview(colEditImagesDraft);
+                  persistCurrentBookmarkEditDraft(false);
+                  if (typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast("已设为封面", "success");
+                  }
+                }
+              };
+
+              picBox.addEventListener("click", setAsCoverNow);
+
+              const coverBtn = document.createElement("button");
+              coverBtn.type = "button";
+              coverBtn.className = "mod-nai-edit-thumb-cover-btn";
+              coverBtn.textContent = idx === 0 ? "当前封面" : "设为封面";
+              coverBtn.addEventListener("click", setAsCoverNow);
+
+              itemWrap.appendChild(picBox);
+              itemWrap.appendChild(coverBtn);
+              stripEl.appendChild(itemWrap);
+            });
           }
 
           function syncEditViewModeControls() {
             const isShared = colScope === "shared";
+            const isLex = isLexiconCategory();
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
             const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
+            const artistGroup = document.getElementById("mod-nai-col-edit-artist-group");
+            const negGroup = document.getElementById("mod-nai-col-edit-neg-group");
             const grabBtn = document.getElementById("mod-nai-col-edit-grab-current-btn");
             const delBtn = document.getElementById("mod-nai-col-edit-delete-btn");
             const upBtn = document.getElementById("mod-nai-col-edit-upload-btn");
@@ -44854,6 +45341,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             [nameInp, remarkInp, artistInp, posInp, negInp].forEach((el) => {
               if (el) el.readOnly = isShared;
             });
+            if (artistGroup) artistGroup.style.display = isLex ? "none" : "flex";
+            if (negGroup) negGroup.style.display = isLex ? "none" : "flex";
+            if (posInp) {
+              posInp.placeholder = isLex
+                ? "输入固定人物或动作正面提示词，可自由上下滑动"
+                : "输入正面提示词，可自由上下滑动";
+            }
             if (grabBtn) grabBtn.style.display = isShared ? "none" : "inline-flex";
             if (delBtn) delBtn.style.display = colIsCreatingNew ? "none" : "inline-flex";
             if (upBtn) upBtn.style.display = isShared ? "none" : "inline-flex";
@@ -44871,12 +45365,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function renderSpecimenDetailCard(item, idx) {
             const isShared = colScope === "shared";
+            const isLex = isLexiconCategory();
             const idxEl = document.getElementById("mod-nai-col-detail-index");
             const sealEl = document.getElementById("mod-nai-col-wax-seal");
+            const sideNoteEl = document.getElementById("mod-nai-col-detail-side-note");
             const heroFrame = document.getElementById("mod-nai-col-detail-hero-frame");
             const stageEl = document.getElementById("mod-nai-col-detail-img-stage");
             const nameEl = document.getElementById("mod-nai-col-detail-name");
             const remarkEl = document.getElementById("mod-nai-col-detail-remark");
+            const drawerKickerEl = document.getElementById("mod-nai-col-drawer-kicker");
+            const artistSecEl = document.getElementById("mod-nai-col-detail-artist-sec");
+            const negSecEl = document.getElementById("mod-nai-col-detail-neg-sec");
+            const posSecTitleEl = document.getElementById("mod-nai-col-detail-pos-sec-title");
             const artistEl = document.getElementById("mod-nai-col-detail-artist-text");
             const posEl = document.getElementById("mod-nai-col-detail-pos-text");
             const negEl = document.getElementById("mod-nai-col-detail-neg-text");
@@ -44885,9 +45385,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const importBtn = document.getElementById("mod-nai-col-detail-import-btn");
 
             const dispIdx = String((typeof idx === "number" && idx >= 0 ? idx : 0) + 1).padStart(2, "0");
-            if (idxEl) idxEl.textContent = `[ ${dispIdx}* ]`;
-            if (sealEl) sealEl.textContent = isShared ? "SHARED TRACE · CLOUD" : "TRACE SPECIMEN · ARCHIVE";
-            if (nameEl) nameEl.textContent = (item && item.name) || "未命名书签";
+            if (idxEl) idxEl.textContent = isLex ? `[ ${dispIdx}·K ]` : `[ ${dispIdx}* ]`;
+            if (sealEl) {
+              sealEl.textContent = isLex
+                ? (isShared ? "SHARED LEXICON · CLOUD" : "KLEIN LEXICON · 21 GRAMS")
+                : (isShared ? "SHARED TRACE · CLOUD" : "TRACE SPECIMEN · ARCHIVE");
+            }
+            if (sideNoteEl) {
+              sideNoteEl.textContent = isLex ? "KLEIN BLUE · 21 GRAMS" : "A PRESENCE BETWEEN SIGNALS";
+            }
+            if (drawerKickerEl) {
+              drawerKickerEl.textContent = isLex ? "LEXICON ENTRY · 正面词条" : "PROMPT ARCHIVE · 词条典藏";
+            }
+            if (artistSecEl) artistSecEl.style.display = isLex ? "none" : "flex";
+            if (negSecEl) negSecEl.style.display = isLex ? "none" : "flex";
+            if (posSecTitleEl) {
+              posSecTitleEl.textContent = isLex ? "[ I · POSITIVE / 正面提示词 ]" : "[ II · POSITIVE / 正面 ]";
+            }
+            if (nameEl) nameEl.textContent = (item && item.name) || (isLex ? "未命名词条" : "未命名书签");
 
             const modelTag = normalizeModelTagValue(item && item.modelTag);
             syncModelSwitchButtons("mod-nai-col-detail-model-switch", modelTag);
@@ -44911,6 +45426,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               stageEl.innerHTML = "";
               applyHeroFrameOrientation(heroFrame, "auto");
               const itemImgs = getBookmarkImagesArray(item);
+              const isDefaultLexCover = itemImgs.length === 0 && isLex;
               const slidesToRender = itemImgs.length > 0
                 ? itemImgs
                 : [getTraceDefaultCoverUrl(idx >= 0 ? idx : 0)];
@@ -44920,6 +45436,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 slide.className = "mod-nai-specimen-slide";
                 slide.dataset.orient = "square";
                 const img = document.createElement("img");
+                if (isDefaultLexCover) {
+                  img.className = "is-lex-default-cover";
+                }
                 img.onload = () => {
                   const w = img.naturalWidth || img.width || 1;
                   const h = img.naturalHeight || img.height || 1;
@@ -44974,14 +45493,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colEditImageDraft = colEditImagesDraft[0] || "";
             colEditModelDraft = normalizeModelTagValue(item.modelTag);
             const isShared = colScope === "shared";
+            const isLex = isLexiconCategory();
 
-            // 默认收起词条抽屉，点击展开后再查看画师串、正面提示词与负面提示词
-            setSpecimenDrawerOpen(false);
+            // 词典模式下默认展开正面词条，收藏模式下默认收起抽屉
+            setSpecimenDrawerOpen(isLex);
             renderSpecimenDetailCard(item, colCurrentIndex);
             switchCollectionSubView("detail");
 
+            const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
             if (isShared && item.id && !item._detailLoaded && typeof ModuleManager !== "undefined" && typeof ModuleManager.fetchWorkshopGithubJson === "function") {
-              ModuleManager.fetchWorkshopGithubJson(`nai-bookmarks/items/${item.id}.json`)
+              ModuleManager.fetchWorkshopGithubJson(`${ghFolder}/items/${item.id}.json`)
                 .then((fullData) => {
                   if (fullData && typeof fullData === "object") {
                     Object.assign(item, fullData, { _detailLoaded: true });
@@ -45001,21 +45522,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colScope = "local";
             updateCollectionHeaderUI();
             colIsCreatingNew = true;
+            const isLex = isLexiconCategory();
             const st = loadPanelState();
             const genImg = document.getElementById("mod-nai-gen-result-img");
             const curGenSrc = (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) ? genImg.src : "";
             const defaultModelTag = st.model && String(st.model).includes("-5-") ? "V5" : "V4.5";
 
             colCurrentItem = {
-              id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+              id: (isLex ? "lx_" : "bm_") + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
               name: "",
               modelTag: defaultModelTag,
               remark: "",
               image: curGenSrc,
               images: curGenSrc ? [curGenSrc] : [],
-              artist: computeActiveArtistPrompt() || st.artistText || "",
+              artist: isLex ? "" : (computeActiveArtistPrompt() || st.artistText || ""),
               positive: computeActivePositivePrompt() || st.pos1Text || "",
-              negative: st.negText || "",
+              negative: isLex ? "" : (st.negText || ""),
               updatedAt: Date.now()
             };
             colCurrentIndex = -1;
@@ -45065,6 +45587,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function persistCurrentBookmarkEditDraft(requireNonEmpty = false) {
             if (!colCurrentItem || colScope === "shared") return false;
+            const isLex = isLexiconCategory();
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
@@ -45073,15 +45596,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const nameVal = (nameInp ? nameInp.value : "").trim();
             const remarkVal = (remarkInp ? remarkInp.value : "").trim();
-            const artistVal = (artistInp ? artistInp.value : "").trim();
+            const artistVal = isLex ? "" : (artistInp ? artistInp.value : "").trim();
             const posVal = (posInp ? posInp.value : "").trim();
-            const negVal = (negInp ? negInp.value : "").trim();
+            const negVal = isLex ? "" : (negInp ? negInp.value : "").trim();
 
             if (requireNonEmpty && !nameVal && !remarkVal && !artistVal && !posVal && colEditImagesDraft.length === 0) {
               return false;
             }
 
-            colCurrentItem.name = nameVal || "未命名书签";
+            colCurrentItem.name = nameVal || (isLex ? "未命名词条" : "未命名书签");
             colCurrentItem.modelTag = normalizeModelTagValue(colEditModelDraft);
             colCurrentItem.remark = remarkVal;
             colCurrentItem.images = colEditImagesDraft.slice();
@@ -45149,18 +45672,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               setColStatus("共享服务正在初始化，请稍候");
               return;
             }
-            setColStatus("正在同步共享收藏夹...");
+            const isLex = isLexiconCategory();
+            const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
+            setColStatus(isLex ? "正在同步共享词典..." : "正在同步共享收藏夹...");
             try {
-              const indexData = await ModuleManager.fetchWorkshopGithubJson("nai-bookmarks/index.json");
+              const indexData = await ModuleManager.fetchWorkshopGithubJson(`${ghFolder}/index.json`);
+              let parsedItems = [];
               if (indexData && Array.isArray(indexData.items)) {
-                colSharedList = indexData.items;
+                parsedItems = indexData.items;
               } else if (Array.isArray(indexData)) {
-                colSharedList = indexData;
-              } else {
-                colSharedList = [];
+                parsedItems = indexData;
               }
-              colSharedLoadedOnce = true;
-              setColStatus(colSharedList.length > 0 ? "" : "共享集暂无内容，可在书签页点击上传分享");
+              if (isLex) {
+                colLexiconSharedList = parsedItems;
+                colLexiconSharedLoadedOnce = true;
+                setColStatus(colLexiconSharedList.length > 0 ? "" : "共享词典暂无内容，可在词条编辑页点击上传分享");
+              } else {
+                colSharedList = parsedItems;
+                colSharedLoadedOnce = true;
+                setColStatus(colSharedList.length > 0 ? "" : "共享集暂无内容，可在书签页点击上传分享");
+              }
               renderCollectionGrid();
             } catch (err) {
               setColStatus("同步未完成: " + (err && err.message ? err.message : "请检查网络"));
@@ -45188,32 +45719,36 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (btnEl) btnEl.disabled = true;
             if (spanEl) spanEl.textContent = "上传中";
 
+            const isLex = isLexiconCategory();
+            const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
+            const catTag = isLex ? "nai_lexicon" : "nai_bookmark";
+
             try {
-              const itemId = colCurrentItem.id || ("bm_" + Date.now());
+              const itemId = colCurrentItem.id || ((isLex ? "lx_" : "bm_") + Date.now());
               const imgsArr = getBookmarkImagesArray(colCurrentItem);
               const sharedItemPayload = {
                 id: itemId,
-                category: "nai_bookmark",
-                name: colCurrentItem.name || "未命名书签",
+                category: catTag,
+                name: colCurrentItem.name || (isLex ? "未命名词条" : "未命名书签"),
                 modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
                 remark: colCurrentItem.remark || "",
                 image: imgsArr[0] || "",
                 images: imgsArr,
-                artist: colCurrentItem.artist || "",
+                artist: isLex ? "" : (colCurrentItem.artist || ""),
                 positive: colCurrentItem.positive || "",
-                negative: colCurrentItem.negative || "",
+                negative: isLex ? "" : (colCurrentItem.negative || ""),
                 updatedAt: Date.now()
               };
 
               await ModuleManager.putWorkshopGithubFile(
-                `nai-bookmarks/items/${itemId}.json`,
+                `${ghFolder}/items/${itemId}.json`,
                 JSON.stringify(sharedItemPayload),
-                `Share NAI bookmark ${sharedItemPayload.name}`
+                `Share NAI ${catTag} ${sharedItemPayload.name}`
               );
 
               let currentIndex = [];
               try {
-                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson("nai-bookmarks/index.json");
+                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson(`${ghFolder}/index.json`);
                 if (remoteIdx && Array.isArray(remoteIdx.items)) {
                   currentIndex = remoteIdx.items;
                 } else if (Array.isArray(remoteIdx)) {
@@ -45223,7 +45758,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               const summaryEntry = {
                 id: itemId,
-                category: "nai_bookmark",
+                category: catTag,
                 name: sharedItemPayload.name,
                 modelTag: sharedItemPayload.modelTag,
                 remark: sharedItemPayload.remark,
@@ -45244,13 +45779,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
 
               await ModuleManager.putWorkshopGithubFile(
-                "nai-bookmarks/index.json",
-                JSON.stringify({ version: 1, type: "nai_bookmarks_isolated_store", updatedAt: Date.now(), items: currentIndex }),
-                `Update NAI bookmarks index`
+                `${ghFolder}/index.json`,
+                JSON.stringify({ version: 1, type: `${catTag}_isolated_store`, updatedAt: Date.now(), items: currentIndex }),
+                `Update NAI ${catTag} index`
               );
 
-              colSharedList = currentIndex;
-              colSharedLoadedOnce = true;
+              if (isLex) {
+                colLexiconSharedList = currentIndex;
+                colLexiconSharedLoadedOnce = true;
+              } else {
+                colSharedList = currentIndex;
+                colSharedLoadedOnce = true;
+              }
               colCurrentItem._uploadedToShared = true;
               const localListAfterUp = loadLocalBookmarks();
               const localPosAfterUp = localListAfterUp.findIndex((x) => x && x.id === itemId);
@@ -45295,38 +45835,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (btnEl) btnEl.disabled = true;
             if (spanEl) spanEl.textContent = "删除中";
 
+            const isLex = isLexiconCategory();
+            const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
+            const catTag = isLex ? "nai_lexicon" : "nai_bookmark";
+
             try {
               let currentIndex = [];
               try {
-                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson("nai-bookmarks/index.json");
+                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson(`${ghFolder}/index.json`);
                 if (remoteIdx && Array.isArray(remoteIdx.items)) {
                   currentIndex = remoteIdx.items;
                 } else if (Array.isArray(remoteIdx)) {
                   currentIndex = remoteIdx;
                 }
               } catch (_) {
-                currentIndex = Array.isArray(colSharedList) ? colSharedList.slice() : [];
+                const fallbackArr = isLex ? colLexiconSharedList : colSharedList;
+                currentIndex = Array.isArray(fallbackArr) ? fallbackArr.slice() : [];
               }
 
               const filteredIndex = currentIndex.filter((x) => x && x.id !== itemId);
 
               await ModuleManager.putWorkshopGithubFile(
-                "nai-bookmarks/index.json",
-                JSON.stringify({ version: 1, type: "nai_bookmarks_isolated_store", updatedAt: Date.now(), items: filteredIndex }),
-                `Delete NAI bookmark ${itemId} from index`
+                `${ghFolder}/index.json`,
+                JSON.stringify({ version: 1, type: `${catTag}_isolated_store`, updatedAt: Date.now(), items: filteredIndex }),
+                `Delete NAI ${catTag} ${itemId} from index`
               );
 
               if (typeof ModuleManager.deleteWorkshopGithubFile === "function") {
                 try {
                   await ModuleManager.deleteWorkshopGithubFile(
-                    `nai-bookmarks/items/${itemId}.json`,
-                    `Delete NAI bookmark file ${itemId}`
+                    `${ghFolder}/items/${itemId}.json`,
+                    `Delete NAI ${catTag} file ${itemId}`
                   );
                 } catch (_) {}
               }
 
-              colSharedList = filteredIndex;
-              colSharedLoadedOnce = true;
+              if (isLex) {
+                colLexiconSharedList = filteredIndex;
+                colLexiconSharedLoadedOnce = true;
+              } else {
+                colSharedList = filteredIndex;
+                colSharedLoadedOnce = true;
+              }
 
               const localList = loadLocalBookmarks();
               const localPos = localList.findIndex((x) => x && x.id === itemId);
@@ -45365,34 +45915,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const switchScopeTo = (targetScope) => {
               colScope = targetScope === "shared" ? "shared" : "local";
+              colSortSourceIndex = -1;
               switchCollectionSubView("grid");
-              if (colScope === "shared" && !colSharedLoadedOnce) {
+              const isLex = isLexiconCategory();
+              const loadedOnce = isLex ? colLexiconSharedLoadedOnce : colSharedLoadedOnce;
+              const sharedArr = isLex ? colLexiconSharedList : colSharedList;
+              if (colScope === "shared" && !loadedOnce) {
                 renderCollectionGrid();
                 refreshSharedBookmarksFromGitHub();
               } else {
-                setColStatus(colScope === "shared" && colSharedList.length === 0 ? "共享集暂无内容，可在典藏卡点击上传分享" : "");
+                setColStatus(colScope === "shared" && sharedArr.length === 0 ? "共享集暂无内容，可在典藏卡点击上传分享" : "");
                 renderCollectionGrid();
               }
             };
 
             if (openBtn) {
               openBtn.addEventListener("click", () => {
+                colCategory = "bookmark";
                 colScope = "local";
+                colSortSourceIndex = -1;
                 setColStatus("");
                 switchCollectionSubView("grid");
                 renderCollectionGrid();
-                applyModeView("generate" === "collection" ? "generate" : "collection");
+                applyModeView("collection");
                 const st = loadPanelState();
                 st.mode = "collection";
-                savePanelState(st);
-              });
-            }
-            if (closeBtn) {
-              closeBtn.addEventListener("click", () => {
-                if (colScope === "local") persistCurrentBookmarkEditDraft(false);
-                applyModeView("generate");
-                const st = loadPanelState();
-                st.mode = "generate";
                 savePanelState(st);
               });
             }
@@ -45403,10 +45950,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (tabLocalBtn) {
               tabLocalBtn.addEventListener("click", () => {
-                if (colScope !== "local") switchScopeTo("local");
-                else {
+                if (colScope !== "local") {
+                  switchScopeTo("local");
+                } else {
+                  persistCurrentBookmarkEditDraft(false);
+                  colCategory = isLexiconCategory() ? "bookmark" : "lexicon";
+                  colSortSourceIndex = -1;
+                  setColStatus("");
                   switchCollectionSubView("grid");
                   renderCollectionGrid();
+                  applyModeView("collection");
                 }
               });
             }
@@ -45426,20 +45979,32 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (prevBtn) {
               prevBtn.addEventListener("click", () => {
+                const isLex = isLexiconCategory();
                 if (colScope === "shared") {
-                  if (colSharedPage > 1) colSharedPage--;
+                  if (isLex) {
+                    if (colLexiconSharedPage > 1) colLexiconSharedPage--;
+                  } else {
+                    if (colSharedPage > 1) colSharedPage--;
+                  }
                 } else {
-                  if (colLocalPage > 1) colLocalPage--;
+                  if (isLex) {
+                    if (colLexiconLocalPage > 1) colLexiconLocalPage--;
+                  } else {
+                    if (colLocalPage > 1) colLocalPage--;
+                  }
                 }
                 renderCollectionGrid();
               });
             }
             if (nextBtn) {
               nextBtn.addEventListener("click", () => {
+                const isLex = isLexiconCategory();
                 if (colScope === "shared") {
-                  colSharedPage++;
+                  if (isLex) colLexiconSharedPage++;
+                  else colSharedPage++;
                 } else {
-                  colLocalPage++;
+                  if (isLex) colLexiconLocalPage++;
+                  else colLocalPage++;
                 }
                 renderCollectionGrid();
               });
@@ -45513,18 +46078,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (detailImportBtn) {
               detailImportBtn.addEventListener("click", () => {
                 if (!colCurrentItem) return;
+                const isLex = isLexiconCategory();
                 const list = loadLocalBookmarks();
                 const imgsArr = getBookmarkImagesArray(colCurrentItem);
                 const cloned = {
-                  id: "bm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-                  name: colCurrentItem.name || "收录书签",
+                  id: (isLex ? "lx_" : "bm_") + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  name: colCurrentItem.name || (isLex ? "收录词条" : "收录书签"),
                   modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
                   remark: colCurrentItem.remark || "",
                   image: imgsArr[0] || "",
                   images: imgsArr,
-                  artist: colCurrentItem.artist || "",
+                  artist: isLex ? "" : (colCurrentItem.artist || ""),
                   positive: colCurrentItem.positive || "",
-                  negative: colCurrentItem.negative || "",
+                  negative: isLex ? "" : (colCurrentItem.negative || ""),
                   updatedAt: Date.now()
                 };
                 list.push(cloned);
@@ -45535,13 +46101,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   setTimeout(() => { spanEl.textContent = "收录"; }, 1200);
                 }
                 if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast("已收入我的收藏", "success");
+                  window.showDownloadToast(isLex ? "已收入我的词典" : "已收入我的收藏", "success");
                 }
               });
             }
             if (detailApplyBtn) {
               detailApplyBtn.addEventListener("click", () => {
                 if (!colCurrentItem) return;
+                const isLex = isLexiconCategory();
                 const artistVal = (colCurrentItem.artist || "").trim();
                 const posVal = (colCurrentItem.positive || "").trim();
                 const negVal = (colCurrentItem.negative || "").trim();
@@ -45552,11 +46119,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const c1El = document.getElementById("mod-nai-pos1-check");
                 const negEl = document.getElementById("mod-nai-gen-neg-input");
 
-                if (artistEl) artistEl.value = artistVal;
-                if (ac1El) ac1El.checked = true;
-                if (pos1El) pos1El.value = posVal;
-                if (c1El) c1El.checked = true;
-                if (negEl) negEl.value = negVal;
+                if (isLex) {
+                  if (pos1El) pos1El.value = posVal;
+                  if (c1El) c1El.checked = true;
+                } else {
+                  if (artistEl) artistEl.value = artistVal;
+                  if (ac1El) ac1El.checked = true;
+                  if (pos1El) pos1El.value = posVal;
+                  if (c1El) c1El.checked = true;
+                  if (negEl) negEl.value = negVal;
+                }
 
                 applyModeView("generate");
                 const st = loadPanelState();
@@ -45564,7 +46136,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 savePanelState(st);
                 syncModuleNaiToGlobal();
                 if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast("已填入生图面板", "success");
+                  window.showDownloadToast(isLex ? "已填入正面提示词" : "已填入生图面板", "success");
                 }
               });
             }
@@ -45667,13 +46239,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (editGrabBtn) {
               editGrabBtn.addEventListener("click", () => {
+                const isLex = isLexiconCategory();
                 const st = loadPanelState();
                 const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
                 const posInp = document.getElementById("mod-nai-col-edit-pos-input");
                 const negInp = document.getElementById("mod-nai-col-edit-neg-input");
-                if (artistInp) artistInp.value = computeActiveArtistPrompt() || st.artistText || "";
+                if (!isLex && artistInp) artistInp.value = computeActiveArtistPrompt() || st.artistText || "";
                 if (posInp) posInp.value = computeActivePositivePrompt() || st.pos1Text || "";
-                if (negInp) negInp.value = st.negText || "";
+                if (!isLex && negInp) negInp.value = st.negText || "";
                 const genImg = document.getElementById("mod-nai-gen-result-img");
                 if (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) {
                   colEditImagesDraft = [genImg.src];
@@ -45712,7 +46285,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               editSaveBtn.addEventListener("click", () => {
                 persistCurrentBookmarkEditDraft(false);
                 if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast("已保存书签", "success");
+                  window.showDownloadToast(isLexiconCategory() ? "已保存词条" : "已保存书签", "success");
                 }
                 if (colCurrentItem) {
                   openBookmarkDetailView(colCurrentItem, colCurrentIndex);
@@ -45727,9 +46300,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               editDeleteBtn.addEventListener("click", async () => {
                 if (!colCurrentItem) return;
                 const itemId = colCurrentItem.id;
+                const isLex = isLexiconCategory();
+                const sharedArr = isLex ? colLexiconSharedList : colSharedList;
                 if (colScope === "shared") {
                   if (typeof window.showCustomConfirm === "function") {
-                    const ok = await window.showCustomConfirm("删除共享画师串", "确定从共享集删除这条已上传的画师串吗？");
+                    const ok = await window.showCustomConfirm("删除共享内容", "确定从共享集删除这条已上传的内容吗？");
                     if (!ok) return;
                   }
                   const deleted = await deleteSharedBookmarkFromGitHub(itemId, editDeleteBtn);
@@ -45743,13 +46318,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                 const existsInShared = Boolean(
                   colCurrentItem._uploadedToShared ||
-                  (Array.isArray(colSharedList) && colSharedList.some((x) => x && x.id === itemId))
+                  (Array.isArray(sharedArr) && sharedArr.some((x) => x && x.id === itemId))
                 );
 
                 if (existsInShared && typeof window.showChoiceModal === "function") {
-                  const choice = await window.showChoiceModal("删除书签", [
-                    { text: "删除已上传的共享画师串", value: "shared_only" },
-                    { text: "仅删除本地收藏", value: "local_only" },
+                  const choice = await window.showChoiceModal("删除卡片", [
+                    { text: "删除已上传的共享内容", value: "shared_only" },
+                    { text: "仅删除本地卡片", value: "local_only" },
                     { text: "同时删除本地与共享", value: "both" }
                   ]);
                   if (!choice) return;
@@ -45775,7 +46350,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
 
                 if (typeof window.showCustomConfirm === "function") {
-                  const ok = await window.showCustomConfirm("删除书签", "确定删除这条收藏吗？");
+                  const ok = await window.showCustomConfirm("删除卡片", "确定删除这条内容吗？");
                   if (!ok) return;
                 }
                 const removedVaultRefs = getBookmarkImagesArray(colCurrentItem).filter((u) => typeof u === "string" && u.startsWith("vault://"));
