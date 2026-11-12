@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43157,6 +43157,125 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let memoryLexiconList = null;
           let colCategory = "bookmark"; // "bookmark" | "lexicon"
 
+          const NAI_TERMUX_STORE_FILE = "nai_collection_store.json";
+          let _termuxNaiStoreLoadedOnce = false;
+          let _termuxNaiSyncInFlight = null;
+          let _termuxNaiWriteQueue = Promise.resolve();
+
+          function getNaiTermuxBaseUrl() {
+            try {
+              const raw = localStorage.getItem("ephone_local_vault_config_v1");
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.url && String(parsed.url).trim()) {
+                  return String(parsed.url).trim().replace(/\/+$/, "");
+                }
+              }
+            } catch (_) {}
+            return "http://127.0.0.1:8765";
+          }
+
+          function bindNaiVaultAwareImage(imgEl, rawSrcUrl) {
+            if (!imgEl) return;
+            const srcStr = String(rawSrcUrl || "").trim();
+            if (!srcStr) {
+              imgEl.removeAttribute("src");
+              return;
+            }
+            if (srcStr.startsWith("vault://")) {
+              imgEl.setAttribute("data-vault-ref", srcStr);
+              const fastCached = typeof window.getCachedVaultBlobUrl === "function"
+                ? window.getCachedVaultBlobUrl(srcStr)
+                : null;
+              if (fastCached) {
+                imgEl.setAttribute("data-vault-hydrated-src", fastCached);
+                imgEl.src = fastCached;
+                return;
+              }
+              if (typeof window.resolveVaultRefToUrl === "function") {
+                window.resolveVaultRefToUrl(srcStr).then((resolved) => {
+                  if (resolved && resolved !== srcStr && !resolved.startsWith("vault://")) {
+                    imgEl.setAttribute("data-vault-hydrated-src", resolved);
+                    imgEl.src = resolved;
+                  }
+                }).catch(() => {});
+              } else {
+                imgEl.src = srcStr;
+              }
+            } else {
+              if (typeof window.setCleanPreviewImgSrc === "function") {
+                window.setCleanPreviewImgSrc(imgEl, srcStr);
+              } else {
+                imgEl.src = srcStr;
+              }
+            }
+          }
+
+          async function offloadSingleNaiImageToTermux(imgUrl) {
+            if (!imgUrl || typeof imgUrl !== "string") return "";
+            const trimmed = imgUrl.trim();
+            if (!trimmed) return "";
+            if (trimmed.startsWith("vault://")) return trimmed;
+            if (trimmed.startsWith("blob:") && window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.has(trimmed)) {
+              return window.blobUrlToVaultRefMap.get(trimmed);
+            }
+            if (trimmed.startsWith("data:image/") && typeof window.saveStickerToLocalVault === "function") {
+              try {
+                const vaultRef = await window.saveStickerToLocalVault(trimmed, false);
+                if (vaultRef && typeof vaultRef === "string" && vaultRef.startsWith("vault://")) {
+                  return vaultRef;
+                }
+              } catch (_) {}
+            }
+            return trimmed;
+          }
+
+          async function offloadBookmarkListImagesToTermux(list) {
+            if (!Array.isArray(list)) return [];
+            for (let i = 0; i < list.length; i++) {
+              const item = list[i];
+              if (!item || typeof item !== "object") continue;
+              const rawImgs = Array.isArray(item.images) && item.images.length > 0
+                ? item.images.filter(Boolean)
+                : (item.image ? [item.image] : []);
+              if (rawImgs.length > 0) {
+                const nextImgs = [];
+                for (let j = 0; j < rawImgs.length; j++) {
+                  const ref = await offloadSingleNaiImageToTermux(rawImgs[j]);
+                  if (ref) nextImgs.push(ref);
+                }
+                item.images = nextImgs;
+                item.image = nextImgs[0] || "";
+              } else {
+                item.images = [];
+                item.image = "";
+              }
+            }
+            return list;
+          }
+
+          function purgeBrowserDuplicateNaiCopies() {
+            try {
+              localStorage.removeItem("mod_nai_bookmarks_v1");
+              localStorage.removeItem("mod_nai_lexicon_v1");
+              localStorage.removeItem("mod_nai_bookmarks_text_backup_v1");
+              localStorage.removeItem("mod_nai_lexicon_text_backup_v1");
+            } catch (_) {}
+            if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
+              delete window.state.globalSettings.naiBookmarksCollection;
+              delete window.state.globalSettings.naiLexiconCollection;
+            }
+            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+              window.db.globalSettings.get("main").then((gs) => {
+                if (gs && (gs.naiBookmarksCollection !== undefined || gs.naiLexiconCollection !== undefined)) {
+                  delete gs.naiBookmarksCollection;
+                  delete gs.naiLexiconCollection;
+                  window.db.globalSettings.put(gs).catch(() => {});
+                }
+              }).catch(() => {});
+            }
+          }
+
           function safeNaiLocalSetItem(key, val) {
             try {
               localStorage.setItem(key, val);
@@ -43172,42 +43291,85 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          let _dbWriteQueuePromise = Promise.resolve();
-          function safePersistNaiFieldToDb(fieldKey, fieldValue, onAfterPut) {
-            if (window.state) {
-              if (!window.state.globalSettings || typeof window.state.globalSettings !== "object") {
-                window.state.globalSettings = { id: "main" };
+          function persistNaiStoreToTermux(useKeepAlive = false) {
+            _termuxNaiWriteQueue = _termuxNaiWriteQueue.then(async () => {
+              const baseUrl = getNaiTermuxBaseUrl();
+              if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
+                await offloadBookmarkListImagesToTermux(memoryBookmarksList);
               }
-              window.state.globalSettings[fieldKey] = fieldValue;
-            }
-            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
-              _dbWriteQueuePromise = _dbWriteQueuePromise
-                .then(async () => {
-                  const existingGs = (await window.db.globalSettings.get("main")) || { id: "main" };
-                  const mergedGs = Object.assign({ id: "main" }, existingGs);
-                  if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
-                    Object.keys(window.state.globalSettings).forEach((k) => {
-                      const v = window.state.globalSettings[k];
-                      if (v !== undefined) {
-                        if (Array.isArray(v) && v.length === 0 && Array.isArray(existingGs[k]) && existingGs[k].length > 0 && k !== fieldKey) {
-                          return;
-                        }
-                        mergedGs[k] = v;
-                      }
-                    });
+              if (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0) {
+                await offloadBookmarkListImagesToTermux(memoryLexiconList);
+              }
+
+              // 若启动时还未从 Termux 读取过，先读取合并一次，严禁拿空列表覆盖 Termux 本地已有文件
+              let existingRemote = null;
+              if (!_termuxNaiStoreLoadedOnce) {
+                try {
+                  const r = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
+                  if (r && r.ok) {
+                    const txt = await r.text();
+                    if (txt && txt.trim().startsWith("{")) {
+                      existingRemote = JSON.parse(txt);
+                    }
                   }
-                  mergedGs.id = "main";
-                  mergedGs[fieldKey] = fieldValue;
-                  if (window.state) {
-                    window.state.globalSettings = mergedGs;
+                } catch (_) {}
+              }
+
+              const outBookmarks = (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0)
+                ? memoryBookmarksList
+                : (existingRemote && Array.isArray(existingRemote.bookmarks) && existingRemote.bookmarks.length > 0 && !Array.isArray(memoryBookmarksList)
+                  ? existingRemote.bookmarks
+                  : (Array.isArray(memoryBookmarksList) ? memoryBookmarksList : []));
+
+              const outLexicon = (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0)
+                ? memoryLexiconList
+                : (existingRemote && Array.isArray(existingRemote.lexicon) && existingRemote.lexicon.length > 0 && !Array.isArray(memoryLexiconList)
+                  ? existingRemote.lexicon
+                  : (Array.isArray(memoryLexiconList) ? memoryLexiconList : []));
+
+              const outPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
+                ? memoryPresetsStore
+                : (existingRemote && existingRemote.presets ? existingRemote.presets : { artist: [], positive: [], negative: [] });
+
+              const outPanelState = (memoryPanelState && typeof memoryPanelState === "object")
+                ? memoryPanelState
+                : (existingRemote && existingRemote.panelState ? existingRemote.panelState : null);
+
+              const payload = {
+                version: 1,
+                updatedAt: Date.now(),
+                bookmarks: outBookmarks,
+                lexicon: outLexicon,
+                presets: outPresets,
+                panelState: outPanelState
+              };
+              const bodyStr = JSON.stringify(payload);
+              const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
+              if (baseUrl.includes("127.0.0.1")) {
+                urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
+              }
+              let savedToTermux = false;
+              for (const u of urls) {
+                try {
+                  const putRes = await fetch(u, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json; charset=utf-8" },
+                    body: bodyStr,
+                    keepalive: Boolean(useKeepAlive && bodyStr.length < 60000)
+                  });
+                  if (putRes && putRes.ok) {
+                    savedToTermux = true;
+                    break;
                   }
-                  await window.db.globalSettings.put(mergedGs);
-                  if (typeof onAfterPut === "function") {
-                    onAfterPut(mergedGs);
-                  }
-                })
-                .catch(() => {});
-            }
+                } catch (_) {}
+              }
+              if (savedToTermux) {
+                _termuxNaiStoreLoadedOnce = true;
+                // 成功写入 Termux 本地磁盘后，立即清除浏览器内的重复副本以释放浏览器内存
+                purgeBrowserDuplicateNaiCopies();
+              }
+            }).catch(() => {});
+            return _termuxNaiWriteQueue;
           }
 
           const THEME_ICONS = {
@@ -43265,8 +43427,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function savePanelState(stateObj) {
             memoryPanelState = Object.assign({}, stateObj);
-            safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
-            safePersistNaiFieldToDb("naiPanelState", memoryPanelState);
+            persistNaiStoreToTermux(false);
           }
 
           function loadPresetsStore() {
@@ -43341,8 +43502,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               positive: Array.isArray(store && store.positive) ? store.positive : [],
               negative: Array.isArray(store && store.negative) ? store.negative : []
             };
-            safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
-            safePersistNaiFieldToDb("naiPresetsStore", memoryPresetsStore);
+            persistNaiStoreToTermux(false);
           }
 
           function getShortModelLabel(modelVal) {
@@ -44799,42 +44959,33 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return covers[safeIdx];
           }
 
-          function stripBase64FromBookmarkList(arr) {
-            if (!Array.isArray(arr)) return [];
-            return arr.map((item) => {
-              if (!item || typeof item !== "object") return item;
-              const next = Object.assign({}, item);
-              if (typeof next.image === "string" && next.image.startsWith("data:")) next.image = "";
-              if (Array.isArray(next.images)) {
-                next.images = next.images.filter((u) => typeof u === "string" && !u.startsWith("data:"));
+          function mergeBookmarkListsById(primaryList, secondaryList) {
+            const listA = Array.isArray(primaryList) ? primaryList.filter(Boolean) : [];
+            const listB = Array.isArray(secondaryList) ? secondaryList.filter(Boolean) : [];
+            if (listA.length === 0) return listB.slice();
+            if (listB.length === 0) return listA.slice();
+            const merged = listA.map((item) => Object.assign({}, item));
+            const indexById = new Map();
+            merged.forEach((it, idx) => {
+              if (it && it.id) indexById.set(it.id, idx);
+            });
+            for (const other of listB) {
+              if (!other || typeof other !== "object") continue;
+              if (other.id && indexById.has(other.id)) {
+                const pos = indexById.get(other.id);
+                const cur = merged[pos];
+                const curImgs = Array.isArray(cur.images) ? cur.images.filter(Boolean) : (cur.image ? [cur.image] : []);
+                const otherImgs = Array.isArray(other.images) ? other.images.filter(Boolean) : (other.image ? [other.image] : []);
+                if (curImgs.length === 0 && otherImgs.length > 0) {
+                  cur.images = otherImgs;
+                  cur.image = otherImgs[0] || "";
+                }
+              } else {
+                merged.push(Object.assign({}, other));
+                if (other.id) indexById.set(other.id, merged.length - 1);
               }
-              return next;
-            });
-          }
-
-          function mergeBookmarkListsPreservingImages(primaryList, secondaryList) {
-            const base = Array.isArray(primaryList) && primaryList.length > 0
-              ? primaryList
-              : (Array.isArray(secondaryList) ? secondaryList : []);
-            const other = base === primaryList
-              ? (Array.isArray(secondaryList) ? secondaryList : [])
-              : (Array.isArray(primaryList) ? primaryList : []);
-            if (other.length === 0) return base;
-            const otherMap = new Map();
-            other.forEach((it) => {
-              if (it && it.id) otherMap.set(it.id, it);
-            });
-            return base.map((it) => {
-              if (!it || typeof it !== "object") return it;
-              const match = it.id ? otherMap.get(it.id) : null;
-              if (!match) return it;
-              const curImgs = Array.isArray(it.images) ? it.images.filter(Boolean) : (it.image ? [it.image] : []);
-              const matchImgs = Array.isArray(match.images) ? match.images.filter(Boolean) : (match.image ? [match.image] : []);
-              if (curImgs.length === 0 && matchImgs.length > 0) {
-                return Object.assign({}, it, { image: matchImgs[0] || "", images: matchImgs });
-              }
-              return it;
-            });
+            }
+            return merged;
           }
 
           function readListFromStorageKey(key) {
@@ -44853,7 +45004,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function loadLocalBookmarks() {
             const isLex = isLexiconCategory();
             const memList = isLex ? memoryLexiconList : memoryBookmarksList;
-            if (Array.isArray(memList) && memList.length > 0) {
+            if (Array.isArray(memList)) {
               return memList;
             }
 
@@ -44873,25 +45024,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const localArr = readListFromStorageKey(storeKey);
             const backupArr = readListFromStorageKey(backupKey);
 
-            let resolved = null;
-            if (gsArr && localArr) {
-              resolved = mergeBookmarkListsPreservingImages(
-                localArr.length >= gsArr.length ? localArr : gsArr,
-                localArr.length >= gsArr.length ? gsArr : localArr
-              );
-            } else if (gsArr) {
-              resolved = backupArr && backupArr.length > gsArr.length
-                ? mergeBookmarkListsPreservingImages(backupArr, gsArr)
-                : gsArr;
-            } else if (localArr) {
-              resolved = backupArr && backupArr.length > localArr.length
-                ? mergeBookmarkListsPreservingImages(backupArr, localArr)
-                : localArr;
-            } else if (backupArr) {
-              resolved = backupArr;
-            }
+            let resolved = [];
+            if (gsArr) resolved = mergeBookmarkListsById(resolved, gsArr);
+            if (localArr) resolved = mergeBookmarkListsById(resolved, localArr);
+            if (backupArr) resolved = mergeBookmarkListsById(resolved, backupArr);
 
-            if (Array.isArray(resolved) && resolved.length > 0) {
+            if (resolved.length > 0) {
               if (isLex) {
                 memoryLexiconList = resolved;
               } else {
@@ -44899,48 +45037,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               return resolved;
             }
-
-            return Array.isArray(memList) ? memList : [];
+            return [];
           }
 
           function saveLocalBookmarks(list) {
             const cleanList = Array.isArray(list) ? list : [];
             const isLex = isLexiconCategory();
-            const storeKey = isLex ? LEXICON_STORE_KEY : BOOKMARKS_STORE_KEY;
-            const backupKey = isLex ? LEXICON_TEXT_BACKUP_KEY : BOOKMARKS_TEXT_BACKUP_KEY;
-            const gsField = isLex ? "naiLexiconCollection" : "naiBookmarksCollection";
-
             if (isLex) {
               memoryLexiconList = cleanList;
             } else {
               memoryBookmarksList = cleanList;
             }
-
-            const syncToLocalStorage = (arr) => {
-              const lightList = stripBase64FromBookmarkList(arr);
-              try {
-                localStorage.setItem(backupKey, JSON.stringify(lightList));
-              } catch (_) {}
-              try {
-                localStorage.setItem(storeKey, JSON.stringify(arr));
-              } catch (_) {
-                try {
-                  localStorage.setItem(storeKey, JSON.stringify(lightList));
-                } catch (_2) {}
-              }
-            };
-            syncToLocalStorage(cleanList);
-            safePersistNaiFieldToDb(gsField, cleanList, (mergedGs) => {
-              if (mergedGs && Array.isArray(mergedGs[gsField])) {
-                if (isLex) {
-                  memoryLexiconList = mergedGs[gsField];
-                  syncToLocalStorage(memoryLexiconList);
-                } else {
-                  memoryBookmarksList = mergedGs[gsField];
-                  syncToLocalStorage(memoryBookmarksList);
-                }
-              }
-            });
+            persistNaiStoreToTermux(false);
           }
 
           function setColStatus(msg) {
@@ -45159,11 +45267,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             img.loading = "lazy";
             const itemImgs = getBookmarkImagesArray(item);
             const isDefaultCover = itemImgs.length === 0;
-            img.src = isDefaultCover ? getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx) : itemImgs[0];
+            const coverSrc = isDefaultCover ? getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx) : itemImgs[0];
             if (isDefaultCover && isLex) {
               img.className = "is-lex-default-cover";
             }
             img.alt = (item && item.name) || "片段";
+            bindNaiVaultAwareImage(img, coverSrc);
             artBox.appendChild(img);
             frame.appendChild(artBox);
             frameWrap.appendChild(frame);
@@ -45300,8 +45409,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               : (typeof imagesOrUrl === "string" && imagesOrUrl.trim().length > 0 ? [imagesOrUrl.trim()] : []);
             if (arr.length > 0) {
               const img = document.createElement("img");
-              img.src = arr[0];
               img.alt = "封面";
+              bindNaiVaultAwareImage(img, arr[0]);
               stageEl.appendChild(img);
             } else {
               stageEl.innerHTML =
@@ -45323,8 +45432,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const picBox = document.createElement("div");
               picBox.className = "mod-nai-edit-thumb-pic";
               const thumbImg = document.createElement("img");
-              thumbImg.src = srcUrl;
               thumbImg.alt = `图${idx + 1}`;
+              bindNaiVaultAwareImage(thumbImg, srcUrl);
               picBox.appendChild(thumbImg);
 
               const delBtn = document.createElement("button");
@@ -45511,9 +45620,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     applyHeroFrameOrientation(heroFrame, orient);
                   }
                 };
-                img.src = srcUrl;
                 img.alt = (item && item.name) || "封面";
                 img.draggable = false;
+                bindNaiVaultAwareImage(img, srcUrl);
                 slide.appendChild(img);
                 stageEl.appendChild(slide);
               });
@@ -45782,7 +45891,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             try {
               const itemId = colCurrentItem.id || ((isLex ? "lx_" : "bm_") + Date.now());
-              const imgsArr = getBookmarkImagesArray(colCurrentItem);
+              const rawImgsArr = getBookmarkImagesArray(colCurrentItem);
+              const imgsArr = [];
+              for (const rawImg of rawImgsArr) {
+                if (typeof rawImg === "string" && rawImg.startsWith("vault://") && typeof window.resolveVaultRefToDataUrl === "function") {
+                  const resolvedDataUrl = await window.resolveVaultRefToDataUrl(rawImg);
+                  imgsArr.push(resolvedDataUrl || rawImg);
+                } else {
+                  imgsArr.push(rawImg);
+                }
+              }
               const sharedItemPayload = {
                 id: itemId,
                 category: catTag,
@@ -45998,6 +46116,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const st = loadPanelState();
                 st.mode = "collection";
                 savePanelState(st);
+                loadNaiStoreFromTermux();
               });
             }
             if (newBtn) {
@@ -46261,7 +46380,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const newUrls = [];
                 for (const f of files) {
                   const sqUrl = await compressImageFileToSquareDataUrl(f);
-                  if (sqUrl) newUrls.push(sqUrl);
+                  if (sqUrl) {
+                    const termuxRef = await offloadSingleNaiImageToTermux(sqUrl);
+                    if (termuxRef) newUrls.push(termuxRef);
+                  }
                 }
                 if (!newUrls.length) return;
 
@@ -46295,7 +46417,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (editGrabBtn) {
-              editGrabBtn.addEventListener("click", () => {
+              editGrabBtn.addEventListener("click", async () => {
                 const isLex = isLexiconCategory();
                 const st = loadPanelState();
                 const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
@@ -46306,8 +46428,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (!isLex && negInp) negInp.value = st.negText || "";
                 const genImg = document.getElementById("mod-nai-gen-result-img");
                 if (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) {
-                  colEditImagesDraft = [genImg.src];
-                  colEditImageDraft = genImg.src;
+                  const termuxRef = await offloadSingleNaiImageToTermux(genImg.src);
+                  colEditImagesDraft = [termuxRef || genImg.src];
+                  colEditImageDraft = colEditImagesDraft[0] || "";
                   renderEditSquarePreview(colEditImagesDraft);
                 }
                 persistCurrentBookmarkEditDraft(false);
@@ -46481,6 +46604,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             computeActivePositivePrompt();
             renderPresetSelectOptions();
             updateHeaderSummary();
+            loadNaiStoreFromTermux();
           };
 
           window.getModuleNaiLiveStateForMashu = function (scope) {
@@ -46691,76 +46815,171 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             } catch (_) {}
             syncModuleNaiToGlobal();
+            persistNaiStoreToTermux(true);
           }
           window.addEventListener("pagehide", flushAllNaiStateBeforeExit);
           window.addEventListener("beforeunload", flushAllNaiStateBeforeExit);
           document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "hidden") {
               flushAllNaiStateBeforeExit();
+            } else if (document.visibilityState === "visible") {
+              loadNaiStoreFromTermux();
             }
           });
 
-          function tryHydrateNaiCollectionsAndPresetsFromDb() {
-            if (!window.db || !window.db.globalSettings || typeof window.db.globalSettings.get !== "function") {
-              return;
-            }
-            window.db.globalSettings.get("main").then((gs) => {
-              if (!gs) return;
-              if (window.state && (!window.state.globalSettings || typeof window.state.globalSettings !== "object")) {
-                window.state.globalSettings = gs;
-              } else if (window.state && window.state.globalSettings) {
-                Object.keys(gs).forEach((k) => {
-                  if (window.state.globalSettings[k] === undefined || (Array.isArray(window.state.globalSettings[k]) && window.state.globalSettings[k].length === 0 && Array.isArray(gs[k]) && gs[k].length > 0)) {
-                    window.state.globalSettings[k] = gs[k];
+          async function loadNaiStoreFromTermux() {
+            if (_termuxNaiSyncInFlight) return _termuxNaiSyncInFlight;
+            _termuxNaiSyncInFlight = (async () => {
+              const baseUrl = getNaiTermuxBaseUrl();
+              let remoteStore = null;
+              const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
+              if (baseUrl.includes("127.0.0.1")) {
+                urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
+              }
+              for (const u of urls) {
+                try {
+                  const res = await fetch(u, { method: "GET", cache: "no-store" });
+                  if (res && res.ok) {
+                    const txt = await res.text();
+                    if (txt && txt.trim().startsWith("{")) {
+                      remoteStore = JSON.parse(txt);
+                      break;
+                    }
                   }
-                });
+                } catch (_) {}
+              }
+
+              // 若 Termux 上的 nai_collection_store.json 尚未建立或为空，尝试从 Termux backup.json 或浏览器旧残留中提取一次并迁移进 Termux
+              let backupBookmarks = [];
+              let backupLexicon = [];
+              let backupPresets = null;
+              let backupPanelState = null;
+
+              const hasRemoteItems = Boolean(
+                remoteStore &&
+                ((Array.isArray(remoteStore.bookmarks) && remoteStore.bookmarks.length > 0) ||
+                  (Array.isArray(remoteStore.lexicon) && remoteStore.lexicon.length > 0))
+              );
+
+              if (!hasRemoteItems) {
+                try {
+                  const bRes = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
+                  if (bRes && bRes.ok) {
+                    const bJson = await bRes.json();
+                    if (bJson && typeof bJson === "object") {
+                      const ls = bJson.localStorageData || {};
+                      if (typeof ls.mod_nai_bookmarks_v1 === "string") {
+                        try {
+                          const p = JSON.parse(ls.mod_nai_bookmarks_v1);
+                          if (Array.isArray(p)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, p);
+                        } catch (_) {}
+                      }
+                      if (typeof ls.mod_nai_lexicon_v1 === "string") {
+                        try {
+                          const p = JSON.parse(ls.mod_nai_lexicon_v1);
+                          if (Array.isArray(p)) backupLexicon = mergeBookmarkListsById(backupLexicon, p);
+                        } catch (_) {}
+                      }
+                      if (typeof ls.mod_nai_presets_v1 === "string") {
+                        try {
+                          const p = JSON.parse(ls.mod_nai_presets_v1);
+                          if (p && typeof p === "object") backupPresets = p;
+                        } catch (_) {}
+                      }
+                      if (typeof ls.mod_nai_panel_state_v1 === "string") {
+                        try {
+                          const p = JSON.parse(ls.mod_nai_panel_state_v1);
+                          if (p && typeof p === "object") backupPanelState = p;
+                        } catch (_) {}
+                      }
+                      const gsRows = bJson.tables && Array.isArray(bJson.tables.globalSettings) ? bJson.tables.globalSettings : [];
+                      const mainGs = gsRows.find((r) => r && r.id === "main") || gsRows[0];
+                      if (mainGs && typeof mainGs === "object") {
+                        if (Array.isArray(mainGs.naiBookmarksCollection)) {
+                          backupBookmarks = mergeBookmarkListsById(backupBookmarks, mainGs.naiBookmarksCollection);
+                        }
+                        if (Array.isArray(mainGs.naiLexiconCollection)) {
+                          backupLexicon = mergeBookmarkListsById(backupLexicon, mainGs.naiLexiconCollection);
+                        }
+                        if (!backupPresets && mainGs.naiPresetsStore) backupPresets = mainGs.naiPresetsStore;
+                        if (!backupPanelState && mainGs.naiPanelState) backupPanelState = mainGs.naiPanelState;
+                      }
+                    }
+                  }
+                } catch (_) {}
+              }
+
+              // 检查浏览器数据库或缓存里是否还有未迁移的旧残留条目
+              let legacyGs = null;
+              if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+                try {
+                  legacyGs = await window.db.globalSettings.get("main");
+                } catch (_) {}
+              }
+              const legacyBm = mergeBookmarkListsById(
+                legacyGs && Array.isArray(legacyGs.naiBookmarksCollection) ? legacyGs.naiBookmarksCollection : [],
+                mergeBookmarkListsById(readListFromStorageKey(BOOKMARKS_STORE_KEY), readListFromStorageKey(BOOKMARKS_TEXT_BACKUP_KEY))
+              );
+              const legacyLex = mergeBookmarkListsById(
+                legacyGs && Array.isArray(legacyGs.naiLexiconCollection) ? legacyGs.naiLexiconCollection : [],
+                mergeBookmarkListsById(readListFromStorageKey(LEXICON_STORE_KEY), readListFromStorageKey(LEXICON_TEXT_BACKUP_KEY))
+              );
+
+              let mergedBm = Array.isArray(remoteStore && remoteStore.bookmarks) ? remoteStore.bookmarks : [];
+              mergedBm = mergeBookmarkListsById(mergedBm, backupBookmarks);
+              mergedBm = mergeBookmarkListsById(mergedBm, legacyBm);
+              if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
+                mergedBm = mergeBookmarkListsById(memoryBookmarksList, mergedBm);
+              }
+
+              let mergedLex = Array.isArray(remoteStore && remoteStore.lexicon) ? remoteStore.lexicon : [];
+              mergedLex = mergeBookmarkListsById(mergedLex, backupLexicon);
+              mergedLex = mergeBookmarkListsById(mergedLex, legacyLex);
+              if (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0) {
+                mergedLex = mergeBookmarkListsById(memoryLexiconList, mergedLex);
               }
 
               let changed = false;
-              if (!localStorage.getItem(PANEL_STATE_KEY) && gs.naiPanelState && typeof gs.naiPanelState === "object") {
-                memoryPanelState = Object.assign({}, loadPanelState(), gs.naiPanelState);
-                safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
+              if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList)) {
+                await offloadBookmarkListImagesToTermux(mergedBm);
+                memoryBookmarksList = mergedBm;
                 changed = true;
               }
-              if (gs.naiPresetsStore && typeof gs.naiPresetsStore === "object") {
+              if (mergedLex.length > 0 || !Array.isArray(memoryLexiconList)) {
+                await offloadBookmarkListImagesToTermux(mergedLex);
+                memoryLexiconList = mergedLex;
+                changed = true;
+              }
+
+              const candPresets = (remoteStore && remoteStore.presets) || backupPresets || (legacyGs && legacyGs.naiPresetsStore);
+              if (candPresets && typeof candPresets === "object") {
                 const curP = loadPresetsStore();
                 const hasCur = (curP.artist && curP.artist.length) || (curP.positive && curP.positive.length) || (curP.negative && curP.negative.length);
-                const hasGs = (Array.isArray(gs.naiPresetsStore.artist) && gs.naiPresetsStore.artist.length) ||
-                  (Array.isArray(gs.naiPresetsStore.positive) && gs.naiPresetsStore.positive.length) ||
-                  (Array.isArray(gs.naiPresetsStore.negative) && gs.naiPresetsStore.negative.length);
-                if (!hasCur && hasGs) {
+                const hasCand = (Array.isArray(candPresets.artist) && candPresets.artist.length) ||
+                  (Array.isArray(candPresets.positive) && candPresets.positive.length) ||
+                  (Array.isArray(candPresets.negative) && candPresets.negative.length);
+                if (!hasCur && hasCand) {
                   memoryPresetsStore = {
-                    artist: Array.isArray(gs.naiPresetsStore.artist) ? gs.naiPresetsStore.artist : [],
-                    positive: Array.isArray(gs.naiPresetsStore.positive) ? gs.naiPresetsStore.positive : [],
-                    negative: Array.isArray(gs.naiPresetsStore.negative) ? gs.naiPresetsStore.negative : []
+                    artist: Array.isArray(candPresets.artist) ? candPresets.artist : [],
+                    positive: Array.isArray(candPresets.positive) ? candPresets.positive : [],
+                    negative: Array.isArray(candPresets.negative) ? candPresets.negative : []
                   };
-                  safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
                   changed = true;
                 }
               }
 
-              if (Array.isArray(gs.naiBookmarksCollection) && gs.naiBookmarksCollection.length > 0) {
-                if (!Array.isArray(memoryBookmarksList) || memoryBookmarksList.length === 0) {
-                  memoryBookmarksList = gs.naiBookmarksCollection;
-                  try {
-                    localStorage.setItem(BOOKMARKS_TEXT_BACKUP_KEY, JSON.stringify(stripBase64FromBookmarkList(memoryBookmarksList)));
-                  } catch (_) {}
-                  changed = true;
-                } else {
-                  memoryBookmarksList = mergeBookmarkListsPreservingImages(memoryBookmarksList, gs.naiBookmarksCollection);
-                }
+              const candState = (remoteStore && remoteStore.panelState) || backupPanelState || (legacyGs && legacyGs.naiPanelState);
+              if (!memoryPanelState && candState && typeof candState === "object") {
+                memoryPanelState = Object.assign({}, loadPanelState(), candState);
+                changed = true;
               }
 
-              if (Array.isArray(gs.naiLexiconCollection) && gs.naiLexiconCollection.length > 0) {
-                if (!Array.isArray(memoryLexiconList) || memoryLexiconList.length === 0) {
-                  memoryLexiconList = gs.naiLexiconCollection;
-                  try {
-                    localStorage.setItem(LEXICON_TEXT_BACKUP_KEY, JSON.stringify(stripBase64FromBookmarkList(memoryLexiconList)));
-                  } catch (_) {}
-                  changed = true;
-                } else {
-                  memoryLexiconList = mergeBookmarkListsPreservingImages(memoryLexiconList, gs.naiLexiconCollection);
-                }
+              _termuxNaiStoreLoadedOnce = true;
+
+              if (legacyBm.length > 0 || legacyLex.length > 0 || backupBookmarks.length > 0 || backupLexicon.length > 0 || !remoteStore) {
+                await persistNaiStoreToTermux(false);
+              } else if (remoteStore) {
+                purgeBrowserDuplicateNaiCopies();
               }
 
               if (changed) {
@@ -46769,16 +46988,49 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   renderCollectionGrid();
                 }
               }
-            }).catch(() => {});
+            })().finally(() => {
+              _termuxNaiSyncInFlight = null;
+            });
+            return _termuxNaiSyncInFlight;
           }
+
+          window.getNaiVaultMediaReferences = async function () {
+            const refs = [];
+            const collectFromList = (arr) => {
+              if (!Array.isArray(arr)) return;
+              arr.forEach((it) => {
+                if (!it || typeof it !== "object") return;
+                if (typeof it.image === "string" && it.image.includes("vault://")) refs.push(it.image);
+                if (Array.isArray(it.images)) {
+                  it.images.forEach((u) => {
+                    if (typeof u === "string" && u.includes("vault://")) refs.push(u);
+                  });
+                }
+              });
+            };
+            collectFromList(memoryBookmarksList);
+            collectFromList(memoryLexiconList);
+            try {
+              const baseUrl = getNaiTermuxBaseUrl();
+              const res = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
+              if (res && res.ok) {
+                const data = await res.json();
+                if (data && typeof data === "object") {
+                  collectFromList(data.bookmarks);
+                  collectFromList(data.lexicon);
+                }
+              }
+            } catch (_) {}
+            return refs;
+          };
 
           function hydrateModuleNaiFromDbIfNeeded() {
             if (typeof window.openModuleNaiPanel === "function") {
               window.openModuleNaiPanel();
             }
-            tryHydrateNaiCollectionsAndPresetsFromDb();
-            setTimeout(tryHydrateNaiCollectionsAndPresetsFromDb, 450);
-            setTimeout(tryHydrateNaiCollectionsAndPresetsFromDb, 1500);
+            loadNaiStoreFromTermux();
+            setTimeout(loadNaiStoreFromTermux, 500);
+            setTimeout(loadNaiStoreFromTermux, 1800);
           }
 
           if (document.readyState === "loading") {
@@ -126384,6 +126636,12 @@ ${specificRules}`;
               try {
                 const tv = await window.getTavernStateForFullBackup();
                 if (tv) walkAny(tv);
+              } catch (_) {}
+            }
+            if (typeof window.getNaiVaultMediaReferences === "function") {
+              try {
+                const naiRefs = await window.getNaiVaultMediaReferences();
+                if (naiRefs) walkAny(naiRefs);
               } catch (_) {}
             }
             return { refNames, refStems };
