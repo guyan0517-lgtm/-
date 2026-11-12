@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43315,25 +43315,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 } catch (_) {}
               }
 
-              let outBookmarks = (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0)
+              const outBookmarks = (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0)
                 ? memoryBookmarksList
                 : (existingRemote && Array.isArray(existingRemote.bookmarks) && existingRemote.bookmarks.length > 0 && !Array.isArray(memoryBookmarksList)
                   ? existingRemote.bookmarks
                   : (Array.isArray(memoryBookmarksList) ? memoryBookmarksList : []));
 
-              let outLexicon = (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0)
+              const outLexicon = (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0)
                 ? memoryLexiconList
                 : (existingRemote && Array.isArray(existingRemote.lexicon) && existingRemote.lexicon.length > 0 && !Array.isArray(memoryLexiconList)
                   ? existingRemote.lexicon
                   : (Array.isArray(memoryLexiconList) ? memoryLexiconList : []));
-
-              if (typeof sanitizeAndDedupeNaiCollections === "function") {
-                const cleaned = sanitizeAndDedupeNaiCollections(outBookmarks, outLexicon);
-                outBookmarks = cleaned.bookmarks;
-                outLexicon = cleaned.lexicon;
-                if (Array.isArray(memoryBookmarksList)) memoryBookmarksList = outBookmarks;
-                if (Array.isArray(memoryLexiconList)) memoryLexiconList = outLexicon;
-              }
 
               const outPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
                 ? memoryPresetsStore
@@ -45011,76 +45003,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return null;
           }
 
-          function sanitizeAndDedupeNaiCollections(rawBookmarks, rawLexicon) {
-            const bmInput = Array.isArray(rawBookmarks) ? rawBookmarks.filter((x) => x && typeof x === "object") : [];
-            const lexInput = Array.isArray(rawLexicon) ? rawLexicon.filter((x) => x && typeof x === "object") : [];
-
-            const cleanBookmarks = [];
-            const seenBmIds = new Set();
-            const seenBmSignatures = new Set();
-            const bmNamePosSignatures = new Set();
-
-            for (const item of bmInput) {
-              const idStr = String(item.id || "").trim();
-              if (idStr.startsWith("lx_") || item._category === "lexicon") continue;
-              if (idStr && seenBmIds.has(idStr)) continue;
-
-              const nameStr = String(item.name || "").trim();
-              const artistStr = String(item.artist || "").trim();
-              const posStr = String(item.positive || "").trim();
-              const negStr = String(item.negative || "").trim();
-              const remarkStr = String(item.remark || "").trim();
-              const imgs = Array.isArray(item.images) && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
-              const firstImg = String(imgs[0] || "").trim();
-
-              if (!nameStr && !artistStr && !posStr && !negStr && !remarkStr && !firstImg) continue;
-
-              const fullSig = `${nameStr}||${artistStr}||${posStr}||${negStr}||${remarkStr}||${firstImg}`;
-              if (seenBmSignatures.has(fullSig)) continue;
-
-              if (idStr) seenBmIds.add(idStr);
-              seenBmSignatures.add(fullSig);
-              if (nameStr || posStr) {
-                bmNamePosSignatures.add(`${nameStr}||${posStr}`);
-              }
-              cleanBookmarks.push(item);
-            }
-
-            const cleanLexicon = [];
-            const seenLexIds = new Set();
-            const seenLexSignatures = new Set();
-
-            for (const item of lexInput) {
-              const idStr = String(item.id || "").trim();
-              // 过滤从收藏误串入词典的书签条目
-              if (idStr.startsWith("bm_") || item._category === "bookmark") continue;
-              if (idStr && seenBmIds.has(idStr)) continue;
-              if (idStr && seenLexIds.has(idStr)) continue;
-
-              const nameStr = String(item.name || "").trim();
-              const artistStr = String(item.artist || "").trim();
-              const posStr = String(item.positive || "").trim();
-              const negStr = String(item.negative || "").trim();
-              const remarkStr = String(item.remark || "").trim();
-              const imgs = Array.isArray(item.images) && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
-              const firstImg = String(imgs[0] || "").trim();
-
-              // 词典条目不含画师串与负面词，且若名称与正面词同收藏夹已有书签完全一致则为之前误串入的副本
-              if (artistStr || negStr) continue;
-              if ((nameStr || posStr) && bmNamePosSignatures.has(`${nameStr}||${posStr}`)) continue;
-              if (!nameStr && !posStr && !remarkStr && !firstImg) continue;
-
-              const fullSig = `${nameStr}||${posStr}||${remarkStr}||${firstImg}`;
-              if (seenLexSignatures.has(fullSig)) continue;
-
-              if (idStr) seenLexIds.add(idStr);
-              seenLexSignatures.add(fullSig);
-              cleanLexicon.push(item);
-            }
-
-            return { bookmarks: cleanBookmarks, lexicon: cleanLexicon };
-          }
-
           function loadLocalBookmarks() {
             const isLex = isLexiconCategory();
             const memList = isLex ? memoryLexiconList : memoryBookmarksList;
@@ -45111,12 +45033,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (resolved.length > 0) {
               if (isLex) {
-                const cleaned = sanitizeAndDedupeNaiCollections(memoryBookmarksList || [], resolved);
-                memoryLexiconList = cleaned.lexicon;
+                memoryLexiconList = resolved;
                 return memoryLexiconList;
               } else {
-                const cleaned = sanitizeAndDedupeNaiCollections(resolved, memoryLexiconList || []);
-                memoryBookmarksList = cleaned.bookmarks;
+                memoryBookmarksList = resolved;
                 return memoryBookmarksList;
               }
             }
@@ -45132,12 +45052,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else {
               memoryBookmarksList = cleanList;
             }
-            const sanitized = sanitizeAndDedupeNaiCollections(
-              Array.isArray(memoryBookmarksList) ? memoryBookmarksList : [],
-              Array.isArray(memoryLexiconList) ? memoryLexiconList : []
-            );
-            memoryBookmarksList = sanitized.bookmarks;
-            memoryLexiconList = sanitized.lexicon;
             persistNaiStoreToTermux(false);
           }
 
@@ -47092,20 +47006,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 mergedLex = mergeBookmarkListsById(memoryLexiconList, mergedLex);
               }
 
-              const prevBmCount = mergedBm.length;
-              const prevLexCount = mergedLex.length;
-              const cleanedCollections = sanitizeAndDedupeNaiCollections(mergedBm, mergedLex);
-              mergedBm = cleanedCollections.bookmarks;
-              mergedLex = cleanedCollections.lexicon;
-              const wasCleaned = (mergedBm.length !== prevBmCount) || (mergedLex.length !== prevLexCount);
-
               let changed = false;
-              if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList) || wasCleaned) {
+              if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList)) {
                 await offloadBookmarkListImagesToTermux(mergedBm);
                 memoryBookmarksList = mergedBm;
                 changed = true;
               }
-              if (mergedLex.length > 0 || !Array.isArray(memoryLexiconList) || wasCleaned) {
+              if (mergedLex.length > 0 || !Array.isArray(memoryLexiconList)) {
                 await offloadBookmarkListImagesToTermux(mergedLex);
                 memoryLexiconList = mergedLex;
                 changed = true;
@@ -47136,7 +47043,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               _termuxNaiStoreLoadedOnce = true;
 
-              if (legacyBm.length > 0 || legacyLex.length > 0 || backupBookmarks.length > 0 || backupLexicon.length > 0 || !remoteStore || wasCleaned) {
+              if (legacyBm.length > 0 || legacyLex.length > 0 || backupBookmarks.length > 0 || backupLexicon.length > 0 || !remoteStore) {
                 await persistNaiStoreToTermux(false);
               } else if (remoteStore) {
                 purgeBrowserDuplicateNaiCopies();
