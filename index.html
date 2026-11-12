@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v21.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43164,13 +43164,49 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (_) {
               try {
                 localStorage.removeItem("coc_module_draft_state_v1");
-                localStorage.removeItem("mod_nai_bookmarks_v1");
-                localStorage.removeItem("mod_nai_lexicon_v1");
                 localStorage.setItem(key, val);
                 return true;
               } catch (_2) {
                 return false;
               }
+            }
+          }
+
+          let _dbWriteQueuePromise = Promise.resolve();
+          function safePersistNaiFieldToDb(fieldKey, fieldValue, onAfterPut) {
+            if (window.state) {
+              if (!window.state.globalSettings || typeof window.state.globalSettings !== "object") {
+                window.state.globalSettings = { id: "main" };
+              }
+              window.state.globalSettings[fieldKey] = fieldValue;
+            }
+            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+              _dbWriteQueuePromise = _dbWriteQueuePromise
+                .then(async () => {
+                  const existingGs = (await window.db.globalSettings.get("main")) || { id: "main" };
+                  const mergedGs = Object.assign({ id: "main" }, existingGs);
+                  if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
+                    Object.keys(window.state.globalSettings).forEach((k) => {
+                      const v = window.state.globalSettings[k];
+                      if (v !== undefined) {
+                        if (Array.isArray(v) && v.length === 0 && Array.isArray(existingGs[k]) && existingGs[k].length > 0 && k !== fieldKey) {
+                          return;
+                        }
+                        mergedGs[k] = v;
+                      }
+                    });
+                  }
+                  mergedGs.id = "main";
+                  mergedGs[fieldKey] = fieldValue;
+                  if (window.state) {
+                    window.state.globalSettings = mergedGs;
+                  }
+                  await window.db.globalSettings.put(mergedGs);
+                  if (typeof onAfterPut === "function") {
+                    onAfterPut(mergedGs);
+                  }
+                })
+                .catch(() => {});
             }
           }
 
@@ -43230,18 +43266,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function savePanelState(stateObj) {
             memoryPanelState = Object.assign({}, stateObj);
             safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
-            if (window.state) {
-              if (!window.state.globalSettings || typeof window.state.globalSettings !== "object") {
-                window.state.globalSettings = { id: "main" };
-              }
-              if (!window.state.globalSettings.id) {
-                window.state.globalSettings.id = "main";
-              }
-              window.state.globalSettings.naiPanelState = memoryPanelState;
-              if (window.db && window.db.globalSettings) {
-                window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
-              }
-            }
+            safePersistNaiFieldToDb("naiPanelState", memoryPanelState);
           }
 
           function loadPresetsStore() {
@@ -43268,7 +43293,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ? window.state.globalSettings.naiPresetsStore
               : null;
 
-            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+            if (memoryPresetsStore && typeof memoryPresetsStore === "object" && (
+              (Array.isArray(memoryPresetsStore.artist) && memoryPresetsStore.artist.length > 0) ||
+              (Array.isArray(memoryPresetsStore.positive) && memoryPresetsStore.positive.length > 0) ||
+              (Array.isArray(memoryPresetsStore.negative) && memoryPresetsStore.negative.length > 0)
+            )) {
               return {
                 artist: [...(Array.isArray(memoryPresetsStore.artist) ? memoryPresetsStore.artist : [])],
                 positive: [...(Array.isArray(memoryPresetsStore.positive) ? memoryPresetsStore.positive : [])],
@@ -43313,18 +43342,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               negative: Array.isArray(store && store.negative) ? store.negative : []
             };
             safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
-            if (window.state) {
-              if (!window.state.globalSettings || typeof window.state.globalSettings !== "object") {
-                window.state.globalSettings = { id: "main" };
-              }
-              if (!window.state.globalSettings.id) {
-                window.state.globalSettings.id = "main";
-              }
-              window.state.globalSettings.naiPresetsStore = memoryPresetsStore;
-              if (window.db && window.db.globalSettings) {
-                window.db.globalSettings.put(window.state.globalSettings).catch(() => {});
-              }
-            }
+            safePersistNaiFieldToDb("naiPresetsStore", memoryPresetsStore);
           }
 
           function getShortModelLabel(modelVal) {
@@ -44719,6 +44737,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           // ============================================================
           const BOOKMARKS_STORE_KEY = "mod_nai_bookmarks_v1";
           const LEXICON_STORE_KEY = "mod_nai_lexicon_v1";
+          const BOOKMARKS_TEXT_BACKUP_KEY = "mod_nai_bookmarks_text_backup_v1";
+          const LEXICON_TEXT_BACKUP_KEY = "mod_nai_lexicon_text_backup_v1";
           const ITEMS_PER_PAGE = 6;
           let colScope = "local"; // "local" | "shared"
           let colLocalPage = 1;
@@ -44779,64 +44799,115 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return covers[safeIdx];
           }
 
-          function loadLocalBookmarks() {
-            if (isLexiconCategory()) {
-              if (Array.isArray(memoryLexiconList)) {
-                return memoryLexiconList;
+          function stripBase64FromBookmarkList(arr) {
+            if (!Array.isArray(arr)) return [];
+            return arr.map((item) => {
+              if (!item || typeof item !== "object") return item;
+              const next = Object.assign({}, item);
+              if (typeof next.image === "string" && next.image.startsWith("data:")) next.image = "";
+              if (Array.isArray(next.images)) {
+                next.images = next.images.filter((u) => typeof u === "string" && !u.startsWith("data:"));
               }
-              if (
-                window.state &&
-                window.state.globalSettings &&
-                Array.isArray(window.state.globalSettings.naiLexiconCollection) &&
-                window.state.globalSettings.naiLexiconCollection.length > 0
-              ) {
-                memoryLexiconList = window.state.globalSettings.naiLexiconCollection;
-                return memoryLexiconList;
-              }
-              try {
-                const raw = localStorage.getItem(LEXICON_STORE_KEY);
-                if (raw) {
-                  const parsed = JSON.parse(raw);
-                  if (Array.isArray(parsed)) {
-                    memoryLexiconList = parsed;
-                    return parsed;
-                  }
-                }
-              } catch (_) {}
-              memoryLexiconList = [];
-              return memoryLexiconList;
-            }
+              return next;
+            });
+          }
 
-            if (Array.isArray(memoryBookmarksList)) {
-              return memoryBookmarksList;
-            }
-            if (
-              window.state &&
-              window.state.globalSettings &&
-              Array.isArray(window.state.globalSettings.naiBookmarksCollection) &&
-              window.state.globalSettings.naiBookmarksCollection.length > 0
-            ) {
-              memoryBookmarksList = window.state.globalSettings.naiBookmarksCollection;
-              return memoryBookmarksList;
-            }
+          function mergeBookmarkListsPreservingImages(primaryList, secondaryList) {
+            const base = Array.isArray(primaryList) && primaryList.length > 0
+              ? primaryList
+              : (Array.isArray(secondaryList) ? secondaryList : []);
+            const other = base === primaryList
+              ? (Array.isArray(secondaryList) ? secondaryList : [])
+              : (Array.isArray(primaryList) ? primaryList : []);
+            if (other.length === 0) return base;
+            const otherMap = new Map();
+            other.forEach((it) => {
+              if (it && it.id) otherMap.set(it.id, it);
+            });
+            return base.map((it) => {
+              if (!it || typeof it !== "object") return it;
+              const match = it.id ? otherMap.get(it.id) : null;
+              if (!match) return it;
+              const curImgs = Array.isArray(it.images) ? it.images.filter(Boolean) : (it.image ? [it.image] : []);
+              const matchImgs = Array.isArray(match.images) ? match.images.filter(Boolean) : (match.image ? [match.image] : []);
+              if (curImgs.length === 0 && matchImgs.length > 0) {
+                return Object.assign({}, it, { image: matchImgs[0] || "", images: matchImgs });
+              }
+              return it;
+            });
+          }
+
+          function readListFromStorageKey(key) {
             try {
-              const raw = localStorage.getItem(BOOKMARKS_STORE_KEY);
+              const raw = localStorage.getItem(key);
               if (raw) {
                 const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                  memoryBookmarksList = parsed;
+                if (Array.isArray(parsed) && parsed.length > 0) {
                   return parsed;
                 }
               }
             } catch (_) {}
-            memoryBookmarksList = [];
-            return memoryBookmarksList;
+            return null;
+          }
+
+          function loadLocalBookmarks() {
+            const isLex = isLexiconCategory();
+            const memList = isLex ? memoryLexiconList : memoryBookmarksList;
+            if (Array.isArray(memList) && memList.length > 0) {
+              return memList;
+            }
+
+            const gsField = isLex ? "naiLexiconCollection" : "naiBookmarksCollection";
+            const storeKey = isLex ? LEXICON_STORE_KEY : BOOKMARKS_STORE_KEY;
+            const backupKey = isLex ? LEXICON_TEXT_BACKUP_KEY : BOOKMARKS_TEXT_BACKUP_KEY;
+
+            const gsArr = (
+              window.state &&
+              window.state.globalSettings &&
+              Array.isArray(window.state.globalSettings[gsField]) &&
+              window.state.globalSettings[gsField].length > 0
+            )
+              ? window.state.globalSettings[gsField]
+              : null;
+
+            const localArr = readListFromStorageKey(storeKey);
+            const backupArr = readListFromStorageKey(backupKey);
+
+            let resolved = null;
+            if (gsArr && localArr) {
+              resolved = mergeBookmarkListsPreservingImages(
+                localArr.length >= gsArr.length ? localArr : gsArr,
+                localArr.length >= gsArr.length ? gsArr : localArr
+              );
+            } else if (gsArr) {
+              resolved = backupArr && backupArr.length > gsArr.length
+                ? mergeBookmarkListsPreservingImages(backupArr, gsArr)
+                : gsArr;
+            } else if (localArr) {
+              resolved = backupArr && backupArr.length > localArr.length
+                ? mergeBookmarkListsPreservingImages(backupArr, localArr)
+                : localArr;
+            } else if (backupArr) {
+              resolved = backupArr;
+            }
+
+            if (Array.isArray(resolved) && resolved.length > 0) {
+              if (isLex) {
+                memoryLexiconList = resolved;
+              } else {
+                memoryBookmarksList = resolved;
+              }
+              return resolved;
+            }
+
+            return Array.isArray(memList) ? memList : [];
           }
 
           function saveLocalBookmarks(list) {
             const cleanList = Array.isArray(list) ? list : [];
             const isLex = isLexiconCategory();
             const storeKey = isLex ? LEXICON_STORE_KEY : BOOKMARKS_STORE_KEY;
+            const backupKey = isLex ? LEXICON_TEXT_BACKUP_KEY : BOOKMARKS_TEXT_BACKUP_KEY;
             const gsField = isLex ? "naiLexiconCollection" : "naiBookmarksCollection";
 
             if (isLex) {
@@ -44846,44 +44917,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             const syncToLocalStorage = (arr) => {
+              const lightList = stripBase64FromBookmarkList(arr);
+              try {
+                localStorage.setItem(backupKey, JSON.stringify(lightList));
+              } catch (_) {}
               try {
                 localStorage.setItem(storeKey, JSON.stringify(arr));
               } catch (_) {
                 try {
-                  const lightList = arr.map((item) => {
-                    if (!item || typeof item !== "object") return item;
-                    const next = Object.assign({}, item);
-                    if (typeof next.image === "string" && next.image.startsWith("data:")) next.image = "";
-                    if (Array.isArray(next.images)) {
-                      next.images = next.images.filter((u) => typeof u === "string" && !u.startsWith("data:"));
-                    }
-                    return next;
-                  });
                   localStorage.setItem(storeKey, JSON.stringify(lightList));
                 } catch (_2) {}
               }
             };
             syncToLocalStorage(cleanList);
-            if (window.state && window.state.globalSettings) {
-              window.state.globalSettings[gsField] = cleanList;
-              if (window.db && window.db.globalSettings) {
-                window.db.globalSettings
-                  .put(window.state.globalSettings)
-                  .then(() => {
-                    // 当自动分离将 data:image 转为 vault:// 后，同步把轻量 vault:// 列表写回 localStorage，释放 localStorage 内存
-                    if (window.state && window.state.globalSettings && Array.isArray(window.state.globalSettings[gsField])) {
-                      if (isLex) {
-                        memoryLexiconList = window.state.globalSettings[gsField];
-                        syncToLocalStorage(memoryLexiconList);
-                      } else {
-                        memoryBookmarksList = window.state.globalSettings[gsField];
-                        syncToLocalStorage(memoryBookmarksList);
-                      }
-                    }
-                  })
-                  .catch(() => {});
+            safePersistNaiFieldToDb(gsField, cleanList, (mergedGs) => {
+              if (mergedGs && Array.isArray(mergedGs[gsField])) {
+                if (isLex) {
+                  memoryLexiconList = mergedGs[gsField];
+                  syncToLocalStorage(memoryLexiconList);
+                } else {
+                  memoryBookmarksList = mergedGs[gsField];
+                  syncToLocalStorage(memoryBookmarksList);
+                }
               }
-            }
+            });
           }
 
           function setColStatus(msg) {
@@ -45533,10 +45590,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               name: "",
               modelTag: defaultModelTag,
               remark: "",
-              image: curGenSrc,
-              images: curGenSrc ? [curGenSrc] : [],
+              image: isLex ? "" : curGenSrc,
+              images: !isLex && curGenSrc ? [curGenSrc] : [],
               artist: isLex ? "" : (computeActiveArtistPrompt() || st.artistText || ""),
-              positive: computeActivePositivePrompt() || st.pos1Text || "",
+              positive: isLex ? "" : (computeActivePositivePrompt() || st.pos1Text || ""),
               negative: isLex ? "" : (st.negText || ""),
               updatedAt: Date.now()
             };
@@ -46626,20 +46683,52 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return changedFields;
           };
 
-          function hydrateModuleNaiFromDbIfNeeded() {
-            if (typeof window.openModuleNaiPanel === "function") {
-              window.openModuleNaiPanel();
+          function flushAllNaiStateBeforeExit() {
+            try {
+              const editPage = document.getElementById("mod-nai-col-edit-page");
+              if (editPage && editPage.style.display !== "none" && colCurrentItem && colScope === "local") {
+                persistCurrentBookmarkEditDraft(true);
+              }
+            } catch (_) {}
+            syncModuleNaiToGlobal();
+          }
+          window.addEventListener("pagehide", flushAllNaiStateBeforeExit);
+          window.addEventListener("beforeunload", flushAllNaiStateBeforeExit);
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "hidden") {
+              flushAllNaiStateBeforeExit();
             }
-            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
-              window.db.globalSettings.get("main").then((gs) => {
-                if (!gs) return;
-                let changed = false;
-                if (!localStorage.getItem(PANEL_STATE_KEY) && gs.naiPanelState && typeof gs.naiPanelState === "object") {
-                  memoryPanelState = Object.assign({}, loadPanelState(), gs.naiPanelState);
-                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
-                  changed = true;
-                }
-                if (!localStorage.getItem(PRESETS_STORE_KEY) && gs.naiPresetsStore && typeof gs.naiPresetsStore === "object") {
+          });
+
+          function tryHydrateNaiCollectionsAndPresetsFromDb() {
+            if (!window.db || !window.db.globalSettings || typeof window.db.globalSettings.get !== "function") {
+              return;
+            }
+            window.db.globalSettings.get("main").then((gs) => {
+              if (!gs) return;
+              if (window.state && (!window.state.globalSettings || typeof window.state.globalSettings !== "object")) {
+                window.state.globalSettings = gs;
+              } else if (window.state && window.state.globalSettings) {
+                Object.keys(gs).forEach((k) => {
+                  if (window.state.globalSettings[k] === undefined || (Array.isArray(window.state.globalSettings[k]) && window.state.globalSettings[k].length === 0 && Array.isArray(gs[k]) && gs[k].length > 0)) {
+                    window.state.globalSettings[k] = gs[k];
+                  }
+                });
+              }
+
+              let changed = false;
+              if (!localStorage.getItem(PANEL_STATE_KEY) && gs.naiPanelState && typeof gs.naiPanelState === "object") {
+                memoryPanelState = Object.assign({}, loadPanelState(), gs.naiPanelState);
+                safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
+                changed = true;
+              }
+              if (gs.naiPresetsStore && typeof gs.naiPresetsStore === "object") {
+                const curP = loadPresetsStore();
+                const hasCur = (curP.artist && curP.artist.length) || (curP.positive && curP.positive.length) || (curP.negative && curP.negative.length);
+                const hasGs = (Array.isArray(gs.naiPresetsStore.artist) && gs.naiPresetsStore.artist.length) ||
+                  (Array.isArray(gs.naiPresetsStore.positive) && gs.naiPresetsStore.positive.length) ||
+                  (Array.isArray(gs.naiPresetsStore.negative) && gs.naiPresetsStore.negative.length);
+                if (!hasCur && hasGs) {
                   memoryPresetsStore = {
                     artist: Array.isArray(gs.naiPresetsStore.artist) ? gs.naiPresetsStore.artist : [],
                     positive: Array.isArray(gs.naiPresetsStore.positive) ? gs.naiPresetsStore.positive : [],
@@ -46648,11 +46737,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
                   changed = true;
                 }
-                if (changed && typeof window.openModuleNaiPanel === "function") {
-                  window.openModuleNaiPanel();
+              }
+
+              if (Array.isArray(gs.naiBookmarksCollection) && gs.naiBookmarksCollection.length > 0) {
+                if (!Array.isArray(memoryBookmarksList) || memoryBookmarksList.length === 0) {
+                  memoryBookmarksList = gs.naiBookmarksCollection;
+                  try {
+                    localStorage.setItem(BOOKMARKS_TEXT_BACKUP_KEY, JSON.stringify(stripBase64FromBookmarkList(memoryBookmarksList)));
+                  } catch (_) {}
+                  changed = true;
+                } else {
+                  memoryBookmarksList = mergeBookmarkListsPreservingImages(memoryBookmarksList, gs.naiBookmarksCollection);
                 }
-              }).catch(() => {});
+              }
+
+              if (Array.isArray(gs.naiLexiconCollection) && gs.naiLexiconCollection.length > 0) {
+                if (!Array.isArray(memoryLexiconList) || memoryLexiconList.length === 0) {
+                  memoryLexiconList = gs.naiLexiconCollection;
+                  try {
+                    localStorage.setItem(LEXICON_TEXT_BACKUP_KEY, JSON.stringify(stripBase64FromBookmarkList(memoryLexiconList)));
+                  } catch (_) {}
+                  changed = true;
+                } else {
+                  memoryLexiconList = mergeBookmarkListsPreservingImages(memoryLexiconList, gs.naiLexiconCollection);
+                }
+              }
+
+              if (changed) {
+                renderPresetSelectOptions();
+                if (currentMode === "collection") {
+                  renderCollectionGrid();
+                }
+              }
+            }).catch(() => {});
+          }
+
+          function hydrateModuleNaiFromDbIfNeeded() {
+            if (typeof window.openModuleNaiPanel === "function") {
+              window.openModuleNaiPanel();
             }
+            tryHydrateNaiCollectionsAndPresetsFromDb();
+            setTimeout(tryHydrateNaiCollectionsAndPresetsFromDb, 450);
+            setTimeout(tryHydrateNaiCollectionsAndPresetsFromDb, 1500);
           }
 
           if (document.readyState === "loading") {

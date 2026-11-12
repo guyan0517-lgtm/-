@@ -38379,19 +38379,11 @@ select,
 }
 
 /* ============================================================
-   克莱因蓝双生姐妹面板（词典模式 · 21 GRAMS / WAITING / 入藍）
-   60% 艺术馆宣白纸底 : 30% 深炭墨骨骼线 : 10% 深邃克莱因蓝印章点睛
+   克莱因蓝双生姐妹面板（词典模式 · 保持原有背景色不覆盖，仅单独绑定克莱因蓝）
    ============================================================ */
 #module-nai-panel #mod-nai-collection-view.mod-nai-trace-panel.is-lexicon-mode {
-  --trace-paper: color-mix(in srgb, var(--tukey-text-light) 9%, var(--card-bg));
-  --trace-card: color-mix(in srgb, var(--card-bg) 95%, var(--secondary-bg));
-  --trace-soft: color-mix(in srgb, var(--secondary-bg) 48%, var(--card-bg));
-  --trace-ink: color-mix(in srgb, var(--text-primary) 90%, var(--text-secondary));
-  --trace-muted: color-mix(in srgb, var(--text-secondary) 84%, var(--text-primary));
-  --trace-line: color-mix(in srgb, var(--text-primary) 30%, var(--border-color));
-  --trace-border-soft: color-mix(in srgb, var(--border-color) 82%, transparent);
-  --trace-klein: color-mix(in srgb, color-mix(in srgb, var(--accent-color) 76%, var(--tukey-accent)) 64%, var(--text-primary));
-  --trace-klein-deep: color-mix(in srgb, var(--trace-klein) 82%, var(--text-primary));
+  --trace-klein: color-mix(in srgb, var(--accent-color) 84%, var(--tukey-accent));
+  --trace-klein-deep: color-mix(in srgb, var(--trace-klein) 88%, var(--text-primary));
   --trace-klein-mist: color-mix(in srgb, var(--trace-klein) 14%, var(--trace-paper));
   --trace-accent: var(--trace-klein);
   --trace-circle-ink: var(--trace-klein-deep);
