@@ -5,7 +5,7 @@
     if (typeof window !== "undefined" && "caches" in window) {
       caches.keys().then(function (keys) {
         keys.forEach(function (k) {
-          if (k !== "ephone-tuk-cache-v23.0") {
+          if (k !== "ephone-tuk-cache-v23.1") {
             caches.delete(k).catch(function () {});
           }
         });
@@ -22,10 +22,10 @@
 
   function ensureNaiSettingsDrawerStructure() {
     var vTag = document.getElementById("api-settings-version-tag");
-    if (vTag && vTag.textContent && vTag.textContent.trim() !== "v23.0") {
+    if (vTag && vTag.textContent && vTag.textContent.trim() !== "v23.1") {
       try {
-        if (sessionStorage.getItem("ephone_reloaded_v23_0") !== "1") {
-          sessionStorage.setItem("ephone_reloaded_v23_0", "1");
+        if (sessionStorage.getItem("ephone_reloaded_v23_1") !== "1") {
+          sessionStorage.setItem("ephone_reloaded_v23_1", "1");
           if ("caches" in window) {
             caches.keys().then(function (keys) {
               return Promise.all(keys.map(function (k) { return caches.delete(k); }));
