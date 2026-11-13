@@ -36,10 +36,6 @@ jobs:
               cp "$f" dist/
             fi
           done
-          if [ -d "assets" ]; then
-            mkdir -p dist/assets
-            cp -r assets/* dist/assets/ 2>/dev/null || true
-          fi
           if [ -d "public" ]; then
             cp -r public/* dist/ 2>/dev/null || true
           fi
