@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -44920,7 +44920,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const LEXICON_STORE_KEY = "mod_nai_lexicon_v1";
           const BOOKMARKS_TEXT_BACKUP_KEY = "mod_nai_bookmarks_text_backup_v1";
           const LEXICON_TEXT_BACKUP_KEY = "mod_nai_lexicon_text_backup_v1";
-          const ITEMS_PER_PAGE = 9999;
+          const ITEMS_PER_PAGE = 9;
           let colScope = "local"; // "local" | "shared"
           let colLocalPage = 1;
           let colSharedPage = 1;
@@ -45459,20 +45459,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
-            const pageItems = sourceList.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+            const endIdx = startIdx + ITEMS_PER_PAGE;
 
-            const sigParts = pageItems.map((it, sIdx) => {
+            const sigParts = sourceList.map((it, sIdx) => {
               if (!it) return "";
               const imgs = getBookmarkImagesArray(it);
               return `${it.id || sIdx}:${it.name || ""}:${normalizeModelTagValue(it.modelTag)}:${imgs[0] || ""}`;
             });
-            const nextGridSig = `${colScope}|${colCategory}|${curPage}|${pageItems.length}|${sigParts.join("||")}`;
+            const nextGridSig = `${colScope}|${colCategory}|${sourceList.length}|${sigParts.join("||")}`;
 
             if (!forceRebuild && gridEl._renderedGridSig === nextGridSig && gridEl.children.length > 0) {
-              // 列表未变化时绝不销毁或重建 DOM 与图片节点，仅更新排序高亮与补充未水合的图片
-              Array.from(gridEl.children).forEach((child, idx) => {
-                const absIdx = startIdx + idx;
-                child.classList.toggle("is-sort-source", !isShared && pageItems.length > 0 && colSortSourceIndex === absIdx);
+              // 所有页的卡片已同时挂载在 DOM 中，翻页或返回时仅切换当页 9 张的显示状态，零重建零重绘
+              Array.from(gridEl.children).forEach((child, absIdx) => {
+                if (sourceList.length === 0) {
+                  child.style.display = "";
+                  return;
+                }
+                const isVisibleOnPage = absIdx >= startIdx && absIdx < endIdx;
+                child.style.display = isVisibleOnPage ? "" : "none";
+                child.classList.toggle("is-sort-source", !isShared && colSortSourceIndex === absIdx);
                 const imgEl = child.querySelector("img[data-vault-ref]");
                 if (imgEl) {
                   const ref = imgEl.getAttribute("data-vault-ref");
@@ -45485,7 +45490,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else {
               gridEl._renderedGridSig = nextGridSig;
               const frag = document.createDocumentFragment();
-              if (pageItems.length === 0) {
+              if (sourceList.length === 0) {
                 const emptyCard = buildTraceCardElement(null, 0, 0, true);
                 if (!isShared) {
                   emptyCard.addEventListener("click", () => {
@@ -45494,8 +45499,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 frag.appendChild(emptyCard);
               } else {
-                pageItems.forEach((item, slotIdx) => {
-                  const absIdx = startIdx + slotIdx;
+                // 一次性将全部卡片挂载进画廊并预先渲染好图片，每页只展示当前页的 9 张
+                sourceList.forEach((item, absIdx) => {
+                  const slotIdx = absIdx % ITEMS_PER_PAGE;
                   const itemImgs = getBookmarkImagesArray(item);
                   const coverSrc = itemImgs.length === 0
                     ? getTraceDefaultCoverUrl(absIdx >= 0 ? absIdx : slotIdx)
@@ -45523,6 +45529,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   cardEl._boundItem = item;
                   cardEl._boundAbsIdx = absIdx;
+                  const isVisibleOnPage = absIdx >= startIdx && absIdx < endIdx;
+                  cardEl.style.display = isVisibleOnPage ? "" : "none";
                   cardEl.classList.toggle("is-sort-source", colScope === "local" && colSortSourceIndex === absIdx);
                   frag.appendChild(cardEl);
                 });
@@ -45531,7 +45539,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (footerEl) {
-              footerEl.style.display = totalPages > 1 ? "flex" : "none";
+              footerEl.style.display = "flex";
             }
             if (pageTextEl) {
               pageTextEl.textContent = `${String(curPage).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`;
@@ -46355,6 +46363,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                 }
                 renderCollectionGrid();
+                const sc = document.querySelector("#module-nai-panel .mod-nai-scroll");
+                if (sc) sc.scrollTop = 0;
               });
             }
             if (nextBtn) {
@@ -46368,6 +46378,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   else colLocalPage++;
                 }
                 renderCollectionGrid();
+                const sc = document.querySelector("#module-nai-panel .mod-nai-scroll");
+                if (sc) sc.scrollTop = 0;
               });
             }
 
