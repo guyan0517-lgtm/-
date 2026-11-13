@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4201,7 +4201,13 @@
                     <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-artist">0</span>
                     <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-artist"></div>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-artist">
+                    <div class="mod-nai-group-Quickbar">
+                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-artist" placeholder="新建画师分组名" autocomplete="off" />
+                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-artist">新建</button>
+                    </div>
+                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-artist"></div>
+                  </div>
                 </div>
 
                 <!-- 2. 正面预设分组抽屉 -->
@@ -4214,7 +4220,13 @@
                     <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-positive">0</span>
                     <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-positive"></div>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-positive">
+                    <div class="mod-nai-group-Quickbar">
+                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-positive" placeholder="新建正面分组名" autocomplete="off" />
+                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-positive">新建</button>
+                    </div>
+                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-positive"></div>
+                  </div>
                 </div>
 
                 <!-- 3. 负面预设分组抽屉 -->
@@ -4227,7 +4239,13 @@
                     <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-negative">0</span>
                     <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                   </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-negative"></div>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-negative">
+                    <div class="mod-nai-group-Quickbar">
+                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-negative" placeholder="新建负面分组名" autocomplete="off" />
+                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-negative">新建</button>
+                    </div>
+                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-negative"></div>
+                  </div>
                 </div>
               </div>
 
@@ -39236,6 +39254,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const handledTableNames = new Set();
 
+          const cloneAndResolveForBackup = async (item) => {
+            if (!item || typeof item !== "object") return item;
+            let cloned = item;
+            try {
+              cloned = JSON.parse(JSON.stringify(item));
+            } catch (_) {}
+            if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
+              try {
+                await window.resolveAllVaultUrlsDeepForBackup(cloned);
+              } catch (_) {}
+            }
+            return cloned;
+          };
+
           for (const tName of singleObjectTables) {
             handledTableNames.add(tName);
             let objVal = null;
@@ -39244,6 +39276,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 objVal = (await db[tName].get("main")) || (await db[tName].toCollection().first()) || null;
               }
             } catch (_) {}
+            if (objVal && typeof objVal === "object") {
+              objVal = await cloneAndResolveForBackup(objVal);
+            }
             if (tName === "globalSettings" && objVal && typeof objVal === "object") {
               objVal = { ...objVal };
               objVal.myPeerCode = localStorage.getItem("tukey_my_peer_code") || objVal.myPeerCode || "";
@@ -39272,9 +39307,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             writer.appendRaw(",\n" + JSON.stringify(tName) + ":[");
             for (let r = 0; r < rows.length; r++) {
               if (r > 0) writer.appendRaw(",");
-              writer.appendValue(rows[r], 1);
+              const resolvedRow = await cloneAndResolveForBackup(rows[r]);
+              writer.appendValue(resolvedRow, 1);
               rows[r] = null;
-              if (r % 50 === 0) {
+              if (r % 15 === 0) {
                 writer.flush();
                 await yieldToUi();
               }
@@ -39302,7 +39338,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               writer.appendRaw(JSON.stringify(table.name) + ":[");
               for (let r = 0; r < rows.length; r++) {
                 if (r > 0) writer.appendRaw(",");
-                writer.appendValue(rows[r], 1);
+                const resolvedRow = await cloneAndResolveForBackup(rows[r]);
+                writer.appendValue(resolvedRow, 1);
                 rows[r] = null;
               }
               writer.appendRaw("]");
@@ -39341,14 +39378,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   deletedPeerCodes: JSON.parse(localStorage.getItem("tukey_deleted_peer_codes") || "[]"),
                 }
           );
-          await writeField("homeScreenState", collectHomeScreenStateForBackup());
+          const homeStateResolved = await cloneAndResolveForBackup(collectHomeScreenStateForBackup());
+          await writeField("homeScreenState", homeStateResolved);
 
           const lsSnapshot = {};
           for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k) lsSnapshot[k] = localStorage.getItem(k);
           }
-          await writeField("localStorageSnapshot", lsSnapshot);
+          const resolvedLsSnapshot = await cloneAndResolveForBackup(lsSnapshot);
+          await writeField("localStorageSnapshot", resolvedLsSnapshot);
+
+          if (typeof window.getNaiStoreForFullBackup === "function") {
+            try {
+              const naiBackup = await window.getNaiStoreForFullBackup();
+              if (naiBackup) {
+                const resolvedNaiBackup = await cloneAndResolveForBackup(naiBackup);
+                await writeField("naiCollectionBackup", resolvedNaiBackup);
+              }
+            } catch (_) {}
+          }
 
           if (typeof window.getTavernStateForFullBackup === "function") {
             if (typeof onProgress === "function") {
@@ -39357,7 +39406,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               const tvBackup = await window.getTavernStateForFullBackup();
               if (tvBackup) {
-                await writeField("tavernStateBackup", tvBackup);
+                const resolvedTvBackup = await cloneAndResolveForBackup(tvBackup);
+                await writeField("tavernStateBackup", resolvedTvBackup);
               }
             } catch (_) {}
           }
@@ -40276,6 +40326,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } catch (_) {}
 
               try {
+                if (data.naiCollectionBackup && typeof window.restoreNaiStoreFromFullBackup === "function") {
+                  await window.restoreNaiStoreFromFullBackup(data.naiCollectionBackup);
+                }
+              } catch (_) {}
+
+              try {
                 if (data.modulePromptPresets && Array.isArray(data.modulePromptPresets)) {
                   localStorage.setItem("coc_module_prompt_presets", JSON.stringify(data.modulePromptPresets));
                 }
@@ -40366,13 +40422,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               console.log("已成功导入主屏幕样式数据。");
             }
 
-            // 将导入前已有的非初始最新进度及 Termux 本地最新数据智能合并进来，确保同名群聊/角色保留最新进度
+            // 将导入前已有的非初始最新进度及本地存储最新数据智能合并进来，确保同名群聊/角色保留最新进度
             if (typeof window.mergeNewerSnapshotAndTermuxIntoDb === "function") {
               try {
                 await window.mergeNewerSnapshotAndTermuxIntoDb(preImportSnapshot);
               } catch (mergeErr) {
                 console.warn("智能合并本地最新进度时出现非致命警告:", mergeErr);
               }
+            }
+
+            if (typeof window.offloadImportedImagesToActiveVaultSilent === "function") {
+              try {
+                await window.offloadImportedImagesToActiveVaultSilent();
+              } catch (_) {}
             }
 
             try {
@@ -40387,7 +40449,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             await showCustomAlert(
               "导入与合并成功",
-              "旧备份包与本地最新进度、人设、思维链、世界书及Termux本地图片已全部智能合并恢复！应用即将刷新。",
+              "全量备份包与本地最新进度、人设、思维链、世界书及全部图片已智能合并恢复！应用即将刷新。",
             );
 
             setTimeout(() => {
@@ -43392,8 +43454,47 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
+          function isAppIsolatedVaultMode() {
+            if (typeof window.isStandaloneAppVaultActive === "function") {
+              return window.isStandaloneAppVaultActive();
+            }
+            return Boolean(window.Capacitor || (window.location && (window.location.protocol === "capacitor:" || window.location.protocol === "file:")));
+          }
+
+          async function readAppIsolatedNaiStore() {
+            try {
+              if (navigator.storage && typeof navigator.storage.getDirectory === "function") {
+                const root = await navigator.storage.getDirectory();
+                const dir = await root.getDirectoryHandle("EPhoneAppVault", { create: true });
+                const fh = await dir.getFileHandle(NAI_TERMUX_STORE_FILE, { create: false });
+                const file = await fh.getFile();
+                const txt = await file.text();
+                if (txt && txt.trim().startsWith("{")) {
+                  return JSON.parse(txt);
+                }
+              }
+            } catch (_) {}
+            return null;
+          }
+
+          async function writeAppIsolatedNaiStore(bodyStr) {
+            try {
+              if (navigator.storage && typeof navigator.storage.getDirectory === "function") {
+                const root = await navigator.storage.getDirectory();
+                const dir = await root.getDirectoryHandle("EPhoneAppVault", { create: true });
+                const fh = await dir.getFileHandle(NAI_TERMUX_STORE_FILE, { create: true });
+                const w = await fh.createWritable();
+                await w.write(bodyStr);
+                await w.close();
+                return true;
+              }
+            } catch (_) {}
+            return false;
+          }
+
           function persistNaiStoreToTermux(useKeepAlive = false) {
             _termuxNaiWriteQueue = _termuxNaiWriteQueue.then(async () => {
+              const isolatedApp = isAppIsolatedVaultMode();
               const baseUrl = getNaiTermuxBaseUrl();
               if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
                 await offloadBookmarkListImagesToTermux(memoryBookmarksList);
@@ -43404,15 +43505,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               let existingRemote = null;
               if (!_termuxNaiStoreLoadedOnce) {
-                try {
-                  const r = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
-                  if (r && r.ok) {
-                    const txt = await r.text();
-                    if (txt && txt.trim().startsWith("{")) {
-                      existingRemote = JSON.parse(txt);
+                if (isolatedApp) {
+                  existingRemote = await readAppIsolatedNaiStore();
+                } else {
+                  try {
+                    const r = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
+                    if (r && r.ok) {
+                      const txt = await r.text();
+                      if (txt && txt.trim().startsWith("{")) {
+                        existingRemote = JSON.parse(txt);
+                      }
                     }
-                  }
-                } catch (_) {}
+                  } catch (_) {}
+                }
               }
 
               if (existingRemote && Array.isArray(existingRemote.deletedIds)) {
@@ -43452,26 +43557,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 panelState: outPanelState
               };
               const bodyStr = JSON.stringify(payload);
-              const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
-              if (baseUrl.includes("127.0.0.1")) {
-                urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
+              let savedToVault = false;
+              if (isolatedApp) {
+                savedToVault = await writeAppIsolatedNaiStore(bodyStr);
+              } else {
+                const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
+                if (baseUrl.includes("127.0.0.1")) {
+                  urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
+                }
+                for (const u of urls) {
+                  try {
+                    const putRes = await fetch(u, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json; charset=utf-8" },
+                      body: bodyStr,
+                      keepalive: Boolean(useKeepAlive && bodyStr.length < 60000)
+                    });
+                    if (putRes && putRes.ok) {
+                      savedToVault = true;
+                      break;
+                    }
+                  } catch (_) {}
+                }
               }
-              let savedToTermux = false;
-              for (const u of urls) {
-                try {
-                  const putRes = await fetch(u, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json; charset=utf-8" },
-                    body: bodyStr,
-                    keepalive: Boolean(useKeepAlive && bodyStr.length < 60000)
-                  });
-                  if (putRes && putRes.ok) {
-                    savedToTermux = true;
-                    break;
-                  }
-                } catch (_) {}
-              }
-              if (savedToTermux) {
+              if (savedToVault) {
                 _termuxNaiStoreLoadedOnce = true;
                 purgeBrowserDuplicateNaiCopies();
               }
@@ -44048,9 +44157,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const list = Array.isArray(store[cat]) ? store[cat] : [];
               const groups = (store.groups && Array.isArray(store.groups[cat])) ? store.groups[cat] : [];
               const countEl = document.getElementById(`mod-nai-drawer-count-${cat}`);
-              const listContainer = document.getElementById(`mod-nai-drawer-list-${cat}`);
+              let listContainer = document.getElementById(`mod-nai-drawer-list-${cat}`);
               if (countEl) {
                 countEl.textContent = String(list.length);
+              }
+              if (!listContainer) {
+                const bodyEl = document.getElementById(`mod-nai-drawer-body-${cat}`);
+                if (bodyEl) {
+                  listContainer = document.createElement("div");
+                  listContainer.className = "mod-nai-drawer-preset-list";
+                  listContainer.id = `mod-nai-drawer-list-${cat}`;
+                  bodyEl.appendChild(listContainer);
+                }
               }
               if (!listContainer) return;
               listContainer.innerHTML = "";
@@ -47402,23 +47520,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           async function loadNaiStoreFromTermux() {
             if (_termuxNaiSyncInFlight) return _termuxNaiSyncInFlight;
             _termuxNaiSyncInFlight = (async () => {
+              const isolatedApp = isAppIsolatedVaultMode();
               const baseUrl = getNaiTermuxBaseUrl();
               let remoteStore = null;
-              const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
-              if (baseUrl.includes("127.0.0.1")) {
-                urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
-              }
-              for (const u of urls) {
-                try {
-                  const res = await fetch(u, { method: "GET", cache: "no-store" });
-                  if (res && res.ok) {
-                    const txt = await res.text();
-                    if (txt && txt.trim().startsWith("{")) {
-                      remoteStore = JSON.parse(txt);
-                      break;
+              if (isolatedApp) {
+                remoteStore = await readAppIsolatedNaiStore();
+              } else {
+                const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
+                if (baseUrl.includes("127.0.0.1")) {
+                  urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
+                }
+                for (const u of urls) {
+                  try {
+                    const res = await fetch(u, { method: "GET", cache: "no-store" });
+                    if (res && res.ok) {
+                      const txt = await res.text();
+                      if (txt && txt.trim().startsWith("{")) {
+                        remoteStore = JSON.parse(txt);
+                        break;
+                      }
                     }
-                  }
-                } catch (_) {}
+                  } catch (_) {}
+                }
               }
 
               if (remoteStore && Array.isArray(remoteStore.deletedIds)) {
@@ -47655,6 +47778,54 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             } catch (_) {}
             return refs;
+          };
+
+          window.getNaiStoreForFullBackup = async function () {
+            try {
+              await loadNaiStoreFromTermux();
+            } catch (_) {}
+            return {
+              version: 1,
+              updatedAt: Date.now(),
+              deletedIds: Array.from(getDeletedIdsSet()),
+              bookmarks: filterOutDeletedItems(Array.isArray(memoryBookmarksList) ? memoryBookmarksList : []),
+              lexicon: filterOutDeletedItems(Array.isArray(memoryLexiconList) ? memoryLexiconList : []),
+              presets: loadPresetsStore(),
+              panelState: loadPanelState()
+            };
+          };
+
+          window.restoreNaiStoreFromFullBackup = async function (naiBackup) {
+            if (!naiBackup || typeof naiBackup !== "object") return;
+            if (Array.isArray(naiBackup.deletedIds)) {
+              const delSet = getDeletedIdsSet();
+              naiBackup.deletedIds.forEach((id) => {
+                if (id && typeof id === "string") delSet.add(id);
+              });
+              safeNaiLocalSetItem(DELETED_IDS_KEY, JSON.stringify(Array.from(delSet)));
+            }
+            if (Array.isArray(naiBackup.bookmarks)) {
+              const mergedBm = mergeBookmarkListsById(Array.isArray(memoryBookmarksList) ? memoryBookmarksList : [], naiBackup.bookmarks);
+              await offloadBookmarkListImagesToTermux(mergedBm);
+              memoryBookmarksList = mergedBm;
+            }
+            if (Array.isArray(naiBackup.lexicon)) {
+              const mergedLex = mergeBookmarkListsById(Array.isArray(memoryLexiconList) ? memoryLexiconList : [], naiBackup.lexicon);
+              await offloadBookmarkListImagesToTermux(mergedLex);
+              memoryLexiconList = mergedLex;
+            }
+            if (naiBackup.presets && typeof naiBackup.presets === "object") {
+              savePresetsStore(naiBackup.presets);
+            }
+            if (naiBackup.panelState && typeof naiBackup.panelState === "object") {
+              const st = Object.assign({}, loadPanelState(), naiBackup.panelState);
+              if (st.lastGeneratedImage && st.lastGeneratedImage.startsWith("data:")) {
+                const ref = await offloadSingleNaiImageToTermux(st.lastGeneratedImage);
+                if (ref) st.lastGeneratedImage = ref;
+              }
+              savePanelState(st);
+            }
+            await persistNaiStoreToTermux(false);
           };
 
           function hydrateModuleNaiFromDbIfNeeded() {
@@ -49390,9 +49561,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             selectedBadgeHtml = `<span class="intimacy-badge-display"><img src="${chat.settings.selectedIntimacyBadge}" alt="badge"></span>`;
           }
 
+          const rawChatAvatar = avatar || defaultAvatar;
+          let chatAvatarImgHtml = `<img src="${rawChatAvatar}" class="avatar" decoding="async">`;
+          if (typeof rawChatAvatar === "string" && rawChatAvatar.startsWith("vault://")) {
+            const cachedChatAva = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(rawChatAvatar) : null;
+            chatAvatarImgHtml = cachedChatAva
+              ? `<img src="${cachedChatAva}" data-vault-ref="${rawChatAvatar}" data-vault-hydrated-src="${cachedChatAva}" class="avatar" decoding="async">`
+              : `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${rawChatAvatar}" data-vault-pending="1" class="avatar" decoding="async">`;
+          }
+
           content.innerHTML = `
 			        <div class="chat-list-item" data-chat-id="${chat.id}">
-			            <img src="${avatar || defaultAvatar}" class="avatar" loading="lazy" decoding="async">
+			            ${chatAvatarImgHtml}
 			            <div class="info">
 			                <div class="name-line">
 			                    <span class="name">${
@@ -52155,10 +52335,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (stkUrl.startsWith("vault://")) {
               const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(stkUrl) : null;
               contentHtml = cachedUrl
-                ? `<img src="${cachedUrl}" data-vault-ref="${stkUrl}" data-vault-hydrated-src="${cachedUrl}" alt="${msg.meaning || "Sticker"}" referrerpolicy="no-referrer" class="sticker-image">`
-                : `<img src="${stkUrl}" data-vault-ref="${stkUrl}" alt="${msg.meaning || "Sticker"}" referrerpolicy="no-referrer" class="sticker-image">`;
+                ? `<img src="${cachedUrl}" data-vault-ref="${stkUrl}" data-vault-hydrated-src="${cachedUrl}" alt="${msg.meaning || "Sticker"}" referrerpolicy="no-referrer" class="sticker-image" decoding="async">`
+                : `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${stkUrl}" data-vault-pending="1" alt="${msg.meaning || "Sticker"}" referrerpolicy="no-referrer" class="sticker-image" decoding="async">`;
             } else {
-              contentHtml = `<img src="${stkUrl}" alt="${msg.meaning || "Sticker"}" referrerpolicy="no-referrer" class="sticker-image">`;
+              contentHtml = `<img src="${stkUrl}" alt="${msg.meaning || "Sticker"}" referrerpolicy="no-referrer" class="sticker-image" decoding="async">`;
             }
           }
 
@@ -52173,10 +52353,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (stkUrl.startsWith("vault://")) {
               const cachedUrl = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(stkUrl) : null;
               contentHtml = cachedUrl
-                ? `<img src="${cachedUrl}" data-vault-ref="${stkUrl}" data-vault-hydrated-src="${cachedUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`
-                : `<img src="${stkUrl}" data-vault-ref="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+                ? `<img src="${cachedUrl}" data-vault-ref="${stkUrl}" data-vault-hydrated-src="${cachedUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image" decoding="async">`
+                : `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-vault-ref="${stkUrl}" data-vault-pending="1" alt="${msg.meaning || "Sticker"}" class="sticker-image" decoding="async">`;
             } else {
-              contentHtml = `<img src="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image">`;
+              contentHtml = `<img src="${stkUrl}" alt="${msg.meaning || "Sticker"}" class="sticker-image" decoding="async">`;
             }
           } else if (
             Array.isArray(msg.content) &&
@@ -124039,7 +124219,7 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
-          const MAX_BLOB_CACHE_ITEMS = 200;
+          const MAX_BLOB_CACHE_ITEMS = 600;
           function isBlobUrlMountedInDom(targetUrl) {
             if (!targetUrl) return false;
             try {
@@ -124317,37 +124497,60 @@ ${specificRules}`;
           }
           window.restoreVaultRefsInObjectDeep = restoreVaultRefsInObjectDeep;
 
+          function isStandaloneAppRuntime() {
+            return Boolean(
+              typeof window !== "undefined" &&
+                (window.Capacitor ||
+                  (window.location &&
+                    (window.location.protocol === "capacitor:" || window.location.protocol === "file:")))
+            );
+          }
+
           function normalizeVaultMode(m) {
-            if (!m || m === "termux" || m === "server") return "server";
+            if (m === "apk") return "apk";
+            if (!m) return isStandaloneAppRuntime() ? "apk" : "server";
+            if (m === "termux" || m === "server") return "server";
             if (m === "webdav") return "webdav";
             if (m === "folder") return "folder";
-            return "server";
+            return isStandaloneAppRuntime() ? "apk" : "server";
           }
 
           function loadVaultConfig() {
+            const isApp = isStandaloneAppRuntime();
             try {
               const raw = localStorage.getItem(VAULT_CFG_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
+                let resolvedMode = normalizeVaultMode(parsed.mode);
+                if (isApp && !parsed.explicitlySetInApp && resolvedMode === "server") {
+                  resolvedMode = "apk";
+                }
                 return {
-                  mode: normalizeVaultMode(parsed.mode),
+                  mode: resolvedMode,
                   url: parsed.url || "http://127.0.0.1:8765",
                   username: parsed.username || "",
                   password: parsed.password || "",
                   auto: parsed.auto !== undefined ? Boolean(parsed.auto) : true,
-                  folderName: parsed.folderName || "EPhoneVault",
+                  folderName: resolvedMode === "apk" ? "EPhoneAppVault" : (parsed.folderName || "EPhoneVault"),
+                  explicitlySetInApp: Boolean(parsed.explicitlySetInApp),
                 };
               }
             } catch (_) {}
             return {
-              mode: "server",
+              mode: isApp ? "apk" : "server",
               url: "http://127.0.0.1:8765",
               username: "",
               password: "",
               auto: true,
-              folderName: "EPhoneVault",
+              folderName: isApp ? "EPhoneAppVault" : "EPhoneVault",
+              explicitlySetInApp: false,
             };
           }
+
+          window.isStandaloneAppVaultActive = function () {
+            const cfg = loadVaultConfig();
+            return cfg.mode === "apk";
+          };
 
           function saveVaultConfig(cfg) {
             try {
@@ -124412,13 +124615,22 @@ ${specificRules}`;
             } catch (_) {}
           }
 
-          async function getAutoOpfsDirectoryHandle() {
-            if (opfsHandleCache) return opfsHandleCache;
+          let appOpfsHandleCache = null;
+          async function getAutoOpfsDirectoryHandle(forceAppIsolated = false) {
+            const cfg = loadVaultConfig();
+            const useAppDir = Boolean(forceAppIsolated || cfg.mode === "apk");
+            if (useAppDir && appOpfsHandleCache) return appOpfsHandleCache;
+            if (!useAppDir && opfsHandleCache) return opfsHandleCache;
             try {
               if (navigator.storage && typeof navigator.storage.getDirectory === "function") {
                 const root = await navigator.storage.getDirectory();
-                const vaultDir = await root.getDirectoryHandle("EPhoneVault", { create: true });
-                opfsHandleCache = vaultDir;
+                const dirName = useAppDir ? "EPhoneAppVault" : "EPhoneVault";
+                const vaultDir = await root.getDirectoryHandle(dirName, { create: true });
+                if (useAppDir) {
+                  appOpfsHandleCache = vaultDir;
+                } else {
+                  opfsHandleCache = vaultDir;
+                }
                 return vaultDir;
               }
             } catch (_) {}
@@ -124560,7 +124772,14 @@ ${specificRules}`;
             const folderDisp = document.getElementById("local-vault-folder-display");
             if (!modeSel) return;
             const mode = normalizeVaultMode(modeSel.value);
-            if (mode === "server") {
+            if (mode === "apk") {
+              if (urlRow) urlRow.style.display = "none";
+              if (authRows) authRows.style.display = "none";
+              if (folderRow) folderRow.style.display = "flex";
+              if (folderDisp) {
+                folderDisp.value = "EPhoneAppVault";
+              }
+            } else if (mode === "server") {
               if (urlRow) urlRow.style.display = "flex";
               if (authRows) authRows.style.display = "none";
               if (folderRow) folderRow.style.display = "none";
@@ -124590,7 +124809,7 @@ ${specificRules}`;
                   urlInput.value = "http://127.0.0.1:8765";
                 }
               }
-              if (folderDisp && (!folderDisp.value.trim() || folderDisp.value === "未选择本地目录")) {
+              if (folderDisp && (!folderDisp.value.trim() || folderDisp.value === "未选择本地目录" || folderDisp.value === "EPhoneAppVault")) {
                 folderDisp.value = "EPhoneVault";
               }
             }
@@ -124823,7 +125042,30 @@ ${specificRules}`;
           async function testVaultConnection(silent = false) {
             const cfg = getCurrentFormVaultConfig();
             try {
-              if (cfg.mode === "server" || cfg.mode === "folder") {
+              if (cfg.mode === "apk") {
+                const appOpfs = await getAutoOpfsDirectoryHandle(true);
+                const savedHandle = await getSavedDirectoryHandle();
+                const activeHandle = savedHandle || appOpfs;
+                if (activeHandle) {
+                  await writeNoMediaFileInDir(activeHandle);
+                  const folderName = "EPhoneAppVault";
+                  const folderDisp = document.getElementById("local-vault-folder-display");
+                  if (folderDisp) folderDisp.value = folderName;
+                  updateVaultStatusBadge("已就绪", true);
+                  const prefixText = "软件独立存储目录 EPhoneAppVault 已就绪";
+                  setVaultInfoText(prefixText);
+                  hydrateDomVaultImages();
+                  countLocalDatabaseStats().then((stats) => {
+                    const dataSummary = "已关联 " + stats.chatCount + " 个会话与 " + (stats.inlineImgCount + stats.vaultedImgCount) + " 张图片";
+                    setVaultInfoText(prefixText + " · " + dataSummary);
+                    if (!silent && typeof window.showCustomAlert === "function") {
+                      window.showCustomAlert("提示", prefixText + "，与网页版目录完全隔离互不覆盖，" + dataSummary);
+                    }
+                  });
+                  return true;
+                }
+                throw new Error("本机独立存储目录初始化失败");
+              } else if (cfg.mode === "server" || cfg.mode === "folder") {
                 const urlInput = document.getElementById("local-vault-url-input");
                 if (urlInput && !urlInput.value.trim()) {
                   urlInput.value = "http://127.0.0.1:8765";
@@ -124833,7 +125075,7 @@ ${specificRules}`;
                   checkTermuxEndpointReachable(baseUrl, !silent),
                   checkBuiltInVaultServer(),
                   getEffectiveDirectoryHandle(),
-                  getAutoOpfsDirectoryHandle(),
+                  getAutoOpfsDirectoryHandle(false),
                 ]);
                 const activeHandle = handle || opfsHandle;
                 if (termuxOk || (serverVault && serverVault.ok) || activeHandle) {
@@ -125307,7 +125549,60 @@ ${specificRules}`;
             }
             const stealthName = toStealthVaultFileName(fileName);
             const mode = normalizeVaultMode(cfg.mode);
-            if (mode === "server" || mode === "folder") {
+            if (mode === "apk") {
+              const bytes = base64ToUint8Array(parts.b64);
+              const wrappedBytes = wrapVaultBinary(bytes);
+              let storedAny = false;
+              try {
+                let mediaDir = sharedMediaDir;
+                if (!mediaDir) {
+                  const savedHandle = await getSavedDirectoryHandle();
+                  if (savedHandle) {
+                    let perm = "granted";
+                    if (typeof savedHandle.queryPermission === "function") {
+                      perm = await savedHandle.queryPermission({ mode: "readwrite" });
+                    }
+                    if (perm === "granted") {
+                      await writeNoMediaFileInDir(savedHandle);
+                      const appSubDir = await savedHandle.getDirectoryHandle("EPhoneAppVault", { create: true });
+                      await writeNoMediaFileInDir(appSubDir);
+                      mediaDir = await appSubDir.getDirectoryHandle("media", { create: true });
+                      await writeNoMediaFileInDir(mediaDir);
+                    }
+                  }
+                }
+                if (mediaDir) {
+                  const fileHandle = await mediaDir.getFileHandle(stealthName, { create: true });
+                  const writable = await fileHandle.createWritable();
+                  await writable.write(wrappedBytes);
+                  await writable.close();
+                  storedAny = true;
+                }
+              } catch (_) {}
+
+              if (!storedAny) {
+                try {
+                  const appOpfsRoot = await getAutoOpfsDirectoryHandle(true);
+                  if (appOpfsRoot) {
+                    await writeNoMediaFileInDir(appOpfsRoot);
+                    const appOpfsMedia = await appOpfsRoot.getDirectoryHandle("media", { create: true });
+                    await writeNoMediaFileInDir(appOpfsMedia);
+                    const fh = await appOpfsMedia.getFileHandle(stealthName, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(wrappedBytes);
+                    await w.close();
+                    storedAny = true;
+                  }
+                } catch (_) {}
+              }
+              if (!storedAny) throw new Error("写入软件独立目录 EPhoneAppVault 失败");
+              writtenVaultFiles.add(fileName);
+              if (!skipBlobCache) {
+                const blob = new Blob([bytes], { type: parts.mime });
+                setVaultBlobCache(fileName, URL.createObjectURL(blob));
+              }
+              return "vault://" + fileName;
+            } else if (mode === "server" || mode === "folder") {
               const bytes = base64ToUint8Array(parts.b64);
               const wrappedBytes = wrapVaultBinary(bytes);
               let storedAny = false;
@@ -125382,7 +125677,7 @@ ${specificRules}`;
               // 4. 严禁在 server (Termux) 模式下往浏览器 OPFS 塞副本！仅在用户明确选择 folder 模式且授权外部目录不可用时才回退
               if (!termuxSaved && !externalFolderSaved && !storedAny && mode !== "server") {
                 try {
-                  const opfsRoot = await getAutoOpfsDirectoryHandle();
+                  const opfsRoot = await getAutoOpfsDirectoryHandle(false);
                   if (opfsRoot) {
                     const opfsMedia = await opfsRoot.getDirectoryHandle("media", { create: true });
                     const fh = await opfsMedia.getFileHandle(stealthName, { create: true });
@@ -125449,7 +125744,76 @@ ${specificRules}`;
               const mode = normalizeVaultMode(cfg.mode);
               const candidates = stealthName !== fileName ? [stealthName, fileName] : [fileName];
               try {
-                if (mode === "server" || mode === "folder") {
+                if (mode === "apk") {
+                  try {
+                    const savedHandle = await getSavedDirectoryHandle();
+                    if (savedHandle) {
+                      const searchDirs = [];
+                      try {
+                        const appSub = await savedHandle.getDirectoryHandle("EPhoneAppVault", { create: false });
+                        if (appSub) {
+                          try {
+                            const appMedia = await appSub.getDirectoryHandle("media", { create: false });
+                            if (appMedia) searchDirs.push(appMedia);
+                          } catch (_) {}
+                          searchDirs.push(appSub);
+                        }
+                      } catch (_) {}
+                      try {
+                        const mDir = await savedHandle.getDirectoryHandle("media", { create: false });
+                        if (mDir) searchDirs.push(mDir);
+                      } catch (_) {}
+                      searchDirs.push(savedHandle);
+                      for (const dHandle of searchDirs) {
+                        for (const candidate of candidates) {
+                          try {
+                            const fh = await dHandle.getFileHandle(candidate, { create: false });
+                            const file = await fh.getFile();
+                            const ab = await file.arrayBuffer();
+                            const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                            if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
+                              const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                              setVaultBlobCache(fileName, objUrl);
+                              failedVaultResolveTimestamps.delete(fileName);
+                              return objUrl;
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                    }
+                  } catch (_) {}
+
+                  try {
+                    const appOpfsRoot = await getAutoOpfsDirectoryHandle(true);
+                    if (appOpfsRoot) {
+                      const opfsDirs = [];
+                      try {
+                        const omDir = await appOpfsRoot.getDirectoryHandle("media", { create: false });
+                        if (omDir) opfsDirs.push(omDir);
+                      } catch (_) {}
+                      opfsDirs.push(appOpfsRoot);
+                      for (const dHandle of opfsDirs) {
+                        for (const candidate of candidates) {
+                          try {
+                            const fh = await dHandle.getFileHandle(candidate, { create: false });
+                            const file = await fh.getFile();
+                            const ab = await file.arrayBuffer();
+                            const cleanBytes = unwrapVaultBinary(new Uint8Array(ab));
+                            if (cleanBytes && cleanBytes.byteLength > 0 && !isHtmlFallbackResponse(cleanBytes, null)) {
+                              const objUrl = URL.createObjectURL(new Blob([cleanBytes], { type: mime }));
+                              setVaultBlobCache(fileName, objUrl);
+                              failedVaultResolveTimestamps.delete(fileName);
+                              return objUrl;
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                    }
+                  } catch (_) {}
+
+                  failedVaultResolveTimestamps.set(fileName, Date.now());
+                  return vaultRef;
+                } else if (mode === "server" || mode === "folder") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
                   // 1. 优先从 Termux 本地服务按并发队列稳健读取，防止并发过高打满 Python 监听队列，且绝不复制写入浏览器 OPFS
@@ -126184,23 +126548,58 @@ ${specificRules}`;
             return snapshot;
           }
 
+          window.offloadImportedImagesToActiveVaultSilent = async function () {
+            try {
+              const cfg = loadVaultConfig();
+              if (!cfg.auto && cfg.mode !== "apk") return;
+              const counter = { count: 0, savedBytes: 0 };
+              if (typeof db !== "undefined" && Array.isArray(db.tables)) {
+                for (const table of db.tables) {
+                  if (!table || table.name === "apiConfig") continue;
+                  try {
+                    const rows = await table.toArray();
+                    for (let idx = 0; idx < rows.length; idx++) {
+                      const row = rows[idx];
+                      const changed = await offloadObjectImagesDeep(row, cfg, counter, null, true);
+                      if (changed) {
+                        await table.put(row);
+                      }
+                    }
+                  } catch (_) {}
+                }
+              }
+            } catch (_) {}
+          };
+
           async function applyFullDatabaseSnapshot(snapshot) {
             if (!snapshot || typeof snapshot !== "object") {
               throw new Error("备份数据格式无效");
             }
-            if (snapshot.localStorageData && typeof snapshot.localStorageData === "object") {
-              for (const [k, v] of Object.entries(snapshot.localStorageData)) {
+            const lsSnap = snapshot.localStorageData || snapshot.localStorageSnapshot || null;
+            if (lsSnap && typeof lsSnap === "object") {
+              for (const [k, v] of Object.entries(lsSnap)) {
                 if (typeof v === "string") {
-                  localStorage.setItem(k, v);
+                  if (k === "ephone_local_vault_config" || k === "ephone_local_vault_config_v1") continue;
+                  try {
+                    localStorage.setItem(k, v);
+                  } catch (_) {}
                 }
               }
             }
-            if (snapshot.tables && typeof db !== "undefined" && db.tables) {
+            if (typeof db !== "undefined" && db.tables) {
+              const tablesObj = snapshot.tables || snapshot.extraDbTables || {};
               for (const table of db.tables) {
-                if (Array.isArray(snapshot.tables[table.name])) {
+                const rows = Array.isArray(tablesObj[table.name])
+                  ? tablesObj[table.name]
+                  : Array.isArray(snapshot[table.name])
+                  ? snapshot[table.name]
+                  : snapshot[table.name] && typeof snapshot[table.name] === "object"
+                  ? [snapshot[table.name]]
+                  : null;
+                if (Array.isArray(rows)) {
                   await table.clear();
-                  if (snapshot.tables[table.name].length > 0) {
-                    await table.bulkPut(snapshot.tables[table.name]);
+                  if (rows.length > 0) {
+                    await table.bulkPut(rows);
                   }
                 }
               }
@@ -126208,6 +126607,16 @@ ${specificRules}`;
             if (snapshot.tavernStateBackup && typeof window.restoreTavernStateFromFullBackup === "function") {
               try {
                 await window.restoreTavernStateFromFullBackup(snapshot.tavernStateBackup);
+              } catch (_) {}
+            }
+            if (snapshot.naiCollectionBackup && typeof window.restoreNaiStoreFromFullBackup === "function") {
+              try {
+                await window.restoreNaiStoreFromFullBackup(snapshot.naiCollectionBackup);
+              } catch (_) {}
+            }
+            if (typeof window.offloadImportedImagesToActiveVaultSilent === "function") {
+              try {
+                await window.offloadImportedImagesToActiveVaultSilent();
               } catch (_) {}
             }
           }
@@ -126219,8 +126628,24 @@ ${specificRules}`;
                 : null;
             if (!writer) {
               const snap = await collectFullDatabaseSnapshot();
+              if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
+                await window.resolveAllVaultUrlsDeepForBackup(snap);
+              }
               return new Blob([JSON.stringify(snap)], { type: "application/json" });
             }
+            const cloneAndResolve = async (item) => {
+              if (!item || typeof item !== "object") return item;
+              let cloned = item;
+              try {
+                cloned = JSON.parse(JSON.stringify(item));
+              } catch (_) {}
+              if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
+                try {
+                  await window.resolveAllVaultUrlsDeepForBackup(cloned);
+                } catch (_) {}
+              }
+              return cloned;
+            };
             const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
             writer.appendRaw(`{"version":1,"timestamp":${Date.now()},"localStorageData":`);
             const lsData = {};
@@ -126228,7 +126653,8 @@ ${specificRules}`;
               const k = localStorage.key(i);
               if (k) lsData[k] = localStorage.getItem(k);
             }
-            writer.appendValue(lsData, 0);
+            const resolvedLsData = await cloneAndResolve(lsData);
+            writer.appendValue(resolvedLsData, 0);
             writer.flush();
 
             writer.appendRaw(',"tables":{');
@@ -126247,9 +126673,10 @@ ${specificRules}`;
                 writer.appendRaw(JSON.stringify(table.name) + ":[");
                 for (let r = 0; r < rows.length; r++) {
                   if (r > 0) writer.appendRaw(",");
-                  writer.appendValue(rows[r], 1);
+                  const resolvedRow = await cloneAndResolve(rows[r]);
+                  writer.appendValue(resolvedRow, 1);
                   rows[r] = null;
-                  if (r % 50 === 0) {
+                  if (r % 15 === 0) {
                     writer.flush();
                     await yieldToUi();
                   }
@@ -126260,11 +126687,21 @@ ${specificRules}`;
                 await yieldToUi();
               }
             }
-            writer.appendRaw('},"tavernStateBackup":');
+            writer.appendRaw('},"naiCollectionBackup":');
+            let naiBackup = null;
+            if (typeof window.getNaiStoreForFullBackup === "function") {
+              try {
+                naiBackup = await window.getNaiStoreForFullBackup();
+                if (naiBackup) naiBackup = await cloneAndResolve(naiBackup);
+              } catch (_) {}
+            }
+            writer.appendValue(naiBackup, 0);
+            writer.appendRaw(',"tavernStateBackup":');
             let tvBackup = null;
             if (typeof window.getTavernStateForFullBackup === "function") {
               try {
                 tvBackup = await window.getTavernStateForFullBackup();
+                if (tvBackup) tvBackup = await cloneAndResolve(tvBackup);
               } catch (_) {}
             }
             writer.appendValue(tvBackup, 0);
@@ -126282,10 +126719,40 @@ ${specificRules}`;
             }
             const cfg = getCurrentFormVaultConfig();
             const mode = normalizeVaultMode(cfg.mode);
-            setVaultInfoText("正在分块打包全量数据并写入本地存储...");
+            setVaultInfoText("正在分块打包包含全部图片的全量数据并写入本地存储...");
             try {
               const snapBlob = await buildFullDatabaseSnapshotBlobLowMemory();
-              if (mode === "server" || mode === "folder") {
+              if (mode === "apk") {
+                let savedAny = false;
+                try {
+                  const appOpfs = await getAutoOpfsDirectoryHandle(true);
+                  if (appOpfs) {
+                    const fh = await appOpfs.getFileHandle("EPhoneBackup.json", { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(snapBlob);
+                    await w.close();
+                    savedAny = true;
+                  }
+                } catch (_) {}
+                try {
+                  const url = URL.createObjectURL(snapBlob);
+                  const link = Object.assign(document.createElement("a"), {
+                    href: url,
+                    download: `EPhone_FullBackup_${new Date().toISOString().slice(0, 10)}.json`,
+                  });
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  setTimeout(() => URL.revokeObjectURL(url), 15000);
+                  savedAny = true;
+                } catch (_) {}
+                if (!savedAny) throw new Error("写入软件独立目录备份失败");
+                setVaultInfoText("全量备份已完成，已存入软件独立目录 EPhoneAppVault 并导出备份文件");
+                if (typeof window.showCustomAlert === "function") {
+                  window.showCustomAlert("提示", "全量备份成功，全部文字与图片已保存在软件独立目录 EPhoneAppVault");
+                }
+                return;
+              } else if (mode === "server" || mode === "folder") {
                 let savedAny = false;
                 const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
                 if (await checkTermuxEndpointReachable(baseUrl)) {
@@ -126338,9 +126805,9 @@ ${specificRules}`;
                 const data = await res.json();
                 if (!data || !data.ok) throw new Error("上传网盘备份失败");
               }
-              setVaultInfoText("备份已完成，全量聊天与设置已安全写入 EPhoneVault");
+              setVaultInfoText("备份已完成，全量聊天与全部图片已安全写入 EPhoneVault");
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", "备份成功，全量聊天与图片已安全保存在 EPhoneVault 目录");
+                window.showCustomAlert("提示", "备份成功，全量聊天与全部图片已安全保存在 EPhoneVault 目录");
               }
             } catch (err) {
               setVaultInfoText("备份失败: " + (err && err.message ? err.message : "未知错误"));
@@ -126715,11 +127182,59 @@ ${specificRules}`;
             }
             const cfg = getCurrentFormVaultConfig();
             const mode = normalizeVaultMode(cfg.mode);
-            setVaultInfoText("正在从外部存储读取备份并合并本地最新进度...");
+            setVaultInfoText("正在读取全量备份数据...");
             try {
               let parsedSnap = null;
               const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-              if (mode === "server" || mode === "folder") {
+              if (mode === "apk") {
+                try {
+                  const appOpfs = await getAutoOpfsDirectoryHandle(true);
+                  if (appOpfs) {
+                    const fh = await appOpfs.getFileHandle("EPhoneBackup.json", { create: false });
+                    const file = await fh.getFile();
+                    if (file && file.size > 2) {
+                      parsedSnap = await parseBackupBlobOrFileLowMemory(file);
+                    }
+                  }
+                } catch (_) {}
+                if (!parsedSnap) {
+                  const pickedFile = await new Promise((resolve) => {
+                    const inp = document.createElement("input");
+                    inp.type = "file";
+                    inp.accept = ".json,application/json,text/plain,*/*";
+                    inp.style.display = "none";
+                    document.body.appendChild(inp);
+                    let settled = false;
+                    const finish = (f) => {
+                      if (settled) return;
+                      settled = true;
+                      try { document.body.removeChild(inp); } catch (_) {}
+                      resolve(f || null);
+                    };
+                    inp.addEventListener("change", () => {
+                      finish(inp.files && inp.files[0] ? inp.files[0] : null);
+                    });
+                    inp.click();
+                  });
+                  if (pickedFile) {
+                    setVaultInfoText("正在导入所选全量备份文件至软件独立目录 EPhoneAppVault...");
+                    parsedSnap = await parseBackupBlobOrFileLowMemory(pickedFile);
+                  } else {
+                    setVaultInfoText("已取消选择备份文件");
+                    return;
+                  }
+                }
+                if (parsedSnap && typeof parsedSnap === "object") {
+                  await applyFullDatabaseSnapshot(parsedSnap);
+                  setVaultInfoText("软件独立目录恢复成功，正在重新加载页面...");
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("提示", "全量备份已导入软件独立目录 EPhoneAppVault，与网页版互不干扰，即将刷新页面");
+                  }
+                  setTimeout(() => window.location.reload(), 900);
+                  return;
+                }
+                throw new Error("未读取到有效备份文件");
+              } else if (mode === "server" || mode === "folder") {
                 if (await checkTermuxEndpointReachable(baseUrl)) {
                   try {
                     const res = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
@@ -128511,7 +129026,11 @@ ${specificRules}`;
               modeSel.value = normalizeVaultMode(cfg.mode);
               modeSel.addEventListener("change", () => {
                 syncVaultModeRows();
-                getCurrentFormVaultConfig();
+                const updatedCfg = getCurrentFormVaultConfig();
+                if (isStandaloneAppRuntime()) {
+                  updatedCfg.explicitlySetInApp = true;
+                  saveVaultConfig(updatedCfg);
+                }
                 testVaultConnection(true);
               });
             }
@@ -128532,7 +129051,7 @@ ${specificRules}`;
               autoSw.addEventListener("change", getCurrentFormVaultConfig);
             }
             if (folderDisp) {
-              folderDisp.value = "EPhoneVault";
+              folderDisp.value = cfg.mode === "apk" ? "EPhoneAppVault" : "EPhoneVault";
             }
             syncVaultModeRows();
 
@@ -128646,8 +129165,35 @@ ${specificRules}`;
               }
               return false;
             }
+            function fastSwapCachedVaultImgsInSubtree(rootNode) {
+              if (!rootNode || rootNode.nodeType !== 1 || typeof window.getCachedVaultBlobUrl !== "function") return;
+              const checkImg = (img) => {
+                const attrSrc = img.getAttribute("src") || "";
+                const ref = attrSrc.startsWith("vault://") ? attrSrc : img.getAttribute("data-vault-ref");
+                if (!ref || !ref.startsWith("vault://")) return;
+                const fastUrl = window.getCachedVaultBlobUrl(ref);
+                if (fastUrl) {
+                  img.setAttribute("data-vault-ref", ref);
+                  img.setAttribute("data-vault-hydrated-src", fastUrl);
+                  img.removeAttribute("data-vault-pending");
+                  if (attrSrc !== fastUrl) {
+                    img.setAttribute("src", fastUrl);
+                  }
+                } else if (attrSrc.startsWith("vault://")) {
+                  img.setAttribute("data-vault-ref", ref);
+                  img.setAttribute("data-vault-pending", "1");
+                  img.setAttribute("src", "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7");
+                }
+              };
+              if (rootNode.tagName === "IMG") checkImg(rootNode);
+              if (rootNode.querySelectorAll) {
+                const imgs = rootNode.querySelectorAll('img[src^="vault://"], img[data-vault-ref], img[data-vault-pending]');
+                for (let i = 0; i < imgs.length; i++) {
+                  checkImg(imgs[i]);
+                }
+              }
+            }
             const obs = new MutationObserver((mutations) => {
-              if (hydrateTimer) return;
               let mayContainVaultImg = false;
               for (let i = 0; i < mutations.length; i++) {
                 const m = mutations[i];
@@ -128656,30 +129202,33 @@ ${specificRules}`;
                   continue;
                 }
                 if (m.type === "attributes") {
+                  if (target && target.tagName === "IMG") {
+                    fastSwapCachedVaultImgsInSubtree(target);
+                  }
                   if (target.hasAttribute && (target.hasAttribute("data-vault-pending") || target.hasAttribute("data-vault-ref"))) {
                     mayContainVaultImg = true;
-                    break;
                   }
                   const val = target.getAttribute && (target.getAttribute("src") || target.getAttribute("style") || "");
                   if (val && val.includes("vault://")) {
                     mayContainVaultImg = true;
-                    break;
                   }
                 } else if (m.type === "childList" && m.addedNodes && m.addedNodes.length > 0) {
                   for (let j = 0; j < m.addedNodes.length; j++) {
-                    if (nodeContainsVaultRef(m.addedNodes[j])) {
+                    const added = m.addedNodes[j];
+                    if (added && added.nodeType === 1) {
+                      fastSwapCachedVaultImgsInSubtree(added);
+                    }
+                    if (nodeContainsVaultRef(added)) {
                       mayContainVaultImg = true;
-                      break;
                     }
                   }
-                  if (mayContainVaultImg) break;
                 }
               }
-              if (!mayContainVaultImg) return;
+              if (!mayContainVaultImg || hydrateTimer) return;
               hydrateTimer = setTimeout(() => {
                 hydrateTimer = null;
                 hydrateDomVaultImages();
-              }, 80);
+              }, 16);
             });
             obs.observe(document.body, {
               childList: true,
@@ -129326,14 +129875,39 @@ ${specificRules}`;
             });
           }
 
+          // 全局禁止浏览器弹出历史输入联想框
+          const disableInputHistoryPopup = (root = document) => {
+            try {
+              const els = root.querySelectorAll ? root.querySelectorAll("input, form") : [];
+              for (let i = 0; i < els.length; i++) {
+                const el = els[i];
+                if (el.getAttribute("autocomplete") !== "off") {
+                  el.setAttribute("autocomplete", "off");
+                }
+              }
+            } catch (_) {}
+          };
+          disableInputHistoryPopup(document);
+          document.addEventListener("focusin", (e) => {
+            const t = e.target;
+            if (t && t.tagName === "INPUT") {
+              if (t.getAttribute("autocomplete") !== "off") {
+                t.setAttribute("autocomplete", "off");
+              }
+            }
+          }, true);
+
           const hotUpdateBtn = document.getElementById("apk-hot-update-btn");
           if (hotUpdateBtn) {
             hotUpdateBtn.addEventListener("click", async () => {
+              const prevText = hotUpdateBtn.textContent;
+              hotUpdateBtn.textContent = "更新中";
               try {
                 if ("serviceWorker" in navigator) {
                   const regs = await navigator.serviceWorker.getRegistrations();
                   for (const reg of regs) {
                     await reg.update();
+                    try { await reg.unregister(); } catch (_) {}
                   }
                 }
                 if (window.caches && typeof window.caches.keys === "function") {
@@ -129342,17 +129916,19 @@ ${specificRules}`;
                     await window.caches.delete(k);
                   }
                 }
-                const ghUser = (typeof state !== "undefined" && state.apiConfig?.githubUsername) ? state.apiConfig.githubUsername.trim() : "";
-                const ghRepo = (typeof state !== "undefined" && state.apiConfig?.githubRepo) ? state.apiConfig.githubRepo.trim().replace(/\/$/, "").split("/").pop().replace(".git", "") : "";
-                if (ghUser && ghRepo && (window.Capacitor || window.location.protocol === "capacitor:" || window.location.protocol === "file:")) {
-                  const remoteUrl = `https://${ghUser}.github.io/${ghRepo}/?t=${Date.now()}`;
-                  window.location.href = remoteUrl;
+                const isAppRuntime = Boolean(window.Capacitor || window.location.protocol === "capacitor:" || window.location.protocol === "file:");
+                if (isAppRuntime) {
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert("提示", "已完成本机缓存清理与配置同步，即将刷新进入最新界面");
+                  }
+                  window.location.reload();
                   return;
                 }
                 const url = new URL(window.location.href);
                 url.searchParams.set("_t", String(Date.now()));
                 window.location.replace(url.toString());
               } catch (_) {
+                hotUpdateBtn.textContent = prevText;
                 window.location.reload();
               }
             });
