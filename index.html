@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3703,14 +3703,8 @@
                   <textarea id="mod-nai-gen-neg-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入负面词，修改后实时自动保存"></textarea>
                 </div>
 
-                <!-- 底部手动确认保存按钮与收藏夹入口 -->
+                <!-- 底部手动确认保存按钮 -->
                 <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                  <button type="button" class="mod-nai-btn" id="mod-nai-open-collection-btn" style="flex: 1; height: 36px; font-size: 13px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <span>收藏</span>
-                  </button>
                   <button type="button" class="mod-nai-btn primary" id="mod-nai-gen-save-all-btn" style="flex: 1; height: 36px; font-size: 13px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -4106,7 +4100,7 @@
                       <div class="mod-nai-edit-group-head">
                         <label class="mod-nai-edit-field-label">备注</label>
                       </div>
-                      <input type="text" id="mod-nai-col-edit-remark-input" class="moe-input mod-nai-edit-input" placeholder="选填，点进详情卡片后显示，外层画廊不露出" />
+                      <textarea id="mod-nai-col-edit-remark-input" class="module-prompt-textarea mod-nai-edit-textarea mod-nai-edit-remark-textarea" rows="3" placeholder="选填，点进详情卡片后显示，外层画廊不露出"></textarea>
                     </div>
 
                     <div class="mod-nai-edit-group" id="mod-nai-col-edit-artist-group">
@@ -4148,10 +4142,17 @@
           </div>
 
           <!-- 生图极简设置弹窗 -->
-          <div class="modal" id="mod-nai-settings-modal" style="display: none;">
-            <div class="modal-content" style="width: calc(100% - 40px); max-width: 330px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
-              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-                <span style="font-weight: 600; font-size: 14px; color: var(--text-primary);">生图设置</span>
+          <div class="modal nai-theme-folio" id="mod-nai-settings-modal" style="display: none;">
+            <div class="modal-content" style="width: calc(100% - 36px); max-width: 340px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+              <i class="mod-nai-settings-anchor tl"></i>
+              <i class="mod-nai-settings-anchor tr"></i>
+              <i class="mod-nai-settings-anchor bl"></i>
+              <i class="mod-nai-settings-anchor br"></i>
+              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <div style="display: flex; align-items: baseline;">
+                  <span class="mod-nai-settings-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">设置</span>
+                  <span class="mod-nai-settings-kicker">TRACE · CONFIG</span>
+                </div>
                 <button type="button" class="modal-close" id="mod-nai-settings-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
               </div>
               <div class="form-group" style="margin-bottom: 0;">
@@ -4187,7 +4188,50 @@
                   <option value="default">初始</option>
                 </select>
               </div>
-              <div style="display: flex; justify-content: flex-end; padding-top: 4px;">
+
+              <!-- 底部三个两字预设分组折叠卡头：画师 / 正面 / 负面 -->
+              <div class="mod-nai-preset-drawers-wrap" id="mod-nai-settings-preset-drawers">
+                <!-- 1. 画师预设分组抽屉 -->
+                <div class="mod-nai-preset-drawer" data-preset-cat="artist" id="mod-nai-drawer-artist">
+                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="artist">
+                    <span class="mod-nai-preset-drawer-head-left">
+                      <i class="mod-nai-preset-drawer-dot"></i>
+                      <span class="mod-nai-preset-drawer-title">画师</span>
+                    </span>
+                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-artist">0</span>
+                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-artist"></div>
+                </div>
+
+                <!-- 2. 正面预设分组抽屉 -->
+                <div class="mod-nai-preset-drawer" data-preset-cat="positive" id="mod-nai-drawer-positive">
+                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="positive">
+                    <span class="mod-nai-preset-drawer-head-left">
+                      <i class="mod-nai-preset-drawer-dot"></i>
+                      <span class="mod-nai-preset-drawer-title">正面</span>
+                    </span>
+                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-positive">0</span>
+                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-positive"></div>
+                </div>
+
+                <!-- 3. 负面预设分组抽屉 -->
+                <div class="mod-nai-preset-drawer" data-preset-cat="negative" id="mod-nai-drawer-negative">
+                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="negative">
+                    <span class="mod-nai-preset-drawer-head-left">
+                      <i class="mod-nai-preset-drawer-dot"></i>
+                      <span class="mod-nai-preset-drawer-title">负面</span>
+                    </span>
+                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-negative">0</span>
+                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-negative"></div>
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; padding-top: 2px;">
                 <button type="button" class="module-btn-primary" id="mod-nai-settings-done-btn" style="height: 30px; padding: 0 18px; font-size: 12px; border-radius: 8px;">确定</button>
               </div>
             </div>
@@ -43148,6 +43192,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         (function initModuleNaiPanelController() {
           const PANEL_STATE_KEY = "mod_nai_panel_state_v1";
           const PRESETS_STORE_KEY = "mod_nai_presets_v1";
+          const DELETED_IDS_KEY = "mod_nai_deleted_ids_v1";
           let inspectObjectUrl = null;
           let isBound = false;
           let currentMode = "generate";
@@ -43155,12 +43200,44 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let memoryPresetsStore = null;
           let memoryBookmarksList = null;
           let memoryLexiconList = null;
+          let memoryDeletedIdsSet = null;
           let colCategory = "bookmark"; // "bookmark" | "lexicon"
 
           const NAI_TERMUX_STORE_FILE = "nai_collection_store.json";
           let _termuxNaiStoreLoadedOnce = false;
           let _termuxNaiSyncInFlight = null;
           let _termuxNaiWriteQueue = Promise.resolve();
+
+          function getDeletedIdsSet() {
+            if (memoryDeletedIdsSet instanceof Set) return memoryDeletedIdsSet;
+            memoryDeletedIdsSet = new Set();
+            try {
+              const raw = localStorage.getItem(DELETED_IDS_KEY);
+              if (raw) {
+                const arr = JSON.parse(raw);
+                if (Array.isArray(arr)) {
+                  arr.forEach((id) => {
+                    if (id && typeof id === "string") memoryDeletedIdsSet.add(id);
+                  });
+                }
+              }
+            } catch (_) {}
+            return memoryDeletedIdsSet;
+          }
+
+          function markNaiItemDeleted(itemId) {
+            if (!itemId || typeof itemId !== "string") return;
+            const s = getDeletedIdsSet();
+            s.add(itemId);
+            safeNaiLocalSetItem(DELETED_IDS_KEY, JSON.stringify(Array.from(s)));
+          }
+
+          function filterOutDeletedItems(list) {
+            if (!Array.isArray(list)) return [];
+            const s = getDeletedIdsSet();
+            if (s.size === 0) return list.filter(Boolean);
+            return list.filter((it) => it && (!it.id || !s.has(it.id)));
+          }
 
           function getNaiTermuxBaseUrl() {
             try {
@@ -43185,7 +43262,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             predecodedImageCache.set(url, preImg);
           }
 
-          function bindNaiVaultAwareImage(imgEl, rawSrcUrl) {
+          function bindNaiVaultAwareImage(imgEl, rawSrcUrl, fallbackCoverIdx) {
             if (!imgEl) return;
             const srcStr = String(rawSrcUrl || "").trim();
             if (!srcStr) {
@@ -43200,10 +43277,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 ? window.getCachedVaultBlobUrl(srcStr)
                 : null;
               if (fastCached) {
-                if (imgEl.getAttribute("src") !== fastCached) {
-                  imgEl.setAttribute("data-vault-hydrated-src", fastCached);
-                  imgEl.src = fastCached;
-                }
+                imgEl.setAttribute("data-vault-hydrated-src", fastCached);
+                imgEl.src = fastCached;
                 predecodeResolvedUrl(fastCached);
                 return;
               }
@@ -43211,23 +43286,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 window.resolveVaultRefToUrl(srcStr).then((resolved) => {
                   if (resolved && resolved !== srcStr && !resolved.startsWith("vault://")) {
                     predecodeResolvedUrl(resolved);
-                    if (imgEl.getAttribute("data-vault-ref") === srcStr && imgEl.getAttribute("src") !== resolved) {
+                    if (imgEl.getAttribute("data-vault-ref") === srcStr) {
                       imgEl.setAttribute("data-vault-hydrated-src", resolved);
                       imgEl.src = resolved;
                     }
+                  } else if (typeof fallbackCoverIdx === "number") {
+                    imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
                   }
-                }).catch(() => {});
-              } else if (imgEl.getAttribute("src") !== srcStr) {
-                imgEl.src = srcStr;
+                }).catch(() => {
+                  if (typeof fallbackCoverIdx === "number") {
+                    imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                  }
+                });
+              } else if (typeof fallbackCoverIdx === "number") {
+                imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
               }
             } else {
+              imgEl.removeAttribute("data-vault-ref");
               predecodeResolvedUrl(srcStr);
-              if (imgEl.getAttribute("src") !== srcStr) {
-                if (typeof window.setCleanPreviewImgSrc === "function") {
-                  window.setCleanPreviewImgSrc(imgEl, srcStr);
-                } else {
-                  imgEl.src = srcStr;
-                }
+              if (typeof window.setCleanPreviewImgSrc === "function") {
+                window.setCleanPreviewImgSrc(imgEl, srcStr);
+              } else {
+                imgEl.src = srcStr;
               }
             }
           }
@@ -43322,7 +43402,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 await offloadBookmarkListImagesToTermux(memoryLexiconList);
               }
 
-              // 若启动时还未从 Termux 读取过，先读取合并一次，严禁拿空列表覆盖 Termux 本地已有文件
               let existingRemote = null;
               if (!_termuxNaiStoreLoadedOnce) {
                 try {
@@ -43336,29 +43415,37 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 } catch (_) {}
               }
 
-              const outBookmarks = (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0)
-                ? memoryBookmarksList
-                : (existingRemote && Array.isArray(existingRemote.bookmarks) && existingRemote.bookmarks.length > 0 && !Array.isArray(memoryBookmarksList)
-                  ? existingRemote.bookmarks
-                  : (Array.isArray(memoryBookmarksList) ? memoryBookmarksList : []));
+              if (existingRemote && Array.isArray(existingRemote.deletedIds)) {
+                const delSet = getDeletedIdsSet();
+                existingRemote.deletedIds.forEach((id) => {
+                  if (id && typeof id === "string") delSet.add(id);
+                });
+              }
 
-              const outLexicon = (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0)
-                ? memoryLexiconList
-                : (existingRemote && Array.isArray(existingRemote.lexicon) && existingRemote.lexicon.length > 0 && !Array.isArray(memoryLexiconList)
-                  ? existingRemote.lexicon
-                  : (Array.isArray(memoryLexiconList) ? memoryLexiconList : []));
+              const outBookmarks = filterOutDeletedItems(
+                Array.isArray(memoryBookmarksList)
+                  ? memoryBookmarksList
+                  : (existingRemote && Array.isArray(existingRemote.bookmarks) ? existingRemote.bookmarks : [])
+              );
+
+              const outLexicon = filterOutDeletedItems(
+                Array.isArray(memoryLexiconList)
+                  ? memoryLexiconList
+                  : (existingRemote && Array.isArray(existingRemote.lexicon) ? existingRemote.lexicon : [])
+              );
 
               const outPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
                 ? memoryPresetsStore
-                : (existingRemote && existingRemote.presets ? existingRemote.presets : { artist: [], positive: [], negative: [] });
+                : (existingRemote && existingRemote.presets ? existingRemote.presets : loadPresetsStore());
 
               const outPanelState = (memoryPanelState && typeof memoryPanelState === "object")
                 ? memoryPanelState
-                : (existingRemote && existingRemote.panelState ? existingRemote.panelState : null);
+                : (existingRemote && existingRemote.panelState ? existingRemote.panelState : loadPanelState());
 
               const payload = {
                 version: 1,
                 updatedAt: Date.now(),
+                deletedIds: Array.from(getDeletedIdsSet()),
                 bookmarks: outBookmarks,
                 lexicon: outLexicon,
                 presets: outPresets,
@@ -43386,7 +43473,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               if (savedToTermux) {
                 _termuxNaiStoreLoadedOnce = true;
-                // 成功写入 Termux 本地磁盘后，立即清除浏览器内的重复副本以释放浏览器内存
                 purgeBrowserDuplicateNaiCopies();
               }
             }).catch(() => {});
@@ -43404,7 +43490,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function loadPanelState() {
             const defaults = {
               mode: "generate",
-              theme: "tavern",
+              theme: "folio",
               artistText: "",
               artist2Text: "",
               artist1Checked: true,
@@ -43424,7 +43510,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               artist2PresetSelected: "",
               pos1PresetSelected: "",
               pos2PresetSelected: "",
-              negPresetSelected: ""
+              negPresetSelected: "",
+              lastGeneratedImage: "",
+              lastGeneratedTitle: "",
+              updatedAt: 0
             };
             if (memoryPanelState && typeof memoryPanelState === "object") {
               return Object.assign({}, defaults, memoryPanelState);
@@ -43447,82 +43536,108 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function savePanelState(stateObj) {
-            memoryPanelState = Object.assign({}, stateObj);
+            const nextState = Object.assign({}, stateObj, { updatedAt: Date.now() });
+            memoryPanelState = nextState;
+            const localCopy = Object.assign({}, nextState);
+            if (typeof localCopy.lastGeneratedImage === "string" && localCopy.lastGeneratedImage.startsWith("data:") && localCopy.lastGeneratedImage.length > 180000) {
+              // 若为超长base64且尚未转存Termux，先尝试轻量保存在localStorage，若超限则仅保留配置项
+              if (!safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(localCopy))) {
+                const slimCopy = Object.assign({}, localCopy, { lastGeneratedImage: "" });
+                safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(slimCopy));
+              }
+            } else {
+              safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(localCopy));
+            }
             persistNaiStoreToTermux(false);
           }
 
-          function loadPresetsStore() {
-            const defaults = {
-              artist: [],
-              positive: [],
-              negative: []
+          function normalizePresetsStoreObject(raw) {
+            const obj = raw && typeof raw === "object" ? raw : {};
+            const normList = (arr) =>
+              Array.isArray(arr)
+                ? arr
+                    .filter((x) => x && typeof x === "object" && x.name)
+                    .map((x) => ({
+                      name: String(x.name).trim(),
+                      value: typeof x.value === "string" ? x.value : "",
+                      group: typeof x.group === "string" ? x.group.trim() : ""
+                    }))
+                : [];
+            const rawGroups = obj.groups && typeof obj.groups === "object" ? obj.groups : {};
+            const normGroups = (cat, list) => {
+              const set = new Set();
+              if (Array.isArray(rawGroups[cat])) {
+                rawGroups[cat].forEach((g) => {
+                  const s = String(g || "").trim();
+                  if (s) set.add(s);
+                });
+              }
+              list.forEach((it) => {
+                if (it && it.group) set.add(it.group);
+              });
+              return Array.from(set);
             };
-            let localStore = null;
+            const artistList = normList(obj.artist);
+            const posList = normList(obj.positive);
+            const negList = normList(obj.negative);
+            return {
+              artist: artistList,
+              positive: posList,
+              negative: negList,
+              groups: {
+                artist: normGroups("artist", artistList),
+                positive: normGroups("positive", posList),
+                negative: normGroups("negative", negList)
+              },
+              updatedAt: typeof obj.updatedAt === "number" ? obj.updatedAt : 0
+            };
+          }
+
+          function clonePresetsStore(store) {
+            const norm = normalizePresetsStoreObject(store);
+            return {
+              artist: norm.artist.map((x) => Object.assign({}, x)),
+              positive: norm.positive.map((x) => Object.assign({}, x)),
+              negative: norm.negative.map((x) => Object.assign({}, x)),
+              groups: {
+                artist: norm.groups.artist.slice(),
+                positive: norm.groups.positive.slice(),
+                negative: norm.groups.negative.slice()
+              },
+              updatedAt: norm.updatedAt
+            };
+          }
+
+          function loadPresetsStore() {
+            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+              return clonePresetsStore(memoryPresetsStore);
+            }
             try {
               const raw = localStorage.getItem(PRESETS_STORE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && typeof parsed === "object") {
-                  localStore = {
-                    artist: Array.isArray(parsed.artist) ? parsed.artist : [],
-                    positive: Array.isArray(parsed.positive) ? parsed.positive : [],
-                    negative: Array.isArray(parsed.negative) ? parsed.negative : []
-                  };
+                  memoryPresetsStore = normalizePresetsStoreObject(parsed);
+                  return clonePresetsStore(memoryPresetsStore);
                 }
               }
             } catch (_) {}
-            const gsStore = (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore)
-              ? window.state.globalSettings.naiPresetsStore
-              : null;
-
-            if (memoryPresetsStore && typeof memoryPresetsStore === "object" && (
-              (Array.isArray(memoryPresetsStore.artist) && memoryPresetsStore.artist.length > 0) ||
-              (Array.isArray(memoryPresetsStore.positive) && memoryPresetsStore.positive.length > 0) ||
-              (Array.isArray(memoryPresetsStore.negative) && memoryPresetsStore.negative.length > 0)
-            )) {
-              return {
-                artist: [...(Array.isArray(memoryPresetsStore.artist) ? memoryPresetsStore.artist : [])],
-                positive: [...(Array.isArray(memoryPresetsStore.positive) ? memoryPresetsStore.positive : [])],
-                negative: [...(Array.isArray(memoryPresetsStore.negative) ? memoryPresetsStore.negative : [])]
-              };
+            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore) {
+              memoryPresetsStore = normalizePresetsStoreObject(window.state.globalSettings.naiPresetsStore);
+              return clonePresetsStore(memoryPresetsStore);
             }
-            if (localStore && (localStore.artist.length || localStore.positive.length || localStore.negative.length)) {
-              memoryPresetsStore = localStore;
-              return {
-                artist: [...memoryPresetsStore.artist],
-                positive: [...memoryPresetsStore.positive],
-                negative: [...memoryPresetsStore.negative]
-              };
-            }
-            if (gsStore && typeof gsStore === "object") {
-              memoryPresetsStore = {
-                artist: Array.isArray(gsStore.artist) ? gsStore.artist : [],
-                positive: Array.isArray(gsStore.positive) ? gsStore.positive : [],
-                negative: Array.isArray(gsStore.negative) ? gsStore.negative : []
-              };
-              return {
-                artist: [...memoryPresetsStore.artist],
-                positive: [...memoryPresetsStore.positive],
-                negative: [...memoryPresetsStore.negative]
-              };
-            }
-            if (localStore) {
-              memoryPresetsStore = localStore;
-              return {
-                artist: [...memoryPresetsStore.artist],
-                positive: [...memoryPresetsStore.positive],
-                negative: [...memoryPresetsStore.negative]
-              };
-            }
-            return defaults;
+            memoryPresetsStore = normalizePresetsStoreObject({});
+            return clonePresetsStore(memoryPresetsStore);
           }
 
           function savePresetsStore(store) {
-            memoryPresetsStore = {
-              artist: Array.isArray(store && store.artist) ? store.artist : [],
-              positive: Array.isArray(store && store.positive) ? store.positive : [],
-              negative: Array.isArray(store && store.negative) ? store.negative : []
-            };
+            const norm = normalizePresetsStoreObject(store);
+            norm.updatedAt = Date.now();
+            memoryPresetsStore = norm;
+            safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+            if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
+              window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
+            }
             persistNaiStoreToTermux(false);
           }
 
@@ -43563,12 +43678,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function applyThemeToPanel(themeName) {
             const panel = document.getElementById("module-nai-panel");
+            const settingsModal = document.getElementById("mod-nai-settings-modal");
             const iconBox = document.getElementById("mod-nai-theme-icon");
             const themeSelect = document.getElementById("mod-nai-setting-theme");
             const validTheme = (themeName === "folio" || themeName === "tavern" || themeName === "default" || themeName === "puppy" || themeName === "apple") ? themeName : "folio";
             if (panel) {
               panel.classList.remove("nai-theme-folio", "nai-theme-tavern", "nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
               panel.classList.add("nai-theme-" + validTheme);
+            }
+            if (settingsModal) {
+              settingsModal.classList.remove("nai-theme-folio", "nai-theme-tavern", "nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
+              settingsModal.classList.add("nai-theme-" + validTheme);
             }
             if (iconBox) {
               iconBox.innerHTML = THEME_ICONS[validTheme] || THEME_ICONS.folio;
@@ -43598,6 +43718,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (toggleText) {
               toggleText.textContent = currentMode === "generate" ? "提取" : "生图";
+            }
+            if (currentMode === "collection" && colActiveSubView === "grid") {
+              renderCollectionGrid(true);
             }
             const scrollContainer = document.querySelector("#module-nai-panel .mod-nai-scroll");
             if (scrollContainer) {
@@ -43639,7 +43762,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return parts.join(", ");
           }
 
-          // 严格独立保存本生图模块的自身配置，绝不修改 API 设置中的 NovelAI 提示词、尺寸或模型
           function syncModuleNaiToGlobal() {
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
             const artist2El = document.getElementById("mod-nai-gen-artist2-input");
@@ -43694,6 +43816,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const ACTION_CHECK_SVG =
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+          const GROUP_CHEVRON_SVG =
+            '<svg class="mod-nai-preset-group-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
 
           function flashActionButtonSuccess(btnEl) {
             if (!btnEl) return;
@@ -43715,6 +43839,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           let presetDropdownOutsideBound = false;
+          const openPresetGroupMemory = new Map();
+
           function closeAllPresetDropdowns(exceptWrap) {
             document.querySelectorAll("#module-nai-panel .mod-nai-preset-dropdown.is-open").forEach((wrap) => {
               if (exceptWrap && wrap === exceptWrap) return;
@@ -43724,7 +43850,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
           }
 
-          function syncPresetCustomDropdown(sel) {
+          function inferCategoryFromSelectId(selectId) {
+            const idStr = String(selectId || "");
+            if (idStr.includes("artist")) return "artist";
+            if (idStr.includes("pos")) return "positive";
+            if (idStr.includes("neg")) return "negative";
+            return "positive";
+          }
+
+          function createPresetMenuItemButton(sel, triggerTxt, itemValue, itemLabel, curVal) {
+            const itemBtn = document.createElement("button");
+            itemBtn.type = "button";
+            const isSelected = (itemValue || "") === curVal;
+            itemBtn.className = "mod-nai-preset-item" + (isSelected ? " is-selected" : "");
+
+            const dot = document.createElement("i");
+            dot.className = "mod-nai-preset-item-dot";
+
+            const labelSpan = document.createElement("span");
+            labelSpan.className = "mod-nai-preset-item-label";
+            labelSpan.textContent = itemLabel || "预设";
+
+            const checkSpan = document.createElement("span");
+            checkSpan.className = "mod-nai-preset-item-check";
+            checkSpan.innerHTML = ACTION_CHECK_SVG;
+
+            itemBtn.appendChild(dot);
+            itemBtn.appendChild(labelSpan);
+            itemBtn.appendChild(checkSpan);
+
+            itemBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              sel.value = itemValue;
+              triggerTxt.textContent = itemValue ? itemValue : "预设";
+              closeAllPresetDropdowns(null);
+              syncPresetCustomDropdown(sel);
+              sel.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+
+            return itemBtn;
+          }
+
+          function syncPresetCustomDropdown(sel, explicitCategory) {
             if (!sel || !sel.parentNode) return;
             if (!presetDropdownOutsideBound) {
               presetDropdownOutsideBound = true;
@@ -43781,38 +43948,200 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             triggerTxt.textContent = curVal ? curVal : "预设";
             menuEl.innerHTML = "";
 
-            const opts = Array.from(sel.options || []);
-            opts.forEach((opt) => {
-              const itemBtn = document.createElement("button");
-              itemBtn.type = "button";
-              const isSelected = (opt.value || "") === curVal;
-              itemBtn.className = "mod-nai-preset-item" + (isSelected ? " is-selected" : "");
+            const cat = explicitCategory || inferCategoryFromSelectId(sel.id);
+            const store = loadPresetsStore();
+            const list = Array.isArray(store[cat]) ? store[cat] : [];
+            const configuredGroups = (store.groups && Array.isArray(store.groups[cat])) ? store.groups[cat] : [];
 
-              const dot = document.createElement("i");
-              dot.className = "mod-nai-preset-item-dot";
+            // 顶部默认占位项
+            menuEl.appendChild(createPresetMenuItemButton(sel, triggerTxt, "", "预设", curVal));
 
-              const labelSpan = document.createElement("span");
-              labelSpan.className = "mod-nai-preset-item-label";
-              labelSpan.textContent = opt.textContent || "预设";
+            const groupOrder = [];
+            configuredGroups.forEach((g) => {
+              const s = String(g || "").trim();
+              if (s && !groupOrder.includes(s)) groupOrder.push(s);
+            });
+            list.forEach((it) => {
+              const g = it && typeof it.group === "string" ? it.group.trim() : "";
+              if (g && !groupOrder.includes(g)) groupOrder.push(g);
+            });
 
-              const checkSpan = document.createElement("span");
-              checkSpan.className = "mod-nai-preset-item-check";
-              checkSpan.innerHTML = ACTION_CHECK_SVG;
+            if (groupOrder.length === 0) {
+              list.forEach((item) => {
+                if (!item || !item.name) return;
+                menuEl.appendChild(createPresetMenuItemButton(sel, triggerTxt, item.name, item.name, curVal));
+              });
+              return;
+            }
 
-              itemBtn.appendChild(dot);
-              itemBtn.appendChild(labelSpan);
-              itemBtn.appendChild(checkSpan);
+            // 类似世界书分组：点击分组头展开/收起，点击内部预设直接选用
+            const buildGroupSection = (groupTitle, itemsInGroup) => {
+              const gWrap = document.createElement("div");
+              const memKey = `${sel.id}::${groupTitle}`;
+              const hasSelectedInside = itemsInGroup.some((it) => it && it.name === curVal);
+              const isOpen = openPresetGroupMemory.has(memKey)
+                ? openPresetGroupMemory.get(memKey)
+                : hasSelectedInside;
+              gWrap.className = "mod-nai-preset-group-wrap" + (isOpen ? " is-open" : "");
 
-              itemBtn.addEventListener("click", (e) => {
+              const gHead = document.createElement("button");
+              gHead.type = "button";
+              gHead.className = "mod-nai-preset-group-head";
+
+              const leftSpan = document.createElement("span");
+              leftSpan.className = "mod-nai-preset-group-head-left";
+              leftSpan.innerHTML = GROUP_CHEVRON_SVG;
+              const titleSpan = document.createElement("span");
+              titleSpan.className = "mod-nai-preset-group-title";
+              titleSpan.textContent = groupTitle;
+              leftSpan.appendChild(titleSpan);
+
+              const countSpan = document.createElement("span");
+              countSpan.className = "mod-nai-preset-group-count";
+              countSpan.textContent = String(itemsInGroup.length);
+
+              gHead.appendChild(leftSpan);
+              gHead.appendChild(countSpan);
+
+              const gBody = document.createElement("div");
+              gBody.className = "mod-nai-preset-group-body";
+
+              if (itemsInGroup.length === 0) {
+                const emptyHint = document.createElement("div");
+                emptyHint.style.cssText = "padding:4px 8px;font-size:10.5px;color:var(--text-secondary);opacity:0.75;";
+                emptyHint.textContent = "暂无预设";
+                gBody.appendChild(emptyHint);
+              } else {
+                itemsInGroup.forEach((item) => {
+                  if (!item || !item.name) return;
+                  gBody.appendChild(createPresetMenuItemButton(sel, triggerTxt, item.name, item.name, curVal));
+                });
+              }
+
+              gHead.addEventListener("click", (e) => {
                 e.stopPropagation();
-                sel.value = opt.value;
-                triggerTxt.textContent = opt.value ? opt.value : "预设";
-                closeAllPresetDropdowns(null);
-                syncPresetCustomDropdown(sel);
-                sel.dispatchEvent(new Event("change", { bubbles: true }));
+                const nextOpen = !gWrap.classList.contains("is-open");
+                gWrap.classList.toggle("is-open", nextOpen);
+                openPresetGroupMemory.set(memKey, nextOpen);
               });
 
-              menuEl.appendChild(itemBtn);
+              gWrap.appendChild(gHead);
+              gWrap.appendChild(gBody);
+              menuEl.appendChild(gWrap);
+            };
+
+            groupOrder.forEach((gName) => {
+              const matched = list.filter((it) => it && (it.group || "").trim() === gName);
+              buildGroupSection(gName, matched);
+            });
+
+            const ungrouped = list.filter((it) => it && !(it.group || "").trim());
+            if (ungrouped.length > 0) {
+              buildGroupSection("未分组", ungrouped);
+            }
+          }
+
+          function renderSettingsPresetDrawers() {
+            const store = loadPresetsStore();
+            const categories = ["artist", "positive", "negative"];
+            categories.forEach((cat) => {
+              const list = Array.isArray(store[cat]) ? store[cat] : [];
+              const groups = (store.groups && Array.isArray(store.groups[cat])) ? store.groups[cat] : [];
+              const countEl = document.getElementById(`mod-nai-drawer-count-${cat}`);
+              const listContainer = document.getElementById(`mod-nai-drawer-list-${cat}`);
+              if (countEl) {
+                countEl.textContent = String(list.length);
+              }
+              if (!listContainer) return;
+              listContainer.innerHTML = "";
+
+              // 已创建的分组标签栏（可点击删除分组）
+              if (groups.length > 0) {
+                const tagsBar = document.createElement("div");
+                tagsBar.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;padding-bottom:4px;border-bottom:1px dashed var(--border-color);";
+                groups.forEach((gName) => {
+                  const chip = document.createElement("div");
+                  chip.style.cssText = "display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:11px;background:var(--background-color);border:1px solid var(--border-color);color:var(--text-primary);";
+                  const txt = document.createElement("span");
+                  txt.textContent = gName;
+                  const delBtn = document.createElement("button");
+                  delBtn.type = "button";
+                  delBtn.className = "mod-nai-drawer-group-del-btn";
+                  delBtn.title = "删除此分组";
+                  delBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+                  delBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const curStore = loadPresetsStore();
+                    if (curStore.groups && Array.isArray(curStore.groups[cat])) {
+                      curStore.groups[cat] = curStore.groups[cat].filter((x) => x !== gName);
+                    }
+                    if (Array.isArray(curStore[cat])) {
+                      curStore[cat].forEach((p) => {
+                        if (p && p.group === gName) p.group = "";
+                      });
+                    }
+                    savePresetsStore(curStore);
+                    renderSettingsPresetDrawers();
+                    renderPresetSelectOptions();
+                  });
+                  chip.appendChild(txt);
+                  chip.appendChild(delBtn);
+                  tagsBar.appendChild(chip);
+                });
+                listContainer.appendChild(tagsBar);
+              }
+
+              if (list.length === 0) {
+                const emptyEl = document.createElement("div");
+                emptyEl.className = "mod-nai-drawer-empty";
+                emptyEl.textContent = "暂无已存预设，可在外层面板点加号新建";
+                listContainer.appendChild(emptyEl);
+                return;
+              }
+
+              list.forEach((presetItem) => {
+                if (!presetItem || !presetItem.name) return;
+                const row = document.createElement("div");
+                row.className = "mod-nai-drawer-preset-row";
+
+                const nameSpan = document.createElement("span");
+                nameSpan.className = "mod-nai-drawer-preset-name";
+                nameSpan.textContent = presetItem.name;
+
+                const groupSel = document.createElement("select");
+                groupSel.className = "moe-input mod-nai-drawer-group-select";
+                const defaultOpt = document.createElement("option");
+                defaultOpt.value = "";
+                defaultOpt.textContent = "未分组";
+                groupSel.appendChild(defaultOpt);
+
+                groups.forEach((gName) => {
+                  const opt = document.createElement("option");
+                  opt.value = gName;
+                  opt.textContent = gName;
+                  if ((presetItem.group || "") === gName) {
+                    opt.selected = true;
+                  }
+                  groupSel.appendChild(opt);
+                });
+                groupSel.value = presetItem.group || "";
+
+                groupSel.addEventListener("change", () => {
+                  const chosenGroup = groupSel.value || "";
+                  const curStore = loadPresetsStore();
+                  const targetArr = Array.isArray(curStore[cat]) ? curStore[cat] : [];
+                  const targetPreset = targetArr.find((x) => x && x.name === presetItem.name);
+                  if (targetPreset) {
+                    targetPreset.group = chosenGroup;
+                    savePresetsStore(curStore);
+                    renderPresetSelectOptions();
+                  }
+                });
+
+                row.appendChild(nameSpan);
+                row.appendChild(groupSel);
+                listContainer.appendChild(row);
+              });
             });
           }
 
@@ -43820,7 +44149,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const store = loadPresetsStore();
             const st = loadPanelState();
 
-            const fillSelect = (selectId, inputId, list, selectedName) => {
+            const fillSelect = (selectId, category, list, selectedName) => {
               const sel = document.getElementById(selectId);
               if (!sel) return;
               sel.innerHTML = '<option value="">预设</option>';
@@ -43837,14 +44166,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 sel.appendChild(opt);
               });
               sel.value = matchedSelected;
-              syncPresetCustomDropdown(sel);
+              syncPresetCustomDropdown(sel, category);
             };
 
-            fillSelect("mod-nai-artist-preset-select", "mod-nai-gen-artist-input", store.artist, st.artistPresetSelected);
-            fillSelect("mod-nai-artist2-preset-select", "mod-nai-gen-artist2-input", store.artist, st.artist2PresetSelected);
-            fillSelect("mod-nai-pos1-preset-select", "mod-nai-gen-pos1-input", store.positive, st.pos1PresetSelected);
-            fillSelect("mod-nai-pos2-preset-select", "mod-nai-gen-pos2-input", store.positive, st.pos2PresetSelected);
-            fillSelect("mod-nai-neg-preset-select", "mod-nai-gen-neg-input", store.negative, st.negPresetSelected);
+            fillSelect("mod-nai-artist-preset-select", "artist", store.artist, st.artistPresetSelected);
+            fillSelect("mod-nai-artist2-preset-select", "artist", store.artist, st.artist2PresetSelected);
+            fillSelect("mod-nai-pos1-preset-select", "positive", store.positive, st.pos1PresetSelected);
+            fillSelect("mod-nai-pos2-preset-select", "positive", store.positive, st.pos2PresetSelected);
+            fillSelect("mod-nai-neg-preset-select", "negative", store.negative, st.negPresetSelected);
+            renderSettingsPresetDrawers();
           }
 
           async function handleOverwritePreset(category, inputId, selectId, stateKey, btnEl) {
@@ -43863,7 +44193,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (idx >= 0) {
               list[idx].value = val;
             } else {
-              list.push({ name: selectedName, value: val });
+              list.push({ name: selectedName, value: val, group: "" });
             }
             store[category] = list;
             savePresetsStore(store);
@@ -43913,7 +44243,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (idx >= 0) {
               list[idx].value = val;
             } else {
-              list.push({ name: cleanName, value: val });
+              list.push({ name: cleanName, value: val, group: "" });
             }
             store[category] = list;
             savePresetsStore(store);
@@ -44578,7 +44908,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 2. 顶部设置弹窗开关与实时保存
+            // 2. 顶部设置弹窗开关、预设分组抽屉与实时保存
             const settingsModal = document.getElementById("mod-nai-settings-modal");
             const openSettingsBtn = document.getElementById("mod-nai-settings-open-btn");
             const closeSettingsBtn = document.getElementById("mod-nai-settings-close-btn");
@@ -44593,9 +44923,58 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (resSelect && st.resolution) resSelect.value = st.resolution;
                 if (modelSelect && st.model) modelSelect.value = st.model;
                 if (themeSelect && st.theme) themeSelect.value = st.theme;
+                applyThemeToPanel(st.theme || "folio");
+                renderSettingsPresetDrawers();
                 settingsModal.style.display = "flex";
               });
             }
+
+            if (settingsModal) {
+              settingsModal.querySelectorAll(".mod-nai-preset-drawer-head").forEach((headBtn) => {
+                headBtn.addEventListener("click", () => {
+                  const drawer = headBtn.closest(".mod-nai-preset-drawer");
+                  if (!drawer) return;
+                  const body = drawer.querySelector(".mod-nai-preset-drawer-body");
+                  const willOpen = !drawer.classList.contains("is-open");
+                  drawer.classList.toggle("is-open", willOpen);
+                  if (body) body.style.display = willOpen ? "flex" : "none";
+                });
+              });
+
+              ["artist", "positive", "negative"].forEach((cat) => {
+                const addBtn = document.getElementById(`mod-nai-group-add-${cat}`);
+                const grpInp = document.getElementById(`mod-nai-group-input-${cat}`);
+                const createGroupForCat = () => {
+                  const gName = grpInp ? String(grpInp.value || "").trim() : "";
+                  if (!gName) return;
+                  const curStore = loadPresetsStore();
+                  if (!curStore.groups) curStore.groups = { artist: [], positive: [], negative: [] };
+                  if (!Array.isArray(curStore.groups[cat])) curStore.groups[cat] = [];
+                  if (!curStore.groups[cat].includes(gName)) {
+                    curStore.groups[cat].push(gName);
+                    savePresetsStore(curStore);
+                  }
+                  if (grpInp) grpInp.value = "";
+                  renderSettingsPresetDrawers();
+                  renderPresetSelectOptions();
+                  if (typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast("已建分组: " + gName, "success");
+                  }
+                };
+                if (addBtn) {
+                  addBtn.addEventListener("click", createGroupForCat);
+                }
+                if (grpInp) {
+                  grpInp.addEventListener("keydown", (e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      createGroupForCat();
+                    }
+                  });
+                }
+              });
+            }
+
             const hideSettings = () => {
               if (themeSelect && themeSelect.value) {
                 applyThemeToPanel(themeSelect.value);
@@ -44657,7 +45036,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             });
 
-            // 页面切后台、离开或点击返回时自动落盘保存
             window.addEventListener("pagehide", syncModuleNaiToGlobal);
             window.addEventListener("beforeunload", syncModuleNaiToGlobal);
             document.addEventListener("visibilitychange", () => {
@@ -44670,7 +45048,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               modulesBackBtn.addEventListener("click", syncModuleNaiToGlobal);
             }
 
-            // 底部手动保存按钮
             const genSaveAllBtn = document.getElementById("mod-nai-gen-save-all-btn");
             if (genSaveAllBtn) {
               genSaveAllBtn.addEventListener("click", () => handleManualSaveWithFeedback(genSaveAllBtn));
@@ -44779,7 +45156,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               null
             );
 
-            // 5. 生图执行按钮
+            // 5. 生图执行按钮（生成的图片自动持久化，关闭再打开依然保留，直到下次生图替换）
             const runGenBtn = document.getElementById("mod-nai-gen-run-btn");
             const genResultImg = document.getElementById("mod-nai-gen-result-img");
             const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
@@ -44819,17 +45196,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     model: modelVal
                   });
                   if (genResultImg && dataUrl) {
-                    if (genResultImg.src && genResultImg.src.startsWith("blob:")) {
-                      try { URL.revokeObjectURL(genResultImg.src); } catch (_) {}
-                    }
+                    const imgTitle = activePosVal || activeArtistVal || "NAI_Image";
+                    genResultImg.removeAttribute("data-vault-ref");
                     genResultImg.src = dataUrl;
-                    genResultImg.title = activePosVal || activeArtistVal || "NAI_Image";
+                    genResultImg.title = imgTitle;
                     genResultImg.style.display = "block";
-                  }
-                  if (genPlaceholder) genPlaceholder.style.display = "none";
-                  if (genStatus) {
-                    genStatus.style.display = "block";
-                    genStatus.textContent = "连点图片三下即可下载到本地";
+                    if (genPlaceholder) genPlaceholder.style.display = "none";
+                    if (genStatus) {
+                      genStatus.style.display = "block";
+                      genStatus.textContent = "连点图片三下即可下载到本地";
+                    }
+                    const persistedRef = await offloadSingleNaiImageToTermux(dataUrl);
+                    const stAfterGen = loadPanelState();
+                    stAfterGen.lastGeneratedImage = persistedRef || dataUrl;
+                    stAfterGen.lastGeneratedTitle = imgTitle;
+                    savePanelState(stAfterGen);
                   }
                 } catch (err) {
                   if (genStatus) {
@@ -44909,18 +45290,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               copyInspectNeg.addEventListener("click", () => copyTextFromInput("mod-nai-inspect-neg-input", copyInspectNeg));
             }
 
-            // 7. 生图收藏夹与共享画册（中世纪羊皮纸书签画册，每页9格）
+            // 7. 生图收藏夹与共享画册（每页6格）
             bindCollectionFolioEvents();
           }
 
           // ============================================================
-          // 生图收藏夹与词典双生面板控制器（分页画廊 + 详情面 + 编辑面 + 封面设置 + 隐蔽序号互换排序 + 云端隔离目录共享）
+          // 生图收藏夹与词典双生面板控制器（分页画廊每页6个 + 详情面 + 编辑面 + 封面设置 + 隐蔽序号互换排序 + 云端隔离目录共享）
           // ============================================================
           const BOOKMARKS_STORE_KEY = "mod_nai_bookmarks_v1";
           const LEXICON_STORE_KEY = "mod_nai_lexicon_v1";
           const BOOKMARKS_TEXT_BACKUP_KEY = "mod_nai_bookmarks_text_backup_v1";
           const LEXICON_TEXT_BACKUP_KEY = "mod_nai_lexicon_text_backup_v1";
-          const ITEMS_PER_PAGE = 9;
+          const ITEMS_PER_PAGE = 6;
           let colScope = "local"; // "local" | "shared"
           let colLocalPage = 1;
           let colSharedPage = 1;
@@ -44938,19 +45319,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let colActiveSubView = "grid";
           let colEditingCategory = "";
           let colSavedGridScrollTop = 0;
-          const traceCardElementCache = new Map();
 
           const PLACEHOLDER_BOOKMARK_SVG =
             '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path><path d="M12 7v6"></path><path d="M9 10h6"></path></svg>';
 
-          // 收藏模式四幅高精度素描版画插画素材
           const TRACE_DEFAULT_COVERS = [
             "assets/trace/trace_01.jpg",
             "assets/trace/trace_02.jpg",
             "assets/trace/trace_03.jpg",
             "assets/trace/trace_04.jpg"
           ];
-          // 词典模式四幅克莱因蓝双生姐妹版画插画素材
           const LEXICON_DEFAULT_COVERS = [
             "assets/trace/lexicon_01.jpg",
             "assets/trace/lexicon_02.jpg",
@@ -44985,8 +45363,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function mergeBookmarkListsById(primaryList, secondaryList) {
-            const listA = Array.isArray(primaryList) ? primaryList.filter(Boolean) : [];
-            const listB = Array.isArray(secondaryList) ? secondaryList.filter(Boolean) : [];
+            const listA = filterOutDeletedItems(primaryList);
+            const listB = filterOutDeletedItems(secondaryList);
             if (listA.length === 0) return listB.slice();
             if (listB.length === 0) return listA.slice();
             const merged = listA.map((item) => Object.assign({}, item));
@@ -45010,7 +45388,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (other.id) indexById.set(other.id, merged.length - 1);
               }
             }
-            return merged;
+            return filterOutDeletedItems(merged);
           }
 
           function readListFromStorageKey(key) {
@@ -45019,7 +45397,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (raw) {
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                  return parsed;
+                  return filterOutDeletedItems(parsed);
                 }
               }
             } catch (_) {}
@@ -45030,7 +45408,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const isLex = isLexiconCategory();
             const memList = isLex ? memoryLexiconList : memoryBookmarksList;
             if (Array.isArray(memList)) {
-              return memList;
+              return filterOutDeletedItems(memList);
             }
 
             const gsField = isLex ? "naiLexiconCollection" : "naiBookmarksCollection";
@@ -45053,6 +45431,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (gsArr) resolved = mergeBookmarkListsById(resolved, gsArr);
             if (localArr) resolved = mergeBookmarkListsById(resolved, localArr);
             if (backupArr) resolved = mergeBookmarkListsById(resolved, backupArr);
+            resolved = filterOutDeletedItems(resolved);
 
             if (resolved.length > 0) {
               if (isLex) {
@@ -45067,7 +45446,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function saveLocalBookmarks(list, targetCategory) {
-            const cleanList = Array.isArray(list) ? list : [];
+            const cleanList = filterOutDeletedItems(Array.isArray(list) ? list : []);
             const cat = targetCategory || colCategory;
             const isLex = cat === "lexicon";
             if (isLex) {
@@ -45235,13 +45614,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (colSortSourceIndex === -1) {
               colSortSourceIndex = targetIdx;
-              renderCollectionGrid();
+              renderCollectionGrid(true);
               return;
             }
 
             if (colSortSourceIndex === targetIdx) {
               colSortSourceIndex = -1;
-              renderCollectionGrid();
+              renderCollectionGrid(true);
               return;
             }
 
@@ -45252,7 +45631,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               list[fromIdx] = list[targetIdx];
               list[targetIdx] = temp;
               saveLocalBookmarks(list);
-              renderCollectionGrid();
+              renderCollectionGrid(true);
             }
           }
 
@@ -45328,12 +45707,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             img.decoding = "sync";
             const itemImgs = getBookmarkImagesArray(item);
             const isDefaultCover = itemImgs.length === 0;
-            const coverSrc = isDefaultCover ? getTraceDefaultCoverUrl(itemIdx >= 0 ? itemIdx : slotIdx) : itemImgs[0];
+            const defaultFallbackIdx = itemIdx >= 0 ? itemIdx : slotIdx;
+            const coverSrc = isDefaultCover ? getTraceDefaultCoverUrl(defaultFallbackIdx) : itemImgs[0];
             if (isDefaultCover && isLex) {
               img.className = "is-lex-default-cover";
             }
             img.alt = (item && item.name) || "片段";
-            bindNaiVaultAwareImage(img, coverSrc);
+            bindNaiVaultAwareImage(img, coverSrc, defaultFallbackIdx);
             artBox.appendChild(img);
             frame.appendChild(artBox);
             frameWrap.appendChild(frame);
@@ -45398,7 +45778,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       window.resolveVaultRefToUrl(s).then((resolved) => {
                         if (resolved && !resolved.startsWith("vault://")) {
                           predecodeResolvedUrl(resolved);
-                          // 若画廊中已有对应图片节点但尚未水合，立即填入
                           document.querySelectorAll(`#module-nai-panel img[data-vault-ref="${s}"]`).forEach((el) => {
                             if (el.getAttribute("src") !== resolved) {
                               el.setAttribute("data-vault-hydrated-src", resolved);
@@ -45418,7 +45797,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             LEXICON_DEFAULT_COVERS.forEach(predecodeResolvedUrl);
           }
 
-          function renderCollectionGrid(forceRebuild = false) {
+          function renderCollectionGrid() {
             updateCollectionHeaderUI();
             const gridEl = document.getElementById("mod-nai-col-grid-container");
             const footerEl = document.querySelector("#mod-nai-col-grid-page .mod-nai-trace-footer");
@@ -45461,82 +45840,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
             const endIdx = startIdx + ITEMS_PER_PAGE;
 
-            const sigParts = sourceList.map((it, sIdx) => {
-              if (!it) return "";
-              const imgs = getBookmarkImagesArray(it);
-              return `${it.id || sIdx}:${it.name || ""}:${normalizeModelTagValue(it.modelTag)}:${imgs[0] || ""}`;
-            });
-            const nextGridSig = `${colScope}|${colCategory}|${sourceList.length}|${sigParts.join("||")}`;
-
-            if (!forceRebuild && gridEl._renderedGridSig === nextGridSig && gridEl.children.length > 0) {
-              // 所有页的卡片已同时挂载在 DOM 中，翻页或返回时仅切换当页 9 张的显示状态，零重建零重绘
-              Array.from(gridEl.children).forEach((child, absIdx) => {
-                if (sourceList.length === 0) {
-                  child.style.display = "";
-                  return;
-                }
-                const isVisibleOnPage = absIdx >= startIdx && absIdx < endIdx;
-                child.style.display = isVisibleOnPage ? "" : "none";
-                child.classList.toggle("is-sort-source", !isShared && colSortSourceIndex === absIdx);
-                const imgEl = child.querySelector("img[data-vault-ref]");
-                if (imgEl) {
-                  const ref = imgEl.getAttribute("data-vault-ref");
-                  const curSrc = imgEl.getAttribute("src") || "";
-                  if (ref && (!curSrc || curSrc.startsWith("vault://"))) {
-                    bindNaiVaultAwareImage(imgEl, ref);
-                  }
-                }
-              });
-            } else {
-              gridEl._renderedGridSig = nextGridSig;
-              const frag = document.createDocumentFragment();
-              if (sourceList.length === 0) {
-                const emptyCard = buildTraceCardElement(null, 0, 0, true);
-                if (!isShared) {
-                  emptyCard.addEventListener("click", () => {
-                    openCreateNewBookmarkEditView();
-                  });
-                }
-                frag.appendChild(emptyCard);
-              } else {
-                // 一次性将全部卡片挂载进画廊并预先渲染好图片，每页只展示当前页的 9 张
-                sourceList.forEach((item, absIdx) => {
-                  const slotIdx = absIdx % ITEMS_PER_PAGE;
-                  const itemImgs = getBookmarkImagesArray(item);
-                  const coverSrc = itemImgs.length === 0
-                    ? getTraceDefaultCoverUrl(absIdx >= 0 ? absIdx : slotIdx)
-                    : itemImgs[0];
-                  const cacheKey = `${isLex ? "lex" : "bm"}|${colScope}|${item && item.id ? item.id : absIdx}|${absIdx}|${slotIdx}|${(item && item.name) || ""}|${normalizeModelTagValue(item && item.modelTag)}|${coverSrc}`;
-
-                  let cardEl = traceCardElementCache.get(cacheKey);
-                  if (!cardEl) {
-                    cardEl = buildTraceCardElement(item, absIdx, slotIdx, false);
-                    cardEl.addEventListener("click", () => {
-                      const bIdx = typeof cardEl._boundAbsIdx === "number" ? cardEl._boundAbsIdx : absIdx;
-                      const bItem = cardEl._boundItem || item;
-                      if (colScope === "local" && colSortSourceIndex !== -1) {
-                        handleTraceIndexReorderClick(bIdx);
-                        return;
-                      }
-                      openBookmarkDetailView(bItem, bIdx);
-                    });
-                    traceCardElementCache.set(cacheKey, cardEl);
-                  } else {
-                    const imgEl = cardEl.querySelector("img");
-                    if (imgEl && (!imgEl.getAttribute("src") || imgEl.getAttribute("src").startsWith("vault://"))) {
-                      bindNaiVaultAwareImage(imgEl, coverSrc);
-                    }
-                  }
-                  cardEl._boundItem = item;
-                  cardEl._boundAbsIdx = absIdx;
-                  const isVisibleOnPage = absIdx >= startIdx && absIdx < endIdx;
-                  cardEl.style.display = isVisibleOnPage ? "" : "none";
-                  cardEl.classList.toggle("is-sort-source", colScope === "local" && colSortSourceIndex === absIdx);
-                  frag.appendChild(cardEl);
+            const frag = document.createDocumentFragment();
+            if (sourceList.length === 0) {
+              const emptyCard = buildTraceCardElement(null, 0, 0, true);
+              if (!isShared) {
+                emptyCard.addEventListener("click", () => {
+                  openCreateNewBookmarkEditView();
                 });
               }
-              gridEl.replaceChildren(frag);
+              frag.appendChild(emptyCard);
+            } else {
+              const pageSlice = sourceList.slice(startIdx, endIdx);
+              pageSlice.forEach((item, slotIdx) => {
+                const absIdx = startIdx + slotIdx;
+                const cardEl = buildTraceCardElement(item, absIdx, slotIdx, false);
+                cardEl.addEventListener("click", () => {
+                  if (colScope === "local" && colSortSourceIndex !== -1) {
+                    handleTraceIndexReorderClick(absIdx);
+                    return;
+                  }
+                  openBookmarkDetailView(item, absIdx);
+                });
+                frag.appendChild(cardEl);
+              });
             }
+            gridEl.replaceChildren(frag);
 
             if (footerEl) {
               footerEl.style.display = "flex";
@@ -45861,7 +46189,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colEditingCategory = colCategory;
             const st = loadPanelState();
             const genImg = document.getElementById("mod-nai-gen-result-img");
-            const curGenSrc = (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) ? genImg.src : "";
+            const vaultAttr = genImg ? (genImg.getAttribute("data-vault-ref") || "") : "";
+            const curGenSrc = (genImg && genImg.style.display !== "none" && (vaultAttr || (genImg.src && (genImg.src.startsWith("data:") || genImg.src.startsWith("blob:") || genImg.src.startsWith("http")))))
+              ? (vaultAttr || st.lastGeneratedImage || genImg.src)
+              : "";
             const defaultModelTag = st.model && String(st.model).includes("-5-") ? "V5" : "V4.5";
 
             colCurrentItem = {
@@ -46624,9 +46955,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (posInp) posInp.value = computeActivePositivePrompt() || st.pos1Text || "";
                 if (!isLex && negInp) negInp.value = st.negText || "";
                 const genImg = document.getElementById("mod-nai-gen-result-img");
-                if (genImg && genImg.style.display !== "none" && genImg.src && genImg.src.startsWith("data:")) {
-                  const termuxRef = await offloadSingleNaiImageToTermux(genImg.src);
-                  colEditImagesDraft = [termuxRef || genImg.src];
+                const vaultAttr = genImg ? (genImg.getAttribute("data-vault-ref") || "") : "";
+                if (genImg && genImg.style.display !== "none" && (vaultAttr || (genImg.src && (genImg.src.startsWith("data:") || genImg.src.startsWith("blob:") || genImg.src.startsWith("http"))))) {
+                  let imgRef = vaultAttr || st.lastGeneratedImage || genImg.src;
+                  if (imgRef && imgRef.startsWith("data:")) {
+                    const termuxRef = await offloadSingleNaiImageToTermux(imgRef);
+                    imgRef = termuxRef || imgRef;
+                  }
+                  colEditImagesDraft = [imgRef];
                   colEditImageDraft = colEditImagesDraft[0] || "";
                   renderEditSquarePreview(colEditImagesDraft);
                 }
@@ -46713,6 +47049,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     await deleteSharedBookmarkFromGitHub(itemId, editDeleteBtn);
                   }
                   const removedVaultRefs = getBookmarkImagesArray(colCurrentItem).filter((u) => typeof u === "string" && u.startsWith("vault://"));
+                  markNaiItemDeleted(itemId);
                   const list = loadLocalBookmarks().filter((x) => x && x.id !== itemId);
                   saveLocalBookmarks(list);
                   if (removedVaultRefs.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
@@ -46731,6 +47068,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (!ok) return;
                 }
                 const removedVaultRefs = getBookmarkImagesArray(colCurrentItem).filter((u) => typeof u === "string" && u.startsWith("vault://"));
+                markNaiItemDeleted(itemId);
                 const list = loadLocalBookmarks().filter((x) => x && x.id !== itemId);
                 saveLocalBookmarks(list);
                 if (removedVaultRefs.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
@@ -46744,6 +47082,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
           }
+
+          window.openModuleNaiCollectionFromHeader = function () {
+            bindModuleNaiPanelEvents();
+            const st = loadPanelState();
+            if (st.mode === "collection") {
+              st.mode = "generate";
+              savePanelState(st);
+              applyModeView("generate");
+            } else {
+              st.mode = "collection";
+              savePanelState(st);
+              switchCollectionSubView("grid");
+              applyModeView("collection");
+              renderCollectionGrid(true);
+            }
+          };
 
           window.openModuleNaiPanel = function (forceGenerateMode) {
             bindModuleNaiPanelEvents();
@@ -46791,13 +47145,33 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               inspectStatusEl.textContent = st.inspectStatusText;
             }
 
+            const genResultImg = document.getElementById("mod-nai-gen-result-img");
+            const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
+            const genStatusText = document.getElementById("mod-nai-gen-status-text");
+            if (genResultImg && st.lastGeneratedImage) {
+              const curRef = genResultImg.getAttribute("data-vault-ref") || genResultImg.getAttribute("src") || "";
+              if (!curRef || genResultImg.style.display === "none") {
+                if (st.lastGeneratedImage.startsWith("vault://")) {
+                  genResultImg.setAttribute("data-vault-ref", st.lastGeneratedImage);
+                } else {
+                  genResultImg.removeAttribute("data-vault-ref");
+                }
+                bindNaiVaultAwareImage(genResultImg, st.lastGeneratedImage);
+                genResultImg.style.display = "block";
+                if (genPlaceholder) genPlaceholder.style.display = "none";
+                if (genStatusText && st.lastGeneratedTitle) {
+                  genStatusText.textContent = st.lastGeneratedTitle;
+                }
+              }
+            }
+
             applyThemeToPanel(st.theme || "folio");
             prewarmNaiCollectionImages();
             if (st.mode === "collection") {
               switchCollectionSubView("grid");
             }
-            renderCollectionGrid();
             applyModeView(st.mode || "generate");
+            renderCollectionGrid();
             computeActiveArtistPrompt();
             computeActivePositivePrompt();
             renderPresetSelectOptions();
@@ -47047,19 +47421,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 } catch (_) {}
               }
 
-              // 若 Termux 上的 nai_collection_store.json 尚未建立或为空，尝试从 Termux backup.json 或浏览器旧残留中提取一次并迁移进 Termux
+              if (remoteStore && Array.isArray(remoteStore.deletedIds)) {
+                const delSet = getDeletedIdsSet();
+                let delAdded = false;
+                remoteStore.deletedIds.forEach((id) => {
+                  const s = String(id || "").trim();
+                  if (s && !delSet.has(s)) {
+                    delSet.add(s);
+                    delAdded = true;
+                  }
+                });
+                if (delAdded) {
+                  try {
+                    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(delSet)));
+                  } catch (_) {}
+                }
+              }
+
+              // 仅在 Termux 上的 nai_collection_store.json 完全不存在且首次加载时，才尝试从 backup.json 或旧残留中迁移一次
               let backupBookmarks = [];
               let backupLexicon = [];
               let backupPresets = null;
               let backupPanelState = null;
 
-              const hasRemoteItems = Boolean(
-                remoteStore &&
-                ((Array.isArray(remoteStore.bookmarks) && remoteStore.bookmarks.length > 0) ||
-                  (Array.isArray(remoteStore.lexicon) && remoteStore.lexicon.length > 0))
-              );
-
-              if (!hasRemoteItems) {
+              if (!remoteStore && !_termuxNaiStoreLoadedOnce) {
                 try {
                   const bRes = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
                   if (bRes && bRes.ok) {
@@ -47109,19 +47494,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               // 检查浏览器数据库或缓存里是否还有未迁移的旧残留条目
               let legacyGs = null;
-              if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+              if (!_termuxNaiStoreLoadedOnce && window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
                 try {
                   legacyGs = await window.db.globalSettings.get("main");
                 } catch (_) {}
               }
-              const legacyBm = mergeBookmarkListsById(
+              const legacyBm = !_termuxNaiStoreLoadedOnce ? mergeBookmarkListsById(
                 legacyGs && Array.isArray(legacyGs.naiBookmarksCollection) ? legacyGs.naiBookmarksCollection : [],
                 mergeBookmarkListsById(readListFromStorageKey(BOOKMARKS_STORE_KEY), readListFromStorageKey(BOOKMARKS_TEXT_BACKUP_KEY))
-              );
-              const legacyLex = mergeBookmarkListsById(
+              ) : [];
+              const legacyLex = !_termuxNaiStoreLoadedOnce ? mergeBookmarkListsById(
                 legacyGs && Array.isArray(legacyGs.naiLexiconCollection) ? legacyGs.naiLexiconCollection : [],
                 mergeBookmarkListsById(readListFromStorageKey(LEXICON_STORE_KEY), readListFromStorageKey(LEXICON_TEXT_BACKUP_KEY))
-              );
+              ) : [];
 
               let mergedBm = Array.isArray(remoteStore && remoteStore.bookmarks) ? remoteStore.bookmarks : [];
               mergedBm = mergeBookmarkListsById(mergedBm, backupBookmarks);
@@ -47129,6 +47514,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
                 mergedBm = mergeBookmarkListsById(memoryBookmarksList, mergedBm);
               }
+              mergedBm = filterOutDeletedItems(mergedBm);
 
               let mergedLex = Array.isArray(remoteStore && remoteStore.lexicon) ? remoteStore.lexicon : [];
               mergedLex = mergeBookmarkListsById(mergedLex, backupLexicon);
@@ -47136,6 +47522,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0) {
                 mergedLex = mergeBookmarkListsById(memoryLexiconList, mergedLex);
               }
+              mergedLex = filterOutDeletedItems(mergedLex);
 
               let changed = false;
               if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList)) {
@@ -47152,24 +47539,66 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const candPresets = (remoteStore && remoteStore.presets) || backupPresets || (legacyGs && legacyGs.naiPresetsStore);
               if (candPresets && typeof candPresets === "object") {
                 const curP = loadPresetsStore();
-                const hasCur = (curP.artist && curP.artist.length) || (curP.positive && curP.positive.length) || (curP.negative && curP.negative.length);
-                const hasCand = (Array.isArray(candPresets.artist) && candPresets.artist.length) ||
-                  (Array.isArray(candPresets.positive) && candPresets.positive.length) ||
-                  (Array.isArray(candPresets.negative) && candPresets.negative.length);
-                if (!hasCur && hasCand) {
-                  memoryPresetsStore = {
-                    artist: Array.isArray(candPresets.artist) ? candPresets.artist : [],
-                    positive: Array.isArray(candPresets.positive) ? candPresets.positive : [],
-                    negative: Array.isArray(candPresets.negative) ? candPresets.negative : []
-                  };
-                  changed = true;
-                }
+                const mergeCategoryPresets = (localArr, remoteArr) => {
+                  const map = new Map();
+                  (Array.isArray(remoteArr) ? remoteArr : []).forEach((it) => {
+                    if (it && it.name) map.set(it.name, Object.assign({}, it));
+                  });
+                  (Array.isArray(localArr) ? localArr : []).forEach((it) => {
+                    if (it && it.name) map.set(it.name, Object.assign(map.get(it.name) || {}, it));
+                  });
+                  return Array.from(map.values());
+                };
+                const mergeGroupNames = (localG, remoteG) => {
+                  return Array.from(new Set([...(Array.isArray(remoteG) ? remoteG : []), ...(Array.isArray(localG) ? localG : [])].map((x) => String(x || "").trim()).filter(Boolean)));
+                };
+                const candGroups = (candPresets.groups && typeof candPresets.groups === "object") ? candPresets.groups : {};
+                const curGroups = (curP.groups && typeof curP.groups === "object") ? curP.groups : {};
+                memoryPresetsStore = {
+                  artist: mergeCategoryPresets(curP.artist, candPresets.artist),
+                  positive: mergeCategoryPresets(curP.positive, candPresets.positive),
+                  negative: mergeCategoryPresets(curP.negative, candPresets.negative),
+                  groups: {
+                    artist: mergeGroupNames(curGroups.artist, candGroups.artist),
+                    positive: mergeGroupNames(curGroups.positive, candGroups.positive),
+                    negative: mergeGroupNames(curGroups.negative, candGroups.negative)
+                  }
+                };
+                try {
+                  localStorage.setItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+                } catch (_) {}
+                changed = true;
               }
 
               const candState = (remoteStore && remoteStore.panelState) || backupPanelState || (legacyGs && legacyGs.naiPanelState);
-              if (!memoryPanelState && candState && typeof candState === "object") {
-                memoryPanelState = Object.assign({}, loadPanelState(), candState);
-                changed = true;
+              if (candState && typeof candState === "object") {
+                const curSt = loadPanelState();
+                if (!curSt.lastGeneratedImage && candState.lastGeneratedImage) {
+                  curSt.lastGeneratedImage = candState.lastGeneratedImage;
+                  curSt.lastGeneratedTitle = candState.lastGeneratedTitle || "";
+                  memoryPanelState = curSt;
+                  try {
+                    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(curSt));
+                  } catch (_) {}
+                  const genResultImg = document.getElementById("mod-nai-gen-result-img");
+                  const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
+                  const genStatusText = document.getElementById("mod-nai-gen-status-text");
+                  if (genResultImg && (!genResultImg.getAttribute("src") || genResultImg.style.display === "none")) {
+                    if (curSt.lastGeneratedImage.startsWith("vault://")) {
+                      genResultImg.setAttribute("data-vault-ref", curSt.lastGeneratedImage);
+                    }
+                    bindNaiVaultAwareImage(genResultImg, curSt.lastGeneratedImage);
+                    genResultImg.style.display = "block";
+                    if (genPlaceholder) genPlaceholder.style.display = "none";
+                    if (genStatusText && curSt.lastGeneratedTitle) {
+                      genStatusText.textContent = curSt.lastGeneratedTitle;
+                    }
+                  }
+                }
+                if (!memoryPanelState) {
+                  memoryPanelState = Object.assign({}, curSt, candState);
+                  changed = true;
+                }
               }
 
               _termuxNaiStoreLoadedOnce = true;
@@ -47207,6 +47636,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             };
             collectFromList(memoryBookmarksList);
             collectFromList(memoryLexiconList);
+            const curSt = loadPanelState();
+            if (curSt && typeof curSt.lastGeneratedImage === "string" && curSt.lastGeneratedImage.includes("vault://")) {
+              refs.push(curSt.lastGeneratedImage);
+            }
             try {
               const baseUrl = getNaiTermuxBaseUrl();
               const res = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
@@ -47215,6 +47648,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (data && typeof data === "object") {
                   collectFromList(data.bookmarks);
                   collectFromList(data.lexicon);
+                  if (data.panelState && typeof data.panelState.lastGeneratedImage === "string" && data.panelState.lastGeneratedImage.includes("vault://")) {
+                    refs.push(data.panelState.lastGeneratedImage);
+                  }
                 }
               }
             } catch (_) {}
@@ -107543,12 +107979,6 @@ ${specificRules}`;
               triggerAiResponse();
             });
           }
-          chatInput.addEventListener("keypress", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              document.getElementById("send-btn").click();
-            }
-          });
           const syncActiveInputDraftNow = (immediate = false) => {
             if (state.activeChatId !== null && state.activeChatId !== undefined) {
               window.saveChatDraftRealtime(state.activeChatId, chatInput.value, immediate);

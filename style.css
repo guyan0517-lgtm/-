@@ -37948,6 +37948,7 @@ select,
   -webkit-text-stroke: 0.14px currentColor;
   line-height: 1.5;
   color: var(--trace-muted);
+  white-space: pre-wrap;
   word-break: break-word;
 }
 
@@ -38238,6 +38239,12 @@ select,
   white-space: pre-wrap;
   word-break: break-word;
   box-sizing: border-box !important;
+}
+
+#module-nai-panel .mod-nai-edit-textarea.mod-nai-edit-remark-textarea {
+  min-height: 64px !important;
+  max-height: 160px !important;
+  font-family: var(--trace-cn-font) !important;
 }
 
 #module-nai-panel .mod-nai-edit-bottom-bar {
@@ -38781,5 +38788,413 @@ select,
   flex-shrink: 0;
 }
 
+/* ============================================================
+   生图设置面板：手札 & 酒馆主题风格化 + 预设分组折叠抽屉 + 下拉分组折叠
+   ============================================================ */
+#mod-nai-settings-modal .modal-content {
+  max-height: 82vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  box-sizing: border-box;
+}
 
+#mod-nai-settings-modal.nai-theme-folio .modal-content,
+#mod-nai-settings-modal.nai-theme-tavern .modal-content {
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-text-light) 12%, var(--card-bg));
+  --nai-card-bg: color-mix(in srgb, var(--card-bg) 92%, var(--secondary-bg));
+  --nai-sub-bg: color-mix(in srgb, var(--secondary-bg) 52%, var(--card-bg));
+  --nai-border: color-mix(in srgb, var(--border-color) 85%, transparent);
+  --nai-border-strong: color-mix(in srgb, var(--text-primary) 34%, var(--border-color));
+  --nai-text: color-mix(in srgb, var(--text-primary) 88%, var(--text-secondary));
+  --nai-muted: color-mix(in srgb, var(--text-secondary) 88%, var(--text-primary));
+  --nai-seal: color-mix(in srgb, var(--accent-color) 76%, var(--text-primary));
+  background-color: var(--nai-panel-bg) !important;
+  color: var(--nai-text) !important;
+  border: 1px dashed var(--nai-border-strong) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--text-primary) 16%, transparent) !important;
+  font-family: "LXGW WenKai", "Noto Serif SC", "Songti SC", serif;
+  padding: 15px 16px !important;
+}
 
+#mod-nai-settings-modal .mod-nai-settings-anchor {
+  display: none;
+}
+
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-settings-anchor,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-settings-anchor {
+  display: block;
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--nai-text);
+  pointer-events: none;
+  z-index: 4;
+}
+
+#mod-nai-settings-modal .mod-nai-settings-anchor.tl { top: 4px; left: 4px; }
+#mod-nai-settings-modal .mod-nai-settings-anchor.tr { top: 4px; right: 4px; }
+#mod-nai-settings-modal .mod-nai-settings-anchor.bl { bottom: 4px; left: 4px; }
+#mod-nai-settings-modal .mod-nai-settings-anchor.br { bottom: 4px; right: 4px; }
+
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-settings-head,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-settings-head {
+  border-bottom: 1px dashed var(--nai-border-strong) !important;
+  padding-bottom: 9px !important;
+}
+
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-settings-title,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-settings-title {
+  font-family: "Cormorant Garamond", "Playfair Display", "Noto Serif SC", "Songti SC", serif;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1px;
+  color: var(--nai-text) !important;
+}
+
+#mod-nai-settings-modal .mod-nai-settings-kicker {
+  display: none;
+}
+
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-settings-kicker,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-settings-kicker {
+  display: inline-block;
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: var(--nai-muted);
+  margin-left: 6px;
+}
+
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-select,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-select {
+  border-radius: 999px !important;
+  border: 1px solid var(--nai-text) !important;
+  background-color: var(--card-bg) !important;
+  color: var(--nai-text) !important;
+  font-family: "Noto Serif SC", "Songti SC", serif !important;
+  font-weight: 600 !important;
+  padding: 0 24px 0 12px !important;
+}
+
+#mod-nai-settings-modal.nai-theme-folio #mod-nai-settings-done-btn,
+#mod-nai-settings-modal.nai-theme-tavern #mod-nai-settings-done-btn {
+  border-radius: 999px !important;
+  background-color: var(--nai-text) !important;
+  color: var(--nai-panel-bg) !important;
+  border: 1px solid var(--nai-text) !important;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  box-shadow: none !important;
+}
+
+/* 设置弹窗底部：画师 / 正面 / 负面 预设分组折叠抽屉 */
+#mod-nai-settings-modal .mod-nai-preset-drawers-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--nai-border-strong, var(--border-color));
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer {
+  border: 1px solid var(--nai-border, var(--border-color));
+  border-radius: 10px;
+  background-color: color-mix(in srgb, var(--card-bg) 88%, var(--secondary-bg));
+  overflow: hidden;
+  transition: border-color 0.16s ease;
+}
+
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-preset-drawer,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-preset-drawer {
+  border: 1px dashed var(--nai-border-strong);
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--card-bg) 84%, transparent);
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer.is-open {
+  border-style: solid;
+  border-color: var(--nai-text, var(--text-primary));
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-head {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: none;
+  background: transparent;
+  color: var(--nai-text, var(--text-primary));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-head-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-dot {
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  background-color: var(--nai-seal, var(--accent-color));
+  flex-shrink: 0;
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nai-text, var(--text-primary));
+  letter-spacing: 0.5px;
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-count {
+  font-size: 11px;
+  color: var(--nai-muted, var(--text-secondary));
+  font-weight: 500;
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-arrow {
+  width: 13px;
+  height: 13px;
+  color: var(--nai-muted, var(--text-secondary));
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer.is-open .mod-nai-preset-drawer-arrow {
+  transform: rotate(180deg);
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer-body {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px 10px;
+  border-top: 1px dashed var(--nai-border-strong, var(--border-color));
+  background-color: color-mix(in srgb, var(--secondary-bg) 35%, var(--card-bg));
+}
+
+#mod-nai-settings-modal .mod-nai-preset-drawer.is-open .mod-nai-preset-drawer-body {
+  display: flex;
+}
+
+#mod-nai-settings-modal .mod-nai-group-Quickbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#mod-nai-settings-modal .mod-nai-group-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 9px !important;
+  font-size: 11.5px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--nai-border-strong, var(--border-color)) !important;
+  background-color: var(--card-bg) !important;
+  color: var(--nai-text, var(--text-primary)) !important;
+  box-sizing: border-box !important;
+}
+
+#mod-nai-settings-modal .mod-nai-group-add-btn {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--nai-text, var(--text-primary));
+  background-color: var(--nai-text, var(--text-primary));
+  color: var(--card-bg);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#mod-nai-settings-modal .mod-nai-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+#mod-nai-settings-modal .mod-nai-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--nai-border-strong, var(--border-color));
+  background-color: var(--card-bg);
+  color: var(--nai-text, var(--text-primary));
+  font-size: 11px;
+  font-weight: 500;
+}
+
+#mod-nai-settings-modal .mod-nai-group-chip-del {
+  border: none;
+  background: transparent;
+  color: var(--nai-muted, var(--text-secondary));
+  padding: 0;
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#mod-nai-settings-modal .mod-nai-drawer-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 165px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+#mod-nai-settings-modal .mod-nai-drawer-preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--nai-border, var(--border-color));
+  min-width: 0;
+}
+
+#mod-nai-settings-modal .mod-nai-drawer-preset-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nai-text, var(--text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#mod-nai-settings-modal .mod-nai-drawer-group-select {
+  flex: 0 0 98px !important;
+  width: 98px !important;
+  min-width: 98px !important;
+  max-width: 98px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  line-height: 24px !important;
+  padding: 0 18px 0 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--nai-border-strong, var(--border-color)) !important;
+  background-color: var(--secondary-bg) !important;
+  color: var(--nai-text, var(--text-primary)) !important;
+  box-sizing: border-box !important;
+  vertical-align: middle !important;
+  cursor: pointer;
+}
+
+/* 生图面板预设下拉框：仿世界书折叠分组样式 */
+#module-nai-panel .mod-nai-preset-menu {
+  max-height: 220px;
+}
+
+#module-nai-panel .mod-nai-preset-group-wrap {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid color-mix(in srgb, var(--nai-border, var(--border-color)) 75%, transparent);
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--nai-sub-bg, var(--secondary-bg)) 38%, var(--card-bg));
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-preset-group-head {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: none;
+  background-color: color-mix(in srgb, var(--nai-sub-bg, var(--secondary-bg)) 68%, var(--card-bg));
+  color: var(--nai-text, var(--text-primary));
+  font-family: "Noto Serif SC", "Songti SC", inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  user-select: none;
+}
+
+#module-nai-panel .mod-nai-preset-group-head-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+#module-nai-panel .mod-nai-preset-group-arrow {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  color: var(--nai-muted, var(--text-secondary));
+  transition: transform 0.16s ease;
+}
+
+#module-nai-panel .mod-nai-preset-group-wrap.is-collapsed .mod-nai-preset-group-arrow {
+  transform: rotate(-90deg);
+}
+
+#module-nai-panel .mod-nai-preset-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#module-nai-panel .mod-nai-preset-group-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--nai-muted, var(--text-secondary));
+  background-color: var(--card-bg);
+  border: 1px solid var(--nai-border, var(--border-color));
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-preset-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  background-color: var(--card-bg);
+}
+
+#module-nai-panel .mod-nai-preset-group-wrap.is-collapsed .mod-nai-preset-group-body {
+  display: none;
+}

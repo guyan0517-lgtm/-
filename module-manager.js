@@ -1674,7 +1674,19 @@
       });
 
       if (settingsBtn) {
-        settingsBtn.style.color = panelName === 'workshop' ? 'var(--accent-color, #4A7A68)' : 'var(--text-primary)';
+        if (!settingsBtn._defaultGearHtml) {
+          settingsBtn._defaultGearHtml = settingsBtn.innerHTML;
+        }
+        const bookmarkSvg = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
+        if (panelName === 'nai') {
+          settingsBtn.innerHTML = bookmarkSvg;
+          settingsBtn.title = '收藏';
+          settingsBtn.style.color = 'var(--text-primary)';
+        } else {
+          settingsBtn.innerHTML = settingsBtn._defaultGearHtml;
+          settingsBtn.title = '设置';
+          settingsBtn.style.color = panelName === 'workshop' ? 'var(--accent-color, #4A7A68)' : 'var(--text-primary)';
+        }
       }
 
       if (panelName === 'library') {
@@ -13296,6 +13308,14 @@ ${chaptersDigest}
       const sectionSettingsBtn = document.getElementById('module-section-settings-btn');
       if (sectionSettingsBtn) {
         sectionSettingsBtn.addEventListener('click', () => {
+          const naiPanel = document.getElementById('module-nai-panel');
+          const isNaiActive = this.activeSubPanel === 'nai' || (naiPanel && naiPanel.style.display !== 'none');
+          if (isNaiActive) {
+            if (typeof window.openModuleNaiCollectionFromHeader === 'function') {
+              window.openModuleNaiCollectionFromHeader();
+            }
+            return;
+          }
           if (this.activeSubPanel === 'workshop') {
             this.switchSubPanel('library');
           } else {
