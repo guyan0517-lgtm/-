@@ -1,4 +1,4 @@
-const CACHE_NAME = "ephone-tuk-cache-v21.4";
+const CACHE_NAME = "ephone-tuk-cache-v23.0";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -61,8 +61,9 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith(".css");
 
   if (isCodeOrDoc) {
+    const fetchTarget = event.request.mode === "navigate" ? event.request.url : event.request;
     event.respondWith(
-      fetch(event.request, { cache: "no-cache" })
+      fetch(fetchTarget, { cache: "no-store" })
         .then(networkResponse => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
