@@ -38791,6 +38791,10 @@ select,
 /* ============================================================
    生图设置面板：手札 & 酒馆主题风格化 + 预设分组折叠抽屉 + 下拉分组折叠
    ============================================================ */
+#mod-nai-settings-modal {
+  z-index: 2200 !important;
+}
+
 #mod-nai-settings-modal .modal-content {
   max-height: 82vh;
   overflow-y: auto;
@@ -38798,6 +38802,10 @@ select,
   -webkit-overflow-scrolling: touch;
   position: relative;
   box-sizing: border-box;
+}
+
+#mod-nai-settings-modal .modal-content > * {
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal.nai-theme-folio .modal-content,
@@ -38900,6 +38908,7 @@ select,
   margin-top: 2px;
   padding-top: 10px;
   border-top: 1px dashed var(--nai-border-strong, var(--border-color));
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-preset-drawer {
@@ -38908,6 +38917,7 @@ select,
   background-color: color-mix(in srgb, var(--card-bg) 88%, var(--secondary-bg));
   overflow: hidden;
   transition: border-color 0.16s ease;
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal.nai-theme-folio .mod-nai-preset-drawer,
@@ -38920,6 +38930,7 @@ select,
 #mod-nai-settings-modal .mod-nai-preset-drawer.is-open {
   border-style: solid;
   border-color: var(--nai-text, var(--text-primary));
+  overflow: visible;
 }
 
 #mod-nai-settings-modal .mod-nai-preset-drawer-head {
@@ -38936,6 +38947,7 @@ select,
   cursor: pointer;
   box-sizing: border-box;
   text-align: left;
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-preset-drawer-head-left {
@@ -38986,6 +38998,7 @@ select,
   padding: 8px 10px 10px 10px;
   border-top: 1px dashed var(--nai-border-strong, var(--border-color));
   background-color: color-mix(in srgb, var(--secondary-bg) 35%, var(--card-bg));
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-preset-drawer.is-open .mod-nai-preset-drawer-body {
@@ -38996,6 +39009,7 @@ select,
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-group-input {
@@ -39032,6 +39046,7 @@ select,
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-group-chip {
@@ -39065,9 +39080,10 @@ select,
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-height: 165px;
+  max-height: 185px;
   overflow-y: auto;
   padding-right: 2px;
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-drawer-preset-row {
@@ -39080,6 +39096,7 @@ select,
   background-color: var(--card-bg);
   border: 1px solid var(--nai-border, var(--border-color));
   min-width: 0;
+  flex-shrink: 0;
 }
 
 #mod-nai-settings-modal .mod-nai-drawer-preset-name {
@@ -39163,6 +39180,10 @@ select,
   transition: transform 0.16s ease;
 }
 
+#module-nai-panel .mod-nai-preset-group-wrap.is-open .mod-nai-preset-group-arrow {
+  transform: rotate(90deg);
+}
+
 #module-nai-panel .mod-nai-preset-group-wrap.is-collapsed .mod-nai-preset-group-arrow {
   transform: rotate(-90deg);
 }
@@ -39175,7 +39196,8 @@ select,
   white-space: nowrap;
 }
 
-#module-nai-panel .mod-nai-preset-group-badge {
+#module-nai-panel .mod-nai-preset-group-badge,
+#module-nai-panel .mod-nai-preset-group-count {
   font-size: 10px;
   font-weight: 600;
   color: var(--nai-muted, var(--text-secondary));
@@ -39188,13 +39210,22 @@ select,
 }
 
 #module-nai-panel .mod-nai-preset-group-body {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 2px;
   padding: 3px;
   background-color: var(--card-bg);
 }
 
+#module-nai-panel .mod-nai-preset-group-wrap.is-open .mod-nai-preset-group-body {
+  display: flex;
+}
+
 #module-nai-panel .mod-nai-preset-group-wrap.is-collapsed .mod-nai-preset-group-body {
   display: none;
+}
+
+#module-nai-panel .mod-nai-specimen-img-box,
+#module-nai-panel .mod-nai-specimen-slide {
+  overflow-anchor: none;
 }
