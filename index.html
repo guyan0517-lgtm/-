@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -26765,6 +26765,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           });
           // 到这里加下面三行
           window.db = db;
+          window.initDatabase = initDatabase;
           console.log(`[System] 已加载用户 ${userId} 的数据库`);
         }
 
@@ -32765,11 +32766,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (resolvedUrl.startsWith("data:")) {
             if (typeof window.storeLocalFontFileInVault === "function") {
               try {
-                const vaultRef = await window.storeLocalFontFileInVault(resolvedUrl, (preset.name || "font") + ".ttf");
+                const oldDataUrl = resolvedUrl;
+                const vaultRef = await window.storeLocalFontFileInVault(oldDataUrl, (preset.name || "font") + ".ttf");
                 if (vaultRef && vaultRef.startsWith("vault://")) {
                   preset.url = vaultRef;
                   resolvedUrl = vaultRef;
                   if (db && db.fontPresets) await db.fontPresets.put(preset);
+                  if (state && state.globalSettings && state.globalSettings.fontUrl === oldDataUrl) {
+                    state.globalSettings.fontUrl = vaultRef;
+                    if (db && db.globalSettings) await db.globalSettings.put(state.globalSettings);
+                  }
                 }
               } catch (_) {}
             }
@@ -124710,18 +124716,20 @@ ${specificRules}`;
 
           let _isPurgingOpfs = false;
           async function purgeBrowserOpfsMediaCacheIfExternalActive() {
-            if (_isPurgingOpfs || !cachedTermuxOk) return;
-            if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") return;
+            if (_isPurgingOpfs || !cachedTermuxOk) return 0;
+            if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") return 0;
             _isPurgingOpfs = true;
+            let purgedCount = 0;
             try {
               const cfg = loadVaultConfig();
               const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              await ensureTermuxMediaListSynced(baseUrl);
               const root = await navigator.storage.getDirectory();
               let vaultDir = null;
               try {
                 vaultDir = await root.getDirectoryHandle("EPhoneVault", { create: false });
               } catch (_) {}
-              if (!vaultDir) return;
+              if (!vaultDir) return 0;
               const dirsToClean = [vaultDir];
               try {
                 const mDir = await vaultDir.getDirectoryHandle("media", { create: false });
@@ -124733,27 +124741,44 @@ ${specificRules}`;
                 for await (const [name, handle] of dHandle.entries()) {
                   if (handle && handle.kind === "file") entries.push({ name, handle });
                 }
-                for (const item of entries) {
-                  if (item.name === ".nomedia") {
-                    try { await dHandle.removeEntry(item.name); } catch (_) {}
-                    continue;
-                  }
-                  try {
-                    const f = await item.handle.getFile();
-                    const ab = await f.arrayBuffer();
-                    const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
-                    const stealth = toStealthVaultFileName(item.name);
-                    const ok = await uploadToTermuxWithRetry(baseUrl, stealth, wrapped);
-                    if (ok) {
-                      await dHandle.removeEntry(item.name);
-                    }
-                  } catch (_) {}
+                const BATCH = 6;
+                for (let i = 0; i < entries.length; i += BATCH) {
+                  const slice = entries.slice(i, i + BATCH);
+                  await Promise.all(
+                    slice.map(async (item) => {
+                      if (item.name === ".nomedia") {
+                        try { await dHandle.removeEntry(item.name); } catch (_) {}
+                        return;
+                      }
+                      try {
+                        const stealth = toStealthVaultFileName(item.name);
+                        const stem = item.name.replace(/\.[a-zA-Z0-9]+$/, "");
+                        let ok = existingDiskMediaStems.has(stem) || writtenVaultFiles.has(stealth);
+                        if (!ok) {
+                          const f = await item.handle.getFile();
+                          const ab = await f.arrayBuffer();
+                          const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                          ok = await uploadToTermuxWithRetry(baseUrl, stealth, wrapped);
+                          if (ok) addStemAllVariantsToWrittenSet(stem, stealth);
+                        }
+                        if (ok) {
+                          await dHandle.removeEntry(item.name);
+                          purgedCount++;
+                        }
+                      } catch (_) {}
+                    })
+                  );
                 }
               }
+              opfsHandleCache = null;
+              try {
+                await root.removeEntry("EPhoneVault", { recursive: true });
+              } catch (_) {}
             } catch (_) {
             } finally {
               _isPurgingOpfs = false;
             }
+            return purgedCount;
           }
 
           async function getEffectiveDirectoryHandle() {
@@ -124936,6 +124961,16 @@ ${specificRules}`;
               else if (mime.includes("ogg")) ext = "ogg";
               return { mime, b64, ext, prefix: "aud_" };
             }
+            const fontMatch = /^data:((?:font\/[a-zA-Z0-9.+-]+|application\/(?:x-font-[a-zA-Z0-9.+-]+|font-[a-zA-Z0-9.+-]+|vnd\.ms-fontobject|octet-stream)));base64,(.+)$/i.exec(dataUrl);
+            if (fontMatch && (propKey === "fontUrl" || propKey === "url" || fontMatch[1].toLowerCase() !== "application/octet-stream" || dataUrl.length > 32768)) {
+              const mime = fontMatch[1].toLowerCase();
+              const b64 = fontMatch[2];
+              let ext = "ttf";
+              if (mime.includes("otf") || mime.includes("opentype")) ext = "otf";
+              else if (mime.includes("woff2")) ext = "woff2";
+              else if (mime.includes("woff")) ext = "woff";
+              return { mime: "font/" + ext, b64, ext, prefix: "font_" };
+            }
             if (
               (propKey === "audioHex" || propKey === "quoteAudioHex" || propKey === "audioData" || propKey === "quoteAudioData") &&
               dataUrl.length >= 4096 &&
@@ -124988,7 +125023,21 @@ ${specificRules}`;
           let inflightTermuxPingPromise = null;
           let _builtInServerAvailable = null;
 
+          function isCapacitorApkEnvironment() {
+            if (typeof window === "undefined") return false;
+            if (window.Capacitor || window.androidBridge || window.cordova) return true;
+            const proto = (window.location && window.location.protocol) || "";
+            if (proto === "capacitor:" || proto === "file:") return true;
+            const host = (window.location && window.location.hostname ? window.location.hostname : "").toLowerCase();
+            const port = (window.location && window.location.port) || "";
+            if (host === "localhost" && (!port || port === "80" || port === "443") && proto === "https:") {
+              return true;
+            }
+            return false;
+          }
+
           function isStaticPagesHost() {
+            if (isCapacitorApkEnvironment()) return true;
             const host =
               typeof window !== "undefined" && window.location && window.location.hostname
                 ? window.location.hostname.toLowerCase()
@@ -125115,13 +125164,16 @@ ${specificRules}`;
                   urlInput.value = "http://127.0.0.1:8765";
                 }
                 const baseUrl = ((urlInput && urlInput.value.trim()) || cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                const [termuxOk, serverVault, handle, opfsHandle] = await Promise.all([
+                const [termuxOk, serverVault] = await Promise.all([
                   checkTermuxEndpointReachable(baseUrl, !silent),
                   checkBuiltInVaultServer(),
-                  getEffectiveDirectoryHandle(),
-                  getAutoOpfsDirectoryHandle(),
                 ]);
-                const activeHandle = handle || opfsHandle;
+                let activeHandle = null;
+                if (!termuxOk) {
+                  activeHandle = (await getEffectiveDirectoryHandle()) || (await getAutoOpfsDirectoryHandle());
+                } else {
+                  purgeBrowserOpfsMediaCacheIfExternalActive().catch(() => {});
+                }
                 if (termuxOk || (serverVault && serverVault.ok) || activeHandle) {
                   const folderName = (activeHandle && activeHandle.name) || "EPhoneVault";
                   const folderDisp = document.getElementById("local-vault-folder-display");
@@ -126228,6 +126280,14 @@ ${specificRules}`;
             if (val.length < 4096) return false;
             if (val.startsWith("data:audio/")) return true;
             if (
+              val.startsWith("data:font/") ||
+              val.startsWith("data:application/font") ||
+              val.startsWith("data:application/x-font") ||
+              ((propKey === "fontUrl" || propKey === "url") && val.startsWith("data:application/octet-stream;base64,"))
+            ) {
+              return true;
+            }
+            if (
               (propKey === "audioHex" || propKey === "quoteAudioHex" || propKey === "audioData" || propKey === "quoteAudioData") &&
               /^[0-9a-fA-F\s]+$/.test(val)
             ) {
@@ -126368,6 +126428,11 @@ ${specificRules}`;
             return str;
           }
 
+          function hasEmbeddedDataUrlInText(val) {
+            if (typeof val !== "string" || val.length < 1024 || val.startsWith("data:")) return false;
+            return val.includes("data:image/") || val.includes("data:audio/") || val.includes("data:font/") || val.includes("data:application/font") || val.includes("data:application/x-font");
+          }
+
           function collectImageTasksFromObject(obj, tasks, visited = new WeakSet()) {
             if (!obj || typeof obj !== "object" || visited.has(obj)) return;
             visited.add(obj);
@@ -126375,7 +126440,9 @@ ${specificRules}`;
               for (let i = 0; i < obj.length; i++) {
                 const val = obj[i];
                 if (isOffloadableStringValue(val, "")) {
-                  tasks.push({ holder: obj, key: i, val, propKey: "" });
+                  tasks.push({ holder: obj, key: i, val, propKey: "", isEmbedded: false });
+                } else if (hasEmbeddedDataUrlInText(val)) {
+                  tasks.push({ holder: obj, key: i, val, propKey: "", isEmbedded: true });
                 } else if (val && typeof val === "object") {
                   collectImageTasksFromObject(val, tasks, visited);
                 }
@@ -126385,7 +126452,9 @@ ${specificRules}`;
             for (const key of Object.keys(obj)) {
               const val = obj[key];
               if (isOffloadableStringValue(val, key)) {
-                tasks.push({ holder: obj, key, val, propKey: key });
+                tasks.push({ holder: obj, key, val, propKey: key, isEmbedded: false });
+              } else if (hasEmbeddedDataUrlInText(val)) {
+                tasks.push({ holder: obj, key, val, propKey: key, isEmbedded: true });
               } else if (val && typeof val === "object") {
                 collectImageTasksFromObject(val, tasks, visited);
               }
@@ -126399,12 +126468,43 @@ ${specificRules}`;
             collectImageTasksFromObject(obj, tasks);
             if (tasks.length === 0) return restored;
             let modified = restored;
+            const embeddedDataUrlRegex = /data:(?:image\/[a-zA-Z0-9.+-]+|audio\/[a-zA-Z0-9.+-]+);base64,[A-Za-z0-9+/=]{512,}/g;
             const BATCH_SIZE = 6;
             for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
               const slice = tasks.slice(i, i + BATCH_SIZE);
               await Promise.all(
                 slice.map(async (t) => {
                   try {
+                    if (t.isEmbedded) {
+                      const matches = t.val.match(embeddedDataUrlRegex);
+                      if (!matches || matches.length === 0) return;
+                      let replacedStr = t.val;
+                      let anyEmbChanged = false;
+                      const uniqueMatches = Array.from(new Set(matches));
+                      for (const mUrl of uniqueMatches) {
+                        if (mUrl.startsWith("data:image/gif;base64,R0lGODlhAQAB")) continue;
+                        const parts = parseDataUrlToParts(mUrl, "");
+                        if (!parts) continue;
+                        const prefix = parts.prefix || "img_";
+                        const fileName = prefix + hashDataUrl(mUrl) + "." + parts.ext;
+                        const stealthKey = toStealthVaultFileName(fileName);
+                        const nextRef = await storeImageInVault(fileName, parts, cfg, sharedMediaDir, skipBlobCache);
+                        if (nextRef && nextRef !== mUrl) {
+                          replacedStr = replacedStr.split(mUrl).join(nextRef);
+                          anyEmbChanged = true;
+                          if (!counter.uniqueFiles.has(stealthKey)) {
+                            counter.uniqueFiles.add(stealthKey);
+                            counter.savedBytes += mUrl.length;
+                          }
+                          counter.count = counter.uniqueFiles.size;
+                        }
+                      }
+                      if (anyEmbChanged && replacedStr !== t.val) {
+                        t.holder[t.key] = replacedStr;
+                        modified = true;
+                      }
+                      return;
+                    }
                     const parts = parseDataUrlToParts(t.val, t.propKey || "");
                     if (!parts) return;
                     const prefix = parts.prefix || "img_";
@@ -126513,13 +126613,40 @@ ${specificRules}`;
                 }
               } catch (_) {}
 
+              // 同步分离酒馆独立数据库 EPhoneTavernDB 中的内联图片与背景
+              if (
+                typeof window.getTavernStateForFullBackup === "function" &&
+                typeof window.restoreTavernStateFromFullBackup === "function"
+              ) {
+                try {
+                  const tvState = await window.getTavernStateForFullBackup();
+                  if (tvState && typeof tvState === "object") {
+                    const tvChanged = await offloadObjectImagesDeep(tvState, cfg, counter, sharedMediaDir, true);
+                    if (tvChanged) {
+                      await window.restoreTavernStateFromFullBackup(tvState);
+                    }
+                  }
+                } catch (_) {}
+              }
+
               await purgeBrowserOpfsMediaCacheIfExternalActive();
+              await compactAndRewriteLocalDatabaseShell("正在清理重写底层数据库残留空壳...");
               releaseUnusedBrowserBlobCache();
               const mbSaved = (counter.savedBytes / (1024 * 1024)).toFixed(1);
-              setVaultInfoText("已全量分离 " + counter.count + " 项图片与音频资源，释放约 " + mbSaved + " MB 浏览器内存");
+              setVaultInfoText("已全量分离 " + counter.count + " 项图片与音频并重写底层数据库，释放约 " + mbSaved + " MB 空间");
               hydrateDomVaultImages();
+              if (typeof calculateAndRenderStorageBreakdown === "function") {
+                try { await calculateAndRenderStorageBreakdown(); } catch (_) {}
+              }
               if (typeof window.showCustomAlert === "function") {
-                window.showCustomAlert("提示", "全表分离完成，共极速转移 " + counter.count + " 项图片、表情包、壁纸与语音数据，释放约 " + mbSaved + " MB 浏览器内存");
+                window.showCustomAlert(
+                  "提示",
+                  "全表分离与底层数据库重写完成，共转移 " +
+                    counter.count +
+                    " 项图片、表情包、壁纸与语音数据，并已彻底清空底层数据库翻倍残留空壳，释放约 " +
+                    mbSaved +
+                    " MB 存储空间"
+                );
               }
             } catch (err) {
               setVaultInfoText("分离中断: " + (err && err.message ? err.message : "未知错误"));
@@ -127397,6 +127524,7 @@ ${specificRules}`;
               "userStickers",
               "charStickers",
               "globalSettings",
+              "fontPresets",
               "thoughtChainPresets",
               "qzoneSettings",
               "qzonePosts",
@@ -127404,7 +127532,10 @@ ${specificRules}`;
               "favorites",
               "customAvatarFrames",
               "themes",
+              "bubbleStylePresets",
               "homeScreenPresets",
+              "modules",
+              "moduleImages",
             ];
             for (const tName of tablesToSync) {
               const table = db[tName];
@@ -127420,6 +127551,8 @@ ${specificRules}`;
                 }
               } catch (_) {}
             }
+            await purgeBrowserOpfsMediaCacheIfExternalActive();
+            await compactAndRewriteLocalDatabaseShell();
           };
 
           async function runVaultRestore() {
@@ -128136,6 +128269,140 @@ ${specificRules}`;
             return true;
           };
 
+          let _isCompactingDbShell = false;
+          async function compactAndRewriteLocalDatabaseShell(progressText = "") {
+            if (_isCompactingDbShell) return false;
+            const isBusyGen = Boolean(
+              (window.activeGeneratingChats && Object.keys(window.activeGeneratingChats).length > 0) ||
+              (window.activeGeneratingKeeperDraw && Object.keys(window.activeGeneratingKeeperDraw).length > 0)
+            );
+            if (isBusyGen) return false;
+            _isCompactingDbShell = true;
+            try {
+              if (progressText) setVaultInfoText(progressText);
+              // 1. 清理模组拆解临时草稿库 TRPG_Module_Cutter_Cache_v2 与废旧 CacheStorage
+              try {
+                if (window.indexedDB && typeof window.indexedDB.deleteDatabase === "function") {
+                  window.indexedDB.deleteDatabase("TRPG_Module_Cutter_Cache_v2");
+                }
+              } catch (_) {}
+              try {
+                if (window.caches && typeof window.caches.keys === "function") {
+                  const cKeys = await window.caches.keys();
+                  for (const ck of cKeys) {
+                    await window.caches.delete(ck).catch(() => {});
+                  }
+                }
+              } catch (_) {}
+
+              // 2. 清理已拆解完成的冗余模组原始大文件副本 moduleRawFiles（章节正文已保存在 moduleChapters 中）
+              try {
+                if (typeof db !== "undefined" && db && db.moduleRawFiles && db.moduleChapters) {
+                  const chCount = await db.moduleChapters.count();
+                  if (chCount > 0) {
+                    await db.moduleRawFiles.clear();
+                  } else {
+                    await db.moduleRawFiles.delete("__module_cutter_draft__").catch(() => {});
+                  }
+                }
+              } catch (_) {}
+
+              // 3. 物理重写酒馆独立数据库 EPhoneTavernDB，消除其底层 LevelDB 历史膨胀碎片
+              if (
+                typeof window.getTavernStateForFullBackup === "function" &&
+                typeof window.restoreTavernStateFromFullBackup === "function" &&
+                window.indexedDB
+              ) {
+                try {
+                  const tvSnap = await window.getTavernStateForFullBackup();
+                  if (tvSnap && typeof tvSnap === "object") {
+                    restoreVaultRefsInObjectDeep(tvSnap);
+                    await new Promise((resolve) => {
+                      let done = false;
+                      const finish = () => {
+                        if (!done) {
+                          done = true;
+                          resolve();
+                        }
+                      };
+                      const timer = setTimeout(finish, 1500);
+                      try {
+                        const delReq = window.indexedDB.deleteDatabase("EPhoneTavernDB");
+                        delReq.onsuccess = () => { clearTimeout(timer); finish(); };
+                        delReq.onerror = () => { clearTimeout(timer); finish(); };
+                        delReq.onblocked = () => { clearTimeout(timer); finish(); };
+                      } catch (_) {
+                        clearTimeout(timer);
+                        finish();
+                      }
+                    });
+                    await window.restoreTavernStateFromFullBackup(tvSnap);
+                  }
+                } catch (_) {}
+              }
+
+              // 4. 物理删库并原地重建主数据库 GeminiChatDB，彻底抹除网页与安卓软件底层残留的数百兆 LevelDB 旧副本与空壳文件
+              if (typeof db !== "undefined" && db && Array.isArray(db.tables) && typeof Dexie !== "undefined") {
+                const tableDump = new Map();
+                for (const table of db.tables) {
+                  if (!table || !table.name) continue;
+                  const rows = await table.toArray();
+                  for (let i = 0; i < rows.length; i++) {
+                    if (rows[i] && typeof rows[i] === "object") {
+                      restoreVaultRefsInObjectDeep(rows[i]);
+                    }
+                  }
+                  tableDump.set(table.name, rows);
+                }
+                if (!tableDump.has("chats")) {
+                  return false;
+                }
+                try {
+                  db.close();
+                } catch (_) {}
+                await Promise.race([
+                  Dexie.delete("GeminiChatDB").catch(() => {}),
+                  new Promise((r) => setTimeout(r, 2500)),
+                ]);
+                if (typeof window.initDatabase === "function") {
+                  window.initDatabase("default_user");
+                }
+                if (!db.isOpen()) {
+                  await db.open();
+                }
+                _suspendVaultAutoOffload = true;
+                try {
+                  for (const [tName, rows] of tableDump.entries()) {
+                    const targetTable = db[tName] || (typeof db.table === "function" ? db.table(tName) : null);
+                    if (targetTable && Array.isArray(rows) && rows.length > 0) {
+                      await targetTable.bulkPut(rows);
+                    }
+                  }
+                } finally {
+                  _suspendVaultAutoOffload = false;
+                }
+                db._allTablesVaultHooked = false;
+                hookDatabaseAutoOffload();
+                hydrateDomVaultImages();
+                return true;
+              }
+            } catch (err) {
+              console.warn("底层数据库重写异常:", err);
+              try {
+                if (typeof window.initDatabase === "function" && (typeof db === "undefined" || !db.isOpen())) {
+                  window.initDatabase("default_user");
+                  await db.open();
+                  db._allTablesVaultHooked = false;
+                  hookDatabaseAutoOffload();
+                }
+              } catch (_) {}
+            } finally {
+              _isCompactingDbShell = false;
+            }
+            return false;
+          }
+          window.compactAndRewriteLocalDatabaseShell = compactAndRewriteLocalDatabaseShell;
+
           async function runVaultCleanupOrphanMedia() {
             setVaultInfoText("正在全表扫描被引用的图片与本地残留文件...");
             try {
@@ -128268,14 +128535,18 @@ ${specificRules}`;
 
               if (orphanFiles.length === 0 && orphanDbCount === 0) {
                 await purgeBrowserOpfsMediaCacheIfExternalActive();
+                await compactAndRewriteLocalDatabaseShell("正在清理重写底层数据库残留空壳...");
                 const releasedRamBlobs = releaseUnusedBrowserBlobCache();
+                if (typeof calculateAndRenderStorageBreakdown === "function") {
+                  try { await calculateAndRenderStorageBreakdown(); } catch (_) {}
+                }
                 setVaultInfoText(
-                  "清理扫描完成 · 已释放浏览器缓存句柄 " + releasedRamBlobs + " 项，本地无残留废图"
+                  "清理与底层数据库重写完成 · 已释放缓存句柄 " + releasedRamBlobs + " 项，本地无残留废图"
                 );
                 if (typeof window.showCustomAlert === "function") {
                   window.showCustomAlert(
                     "提示",
-                    "扫描完成，当前所有本地图片均在正常使用中，没有发现残留废图，并已为您顺手清理释放了浏览器运行内存中的临时图片缓存"
+                    "扫描完成，当前所有本地图片均在正常使用中，没有发现残留废图，并已为您彻底重写清理了底层数据库翻倍残留空壳与运行内存缓存"
                   );
                 }
                 return;
@@ -128309,9 +128580,10 @@ ${specificRules}`;
                 }
               }
               await purgeBrowserOpfsMediaCacheIfExternalActive();
+              await compactAndRewriteLocalDatabaseShell("正在清理重写底层数据库残留空壳...");
               releaseUnusedBrowserBlobCache();
 
-              setVaultInfoText(`已完成清理 · 共清除 ${orphanFiles.length} 张残留废图，释放约 ${mbStr} MB 空间与浏览器运行缓存`);
+              setVaultInfoText(`已完成清理与底层数据库重写 · 共清除 ${orphanFiles.length} 张残留废图，释放约 ${mbStr} MB 空间`);
               if (typeof calculateAndRenderStorageBreakdown === "function") {
                 try { await calculateAndRenderStorageBreakdown(); } catch (_) {}
               }
