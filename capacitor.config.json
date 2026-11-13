@@ -1,6 +1,6 @@
 {
   "appId": "com.ephone.companion.app",
-  "appName": "四半世紀",
+  "appName": "EPhone",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {

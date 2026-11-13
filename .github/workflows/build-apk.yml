@@ -55,34 +55,11 @@ jobs:
             npx cap sync android
           fi
 
-      - name: Configure Android App Name, Icon, Fullscreen & Cleartext Permissions
+      - name: Configure Android Fullscreen & Cleartext Permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             sed -i 's/<application/<application android:usesCleartextTraffic="true" android:largeHeap="true"/g' "$MANIFEST" || true
-          fi
-          STRINGS="android/app/src/main/res/values/strings.xml"
-          if [ -f "$STRINGS" ]; then
-            sed -i 's|<string name="app_name">.*</string>|<string name="app_name">四半世紀</string>|g' "$STRINGS" || true
-            sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">四半世紀</string>|g' "$STRINGS" || true
-          fi
-          rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          ICON_HI="icon-512.png"
-          if [ ! -f "$ICON_HI" ]; then ICON_HI="icon.png"; fi
-          ICON_STD="icon-192.png"
-          if [ ! -f "$ICON_STD" ]; then ICON_STD="$ICON_HI"; fi
-          if [ -f "$ICON_HI" ]; then
-            for dir in android/app/src/main/res/mipmap-*; do
-              if [ -d "$dir" ]; then
-                case "$dir" in
-                  *xxhdpi*|*xxxhdpi*) SRC_IMG="$ICON_HI" ;;
-                  *) SRC_IMG="$ICON_STD" ;;
-                esac
-                cp -f "$SRC_IMG" "$dir/ic_launcher.png"
-                cp -f "$SRC_IMG" "$dir/ic_launcher_round.png"
-                cp -f "$SRC_IMG" "$dir/ic_launcher_foreground.png"
-              fi
-            done
           fi
           STYLES="android/app/src/main/res/values/styles.xml"
           if [ -f "$STYLES" ]; then

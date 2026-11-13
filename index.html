@@ -46,13 +46,13 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Dancing+Script:wght@500;600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link rel="stylesheet" href="style.css?v=23.1" />
+    <link rel="stylesheet" href="style.css" />
     <script src="/node_modules/dexie/dist/dexie.js"></script>
     <script>if (typeof Dexie === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/dexie/dist/dexie.js"><\/script>'); }</script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <script src="https://phoebeboo.github.io/mewoooo/pp.js" defer></script>
-    <script src="main-app.js?v=23.1" defer></script>
+    <script src="main-app.js" defer></script>
     <script src="game-hall.js?v=21.4" defer></script>
     <script src="forum.js" defer></script>
     <script src="lovers-space.js" defer></script>
@@ -61,7 +61,7 @@
     <script src="date.js" defer></script>
     <script src="persona-creator.js" defer></script>
     <script src="studio.js" defer></script>
-    <script src="sw.js?v=23.1" defer></script>
+    <script src="sw.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/darkreader@4.9.84/darkreader.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v22.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -44157,22 +44157,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const list = Array.isArray(store[cat]) ? store[cat] : [];
               const groups = (store.groups && Array.isArray(store.groups[cat])) ? store.groups[cat] : [];
               const countEl = document.getElementById(`mod-nai-drawer-count-${cat}`);
-              const bodyEl = document.getElementById(`mod-nai-drawer-body-${cat}`);
+              let listContainer = document.getElementById(`mod-nai-drawer-list-${cat}`);
               if (countEl) {
                 countEl.textContent = String(list.length);
               }
-              if (bodyEl && !bodyEl.querySelector(".mod-nai-group-Quickbar")) {
-                const qb = document.createElement("div");
-                qb.className = "mod-nai-group-Quickbar";
-                qb.innerHTML = `<input id="mod-nai-group-input-${cat}" type="text" class="moe-input" placeholder="新建分组名称..." autocomplete="off" /><button id="mod-nai-group-add-${cat}" type="button" class="moe-btn">新建分组</button>`;
-                bodyEl.insertBefore(qb, bodyEl.firstChild);
-              }
-              let listContainer = document.getElementById(`mod-nai-drawer-list-${cat}`);
-              if (!listContainer && bodyEl) {
-                listContainer = document.createElement("div");
-                listContainer.className = "mod-nai-drawer-preset-list";
-                listContainer.id = `mod-nai-drawer-list-${cat}`;
-                bodyEl.appendChild(listContainer);
+              if (!listContainer) {
+                const bodyEl = document.getElementById(`mod-nai-drawer-body-${cat}`);
+                if (bodyEl) {
+                  listContainer = document.createElement("div");
+                  listContainer.className = "mod-nai-drawer-preset-list";
+                  listContainer.id = `mod-nai-drawer-list-${cat}`;
+                  bodyEl.appendChild(listContainer);
+                }
               }
               if (!listContainer) return;
               listContainer.innerHTML = "";
@@ -45058,9 +45054,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (!drawer) return;
                   const body = drawer.querySelector(".mod-nai-preset-drawer-body");
                   const willOpen = !drawer.classList.contains("is-open");
-                  if (willOpen) {
-                    renderSettingsPresetDrawers();
-                  }
                   drawer.classList.toggle("is-open", willOpen);
                   if (body) body.style.display = willOpen ? "flex" : "none";
                 });
@@ -46197,7 +46190,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (negEl) negEl.textContent = (item && item.negative && item.negative.trim()) ? item.negative : "— 暂无负面提示词 —";
 
             if (stageEl) {
-              stageEl._userHasSwiped = false;
               stageEl.innerHTML = "";
               applyHeroFrameOrientation(heroFrame, "auto");
               const itemImgs = getBookmarkImagesArray(item);
@@ -46222,15 +46214,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (ratio < 0.88) orient = "portrait";
                   else if (ratio > 1.14) orient = "landscape";
                   slide.dataset.orient = orient;
-                  if (!stageEl._userHasSwiped) {
-                    if (stageEl.scrollLeft !== 0) {
-                      stageEl.scrollLeft = 0;
-                    }
-                    if (sIdx === 0) {
-                      applyHeroFrameOrientation(heroFrame, orient);
-                    }
-                    return;
-                  }
                   const curSlideIdx = stageEl.clientWidth > 0
                     ? Math.round(stageEl.scrollLeft / stageEl.clientWidth)
                     : 0;
@@ -46246,28 +46229,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
 
               stageEl.scrollLeft = 0;
-              requestAnimationFrame(() => {
-                if (!stageEl._userHasSwiped) {
-                  stageEl.scrollLeft = 0;
-                }
-              });
 
               if (!stageEl._hasSwipeListener) {
                 stageEl._hasSwipeListener = true;
-                const markUserSwipe = () => {
-                  stageEl._userHasSwiped = true;
-                };
-                stageEl.addEventListener("touchstart", markUserSwipe, { passive: true });
-                stageEl.addEventListener("pointerdown", markUserSwipe, { passive: true });
-                stageEl.addEventListener("mousedown", markUserSwipe, { passive: true });
-                stageEl.addEventListener("wheel", markUserSwipe, { passive: true });
                 stageEl.addEventListener("scroll", () => {
-                  if (!stageEl._userHasSwiped) {
-                    if (stageEl.scrollLeft !== 0) {
-                      stageEl.scrollLeft = 0;
-                    }
-                    return;
-                  }
                   const slides = stageEl.querySelectorAll(".mod-nai-specimen-slide");
                   if (!slides.length || !stageEl.clientWidth) return;
                   const activeIdx = Math.max(
@@ -46313,8 +46278,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             // 词典模式下默认展开正面词条，收藏模式下默认收起抽屉
             setSpecimenDrawerOpen(isLex);
-            switchCollectionSubView("detail");
             renderSpecimenDetailCard(item, colCurrentIndex);
+            switchCollectionSubView("detail");
 
             const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
             if (isShared && item.id && !item._detailLoaded && typeof ModuleManager !== "undefined" && typeof ModuleManager.fetchWorkshopGithubJson === "function") {
@@ -46778,11 +46743,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               openBtn.addEventListener("click", () => {
                 colCategory = "bookmark";
                 colScope = "local";
-                colLocalPage = 1;
-                colSharedPage = 1;
-                colLexiconLocalPage = 1;
-                colLexiconSharedPage = 1;
-                colSavedGridScrollTop = 0;
                 colSortSourceIndex = -1;
                 setColStatus("");
                 switchCollectionSubView("grid");
@@ -46802,9 +46762,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (tabLocalBtn) {
               tabLocalBtn.addEventListener("click", () => {
                 if (colScope !== "local") {
-                  colLocalPage = 1;
-                  colLexiconLocalPage = 1;
-                  colSavedGridScrollTop = 0;
                   switchScopeTo("local");
                 } else {
                   if (colActiveSubView === "edit") {
@@ -46816,11 +46773,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   colEditingCategory = "";
                   clearEditFormDomInputs();
                   colCategory = isLexiconCategory() ? "bookmark" : "lexicon";
-                  colLocalPage = 1;
-                  colSharedPage = 1;
-                  colLexiconLocalPage = 1;
-                  colLexiconSharedPage = 1;
-                  colSavedGridScrollTop = 0;
                   colSortSourceIndex = -1;
                   setColStatus("");
                   switchCollectionSubView("grid");
@@ -47257,11 +47209,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               savePanelState(st);
               applyModeView("generate");
             } else {
-              colLocalPage = 1;
-              colSharedPage = 1;
-              colLexiconLocalPage = 1;
-              colLexiconSharedPage = 1;
-              colSavedGridScrollTop = 0;
               st.mode = "collection";
               savePanelState(st);
               switchCollectionSubView("grid");
@@ -105717,7 +105664,7 @@ ${specificRules}`;
           // ▼▼▼▼▼▼▼▼▼▼▼▼ 修改：注册真正的 sw.js 文件 ▼▼▼▼▼▼▼▼▼▼▼▼
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=23.1")
+              .register("sw.js")
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
