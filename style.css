@@ -39228,3 +39228,122 @@ select,
 #module-nai-panel .mod-nai-specimen-slide {
   overflow-anchor: none;
 }
+
+#module-nai-panel .mod-nai-lex-vert-seal {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+#module-nai-panel .mod-nai-lex-vert-seal:active {
+  transform: scale(0.95);
+}
+
+#mod-nai-settings-modal .mod-nai-drawer-rename-btn {
+  flex: 0 0 auto;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--nai-border-strong, var(--border-color));
+  background-color: var(--secondary-bg);
+  color: var(--nai-text, var(--text-primary));
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+#mod-nai-settings-modal .mod-nai-settings-io-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--nai-border-strong, var(--border-color));
+  flex-shrink: 0;
+}
+
+#mod-nai-settings-modal .mod-nai-settings-io-btn {
+  flex: 1;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nai-border-strong, var(--border-color));
+  background-color: var(--card-bg);
+  color: var(--nai-text, var(--text-primary));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-sizing: border-box;
+}
+
+#module-nai-panel .mod-nai-folder-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 2px;
+  box-sizing: border-box;
+}
+
+#module-nai-panel .mod-nai-folder-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--card-bg);
+  cursor: pointer;
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+#module-nai-panel .mod-nai-folder-check-input {
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+#module-nai-panel .mod-nai-folder-check-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#module-nai-panel .mod-nai-folder-check-tag {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background-color: var(--secondary-bg);
+}
+

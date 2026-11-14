@@ -43,12 +43,12 @@ const COC7_RULEBOOK_COMMAND_DOCS = [
     vars: "{角色名}、{技能}、{结果}、{技能数值}、{成功等级}",
     desc: `技能与属性检定（Skill and Characteristic Rolls）：
 进行检定时，调查员投掷1D100并将结果与该技能或属性的当前数值进行比对，以确定行动是否成功以及成功的等级：
-【大成功（Critical Success）】：掷出01点。无论难度如何，必然成功，且往往带来额外的绝佳收益；
+【大成功（Critical Success）】：掷出0至5点。无论难度如何，必然成功，且往往带来额外的绝佳收益；
 【极难成功（Extreme Success）】：掷出的点数小于或等于目标技能数值的五分之一（技能值/5向下取整）。达成超乎寻常的卓越成果；
 【困难成功（Hard Success）】：掷出的点数小于或等于目标技能数值的二分之一（技能值/2向下取整）。在更严苛的挑战中依然达成目标；
 【常规成功（Regular Success）】：掷出的点数小于或等于目标技能数值（但大于二分之一值）。完成预期行动；
 【失败（Failure）】：掷出的点数大于目标技能数值（且未达到大失败范围）。行动未达预期；
-【大失败（Fumble）】：当技能数值低于50时，掷出96至100点均为大失败；当技能数值达到或超过50时，仅掷出100点为大失败。必然失败并可能招致灾难性的副作用。
+【大失败（Fumble）】：掷出95至100点均为大失败。必然失败并可能招致灾难性的副作用。
 奖励骰与惩罚骰（Bonus and Penalty Dice）：
 当情况对调查员极为有利或极其不利时使用。除常规掷出个位骰与十位骰外，额外投掷一个或多个十位数骰子。奖励骰在所有十位骰中选取最小值与个位结合；惩罚骰在所有十位骰中选取最大值与个位结合。`
   },
@@ -71,7 +71,7 @@ const COC7_RULEBOOK_COMMAND_DOCS = [
 调查员掷1D100，将其与当前理智值（Sanity Point，简称SAN）对比：
 - 掷骰结果小于或等于当前理智值：检定成功。调查员保持心理镇定，仅扣除斜杠前方的成功损失数值（通常为0或较少数值）；
 - 掷骰结果大于当前理智值：检定失败。调查员受到精神创伤，扣除斜杠后方的失败损失数值（例如1D6、1D10等骰子点数）；
-- 掷出01为大成功，承受该情景所允许的最低损失；掷出100（或96-100）为大失败，直接承受最大可能损失；
+- 掷出0至5为大成功，承受该情景所允许的最低损失；掷出95至100为大失败，直接承受最大可能损失；
 - 数据回写：理智损失立即从人物卡理智值中扣除，并实时保存至角色面板。若单次理智损失达到5点或以上，可能立即诱发短期临时疯狂。`
   },
   {
@@ -1578,10 +1578,10 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
           }
           let level = "失败";
           let rank = 0;
-          if (roll === 1) {
+          if (roll >= 0 && roll <= 5) {
             level = "大成功";
             rank = 4;
-          } else if (roll === 100 || (val >= 50 && roll >= 96)) {
+          } else if (roll >= 95 && roll <= 100) {
             level = "大失败";
             rank = -1;
           } else if (roll <= Math.floor(val / 5)) {
@@ -1897,9 +1897,9 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
         }
 
         let level = "失败";
-        if (finalRoll === 1) {
+        if (finalRoll >= 0 && finalRoll <= 5) {
           level = "大成功";
-        } else if (finalRoll === 100 || (skillVal >= 50 && finalRoll >= 96)) {
+        } else if (finalRoll >= 95 && finalRoll <= 100) {
           level = "大失败";
         } else if (finalRoll <= Math.floor(skillVal / 5)) {
           level = "极难成功";
@@ -2161,10 +2161,24 @@ window.executeDiceCommand = function(rawContent, chat, diceInfo, senderInfo) {
           : (userCoc.stats?.pow || 50);
 
         const rollVal = Math.floor(Math.random() * 100) + 1;
-        let isSuccess = rollVal <= currentSan;
-        let level = isSuccess ? (rollVal <= Math.floor(currentSan / 5) ? "极难成功" : (rollVal <= Math.floor(currentSan / 2) ? "困难成功" : "常规成功")) : "失败";
-        if (rollVal === 1) level = "大成功";
-        if (rollVal === 100 || (currentSan >= 50 && rollVal >= 96)) level = "大失败";
+        let isSuccess = false;
+        let level = "失败";
+        if (rollVal >= 0 && rollVal <= 5) {
+          level = "大成功";
+          isSuccess = true;
+        } else if (rollVal >= 95 && rollVal <= 100) {
+          level = "大失败";
+          isSuccess = false;
+        } else if (rollVal <= Math.floor(currentSan / 5)) {
+          level = "极难成功";
+          isSuccess = true;
+        } else if (rollVal <= Math.floor(currentSan / 2)) {
+          level = "困难成功";
+          isSuccess = true;
+        } else if (rollVal <= currentSan) {
+          level = "常规成功";
+          isSuccess = true;
+        }
 
         const lossExpr = isSuccess ? succExpr : failExpr;
         const lossResult = rollDiceExpression(lossExpr);

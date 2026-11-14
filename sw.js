@@ -1,199 +1,105 @@
-const CACHE_NAME = "ephone-tuk-cache-v23.3";
-const ASSETS_TO_CACHE = [
-  "./",
-  "./index.html",
-  "./style.css",
-  "./manifest.json",
-  "./icon.png",
-  "./icon-192.png",
-  "./icon-512.png",
-  "./apple-touch-icon.png",
-  "./icon.svg",
-  "./mashu-avatar.webp",
-  "./main-app.js",
-  "./peer-manager.js"
-];
+// Service Worker v23.6 - Push Notifications only (no navigation/fetch interception)
+const CACHE_NAME = "ephone-tuk-cache-v23.6";
 
-self.addEventListener("install", event => {
-  self.skipWaiting();
-  caches.open(CACHE_NAME).then(cache => {
-    cache.addAll(ASSETS_TO_CACHE).catch(err => {
-      console.warn("Pre-cache warning: " + err);
-    });
+if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.skipWaiting === "function") {
+  self.addEventListener("install", event => {
+    self.skipWaiting();
   });
-});
 
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cache => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
+  self.addEventListener("activate", event => {
+    event.waitUntil(
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cache => caches.delete(cache))
+        );
+      }).then(() => self.clients.claim())
+    );
+  });
+
+  self.addEventListener("notificationclick", event => {
+    const notifData = (event.notification && event.notification.data) || {};
+    event.notification.close();
+
+    event.waitUntil(
+      self.clients
+        .matchAll({
+          type: "window",
+          includeUncontrolled: true
         })
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") return;
-
-  const url = new URL(event.request.url);
-  if (!url.protocol.startsWith("http")) return;
-  if (url.origin !== self.location.origin) return;
-  if (
-    url.pathname.startsWith("/api") ||
-    url.pathname.startsWith("/media") ||
-    url.pathname === "/ping" ||
-    url.hostname.includes("socket") ||
-    url.hostname.includes("hmr")
-  ) {
-    return;
-  }
-
-  const isCodeOrDoc =
-    event.request.mode === "navigate" ||
-    url.pathname === "/" ||
-    url.pathname.endsWith(".html") ||
-    url.pathname.endsWith(".js") ||
-    url.pathname.endsWith(".css");
-
-  if (isCodeOrDoc) {
-    event.respondWith(
-      fetch(event.request.url, { cache: "no-cache" })
-        .then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(err => {
-          return caches.match(event.request).then(cached => {
-            if (cached) return cached;
-            if (event.request.mode === "navigate") {
-              return caches.match("./index.html");
+        .then(clientList => {
+          for (let i = 0; i < clientList.length; i++) {
+            const client = clientList[i];
+            if (client && typeof client.postMessage === "function") {
+              client.postMessage({
+                type: "PEER_NOTIFICATION_CLICK",
+                chatId: notifData.chatId || "",
+                openRequests: !!notifData.openRequests
+              });
             }
-            return Promise.reject(err);
-          });
+            if ("focus" in client) {
+              return client.focus();
+            }
+          }
+
+          if (self.clients.openWindow) {
+            return self.clients.openWindow("/");
+          }
         })
     );
-    return;
-  }
+  });
 
-  event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      if (cachedResponse) {
-        fetch(event.request).then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
-          }
+  self.addEventListener("message", event => {
+    const data = event.data;
+    if (!data || (data.type !== "SHOW_PEER_NOTIFICATION" && data.type !== "SHOW_AI_NOTIFICATION")) return;
+    const title = data.title || "新消息";
+    const tag = data.tag || ("peer_notif_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6));
+    const notifData = {
+      chatId: data.chatId || "",
+      openRequests: !!notifData.openRequests
+    };
+    const options = {
+      body: data.body || "",
+      icon: data.icon || "./icon-192.png",
+      badge: "./icon-192.png",
+      tag: tag,
+      renotify: true,
+      silent: false,
+      vibrate: [200, 100, 200],
+      data: notifData
+    };
+    event.waitUntil(
+      self.registration.showNotification(title, options).catch(() => {
+        return self.registration.showNotification(title, {
+          body: data.body || "",
+          icon: data.icon || "./icon-192.png",
+          tag: tag,
+          data: notifData
         }).catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then(networkResponse => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== "basic") {
-          return networkResponse;
-        }
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseToCache);
-        });
-        return networkResponse;
-      });
-    })
-  );
-});
-
-self.addEventListener("notificationclick", event => {
-  const notifData = (event.notification && event.notification.data) || {};
-  event.notification.close();
-
-  event.waitUntil(
-    self.clients
-      .matchAll({
-        type: "window",
-        includeUncontrolled: true
       })
-      .then(clientList => {
-        for (let i = 0; i < clientList.length; i++) {
-          const client = clientList[i];
-          if (client && typeof client.postMessage === "function") {
-            client.postMessage({
-              type: "PEER_NOTIFICATION_CLICK",
-              chatId: notifData.chatId || "",
-              openRequests: !!notifData.openRequests
-            });
-          }
-          if ("focus" in client) {
-            return client.focus();
-          }
-        }
+    );
+  });
 
-        if (self.clients.openWindow) {
-          return self.clients.openWindow("/");
-        }
-      })
-  );
-});
+  self.addEventListener("push", event => {
+    if (!event.data) return;
 
-self.addEventListener("message", event => {
-  const data = event.data;
-  if (!data || (data.type !== "SHOW_PEER_NOTIFICATION" && data.type !== "SHOW_AI_NOTIFICATION")) return;
-  const title = data.title || "新消息";
-  const tag = data.tag || ("peer_notif_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6));
-  const notifData = {
-    chatId: data.chatId || "",
-    openRequests: !!data.openRequests
-  };
-  const options = {
-    body: data.body || "",
-    icon: data.icon || "./icon-192.png",
-    badge: "./icon-192.png",
-    tag: tag,
-    renotify: true,
-    silent: false,
-    vibrate: [200, 100, 200],
-    data: notifData
-  };
-  event.waitUntil(
-    self.registration.showNotification(title, options).catch(() => {
-      return self.registration.showNotification(title, {
-        body: data.body || "",
-        icon: data.icon || "./icon-192.png",
-        tag: tag,
-        data: notifData
-      }).catch(() => {});
-    })
-  );
-});
+    let data = {};
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: "新消息", body: event.data.text() };
+    }
 
-self.addEventListener("push", event => {
-  if (!event.data) return;
+    const title = data.title || "四半世紀";
+    const options = {
+      body: data.body,
+      icon: "icon.png",
+      badge: "icon.png",
+      renotify: true,
+      silent: false,
+      vibrate: [200, 100, 200],
+      data: data.data || {}
+    };
 
-  let data = {};
-  try {
-    data = event.data.json();
-  } catch (e) {
-    data = { title: "新消息", body: event.data.text() };
-  }
-
-  const title = data.title || "四半世紀";
-  const options = {
-    body: data.body,
-    icon: "icon.png",
-    badge: "icon.png",
-    renotify: true,
-    silent: false,
-    vibrate: [200, 100, 200],
-    data: data.data || {}
-  };
-
-  event.waitUntil(self.registration.showNotification(title, options));
-});
+    event.waitUntil(self.registration.showNotification(title, options));
+  });
+}

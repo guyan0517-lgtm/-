@@ -985,6 +985,9 @@ code, pre {
             ];
           } else {
             tavernState.presets.forEach(p => {
+              if (p && typeof p === 'object' && 'raw' in p) {
+                delete p.raw;
+              }
               if (p.openai_max_context === undefined) p.openai_max_context = p.contextSize || 64000;
               if (p.openai_max_tokens === undefined || Number(p.openai_max_tokens) < 4096) {
                 p.openai_max_tokens = Math.max(8192, Number(p.maxTokens || p.openai_max_tokens || 8192));
@@ -24729,6 +24732,8 @@ function buildFallbackCodeFromItem(drinkObj) {
           }
           continue;
         }
+        if (node.style && node.style.display === 'none') continue;
+        if (node.hasAttribute && node.hasAttribute('hidden')) continue;
         const cs = window.getComputedStyle(node);
         if (cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0.05) {
           const closeBtn = node.querySelector('.be-close, .be-modal-close, .close-btn, .modal-close, [data-action="close"], button[title*="关闭"], button[aria-label*="Close"]');
