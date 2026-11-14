@@ -39005,14 +39005,16 @@ select,
   display: flex !important;
 }
 
-#mod-nai-settings-modal .mod-nai-group-Quickbar {
+#mod-nai-settings-modal .mod-nai-group-Quickbar,
+#module-nai-panel .mod-nai-group-Quickbar {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
 
-#mod-nai-settings-modal .mod-nai-group-input {
+#mod-nai-settings-modal .mod-nai-group-input,
+#module-nai-panel .mod-nai-group-input {
   flex: 1;
   min-width: 0;
   height: 28px !important;
@@ -39026,7 +39028,8 @@ select,
   box-sizing: border-box !important;
 }
 
-#mod-nai-settings-modal .mod-nai-group-add-btn {
+#mod-nai-settings-modal .mod-nai-group-add-btn,
+#module-nai-panel .mod-nai-group-add-btn {
   height: 28px;
   padding: 0 11px;
   border-radius: 999px;
@@ -39042,13 +39045,15 @@ select,
   justify-content: center;
 }
 
-#mod-nai-settings-modal .mod-nai-group-chips {
+#mod-nai-settings-modal .mod-nai-group-chips,
+#module-nai-panel .mod-nai-group-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
 
-#mod-nai-settings-modal .mod-nai-group-chip {
+#mod-nai-settings-modal .mod-nai-group-chip,
+#module-nai-panel .mod-nai-group-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -39062,20 +39067,25 @@ select,
   font-weight: 500;
 }
 
-#mod-nai-settings-modal .mod-nai-group-chip-del {
+#mod-nai-settings-modal .mod-nai-group-chip-del,
+#module-nai-panel .mod-nai-group-chip-del,
+#mod-nai-settings-modal .mod-nai-drawer-group-del-btn,
+#module-nai-panel .mod-nai-drawer-group-del-btn {
   border: none;
   background: transparent;
   color: var(--nai-muted, var(--text-secondary));
   padding: 0;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-#mod-nai-settings-modal .mod-nai-drawer-preset-list {
+#mod-nai-settings-modal .mod-nai-drawer-preset-list,
+#module-nai-panel .mod-nai-drawer-preset-list {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -39085,7 +39095,8 @@ select,
   flex-shrink: 0;
 }
 
-#mod-nai-settings-modal .mod-nai-drawer-preset-row {
+#mod-nai-settings-modal .mod-nai-drawer-preset-row,
+#module-nai-panel .mod-nai-drawer-preset-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -39098,7 +39109,8 @@ select,
   flex-shrink: 0;
 }
 
-#mod-nai-settings-modal .mod-nai-drawer-preset-name {
+#mod-nai-settings-modal .mod-nai-drawer-preset-name,
+#module-nai-panel .mod-nai-drawer-preset-name {
   flex: 1;
   min-width: 0;
   font-size: 11.5px;
@@ -39109,7 +39121,8 @@ select,
   white-space: nowrap;
 }
 
-#mod-nai-settings-modal .mod-nai-drawer-group-select {
+#mod-nai-settings-modal .mod-nai-drawer-group-select,
+#module-nai-panel .mod-nai-drawer-group-select {
   flex: 0 0 98px !important;
   width: 98px !important;
   min-width: 98px !important;
@@ -39239,7 +39252,8 @@ select,
   transform: scale(0.95);
 }
 
-#mod-nai-settings-modal .mod-nai-drawer-rename-btn {
+#mod-nai-settings-modal .mod-nai-drawer-rename-btn,
+#module-nai-panel .mod-nai-drawer-rename-btn {
   flex: 0 0 auto;
   height: 26px;
   min-height: 26px;

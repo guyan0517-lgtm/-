@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4110,7 +4110,8 @@
                       </div>
                       <div style="display: flex; align-items: center; gap: 6px;">
                         <select id="mod-nai-col-edit-folder-select" class="moe-input mod-nai-select" style="flex: 1; min-width: 0; height: 32px; line-height: 20px; padding: 0 22px 0 10px; font-size: 12px; box-sizing: border-box;"></select>
-                        <input type="text" id="mod-nai-col-edit-folder-input" class="moe-input mod-nai-edit-input" placeholder="或输入新分组" style="flex: 1; min-width: 0; height: 32px; font-size: 12px;" />
+                        <input type="text" id="mod-nai-col-edit-folder-input" class="moe-input mod-nai-group-input" placeholder="新建分组名称" autocomplete="off" style="flex: 1; min-width: 0;" />
+                        <button type="button" class="mod-nai-group-add-btn" id="mod-nai-col-edit-folder-add-btn">新建</button>
                       </div>
                     </div>
 
@@ -4156,7 +4157,7 @@
                   </div>
                 </div>
 
-                <!-- 视图四：词典文件夹分组新建与编辑模式 -->
+                <!-- 视图四：词典文件夹分组管理页（完全复用预设分组样式） -->
                 <div id="mod-nai-col-folder-edit-page" class="mod-nai-trace-subpage" style="display: none; flex-direction: column; gap: 12px;">
                   <div class="mod-nai-trace-bar">
                     <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-folder-edit-back-btn">
@@ -4176,21 +4177,26 @@
 
                   <div class="mod-nai-edit-clean-card">
                     <div class="mod-nai-edit-top-row">
-                      <div class="mod-nai-edit-cover-box" id="mod-nai-folder-edit-img-stage" title="点击上传分组封面"></div>
+                      <div class="mod-nai-edit-cover-box" id="mod-nai-folder-edit-img-stage" title="点击上传当前所选分组封面"></div>
                       <div class="mod-nai-edit-title-col">
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
-                          <label class="mod-nai-edit-field-label">分组</label>
+                          <label class="mod-nai-edit-field-label">封面</label>
                         </div>
-                        <input type="text" id="mod-nai-folder-edit-name-input" class="moe-input mod-nai-edit-input" placeholder="输入分组名称" />
-                        <span class="mod-nai-edit-hint">点击左侧方框可上传封面，不改则默认用分组内第一张图</span>
+                        <select id="mod-nai-folder-edit-target-select" class="moe-input mod-nai-select" style="width: 100%; height: 32px; line-height: 20px; padding: 0 22px 0 10px; font-size: 12px; box-sizing: border-box;"></select>
+                        <span class="mod-nai-edit-hint">选择分组后可点击左侧方框换封面，不换则默认取组内首图</span>
                       </div>
                     </div>
 
-                    <div class="mod-nai-edit-group">
+                    <div class="mod-nai-edit-group" style="gap: 8px;">
                       <div class="mod-nai-edit-group-head">
-                        <label class="mod-nai-edit-field-label">词条</label>
+                        <label class="mod-nai-edit-field-label">分组</label>
                       </div>
-                      <div id="mod-nai-folder-edit-items-list" class="mod-nai-folder-check-list"></div>
+                      <div class="mod-nai-group-Quickbar">
+                        <input type="text" id="mod-nai-folder-edit-name-input" class="moe-input mod-nai-group-input" placeholder="新建分组名称" autocomplete="off" />
+                        <button type="button" class="mod-nai-group-add-btn" id="mod-nai-folder-quick-add-btn">新建</button>
+                      </div>
+                      <div id="mod-nai-folder-tags-bar" style="display: flex; flex-wrap: wrap; gap: 5px; padding-bottom: 4px; border-bottom: 1px dashed var(--border-color);"></div>
+                      <div id="mod-nai-folder-edit-items-list" class="mod-nai-drawer-preset-list" style="max-height: 260px;"></div>
                     </div>
 
                     <div class="mod-nai-edit-bottom-bar">
@@ -4254,8 +4260,16 @@
                   <option value="default">初始</option>
                 </select>
               </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地址</label>
+                <input type="text" id="mod-nai-setting-api-url" class="moe-input" placeholder="留空默认跟随系统，可填生图网址" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">密钥</label>
+                <input type="password" id="mod-nai-setting-api-key" class="moe-input" placeholder="留空默认使用系统设置密钥" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
+              </div>
 
-              <!-- 底部三个两字预设分组折叠卡头：画师 / 正面 / 负面 -->
+              <!-- 底部预设与词典分组折叠卡头：画师 / 正面 / 负面 / 词典 -->
               <div class="mod-nai-preset-drawers-wrap" id="mod-nai-settings-preset-drawers">
                 <!-- 1. 画师预设分组抽屉 -->
                 <div class="mod-nai-preset-drawer" data-preset-cat="artist" id="mod-nai-drawer-artist">
@@ -4311,6 +4325,25 @@
                       <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-negative">新建</button>
                     </div>
                     <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-negative"></div>
+                  </div>
+                </div>
+
+                <!-- 4. 词典分组抽屉 -->
+                <div class="mod-nai-preset-drawer" data-preset-cat="lexicon" id="mod-nai-drawer-lexicon">
+                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="lexicon">
+                    <span class="mod-nai-preset-drawer-head-left">
+                      <i class="mod-nai-preset-drawer-dot"></i>
+                      <span class="mod-nai-preset-drawer-title">词典</span>
+                    </span>
+                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-lexicon">0</span>
+                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-lexicon">
+                    <div class="mod-nai-group-Quickbar">
+                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-lexicon" placeholder="新建分组名称" autocomplete="off" />
+                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-lexicon">新建</button>
+                    </div>
+                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-lexicon"></div>
                   </div>
                 </div>
               </div>
@@ -43276,18 +43309,71 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
         }
 
+        function extractCleanNaiConfig(rawUrlInput, rawKeyInput) {
+          let urlText = String(rawUrlInput || "").trim();
+          let keyText = String(rawKeyInput || "").trim();
+          const combined = urlText + " " + keyText;
+          if (!keyText || keyText.includes("curl ")) {
+            const mKey = combined.match(/\b(pst-[A-Za-z0-9_-]{16,})\b/);
+            if (mKey && mKey[1]) {
+              keyText = mKey[1];
+            }
+          }
+          if (keyText.toLowerCase().startsWith("bearer ")) {
+            keyText = keyText.slice(7).trim();
+          }
+          if (urlText.includes("curl ") || urlText.includes("http")) {
+            const mUrl = urlText.match(/https?:\/\/[^\s"'\\]+/i);
+            if (mUrl && mUrl[0]) {
+              urlText = mUrl[0];
+            }
+          }
+          urlText = urlText
+            .replace(/\/+$/, "")
+            .replace(/\/ai\/generate-image-stream$/i, "")
+            .replace(/\/ai\/generate-image$/i, "")
+            .replace(/\/ai$/i, "")
+            .replace(/\/+$/, "");
+          return { cleanBaseUrl: urlText, cleanApiKey: keyText };
+        }
+
         async function callNovelAiDirect(prompt, options = {}) {
+          const isIsolatedModule = Boolean(options && options.isolatedModuleNai);
           const domKey = document.getElementById("novelai-api-key") ? document.getElementById("novelai-api-key").value.trim() : "";
           const localKey = localStorage.getItem("novelai-api-key") || "";
-          const apiKey = domKey || localKey;
+          const systemKey = domKey || localKey;
 
-          const isIsolatedModule = Boolean(options && options.isolatedModuleNai);
+          let modCustomUrl = options && typeof options.customApiUrl === "string" ? options.customApiUrl.trim() : "";
+          let modCustomKey = options && typeof options.customApiKey === "string" ? options.customApiKey.trim() : "";
+          if (isIsolatedModule) {
+            const domModUrl = document.getElementById("mod-nai-setting-api-url") ? document.getElementById("mod-nai-setting-api-url").value.trim() : "";
+            const domModKey = document.getElementById("mod-nai-setting-api-key") ? document.getElementById("mod-nai-setting-api-key").value.trim() : "";
+            if (!modCustomUrl && domModUrl) modCustomUrl = domModUrl;
+            if (!modCustomKey && domModKey) modCustomKey = domModKey;
+            if (!modCustomUrl || !modCustomKey) {
+              try {
+                const rawSt = localStorage.getItem("mod_nai_panel_state_v1");
+                if (rawSt) {
+                  const parsedSt = JSON.parse(rawSt);
+                  if (parsedSt && typeof parsedSt === "object") {
+                    if (!modCustomUrl && parsedSt.customApiUrl) modCustomUrl = String(parsedSt.customApiUrl).trim();
+                    if (!modCustomKey && parsedSt.customApiKey) modCustomKey = String(parsedSt.customApiKey).trim();
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+
+          const extracted = extractCleanNaiConfig(modCustomUrl, modCustomKey);
+          const apiKey = extracted.cleanApiKey || systemKey;
+          const customBaseUrl = extracted.cleanBaseUrl;
+
           const model = isIsolatedModule
             ? (options.model || "nai-diffusion-4-5-full")
             : resolveNovelAIModel(options.model);
 
           if (!apiKey) {
-            throw new Error("请先在设置中配置 NovelAI API Key");
+            throw new Error("请先在生图设置或系统设置中填写密钥");
           }
           if (!prompt || !prompt.trim()) {
             throw new Error("提示词为空");
@@ -43388,9 +43474,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             };
           }
 
-          const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-            ? "https://image.novelai.net/ai/generate-image-stream"
-            : "https://image.novelai.net/ai/generate-image";
+          const baseHost = customBaseUrl || "https://image.novelai.net";
+          const isCustomHost = Boolean(customBaseUrl && !customBaseUrl.includes("novelai.net"));
+          const primaryEndpoint = isCustomHost
+            ? `${baseHost}/ai/generate-image`
+            : ((model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
+                ? `${baseHost}/ai/generate-image-stream`
+                : `${baseHost}/ai/generate-image`);
+          const fallbackEndpoint = isCustomHost
+            ? `${baseHost}/ai/generate-image-stream`
+            : `${baseHost}/ai/generate-image`;
           const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
           const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
@@ -43398,15 +43491,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             "Content-Type": "application/json",
             Authorization: "Bearer " + apiKey,
           };
+          if (isCustomHost) {
+            headers["X-API-Key"] = apiKey;
+          }
           if (isChrome) {
             const cleanHeaders = {};
             for (const [k, v] of Object.entries(headers)) {
-              cleanHeaders[k] = v.replace(/[^\x00-\xFF]/g, "");
+              cleanHeaders[k] = String(v || "").replace(/[^\x00-\xFF]/g, "");
             }
             headers = cleanHeaders;
           }
 
-          const response = await fetchNovelAiWithFallback(targetApiUrl, corsProxy, headers, requestBody);
+          let response = null;
+          try {
+            response = await fetchNovelAiWithFallback(primaryEndpoint, corsProxy, headers, requestBody);
+          } catch (primaryErr) {
+            if (fallbackEndpoint && fallbackEndpoint !== primaryEndpoint) {
+              response = await fetchNovelAiWithFallback(fallbackEndpoint, corsProxy, headers, requestBody);
+            } else {
+              throw primaryErr;
+            }
+          }
           const imageDataUrl = await parseNovelAiResponseToDataUrl(response);
 
           if (!imageDataUrl) {
@@ -43534,6 +43639,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             predecodedImageCache.clear();
           }
 
+          const NAI_TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
           function bindNaiVaultAwareImage(imgEl, rawSrcUrl, fallbackCoverIdx) {
             if (!imgEl) return;
             const srcStr = String(rawSrcUrl || "").trim();
@@ -43543,38 +43650,105 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             imgEl.loading = "eager";
             imgEl.decoding = "sync";
+
+            if (!imgEl._hasNaiVaultErrorRecovery) {
+              imgEl._hasNaiVaultErrorRecovery = true;
+              imgEl.addEventListener("error", () => {
+                const vRef = imgEl._naiTargetVaultRef || imgEl.getAttribute("data-vault-ref") || "";
+                if (!vRef || !vRef.startsWith("vault://")) return;
+                const retryNum = (imgEl._naiErrRetryCount || 0) + 1;
+                if (retryNum > 4) return;
+                imgEl._naiErrRetryCount = retryNum;
+                if (typeof window.evictVaultBlobCacheByRef === "function") {
+                  try { window.evictVaultBlobCacheByRef(vRef); } catch (_) {}
+                }
+                imgEl.setAttribute("data-vault-ref", vRef);
+                imgEl.setAttribute("data-vault-pending", "1");
+                setTimeout(() => {
+                  if (typeof window.resolveVaultRefToUrl === "function") {
+                    window.resolveVaultRefToUrl(vRef).then((resolved) => {
+                      if (resolved && resolved !== vRef && !resolved.startsWith("vault://")) {
+                        predecodeResolvedUrl(resolved);
+                        imgEl.removeAttribute("data-vault-pending");
+                        imgEl.setAttribute("data-vault-ref", vRef);
+                        imgEl.setAttribute("data-vault-hydrated-src", resolved);
+                        imgEl.src = resolved;
+                      }
+                    }).catch(() => {});
+                  }
+                }, 300 * retryNum);
+              });
+            }
+
             if (srcStr.startsWith("vault://")) {
+              imgEl._naiTargetVaultRef = srcStr;
+              imgEl._naiErrRetryCount = 0;
               imgEl.setAttribute("data-vault-ref", srcStr);
               const fastCached = typeof window.getCachedVaultBlobUrl === "function"
                 ? window.getCachedVaultBlobUrl(srcStr)
                 : null;
               if (fastCached) {
                 predecodeResolvedUrl(fastCached);
+                imgEl.removeAttribute("data-vault-pending");
                 imgEl.setAttribute("data-vault-hydrated-src", fastCached);
                 imgEl.src = fastCached;
                 return;
               }
-              if (typeof window.resolveVaultRefToUrl === "function") {
+              imgEl.setAttribute("data-vault-pending", "1");
+              if (!imgEl.getAttribute("src") || imgEl.getAttribute("src").startsWith("vault://")) {
+                imgEl.src = NAI_TRANSPARENT_PIXEL;
+              }
+              const tryResolveWithRetries = (attempt) => {
+                if (imgEl._naiTargetVaultRef !== srcStr) return;
+                const cachedNow = typeof window.getCachedVaultBlobUrl === "function"
+                  ? window.getCachedVaultBlobUrl(srcStr)
+                  : null;
+                if (cachedNow) {
+                  predecodeResolvedUrl(cachedNow);
+                  imgEl.removeAttribute("data-vault-pending");
+                  imgEl.setAttribute("data-vault-ref", srcStr);
+                  imgEl.setAttribute("data-vault-hydrated-src", cachedNow);
+                  imgEl.src = cachedNow;
+                  return;
+                }
+                if (typeof window.resolveVaultRefToUrl !== "function") {
+                  if (attempt < 5) {
+                    setTimeout(() => tryResolveWithRetries(attempt + 1), 350);
+                  } else if (typeof fallbackCoverIdx === "number") {
+                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                  }
+                  return;
+                }
                 window.resolveVaultRefToUrl(srcStr).then((resolved) => {
+                  if (imgEl._naiTargetVaultRef !== srcStr) return;
                   if (resolved && resolved !== srcStr && !resolved.startsWith("vault://")) {
                     predecodeResolvedUrl(resolved);
-                    if (imgEl.getAttribute("data-vault-ref") === srcStr) {
-                      imgEl.setAttribute("data-vault-hydrated-src", resolved);
-                      imgEl.src = resolved;
-                    }
+                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-ref", srcStr);
+                    imgEl.setAttribute("data-vault-hydrated-src", resolved);
+                    imgEl.src = resolved;
+                  } else if (attempt < 4) {
+                    setTimeout(() => tryResolveWithRetries(attempt + 1), 450 * (attempt + 1));
                   } else if (typeof fallbackCoverIdx === "number") {
+                    imgEl.removeAttribute("data-vault-pending");
                     imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
                   }
                 }).catch(() => {
-                  if (typeof fallbackCoverIdx === "number") {
+                  if (imgEl._naiTargetVaultRef !== srcStr) return;
+                  if (attempt < 4) {
+                    setTimeout(() => tryResolveWithRetries(attempt + 1), 450 * (attempt + 1));
+                  } else if (typeof fallbackCoverIdx === "number") {
+                    imgEl.removeAttribute("data-vault-pending");
                     imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
                   }
                 });
-              } else if (typeof fallbackCoverIdx === "number") {
-                imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
-              }
+              };
+              tryResolveWithRetries(0);
             } else {
+              imgEl._naiTargetVaultRef = "";
               imgEl.removeAttribute("data-vault-ref");
+              imgEl.removeAttribute("data-vault-pending");
               predecodeResolvedUrl(srcStr);
               if (typeof window.setCleanPreviewImgSrc === "function") {
                 window.setCleanPreviewImgSrc(imgEl, srcStr);
@@ -43582,6 +43756,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 imgEl.src = srcStr;
               }
             }
+          }
+
+          function preloadAllNaiCollectionVaultImages() {
+            if (typeof window.resolveVaultRefToUrl !== "function") return;
+            const refs = new Set();
+            const collectArr = (arr) => {
+              if (!Array.isArray(arr)) return;
+              arr.forEach((it) => {
+                if (!it || typeof it !== "object") return;
+                if (typeof it.image === "string" && it.image.startsWith("vault://")) refs.add(it.image);
+                if (typeof it.coverImage === "string" && it.coverImage.startsWith("vault://")) refs.add(it.coverImage);
+                if (Array.isArray(it.images)) {
+                  it.images.forEach((u) => {
+                    if (typeof u === "string" && u.startsWith("vault://")) refs.add(u);
+                  });
+                }
+              });
+            };
+            collectArr(memoryBookmarksList);
+            collectArr(memoryLexiconList);
+            collectArr(memoryLexiconFoldersList);
+            refs.forEach((vRef) => {
+              const cached = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(vRef) : null;
+              if (cached) {
+                predecodeResolvedUrl(cached);
+              } else {
+                window.resolveVaultRefToUrl(vRef).then((resolved) => {
+                  if (resolved && !resolved.startsWith("vault://")) {
+                    predecodeResolvedUrl(resolved);
+                  }
+                }).catch(() => {});
+              }
+            });
           }
 
           async function offloadSingleNaiImageToTermux(imgUrl) {
@@ -43673,6 +43880,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 id: f.id || ("lf_" + f.name),
                 name: String(f.name).trim(),
                 coverImage: (typeof f.coverImage === "string" && !f.coverImage.startsWith("data:")) ? f.coverImage : "",
+                explicitCreated: Boolean(f.explicitCreated),
                 updatedAt: f.updatedAt || 0
               }));
           }
@@ -43888,6 +44096,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               pos1PresetSelected: "",
               pos2PresetSelected: "",
               negPresetSelected: "",
+              customApiUrl: "",
+              customApiKey: "",
               lastGeneratedImage: "",
               lastGeneratedTitle: "",
               updatedAt: 0
@@ -44229,6 +44439,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const resEl = document.getElementById("mod-nai-setting-resolution");
             const modelEl = document.getElementById("mod-nai-setting-model");
             const themeEl = document.getElementById("mod-nai-setting-theme");
+            const apiUrlEl = document.getElementById("mod-nai-setting-api-url");
+            const apiKeyEl = document.getElementById("mod-nai-setting-api-key");
 
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
@@ -44258,6 +44470,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             st.pos2Checked = c2El ? c2El.checked : false;
             st.resolution = resVal;
             st.model = modelVal;
+            if (apiUrlEl) st.customApiUrl = apiUrlEl.value.trim();
+            if (apiKeyEl) st.customApiKey = apiKeyEl.value.trim();
             if (inspectArtistEl) st.inspectArtistText = inspectArtistEl.value;
             if (inspectPosEl) st.inspectPosText = inspectPosEl.value;
             if (inspectNegEl) st.inspectNegText = inspectNegEl.value;
@@ -44648,6 +44862,212 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 row.appendChild(groupSel);
                 listContainer.appendChild(row);
               });
+            });
+
+            renderLexiconGroupingUI(
+              document.getElementById("mod-nai-drawer-list-lexicon"),
+              document.getElementById("mod-nai-drawer-count-lexicon"),
+              null
+            );
+          }
+
+          function renderLexiconGroupingUI(listContainer, countEl, externalTagsContainer) {
+            const allLex = loadLocalBookmarksForCategory("lexicon");
+            const folders = loadLexiconFolders();
+            if (countEl) {
+              countEl.textContent = String(allLex.length);
+            }
+            if (externalTagsContainer) {
+              externalTagsContainer.innerHTML = "";
+            }
+            if (!listContainer) return;
+            listContainer.innerHTML = "";
+
+            const buildTagsInto = (targetBar, isFolderPage) => {
+              if (!targetBar) return;
+              targetBar.innerHTML = "";
+              folders.forEach((fObj) => {
+                if (!fObj || !fObj.name) return;
+                const gName = fObj.name;
+                const isSelectedTarget = isFolderPage && colEditingFolderOriginalName === gName;
+                const chip = document.createElement("div");
+                chip.style.cssText =
+                  "display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:11px;background:" +
+                  (isSelectedTarget ? "var(--secondary-bg)" : "var(--background-color)") +
+                  ";border:1px solid " +
+                  (isSelectedTarget ? "var(--text-primary)" : "var(--border-color)") +
+                  ";color:var(--text-primary);cursor:pointer;";
+                const txt = document.createElement("span");
+                txt.textContent = gName;
+                chip.appendChild(txt);
+
+                if (isFolderPage) {
+                  chip.addEventListener("click", () => {
+                    selectFolderForCoverEdit(gName);
+                  });
+                }
+
+                if (gName !== DEFAULT_LEXICON_FOLDER_NAME) {
+                  const renBtn = document.createElement("button");
+                  renBtn.type = "button";
+                  renBtn.className = "mod-nai-drawer-group-del-btn";
+                  renBtn.title = "修改分组名称";
+                  renBtn.style.cssText = "width:auto;padding:0 2px;font-size:10px;";
+                  renBtn.textContent = "改名";
+                  renBtn.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    if (typeof window.showCustomPrompt !== "function") return;
+                    const newNameRaw = await window.showCustomPrompt("修改分组名称", "请输入新的分组名称", gName);
+                    if (newNameRaw === null) return;
+                    const newName = String(newNameRaw || "").trim();
+                    if (!newName || newName === gName) return;
+                    const curFolders = loadLexiconFolders().slice();
+                    const origIdx = curFolders.findIndex((x) => x && x.name === gName);
+                    const dupIdx = curFolders.findIndex((x) => x && x.name === newName);
+                    if (origIdx >= 0) {
+                      curFolders[origIdx].name = newName;
+                      curFolders[origIdx].explicitCreated = true;
+                      curFolders[origIdx].updatedAt = Date.now();
+                      if (dupIdx >= 0 && dupIdx !== origIdx) {
+                        curFolders.splice(dupIdx, 1);
+                      }
+                    }
+                    const curLex = loadLocalBookmarksForCategory("lexicon").slice();
+                    curLex.forEach((it) => {
+                      if (it && getItemLexiconFolderName(it) === gName) {
+                        it.folder = newName;
+                      }
+                    });
+                    if (colLexiconActiveFolder === gName) colLexiconActiveFolder = newName;
+                    if (colEditingFolderOriginalName === gName) colEditingFolderOriginalName = newName;
+                    saveLexiconFolders(curFolders);
+                    saveLocalBookmarks(curLex, "lexicon");
+                    renderSettingsPresetDrawers();
+                    if (colActiveSubView === "folder_edit") {
+                      openLexiconFolderEditView(newName);
+                    }
+                    renderCollectionGrid();
+                  });
+                  chip.appendChild(renBtn);
+
+                  const delBtn = document.createElement("button");
+                  delBtn.type = "button";
+                  delBtn.className = "mod-nai-drawer-group-del-btn";
+                  delBtn.title = "删除此分组";
+                  delBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+                  delBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const curFolders = loadLexiconFolders().filter((x) => x && x.name !== gName);
+                    const curLex = loadLocalBookmarksForCategory("lexicon").slice();
+                    curLex.forEach((it) => {
+                      if (it && getItemLexiconFolderName(it) === gName) {
+                        it.folder = DEFAULT_LEXICON_FOLDER_NAME;
+                      }
+                    });
+                    if (colLexiconActiveFolder === gName) colLexiconActiveFolder = "";
+                    if (colEditingFolderOriginalName === gName) colEditingFolderOriginalName = DEFAULT_LEXICON_FOLDER_NAME;
+                    saveLexiconFolders(curFolders);
+                    saveLocalBookmarks(curLex, "lexicon");
+                    renderSettingsPresetDrawers();
+                    if (colActiveSubView === "folder_edit") {
+                      openLexiconFolderEditView(DEFAULT_LEXICON_FOLDER_NAME);
+                    }
+                    renderCollectionGrid();
+                  });
+                  chip.appendChild(delBtn);
+                }
+                targetBar.appendChild(chip);
+              });
+            };
+
+            if (externalTagsContainer) {
+              buildTagsInto(externalTagsContainer, true);
+            } else if (folders.length > 0) {
+              const tagsBar = document.createElement("div");
+              tagsBar.style.cssText = "display:flex;flex-wrap:wrap;gap:5px;padding-bottom:4px;border-bottom:1px dashed var(--border-color);";
+              buildTagsInto(tagsBar, false);
+              listContainer.appendChild(tagsBar);
+            }
+
+            if (allLex.length === 0) {
+              const emptyEl = document.createElement("div");
+              emptyEl.className = "mod-nai-drawer-empty";
+              emptyEl.textContent = "词典中暂无词条，可在词典画廊点右上角新建";
+              listContainer.appendChild(emptyEl);
+              return;
+            }
+
+            allLex.forEach((lexItem) => {
+              if (!lexItem || typeof lexItem !== "object") return;
+              const row = document.createElement("div");
+              row.className = "mod-nai-drawer-preset-row";
+
+              const nameSpan = document.createElement("span");
+              nameSpan.className = "mod-nai-drawer-preset-name";
+              nameSpan.textContent = lexItem.name || "未命名词条";
+
+              const renameBtn = document.createElement("button");
+              renameBtn.type = "button";
+              renameBtn.className = "moe-btn mod-nai-drawer-rename-btn";
+              renameBtn.textContent = "改名";
+              renameBtn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                if (typeof window.showCustomPrompt !== "function") return;
+                const oldName = lexItem.name || "";
+                const newNameRaw = await window.showCustomPrompt("修改词条名称", "请输入新的词条名称", oldName);
+                if (newNameRaw === null) return;
+                const newName = String(newNameRaw || "").trim();
+                if (!newName || newName === oldName) return;
+                const curLex = loadLocalBookmarksForCategory("lexicon").slice();
+                const target = curLex.find((x) => x && x.id === lexItem.id);
+                if (target) {
+                  target.name = newName;
+                  target.updatedAt = Date.now();
+                  saveLocalBookmarks(curLex, "lexicon");
+                  renderSettingsPresetDrawers();
+                  if (colActiveSubView === "folder_edit") {
+                    renderLexiconGroupingUI(
+                      document.getElementById("mod-nai-folder-edit-items-list"),
+                      null,
+                      document.getElementById("mod-nai-folder-tags-bar")
+                    );
+                  }
+                  renderCollectionGrid();
+                }
+              });
+
+              const groupSel = document.createElement("select");
+              groupSel.className = "moe-input mod-nai-drawer-group-select";
+              const curFolder = getItemLexiconFolderName(lexItem);
+              folders.forEach((fObj) => {
+                if (!fObj || !fObj.name) return;
+                const opt = document.createElement("option");
+                opt.value = fObj.name;
+                opt.textContent = fObj.name;
+                if (fObj.name === curFolder) opt.selected = true;
+                groupSel.appendChild(opt);
+              });
+              groupSel.value = curFolder;
+
+              groupSel.addEventListener("change", () => {
+                const chosenFolder = groupSel.value || DEFAULT_LEXICON_FOLDER_NAME;
+                const curLex = loadLocalBookmarksForCategory("lexicon").slice();
+                const target = curLex.find((x) => x && x.id === lexItem.id);
+                if (target) {
+                  target.folder = chosenFolder;
+                  target.updatedAt = Date.now();
+                  saveLocalBookmarks(curLex, "lexicon");
+                  renderCollectionGrid();
+                  if (typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast("已归入: " + chosenFolder, "success");
+                  }
+                }
+              });
+
+              row.appendChild(nameSpan);
+              row.appendChild(renameBtn);
+              row.appendChild(groupSel);
+              listContainer.appendChild(row);
             });
           }
 
@@ -45453,6 +45873,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const resSelect = document.getElementById("mod-nai-setting-resolution");
             const modelSelect = document.getElementById("mod-nai-setting-model");
             const themeSelect = document.getElementById("mod-nai-setting-theme");
+            const apiUrlInput = document.getElementById("mod-nai-setting-api-url");
+            const apiKeyInput = document.getElementById("mod-nai-setting-api-key");
 
             if (openSettingsBtn && settingsModal) {
               openSettingsBtn.addEventListener("click", () => {
@@ -45460,11 +45882,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (resSelect && st.resolution) resSelect.value = st.resolution;
                 if (modelSelect && st.model) modelSelect.value = st.model;
                 if (themeSelect && st.theme) themeSelect.value = st.theme;
+                if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
+                if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
                 applyThemeToPanel(st.theme || "folio");
                 renderSettingsPresetDrawers();
                 settingsModal.style.display = "flex";
               });
             }
+
+            [apiUrlInput, apiKeyInput].forEach((inp) => {
+              if (inp) {
+                inp.addEventListener("change", () => syncModuleNaiToGlobal());
+                inp.addEventListener("blur", () => syncModuleNaiToGlobal());
+              }
+            });
 
             if (settingsModal) {
               settingsModal.querySelectorAll(".mod-nai-preset-drawer-head").forEach((headBtn) => {
@@ -45513,6 +45944,44 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   });
                 }
               });
+
+              const lexDrawerAddBtn = document.getElementById("mod-nai-group-add-lexicon");
+              const lexDrawerGrpInp = document.getElementById("mod-nai-group-input-lexicon");
+              const createLexiconGroupFromDrawer = () => {
+                const gName = lexDrawerGrpInp ? String(lexDrawerGrpInp.value || "").trim() : "";
+                if (!gName) return;
+                const curFolders = loadLexiconFolders().slice();
+                const existIdx = curFolders.findIndex((f) => f && f.name === gName);
+                if (existIdx >= 0) {
+                  curFolders[existIdx].explicitCreated = true;
+                } else {
+                  curFolders.push({
+                    id: "lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                    name: gName,
+                    coverImage: "",
+                    explicitCreated: true,
+                    updatedAt: Date.now()
+                  });
+                }
+                saveLexiconFolders(curFolders);
+                if (lexDrawerGrpInp) lexDrawerGrpInp.value = "";
+                renderSettingsPresetDrawers();
+                renderCollectionGrid();
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已建分组: " + gName, "success");
+                }
+              };
+              if (lexDrawerAddBtn) {
+                lexDrawerAddBtn.addEventListener("click", createLexiconGroupFromDrawer);
+              }
+              if (lexDrawerGrpInp) {
+                lexDrawerGrpInp.addEventListener("keydown", (e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    createLexiconGroupFromDrawer();
+                  }
+                });
+              }
 
               const settingsExportBtn = document.getElementById("mod-nai-settings-export-btn");
               const settingsImportBtn = document.getElementById("mod-nai-settings-import-btn");
@@ -45902,13 +46371,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
 
                 try {
+                  const stForGen = loadPanelState();
                   const dataUrl = await callNovelAiDirect(activePosVal, {
                     isolatedModuleNai: true,
                     artist: activeArtistVal,
                     defaultPositive: "",
                     negativePrompt: negVal,
                     resolution: resVal,
-                    model: modelVal
+                    model: modelVal,
+                    customApiUrl: stForGen.customApiUrl || "",
+                    customApiKey: stForGen.customApiKey || ""
                   });
                   if (genResultImg && dataUrl) {
                     const imgTitle = activePosVal || activeArtistVal || "NAI_Image";
@@ -46136,12 +46608,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (!existing.coverImage && f.coverImage && typeof f.coverImage === "string") {
                   existing.coverImage = f.coverImage;
                 }
+                if (f.explicitCreated) {
+                  existing.explicitCreated = true;
+                }
               } else {
                 byName.set(name, out.length);
                 out.push({
                   id: f.id || ("lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
                   name: name,
                   coverImage: typeof f.coverImage === "string" ? f.coverImage : "",
+                  explicitCreated: Boolean(f.explicitCreated),
                   updatedAt: f.updatedAt || Date.now()
                 });
               }
@@ -46153,6 +46629,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 id: "lf_default_adabana",
                 name: DEFAULT_LEXICON_FOLDER_NAME,
                 coverImage: "",
+                explicitCreated: true,
                 updatedAt: Date.now()
               });
             }
@@ -46181,12 +46658,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             }
             const lexItems = loadLocalBookmarksForCategory("lexicon");
+            const activeItemFolderNames = new Set([DEFAULT_LEXICON_FOLDER_NAME]);
             const discovered = [];
             lexItems.forEach((it) => {
               const fn = getItemLexiconFolderName(it);
-              if (fn) discovered.push({ name: fn, coverImage: "" });
+              if (fn) {
+                activeItemFolderNames.add(fn);
+                discovered.push({ name: fn, coverImage: "", explicitCreated: true });
+              }
             });
-            const merged = mergeLexiconFoldersLists(base, discovered);
+            const cleanedBase = base.filter((f) => {
+              if (!f || typeof f !== "object" || !f.name) return false;
+              const fn = String(f.name).trim();
+              if (!fn) return false;
+              if (fn === DEFAULT_LEXICON_FOLDER_NAME) return true;
+              if (activeItemFolderNames.has(fn)) return true;
+              if (f.coverImage && String(f.coverImage).trim()) return true;
+              if (f.explicitCreated) return true;
+              return false;
+            });
+            const merged = mergeLexiconFoldersLists(cleanedBase, discovered);
             memoryLexiconFoldersList = merged;
             return memoryLexiconFoldersList;
           }
@@ -46392,7 +46883,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (isLex) {
               if (lexChipEl) {
-                lexChipEl.textContent = isShared ? "CLOUD / 21G" : "CH.01 / 21G";
+                lexChipEl.textContent = isShared
+                  ? "CLOUD / 21G"
+                  : (isInsideFolder ? ("CH.01 / " + colLexiconActiveFolder) : "CH.01 / 21G");
               }
               if (tabLocalTxt) tabLocalTxt.textContent = "词典";
             } else {
@@ -46564,9 +47057,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 ? (folderCardMeta.folderName || DEFAULT_LEXICON_FOLDER_NAME)
                 : (isEmptyGuide ? (colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME) : getItemLexiconFolderName(item));
               const safeFolderLabel = String(folderLabel).replace(/</g, "&lt;");
+              const topKickerText = isFolderCard ? safeFolderLabel : "21G";
               indexSpan.innerHTML =
                 `<span class="mod-nai-lex-idx-badge">${idxNum}</span>` +
-                `<span class="mod-nai-lex-idx-kicker">${safeFolderLabel}</span>` +
+                `<span class="mod-nai-lex-idx-kicker">${topKickerText}</span>` +
                 HAND_CIRCLE_SVG;
             } else {
               indexSpan.innerHTML =
@@ -46670,9 +47164,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ).replace(/</g, "&lt;");
 
             if (isLex) {
+              const folderLabel = isFolderCard
+                ? (folderCardMeta.folderName || DEFAULT_LEXICON_FOLDER_NAME)
+                : (isEmptyGuide ? (colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME) : getItemLexiconFolderName(item));
+              const safeFolderLabel = String(folderLabel).replace(/</g, "&lt;");
+              const bottomCornerLabel = isFolderCard ? `P.${idxNum}` : safeFolderLabel;
               titleLine.innerHTML =
                 `<span><i class="mod-nai-lex-caption-bracket">「</i>${safeRawTitle}<i class="mod-nai-lex-caption-bracket">」</i></span>` +
-                `<i class="mod-nai-lex-caption-page">P.${idxNum} ↗</i>`;
+                `<i class="mod-nai-lex-caption-page">${bottomCornerLabel} ↗</i>`;
             } else {
               titleLine.innerHTML = `<span><em>Trace</em> / ${safeRawTitle}</span><i class="mod-nai-specimen-arrow">↗</i>`;
             }
@@ -46693,49 +47192,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function prewarmNaiCollectionImages() {
             TRACE_DEFAULT_COVERS.forEach(predecodeResolvedUrl);
             LEXICON_DEFAULT_COVERS.forEach(predecodeResolvedUrl);
+            preloadAllNaiCollectionVaultImages();
           }
 
-          function clearMountedCollectionPages(gridEl, activeVaultRefsToKeep) {
-            const keepSet = activeVaultRefsToKeep instanceof Set ? activeVaultRefsToKeep : new Set();
-            const evictedRefs = [];
-            for (const [, pageEntry] of colMountedPagesMap.entries()) {
-              if (!pageEntry || !Array.isArray(pageEntry.cards)) continue;
-              pageEntry.cards.forEach((cardEl) => {
-                if (!cardEl) return;
-                const imgEl = cardEl.querySelector("img");
-                if (imgEl) {
-                  const vRef = imgEl.getAttribute("data-vault-ref") || "";
-                  const hydrated = imgEl.getAttribute("data-vault-hydrated-src") || imgEl.getAttribute("src") || "";
-                  imgEl.removeAttribute("src");
-                  imgEl.removeAttribute("data-vault-hydrated-src");
-                  if (vRef && vRef.startsWith("vault://") && !keepSet.has(vRef)) {
-                    evictedRefs.push({ vRef, hydrated });
-                  }
-                }
-                if (cardEl.parentNode) {
-                  cardEl.remove();
-                }
-              });
-            }
+          function clearMountedCollectionPages(gridEl) {
             colMountedPagesMap.clear();
             if (gridEl) {
               gridEl.replaceChildren();
             }
-            evictedRefs.forEach(({ vRef, hydrated }) => {
-              if (!keepSet.has(vRef)) {
-                if (hydrated) releasePredecodedUrl(hydrated);
-                if (typeof window.evictVaultBlobCacheByRef === "function") {
-                  window.evictVaultBlobCacheByRef(vRef);
-                }
-              }
-            });
           }
 
           function destroyNaiCollectionGalleryMemory() {
-            const gridEl = document.getElementById("mod-nai-col-grid-container");
-            clearMountedCollectionPages(gridEl);
-            colLastGridContextKey = "";
-            clearAllPredecodedImages();
+            // 保留已加载的收藏与词典卡片及图片缓存，不再销毁
           }
 
           function applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, buildPageCardsFn) {
@@ -47395,7 +47863,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colEditingCategory = colCategory;
           }
 
-          function persistCurrentBookmarkEditDraft(requireNonEmpty = false) {
+          function persistCurrentBookmarkEditDraft(requireNonEmpty = false, commitCustomFolder = false) {
             if (colActiveSubView !== "edit" || !colCurrentItem || colScope === "shared") return false;
             const targetCat = colEditingCategory || colCurrentItem._category || colCategory;
             if (targetCat !== colCategory) return false;
@@ -47417,9 +47885,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const artistVal = isLex ? "" : (artistInp ? artistInp.value : "").trim();
             const posVal = (posInp ? posInp.value : "").trim();
             const negVal = isLex ? "" : (negInp ? negInp.value : "").trim();
-            const customFolderVal = isLex && folderInp ? folderInp.value.trim() : "";
+            const customFolderVal = (isLex && commitCustomFolder && folderInp) ? folderInp.value.trim() : "";
             const selectedFolderVal = isLex && folderSel ? folderSel.value.trim() : "";
-            const chosenFolder = isLex ? (customFolderVal || selectedFolderVal || DEFAULT_LEXICON_FOLDER_NAME) : "";
+            const chosenFolder = isLex ? (customFolderVal || selectedFolderVal || getItemLexiconFolderName(colCurrentItem) || DEFAULT_LEXICON_FOLDER_NAME) : "";
 
             if (!nameVal && !remarkVal && !artistVal && !posVal && !negVal && colEditImagesDraft.length === 0) {
               return false;
@@ -47432,15 +47900,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colCurrentItem.name = nameVal || (isLex ? "未命名词条" : "未命名书签");
             if (isLex) {
               colCurrentItem.folder = chosenFolder;
-              const curFolders = loadLexiconFolders().slice();
-              if (!curFolders.some((f) => f && f.name === chosenFolder)) {
-                curFolders.push({
-                  id: "lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-                  name: chosenFolder,
-                  coverImage: "",
-                  updatedAt: Date.now()
-                });
-                saveLexiconFolders(curFolders);
+              if (commitCustomFolder && customFolderVal) {
+                const curFolders = loadLexiconFolders().slice();
+                if (!curFolders.some((f) => f && f.name === chosenFolder)) {
+                  curFolders.push({
+                    id: "lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                    name: chosenFolder,
+                    coverImage: "",
+                    explicitCreated: true,
+                    updatedAt: Date.now()
+                  });
+                  saveLexiconFolders(curFolders);
+                }
+                if (folderInp) folderInp.value = "";
+                populateEditFolderControls(chosenFolder);
               }
             }
             colCurrentItem.modelTag = normalizeModelTagValue(colEditModelDraft);
@@ -47482,145 +47955,89 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          function openLexiconFolderEditView(folderNameOrNull) {
-            colScope = "local";
+          function selectFolderForCoverEdit(folderName) {
             const folders = loadLexiconFolders();
-            const isEditingExisting = Boolean(folderNameOrNull);
-            const targetName = isEditingExisting ? String(folderNameOrNull).trim() : "";
-            const found = isEditingExisting ? folders.find((f) => f && f.name === targetName) : null;
-
-            colEditingFolderOriginalName = isEditingExisting ? targetName : "";
-            colEditingFolderObj = found
-              ? Object.assign({}, found)
-              : {
-                  id: "lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-                  name: targetName,
-                  coverImage: "",
-                  updatedAt: Date.now()
-                };
+            const targetName = String(folderName || colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME).trim() || DEFAULT_LEXICON_FOLDER_NAME;
+            const found = folders.find((f) => f && f.name === targetName) || folders[0] || {
+              id: "lf_" + Date.now(),
+              name: targetName,
+              coverImage: "",
+              explicitCreated: true,
+              updatedAt: Date.now()
+            };
+            colEditingFolderOriginalName = found.name;
+            colEditingFolderObj = Object.assign({}, found);
             colFolderCoverDraft = colEditingFolderObj.coverImage || "";
 
-            const nameInp = document.getElementById("mod-nai-folder-edit-name-input");
-            const delBtn = document.getElementById("mod-nai-folder-edit-delete-btn");
-            const checklistEl = document.getElementById("mod-nai-folder-edit-items-list");
-
-            if (nameInp) {
-              nameInp.value = colEditingFolderObj.name || "";
-              nameInp.readOnly = false;
+            const targetSel = document.getElementById("mod-nai-folder-edit-target-select");
+            if (targetSel) {
+              targetSel.innerHTML = "";
+              folders.forEach((f) => {
+                if (!f || !f.name) return;
+                const opt = document.createElement("option");
+                opt.value = f.name;
+                opt.textContent = f.name;
+                if (f.name === colEditingFolderOriginalName) opt.selected = true;
+                targetSel.appendChild(opt);
+              });
+              targetSel.value = colEditingFolderOriginalName;
             }
+
+            const delBtn = document.getElementById("mod-nai-folder-edit-delete-btn");
             if (delBtn) {
-              delBtn.style.display = (isEditingExisting && targetName !== DEFAULT_LEXICON_FOLDER_NAME) ? "inline-flex" : "none";
+              delBtn.style.display = colEditingFolderOriginalName !== DEFAULT_LEXICON_FOLDER_NAME ? "inline-flex" : "none";
             }
 
             renderFolderEditCoverPreview();
+            renderLexiconGroupingUI(
+              document.getElementById("mod-nai-folder-edit-items-list"),
+              null,
+              document.getElementById("mod-nai-folder-tags-bar")
+            );
+          }
 
-            if (checklistEl) {
-              checklistEl.innerHTML = "";
-              const allLex = loadLocalBookmarksForCategory("lexicon");
-              if (allLex.length === 0) {
-                const emptyHint = document.createElement("div");
-                emptyHint.style.cssText = "font-size:11px;color:var(--text-secondary);padding:10px 4px;text-align:center;";
-                emptyHint.textContent = "词典中暂无词条，保存分组后可在分组内直接点击新建";
-                checklistEl.appendChild(emptyHint);
-              } else {
-                allLex.forEach((it) => {
-                  if (!it || typeof it !== "object") return;
-                  const row = document.createElement("label");
-                  row.className = "mod-nai-folder-check-item";
-
-                  const cb = document.createElement("input");
-                  cb.type = "checkbox";
-                  cb.className = "mod-nai-folder-check-box";
-                  cb.setAttribute("data-lex-id", it.id || "");
-                  const curItemFolder = getItemLexiconFolderName(it);
-                  cb.checked = Boolean(isEditingExisting && curItemFolder === targetName);
-
-                  const nameSpan = document.createElement("span");
-                  nameSpan.className = "mod-nai-folder-check-name";
-                  nameSpan.textContent = it.name || "未命名词条";
-
-                  const badgeSpan = document.createElement("span");
-                  badgeSpan.className = "mod-nai-folder-check-badge";
-                  badgeSpan.textContent = curItemFolder;
-
-                  row.appendChild(cb);
-                  row.appendChild(nameSpan);
-                  row.appendChild(badgeSpan);
-                  checklistEl.appendChild(row);
-                });
-              }
-            }
-
+          function openLexiconFolderEditView(folderNameOrNull) {
+            colScope = "local";
+            const nameInp = document.getElementById("mod-nai-folder-edit-name-input");
+            if (nameInp) nameInp.value = "";
+            selectFolderForCoverEdit(folderNameOrNull || colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME);
             switchCollectionSubView("folder_edit");
           }
 
           async function saveCurrentLexiconFolderEdit() {
             const nameInp = document.getElementById("mod-nai-folder-edit-name-input");
-            const checklistEl = document.getElementById("mod-nai-folder-edit-items-list");
-            const newName = (nameInp ? nameInp.value : "").trim();
-            if (!newName) {
-              if (typeof window.showCustomAlert === "function") {
-                await window.showCustomAlert("提示", "请输入分组名称");
-              }
-              return;
-            }
-
-            const origName = colEditingFolderOriginalName;
+            const typedNewName = (nameInp ? nameInp.value : "").trim();
             const folders = loadLexiconFolders().slice();
 
-            if (origName && origName !== newName) {
-              const dupIdx = folders.findIndex((f) => f && f.name === newName);
-              const origIdx = folders.findIndex((f) => f && f.name === origName);
-              if (origIdx >= 0) {
-                folders[origIdx].name = newName;
-                folders[origIdx].coverImage = colFolderCoverDraft || "";
-                folders[origIdx].updatedAt = Date.now();
-                if (dupIdx >= 0 && dupIdx !== origIdx) {
-                  folders.splice(dupIdx, 1);
-                }
-              }
-            } else {
-              const existIdx = folders.findIndex((f) => f && f.name === newName);
+            let activeTargetName = colEditingFolderOriginalName || DEFAULT_LEXICON_FOLDER_NAME;
+            if (typedNewName) {
+              const existIdx = folders.findIndex((f) => f && f.name === typedNewName);
               if (existIdx >= 0) {
-                folders[existIdx].coverImage = colFolderCoverDraft || "";
+                folders[existIdx].coverImage = colFolderCoverDraft || folders[existIdx].coverImage || "";
+                folders[existIdx].explicitCreated = true;
                 folders[existIdx].updatedAt = Date.now();
               } else {
                 folders.push({
-                  id: (colEditingFolderObj && colEditingFolderObj.id) || ("lf_" + Date.now()),
-                  name: newName,
+                  id: "lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  name: typedNewName,
                   coverImage: colFolderCoverDraft || "",
+                  explicitCreated: true,
                   updatedAt: Date.now()
                 });
               }
-            }
-
-            const checkedIds = new Set();
-            if (checklistEl) {
-              checklistEl.querySelectorAll("input.mod-nai-folder-check-box").forEach((cb) => {
-                if (cb.checked) {
-                  const lid = cb.getAttribute("data-lex-id");
-                  if (lid) checkedIds.add(lid);
-                }
-              });
-            }
-
-            const allLex = loadLocalBookmarksForCategory("lexicon").slice();
-            allLex.forEach((it) => {
-              if (!it || typeof it !== "object") return;
-              const curF = getItemLexiconFolderName(it);
-              if (checkedIds.has(it.id)) {
-                it.folder = newName;
-              } else if (origName && curF === origName) {
-                it.folder = DEFAULT_LEXICON_FOLDER_NAME;
+              activeTargetName = typedNewName;
+              if (nameInp) nameInp.value = "";
+            } else if (activeTargetName) {
+              const origIdx = folders.findIndex((f) => f && f.name === activeTargetName);
+              if (origIdx >= 0) {
+                folders[origIdx].coverImage = colFolderCoverDraft || "";
+                folders[origIdx].explicitCreated = true;
+                folders[origIdx].updatedAt = Date.now();
               }
-            });
+            }
 
             saveLexiconFolders(folders);
-            saveLocalBookmarks(allLex, "lexicon");
-
-            if (colLexiconActiveFolder && colLexiconActiveFolder === origName) {
-              colLexiconActiveFolder = newName;
-            }
+            renderSettingsPresetDrawers();
             if (typeof window.showDownloadToast === "function") {
               window.showDownloadToast("已保存分组", "success");
             }
@@ -48270,16 +48687,38 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               "mod-nai-col-edit-artist-input",
               "mod-nai-col-edit-pos-input",
               "mod-nai-col-edit-neg-input",
-              "mod-nai-col-edit-folder-select",
-              "mod-nai-col-edit-folder-input"
+              "mod-nai-col-edit-folder-select"
             ].forEach((id) => {
               const el = document.getElementById(id);
               if (el) {
-                el.addEventListener("input", () => persistCurrentBookmarkEditDraft(false));
-                el.addEventListener("change", () => persistCurrentBookmarkEditDraft(false));
-                el.addEventListener("blur", () => persistCurrentBookmarkEditDraft(false));
+                el.addEventListener("input", () => persistCurrentBookmarkEditDraft(false, false));
+                el.addEventListener("change", () => persistCurrentBookmarkEditDraft(false, false));
+                el.addEventListener("blur", () => persistCurrentBookmarkEditDraft(false, false));
               }
             });
+
+            const editFolderAddBtn = document.getElementById("mod-nai-col-edit-folder-add-btn");
+            const editFolderInp = document.getElementById("mod-nai-col-edit-folder-input");
+            const commitNewFolderInEditPage = () => {
+              const gName = editFolderInp ? String(editFolderInp.value || "").trim() : "";
+              if (!gName) return;
+              persistCurrentBookmarkEditDraft(false, true);
+              renderSettingsPresetDrawers();
+              if (typeof window.showDownloadToast === "function") {
+                window.showDownloadToast("已建分组: " + gName, "success");
+              }
+            };
+            if (editFolderAddBtn) {
+              editFolderAddBtn.addEventListener("click", commitNewFolderInEditPage);
+            }
+            if (editFolderInp) {
+              editFolderInp.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitNewFolderInEditPage();
+                }
+              });
+            }
 
             if (editImgStage && editFileInput) {
               editImgStage.addEventListener("click", () => {
@@ -48362,7 +48801,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               editBackBtn.addEventListener("click", () => {
                 const wasCreating = colIsCreatingNew;
                 if (colScope === "local") {
-                  persistCurrentBookmarkEditDraft(false);
+                  persistCurrentBookmarkEditDraft(false, true);
                 }
                 if (!wasCreating && colCurrentItem) {
                   openBookmarkDetailView(colCurrentItem, colCurrentIndex);
@@ -48381,7 +48820,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (editSaveBtn) {
               editSaveBtn.addEventListener("click", () => {
-                persistCurrentBookmarkEditDraft(false);
+                persistCurrentBookmarkEditDraft(false, true);
                 if (typeof window.showDownloadToast === "function") {
                   window.showDownloadToast(isLexiconCategory() ? "已保存词条" : "已保存书签", "success");
                 }
@@ -48471,10 +48910,58 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const folderEditBackBtn = document.getElementById("mod-nai-folder-edit-back-btn");
             const folderImgStage = document.getElementById("mod-nai-folder-edit-img-stage");
             const folderFileInput = document.getElementById("mod-nai-folder-edit-file-input");
+            const folderTargetSel = document.getElementById("mod-nai-folder-edit-target-select");
+            const folderQuickAddBtn = document.getElementById("mod-nai-folder-quick-add-btn");
+            const folderNameInput = document.getElementById("mod-nai-folder-edit-name-input");
             const folderGrabCoverBtn = document.getElementById("mod-nai-folder-edit-grab-btn");
             const folderClearCoverBtn = document.getElementById("mod-nai-folder-edit-clear-cover-btn");
             const folderDeleteBtn = document.getElementById("mod-nai-folder-edit-delete-btn");
             const folderSaveBtn = document.getElementById("mod-nai-folder-edit-save-btn");
+
+            if (folderTargetSel) {
+              folderTargetSel.addEventListener("change", () => {
+                if (folderTargetSel.value) {
+                  selectFolderForCoverEdit(folderTargetSel.value);
+                }
+              });
+            }
+
+            const createQuickFolderInPage = () => {
+              const gName = folderNameInput ? String(folderNameInput.value || "").trim() : "";
+              if (!gName) return;
+              const curFolders = loadLexiconFolders().slice();
+              const existIdx = curFolders.findIndex((f) => f && f.name === gName);
+              if (existIdx >= 0) {
+                curFolders[existIdx].explicitCreated = true;
+              } else {
+                curFolders.push({
+                  id: "lf_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                  name: gName,
+                  coverImage: "",
+                  explicitCreated: true,
+                  updatedAt: Date.now()
+                });
+              }
+              saveLexiconFolders(curFolders);
+              if (folderNameInput) folderNameInput.value = "";
+              selectFolderForCoverEdit(gName);
+              renderSettingsPresetDrawers();
+              renderCollectionGrid();
+              if (typeof window.showDownloadToast === "function") {
+                window.showDownloadToast("已建分组: " + gName, "success");
+              }
+            };
+            if (folderQuickAddBtn) {
+              folderQuickAddBtn.addEventListener("click", createQuickFolderInPage);
+            }
+            if (folderNameInput) {
+              folderNameInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  createQuickFolderInPage();
+                }
+              });
+            }
 
             if (folderEditBackBtn) {
               folderEditBackBtn.addEventListener("click", () => {
@@ -48495,6 +48982,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const termuxRef = await offloadSingleNaiImageToTermux(sqUrl);
                 colFolderCoverDraft = termuxRef || sqUrl;
                 renderFolderEditCoverPreview();
+                const curFolders = loadLexiconFolders().slice();
+                const idx = curFolders.findIndex((f) => f && f.name === colEditingFolderOriginalName);
+                if (idx >= 0) {
+                  curFolders[idx].coverImage = colFolderCoverDraft;
+                  curFolders[idx].explicitCreated = true;
+                  curFolders[idx].updatedAt = Date.now();
+                  saveLexiconFolders(curFolders);
+                }
               });
             }
             if (folderGrabCoverBtn) {
@@ -48510,6 +49005,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   colFolderCoverDraft = imgRef;
                   renderFolderEditCoverPreview();
+                  const curFolders = loadLexiconFolders().slice();
+                  const idx = curFolders.findIndex((f) => f && f.name === colEditingFolderOriginalName);
+                  if (idx >= 0) {
+                    curFolders[idx].coverImage = colFolderCoverDraft;
+                    curFolders[idx].explicitCreated = true;
+                    curFolders[idx].updatedAt = Date.now();
+                    saveLexiconFolders(curFolders);
+                  }
                   if (typeof window.showDownloadToast === "function") {
                     window.showDownloadToast("已读取当前生图封面", "success");
                   }
@@ -48522,6 +49025,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               folderClearCoverBtn.addEventListener("click", () => {
                 colFolderCoverDraft = "";
                 renderFolderEditCoverPreview();
+                const curFolders = loadLexiconFolders().slice();
+                const idx = curFolders.findIndex((f) => f && f.name === colEditingFolderOriginalName);
+                if (idx >= 0) {
+                  curFolders[idx].coverImage = "";
+                  curFolders[idx].updatedAt = Date.now();
+                  saveLexiconFolders(curFolders);
+                }
                 if (typeof window.showDownloadToast === "function") {
                   window.showDownloadToast("已恢复默认首图封面", "success");
                 }
@@ -48568,13 +49078,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               st.mode = "generate";
               savePanelState(st);
               applyModeView("generate");
-              destroyNaiCollectionGalleryMemory();
             } else {
               st.mode = "collection";
               savePanelState(st);
               switchCollectionSubView("grid");
               applyModeView("collection");
-              renderCollectionGrid(true);
+              renderCollectionGrid();
+              preloadAllNaiCollectionVaultImages();
             }
           };
 
@@ -48598,6 +49108,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const resEl = document.getElementById("mod-nai-setting-resolution");
             const modelEl = document.getElementById("mod-nai-setting-model");
             const themeEl = document.getElementById("mod-nai-setting-theme");
+            const apiUrlEl = document.getElementById("mod-nai-setting-api-url");
+            const apiKeyEl = document.getElementById("mod-nai-setting-api-key");
 
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
@@ -48616,6 +49128,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (resEl) resEl.value = st.resolution || "1024x1024";
             if (modelEl) modelEl.value = st.model || "nai-diffusion-4-5-full";
             if (themeEl) themeEl.value = st.theme || "folio";
+            if (apiUrlEl) apiUrlEl.value = st.customApiUrl || "";
+            if (apiKeyEl) apiKeyEl.value = st.customApiKey || "";
 
             if (inspectArtistEl) inspectArtistEl.value = st.inspectArtistText || "";
             if (inspectPosEl) inspectPosEl.value = st.inspectPosText || "";
@@ -49024,21 +49538,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 mergedFolders = mergeLexiconFoldersLists(memoryLexiconFoldersList, mergedFolders);
               }
 
-              let changed = false;
+              const listFp = (arr) =>
+                Array.isArray(arr)
+                  ? arr.map((x) => (x ? `${x.id || ""}:${x.name || ""}:${x.folder || ""}:${x.image || ""}:${x.coverImage || ""}` : "")).join("|")
+                  : "";
+              const prevBmFp = listFp(memoryBookmarksList);
+              const prevLexFp = listFp(memoryLexiconList);
+              const prevFolderFp = listFp(memoryLexiconFoldersList);
+
+              let gridNeedsRebuild = false;
+              let presetsChanged = false;
               if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList)) {
                 await offloadBookmarkListImagesToTermux(mergedBm);
+                if (listFp(mergedBm) !== prevBmFp) gridNeedsRebuild = true;
                 memoryBookmarksList = mergedBm;
-                changed = true;
               }
               if (mergedLex.length > 0 || !Array.isArray(memoryLexiconList)) {
                 await offloadBookmarkListImagesToTermux(mergedLex);
+                if (listFp(mergedLex) !== prevLexFp) gridNeedsRebuild = true;
                 memoryLexiconList = mergedLex;
-                changed = true;
               }
               if (mergedFolders.length > 0 || !Array.isArray(memoryLexiconFoldersList)) {
                 await offloadFolderListCoversToTermux(mergedFolders);
                 memoryLexiconFoldersList = mergedFolders;
-                changed = true;
+                const cleanedFolders = loadLexiconFolders();
+                if (listFp(cleanedFolders) !== prevFolderFp) gridNeedsRebuild = true;
               }
 
               const candPresets = (remoteStore && remoteStore.presets) || backupPresets || (legacyGs && legacyGs.naiPresetsStore);
@@ -49077,7 +49601,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (window.state && window.state.globalSettings) {
                     window.state.globalSettings.naiPresetsStore = memoryPresetsStore;
                   }
-                  changed = true;
+                  presetsChanged = true;
                 }
               }
 
@@ -49100,12 +49624,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const pos1El = document.getElementById("mod-nai-gen-pos1-input");
                   const pos2El = document.getElementById("mod-nai-gen-pos2-input");
                   const negEl = document.getElementById("mod-nai-gen-neg-input");
+                  const apiUrlEl = document.getElementById("mod-nai-setting-api-url");
+                  const apiKeyEl = document.getElementById("mod-nai-setting-api-key");
                   if (artistEl && document.activeElement !== artistEl && memoryPanelState.artistText !== undefined) artistEl.value = memoryPanelState.artistText;
                   if (artist2El && document.activeElement !== artist2El && memoryPanelState.artist2Text !== undefined) artist2El.value = memoryPanelState.artist2Text;
                   if (pos1El && document.activeElement !== pos1El && memoryPanelState.pos1Text !== undefined) pos1El.value = memoryPanelState.pos1Text;
                   if (pos2El && document.activeElement !== pos2El && memoryPanelState.pos2Text !== undefined) pos2El.value = memoryPanelState.pos2Text;
                   if (negEl && document.activeElement !== negEl && memoryPanelState.negText !== undefined) negEl.value = memoryPanelState.negText;
-                  changed = true;
+                  if (apiUrlEl && document.activeElement !== apiUrlEl && memoryPanelState.customApiUrl !== undefined) apiUrlEl.value = memoryPanelState.customApiUrl;
+                  if (apiKeyEl && document.activeElement !== apiKeyEl && memoryPanelState.customApiKey !== undefined) apiKeyEl.value = memoryPanelState.customApiKey;
+                  presetsChanged = true;
                 } else if (!curSt.lastGeneratedImage && candState.lastGeneratedImage) {
                   curSt.lastGeneratedImage = candState.lastGeneratedImage;
                   curSt.lastGeneratedTitle = candState.lastGeneratedTitle || "";
@@ -49141,8 +49669,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 purgeBrowserDuplicateNaiCopies();
               }
 
-              if (changed) {
+              preloadAllNaiCollectionVaultImages();
+
+              if (presetsChanged) {
                 renderPresetSelectOptions();
+              }
+              if (gridNeedsRebuild) {
                 renderCollectionGrid(true);
               }
             })().finally(() => {
@@ -129154,10 +129686,12 @@ ${specificRules}`;
               const isExpiredBlob = attrSrc.startsWith("blob:") && !liveSessionBlobUrls.has(attrSrc);
               if (
                 existingRef &&
+                attrSrc &&
                 !attrSrc.startsWith("vault://") &&
                 !img.hasAttribute("data-vault-pending") &&
                 !isTransparentPlaceholder &&
-                !isExpiredBlob
+                !isExpiredBlob &&
+                !img.closest("#module-nai-panel")
               ) {
                 const isSameHydrated =
                   (hydratedSrc && attrSrc === hydratedSrc) ||
