@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -39337,14 +39337,55 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const handledTableNames = new Set();
 
           const sharedVaultDataUrlCache = new Map();
+          const emittedBackupVaultRefs = new Set();
           const resolveRowVaultUrlsLowMem = async (targetObj) => {
             if (!targetObj || typeof targetObj !== "object") return targetObj;
             if (typeof window.resolveAllVaultUrlsDeepForBackup === "function") {
               try {
-                await window.resolveAllVaultUrlsDeepForBackup(targetObj, sharedVaultDataUrlCache);
+                await window.resolveAllVaultUrlsDeepForBackup(
+                  targetObj,
+                  sharedVaultDataUrlCache,
+                  emittedBackupVaultRefs
+                );
               } catch (_) {}
             }
             return targetObj;
+          };
+
+          const slimChatRowForBackup = (rawChat) => {
+            if (!rawChat || typeof rawChat !== "object") return rawChat;
+            const c = { ...rawChat };
+            if (c.settings && typeof c.settings === "object") {
+              c.settings = { ...c.settings };
+            }
+            const slimMsgAvatar = (m) => {
+              if (!m || typeof m !== "object") return m;
+              if (
+                typeof m.senderAvatar === "string" &&
+                (m.senderAvatar.startsWith("vault://") ||
+                  m.senderAvatar.startsWith("blob:") ||
+                  (m.senderAvatar.startsWith("data:") && m.senderAvatar.length > 512))
+              ) {
+                const mc = { ...m };
+                delete mc.senderAvatar;
+                return mc;
+              }
+              return m;
+            };
+            if (Array.isArray(c.history)) {
+              c.history = c.history.map(slimMsgAvatar);
+            }
+            if (Array.isArray(c.mainLineHistory)) {
+              if (
+                Array.isArray(c.history) &&
+                c.mainLineHistory.length === c.history.length
+              ) {
+                c.mainLineHistory = [];
+              } else {
+                c.mainLineHistory = c.mainLineHistory.map(slimMsgAvatar);
+              }
+            }
+            return c;
           };
 
           for (const tName of singleObjectTables) {
@@ -39357,6 +39398,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (_) {}
             if (tName === "globalSettings" && objVal && typeof objVal === "object") {
               objVal = { ...objVal };
+              delete objVal.naiBookmarksCollection;
+              delete objVal.naiLexiconCollection;
+              delete objVal.naiLexiconFolders;
               objVal.myPeerCode = localStorage.getItem("tukey_my_peer_code") || objVal.myPeerCode || "";
               try {
                 objVal.peerFriendsBackup = JSON.parse(localStorage.getItem("tukey_peer_friends_backup") || "{}");
@@ -39386,11 +39430,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             writer.appendRaw(",\n" + JSON.stringify(tName) + ":[");
             for (let r = 0; r < rows.length; r++) {
               if (r > 0) writer.appendRaw(",");
-              if (rows[r] && typeof rows[r] === "object") {
-                await resolveRowVaultUrlsLowMem(rows[r]);
+              let rowObj = rows[r];
+              if (rowObj && typeof rowObj === "object") {
+                if (tName === "chats") {
+                  rowObj = slimChatRowForBackup(rowObj);
+                }
+                await resolveRowVaultUrlsLowMem(rowObj);
               }
-              writer.appendValue(rows[r], 1);
+              writer.appendValue(rowObj, 1);
               rows[r] = null;
+              rowObj = null;
               if (r % 15 === 0) {
                 writer.flush();
                 await yieldToUi();
@@ -39462,11 +39511,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           await resolveRowVaultUrlsLowMem(hsBackupObj);
           await writeField("homeScreenState", hsBackupObj);
           sharedVaultDataUrlCache.clear();
+          emittedBackupVaultRefs.clear();
 
+          const skippedLsKeys = new Set([
+            "mod_nai_bookmarks_v1",
+            "mod_nai_lexicon_v1",
+            "mod_nai_bookmarks_text_backup_v1",
+            "mod_nai_lexicon_text_backup_v1",
+            "mod_nai_lexicon_folders_v1",
+            "tavern_state_v1",
+            "tavern_state_v2",
+            "coc_module_prompt_presets",
+            "coc_module_default_preset_id",
+            "coc_module_draft_state_v1",
+          ]);
           const lsSnapshot = {};
           for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
-            if (k) lsSnapshot[k] = localStorage.getItem(k);
+            if (k && !skippedLsKeys.has(k)) {
+              lsSnapshot[k] = localStorage.getItem(k);
+            }
           }
           await writeField("localStorageSnapshot", lsSnapshot);
 
@@ -42660,6 +42724,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             custom_proxy_url: document.getElementById("nai-custom-proxy-url")
               ? document.getElementById("nai-custom-proxy-url").value
               : prevSettings.custom_proxy_url,
+            updatedAt: Date.now(),
           };
 
           try {
@@ -42667,7 +42732,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             localStorage.setItem("novelai-artist-prompt", settings.artist_prompt || "");
             localStorage.setItem("novelai-positive-prompt", settings.default_positive || "");
             localStorage.setItem("novelai-negative-prompt", settings.default_negative || "");
-          } catch (_) {}
+          } catch (_) {
+            try {
+              localStorage.removeItem("mod_nai_bookmarks_v1");
+              localStorage.removeItem("mod_nai_lexicon_v1");
+              localStorage.removeItem("mod_nai_bookmarks_text_backup_v1");
+              localStorage.removeItem("mod_nai_lexicon_text_backup_v1");
+              localStorage.setItem("novelai-settings", JSON.stringify(settings));
+            } catch (_2) {}
+          }
           if (window.state && window.state.apiConfig) {
             window.state.apiConfig.novelaiConfig = settings;
             if (window.db && window.db.apiConfig) {
@@ -42709,15 +42782,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             custom_proxy_url: "",
           };
 
-          let parsed = null;
+          let localParsed = null;
           const saved = localStorage.getItem("novelai-settings");
           if (saved) {
             try {
-              parsed = JSON.parse(saved);
+              localParsed = JSON.parse(saved);
             } catch (_) {}
           }
-          if (!parsed && window.state && window.state.apiConfig && window.state.apiConfig.novelaiConfig) {
-            parsed = window.state.apiConfig.novelaiConfig;
+          const dbParsed = (window.state && window.state.apiConfig && window.state.apiConfig.novelaiConfig && typeof window.state.apiConfig.novelaiConfig === "object")
+            ? window.state.apiConfig.novelaiConfig
+            : null;
+          let parsed = localParsed || dbParsed;
+          if (localParsed && dbParsed) {
+            const localTs = typeof localParsed.updatedAt === "number" ? localParsed.updatedAt : 0;
+            const dbTs = typeof dbParsed.updatedAt === "number" ? dbParsed.updatedAt : 0;
+            parsed = dbTs > localTs ? dbParsed : localParsed;
           }
           if (parsed && typeof parsed === "object") {
             if (!localStorage.getItem("novelai_api_isolated_v201")) {
@@ -43420,7 +43499,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           const predecodedImageCache = new Map();
-          const MAX_PREDECODED_CACHE_SIZE = 26;
+          const MAX_PREDECODED_CACHE_SIZE = 240;
           function predecodeResolvedUrl(url) {
             if (!url || typeof url !== "string" || url.startsWith("vault://") || url.startsWith("data:")) return;
             if (predecodedImageCache.has(url)) return;
@@ -43446,6 +43525,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const oldImg = predecodedImageCache.get(url);
             if (oldImg) oldImg.src = "";
             predecodedImageCache.delete(url);
+          }
+
+          function clearAllPredecodedImages() {
+            for (const [, preImg] of predecodedImageCache.entries()) {
+              if (preImg) preImg.src = "";
+            }
+            predecodedImageCache.clear();
           }
 
           function bindNaiVaultAwareImage(imgEl, rawSrcUrl, fallbackCoverIdx) {
@@ -43595,17 +43681,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               localStorage.removeItem("mod_nai_bookmarks_v1");
               localStorage.removeItem("mod_nai_lexicon_v1");
+              localStorage.removeItem("mod_nai_bookmarks_text_backup_v1");
+              localStorage.removeItem("mod_nai_lexicon_text_backup_v1");
             } catch (_) {}
             const slimBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList)) : null;
             const slimLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList)) : null;
             const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList) : null;
 
-            if (slimBm) {
-              safeNaiLocalSetItem("mod_nai_bookmarks_text_backup_v1", JSON.stringify(slimBm));
-            }
-            if (slimLex) {
-              safeNaiLocalSetItem("mod_nai_lexicon_text_backup_v1", JSON.stringify(slimLex));
-            }
             if (slimFolders) {
               safeNaiLocalSetItem(LEXICON_FOLDERS_STORE_KEY, JSON.stringify(slimFolders));
             }
@@ -43613,6 +43695,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (slimBm) window.state.globalSettings.naiBookmarksCollection = slimBm;
               if (slimLex) window.state.globalSettings.naiLexiconCollection = slimLex;
               if (slimFolders) window.state.globalSettings.naiLexiconFolders = slimFolders;
+              if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+                window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
+              }
+              if (memoryPanelState && typeof memoryPanelState === "object") {
+                window.state.globalSettings.naiPanelState = Object.assign({}, memoryPanelState);
+              }
             }
             if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
               window.db.globalSettings.get("main").then((gs) => {
@@ -43628,6 +43716,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 if (slimFolders) {
                   gs.naiLexiconFolders = slimFolders;
+                  touched = true;
+                }
+                if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+                  gs.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
+                  touched = true;
+                }
+                if (memoryPanelState && typeof memoryPanelState === "object") {
+                  gs.naiPanelState = Object.assign({}, memoryPanelState);
                   touched = true;
                 }
                 if (touched) {
@@ -43648,6 +43744,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (_) {
               try {
                 localStorage.removeItem("coc_module_draft_state_v1");
+                localStorage.removeItem("mod_nai_bookmarks_v1");
+                localStorage.removeItem("mod_nai_lexicon_v1");
+                localStorage.removeItem("mod_nai_bookmarks_text_backup_v1");
+                localStorage.removeItem("mod_nai_lexicon_text_backup_v1");
                 localStorage.setItem(key, val);
                 return true;
               } catch (_2) {
@@ -43795,18 +43895,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (memoryPanelState && typeof memoryPanelState === "object") {
               return Object.assign({}, defaults, memoryPanelState);
             }
+            let localParsed = null;
             try {
               const raw = localStorage.getItem(PANEL_STATE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && typeof parsed === "object") {
-                  memoryPanelState = Object.assign({}, defaults, parsed);
-                  return Object.assign({}, memoryPanelState);
+                  localParsed = parsed;
                 }
               }
             } catch (_) {}
-            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPanelState) {
-              memoryPanelState = Object.assign({}, defaults, window.state.globalSettings.naiPanelState);
+            const gsParsed = (window.state && window.state.globalSettings && window.state.globalSettings.naiPanelState && typeof window.state.globalSettings.naiPanelState === "object")
+              ? window.state.globalSettings.naiPanelState
+              : null;
+            let chosen = localParsed || gsParsed;
+            if (localParsed && gsParsed) {
+              const localTs = typeof localParsed.updatedAt === "number" ? localParsed.updatedAt : 0;
+              const gsTs = typeof gsParsed.updatedAt === "number" ? gsParsed.updatedAt : 0;
+              chosen = gsTs > localTs ? gsParsed : localParsed;
+            }
+            if (chosen) {
+              memoryPanelState = Object.assign({}, defaults, chosen);
               return Object.assign({}, memoryPanelState);
             }
             return Object.assign({}, defaults);
@@ -43823,6 +43932,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             } else {
               safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(localCopy));
+            }
+            if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
+              window.state.globalSettings.naiPanelState = Object.assign({}, nextState);
             }
             persistNaiStoreToTermux(false);
           }
@@ -43888,18 +44000,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
               return clonePresetsStore(memoryPresetsStore);
             }
+            let localParsed = null;
             try {
               const raw = localStorage.getItem(PRESETS_STORE_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && typeof parsed === "object") {
-                  memoryPresetsStore = normalizePresetsStoreObject(parsed);
-                  return clonePresetsStore(memoryPresetsStore);
+                  localParsed = normalizePresetsStoreObject(parsed);
                 }
               }
             } catch (_) {}
-            if (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore) {
-              memoryPresetsStore = normalizePresetsStoreObject(window.state.globalSettings.naiPresetsStore);
+            const gsParsed = (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore && typeof window.state.globalSettings.naiPresetsStore === "object")
+              ? normalizePresetsStoreObject(window.state.globalSettings.naiPresetsStore)
+              : null;
+            let chosen = localParsed || gsParsed;
+            if (localParsed && gsParsed) {
+              const localTs = typeof localParsed.updatedAt === "number" ? localParsed.updatedAt : 0;
+              const gsTs = typeof gsParsed.updatedAt === "number" ? gsParsed.updatedAt : 0;
+              chosen = gsTs > localTs ? gsParsed : localParsed;
+            }
+            if (chosen) {
+              memoryPresetsStore = chosen;
               return clonePresetsStore(memoryPresetsStore);
             }
             memoryPresetsStore = normalizePresetsStoreObject({});
@@ -43914,7 +44035,56 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
               window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
             }
+            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+              window.db.globalSettings.get("main").then((gs) => {
+                if (gs && typeof gs === "object") {
+                  gs.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
+                  window.db.globalSettings.put(gs).catch(() => {});
+                }
+              }).catch(() => {});
+            }
             persistNaiStoreToTermux(false);
+          }
+
+          function syncActiveSelectedPresetsFromDom() {
+            const store = loadPresetsStore();
+            const st = loadPanelState();
+            let storeChanged = false;
+            let stChanged = false;
+            const pairs = [
+              { cat: "artist", selectId: "mod-nai-artist-preset-select", inputId: "mod-nai-gen-artist-input", stateKey: "artistPresetSelected" },
+              { cat: "artist", selectId: "mod-nai-artist2-preset-select", inputId: "mod-nai-gen-artist2-input", stateKey: "artist2PresetSelected" },
+              { cat: "positive", selectId: "mod-nai-pos1-preset-select", inputId: "mod-nai-gen-pos1-input", stateKey: "pos1PresetSelected" },
+              { cat: "positive", selectId: "mod-nai-pos2-preset-select", inputId: "mod-nai-gen-pos2-input", stateKey: "pos2PresetSelected" },
+              { cat: "negative", selectId: "mod-nai-neg-preset-select", inputId: "mod-nai-gen-neg-input", stateKey: "negPresetSelected" }
+            ];
+            pairs.forEach(({ cat, selectId, inputId, stateKey }) => {
+              const sel = document.getElementById(selectId);
+              const inp = document.getElementById(inputId);
+              if (!sel || !inp) return;
+              const selectedName = String(sel.value || st[stateKey] || "").trim();
+              if (!selectedName) return;
+              if (st[stateKey] !== selectedName) {
+                st[stateKey] = selectedName;
+                stChanged = true;
+              }
+              const val = inp.value.trim();
+              const list = Array.isArray(store[cat]) ? store[cat] : [];
+              const idx = list.findIndex((x) => x && x.name === selectedName);
+              if (idx >= 0) {
+                if (list[idx].value !== val) {
+                  list[idx].value = val;
+                  storeChanged = true;
+                }
+              }
+            });
+            if (storeChanged) {
+              savePresetsStore(store);
+            }
+            if (stChanged) {
+              savePanelState(st);
+            }
+            return storeChanged;
           }
 
           function getShortModelLabel(modelVal) {
@@ -43975,6 +44145,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function applyModeView(mode) {
+            const prevMode = currentMode;
             currentMode = mode === "inspect" ? "inspect" : mode === "collection" ? "collection" : "generate";
             const genView = document.getElementById("mod-nai-generate-view");
             const inspectView = document.getElementById("mod-nai-inspect-view");
@@ -43994,6 +44165,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (toggleText) {
               toggleText.textContent = currentMode === "generate" ? "提取" : "生图";
+            }
+            if (prevMode === "collection" && currentMode !== "collection") {
+              destroyNaiCollectionGalleryMemory();
             }
             if (currentMode === "collection" && colActiveSubView === "grid") {
               renderCollectionGrid(true);
@@ -45210,7 +45384,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function handleManualSaveWithFeedback(btnEl) {
+            syncActiveSelectedPresetsFromDom();
             syncModuleNaiToGlobal();
+            renderPresetSelectOptions();
             if (btnEl) {
               const spanEl = btnEl.querySelector("span");
               if (spanEl) {
@@ -45580,7 +45756,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
             const modulesBackBtn = document.getElementById("modules-back-btn");
             if (modulesBackBtn) {
-              modulesBackBtn.addEventListener("click", syncModuleNaiToGlobal);
+              modulesBackBtn.addEventListener("click", () => {
+                syncActiveSelectedPresetsFromDom();
+                syncModuleNaiToGlobal();
+                destroyNaiCollectionGalleryMemory();
+              });
             }
 
             const genSaveAllBtn = document.getElementById("mod-nai-gen-save-all-btn");
@@ -46212,15 +46392,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (isLex) {
               if (lexChipEl) {
-                if (isShared) {
-                  lexChipEl.textContent = "CLOUD / 21G";
-                } else if (isInsideFolder) {
-                  lexChipEl.textContent = `FOLDER / ${colLexiconActiveFolder}`;
-                } else if (isFolderMode) {
-                  lexChipEl.textContent = "MODE / 文件夹";
-                } else {
-                  lexChipEl.textContent = "CH.01 / 展开";
-                }
+                lexChipEl.textContent = isShared ? "CLOUD / 21G" : "CH.01 / 21G";
               }
               if (tabLocalTxt) tabLocalTxt.textContent = "词典";
             } else {
@@ -46229,7 +46401,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (refreshBtn) refreshBtn.style.display = isShared ? "inline-flex" : "none";
-            if (folderEditBtn) folderEditBtn.style.display = isInsideFolder ? "inline-flex" : "none";
+            if (folderEditBtn) folderEditBtn.style.display = isFolderMode ? "inline-flex" : "none";
             if (folderBackBtn) folderBackBtn.style.display = isInsideFolder ? "inline-flex" : "none";
             if (newBtn) newBtn.style.display = isShared ? "none" : "inline-flex";
             if (tabLocal) tabLocal.classList.toggle("is-active", !isShared);
@@ -46446,7 +46618,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (isLex) {
               const ribbon = document.createElement("span");
               ribbon.className = "mod-nai-lex-frame-ribbon";
-              ribbon.textContent = isFolderCard ? `DIR · ${idxNum}` : `KEY · ${idxNum}`;
+              ribbon.textContent = `KEY · ${idxNum}`;
               frame.appendChild(ribbon);
             }
 
@@ -46500,7 +46672,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (isLex) {
               titleLine.innerHTML =
                 `<span><i class="mod-nai-lex-caption-bracket">「</i>${safeRawTitle}<i class="mod-nai-lex-caption-bracket">」</i></span>` +
-                `<i class="mod-nai-lex-caption-page">${isFolderCard ? `F.${idxNum} ↗` : `P.${idxNum} ↗`}</i>`;
+                `<i class="mod-nai-lex-caption-page">P.${idxNum} ↗</i>`;
             } else {
               titleLine.innerHTML = `<span><em>Trace</em> / ${safeRawTitle}</span><i class="mod-nai-specimen-arrow">↗</i>`;
             }
@@ -46559,42 +46731,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
           }
 
+          function destroyNaiCollectionGalleryMemory() {
+            const gridEl = document.getElementById("mod-nai-col-grid-container");
+            clearMountedCollectionPages(gridEl);
+            colLastGridContextKey = "";
+            clearAllPredecodedImages();
+          }
+
           function applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, buildPageCardsFn) {
-            const winStartPage = Math.max(1, curPage - 1);
-            const winEndPage = Math.min(totalPages, curPage + 1);
-
-            const evictedPages = [];
-            for (const [pageNum, pageEntry] of Array.from(colMountedPagesMap.entries())) {
-              if (pageNum < winStartPage || pageNum > winEndPage) {
-                evictedPages.push(pageEntry);
-                colMountedPagesMap.delete(pageNum);
-              }
-            }
-
-            const evictedRefs = [];
-            evictedPages.forEach((pageEntry) => {
-              if (!pageEntry || !Array.isArray(pageEntry.cards)) return;
-              pageEntry.cards.forEach((cardEl) => {
-                if (!cardEl) return;
-                const imgEl = cardEl.querySelector("img");
-                if (imgEl) {
-                  const vRef = imgEl.getAttribute("data-vault-ref") || "";
-                  const hydrated = imgEl.getAttribute("data-vault-hydrated-src") || imgEl.getAttribute("src") || "";
-                  imgEl.removeAttribute("src");
-                  imgEl.removeAttribute("data-vault-hydrated-src");
-                  if (vRef && vRef.startsWith("vault://")) {
-                    evictedRefs.push({ vRef, hydrated });
-                  }
-                }
-                if (cardEl.parentNode) {
-                  cardEl.remove();
-                }
-              });
-            });
-
-            // 优先挂载当前页，再挂载相邻前后页，总共最多维持三页十八张图在滑动窗口内
+            // 进入收藏与词典界面时：优先挂载当前页，随后把其余全部页码也在后台挂载并预加载封面图，翻页时零延迟秒切；退出收藏与词典界面时由 destroyNaiCollectionGalleryMemory 统一销毁释放内存
             const mountOrder = [curPage];
-            for (let p = winStartPage; p <= winEndPage; p++) {
+            for (let p = 1; p <= totalPages; p++) {
               if (p !== curPage) mountOrder.push(p);
             }
 
@@ -46621,7 +46768,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               gridEl.appendChild(frag);
             }
 
-            const activeWindowRefs = new Set();
             for (const [pageNum, pageEntry] of colMountedPagesMap.entries()) {
               const isVisiblePage = pageNum === curPage;
               if (pageEntry && Array.isArray(pageEntry.cards)) {
@@ -46632,19 +46778,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                 });
               }
-              if (pageEntry && Array.isArray(pageEntry.refs)) {
-                pageEntry.refs.forEach((r) => activeWindowRefs.add(r));
-              }
             }
-
-            evictedRefs.forEach(({ vRef, hydrated }) => {
-              if (!activeWindowRefs.has(vRef)) {
-                if (hydrated) releasePredecodedUrl(hydrated);
-                if (typeof window.evictVaultBlobCacheByRef === "function") {
-                  window.evictVaultBlobCacheByRef(vRef);
-                }
-              }
-            });
           }
 
           function renderCollectionGrid(forceRebuild) {
@@ -47333,7 +47467,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function renderFolderEditCoverPreview() {
-            const stageEl = document.getElementById("mod-nai-col-folder-img-stage");
+            const stageEl = document.getElementById("mod-nai-folder-edit-img-stage");
             if (!stageEl) return;
             stageEl.innerHTML = "";
             if (colFolderCoverDraft && colFolderCoverDraft.trim()) {
@@ -47366,9 +47500,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 };
             colFolderCoverDraft = colEditingFolderObj.coverImage || "";
 
-            const nameInp = document.getElementById("mod-nai-col-folder-name-input");
-            const delBtn = document.getElementById("mod-nai-col-folder-delete-btn");
-            const checklistEl = document.getElementById("mod-nai-col-folder-items-checklist");
+            const nameInp = document.getElementById("mod-nai-folder-edit-name-input");
+            const delBtn = document.getElementById("mod-nai-folder-edit-delete-btn");
+            const checklistEl = document.getElementById("mod-nai-folder-edit-items-list");
 
             if (nameInp) {
               nameInp.value = colEditingFolderObj.name || "";
@@ -47421,8 +47555,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           async function saveCurrentLexiconFolderEdit() {
-            const nameInp = document.getElementById("mod-nai-col-folder-name-input");
-            const checklistEl = document.getElementById("mod-nai-col-folder-items-checklist");
+            const nameInp = document.getElementById("mod-nai-folder-edit-name-input");
+            const checklistEl = document.getElementById("mod-nai-folder-edit-items-list");
             const newName = (nameInp ? nameInp.value : "").trim();
             if (!newName) {
               if (typeof window.showCustomAlert === "function") {
@@ -47477,7 +47611,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (checkedIds.has(it.id)) {
                 it.folder = newName;
               } else if (origName && curF === origName) {
-                it.folder = newName === DEFAULT_LEXICON_FOLDER_NAME ? DEFAULT_LEXICON_FOLDER_NAME : DEFAULT_LEXICON_FOLDER_NAME;
+                it.folder = DEFAULT_LEXICON_FOLDER_NAME;
               }
             });
 
@@ -47830,8 +47964,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (folderEditBtn) {
               folderEditBtn.addEventListener("click", () => {
-                if (!isLexiconCategory() || colScope === "shared" || !colLexiconActiveFolder) return;
-                openLexiconFolderEditView(colLexiconActiveFolder);
+                if (!isLexiconCategory() || colScope === "shared" || colLexiconViewMode !== "folder") return;
+                openLexiconFolderEditView(colLexiconActiveFolder || null);
               });
             }
 
@@ -47841,6 +47975,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 colSortSourceIndex = -1;
                 switchCollectionSubView("grid");
                 renderCollectionGrid();
+              });
+            }
+
+            if (closeBtn) {
+              closeBtn.addEventListener("click", () => {
+                applyModeView("generate");
+                const st = loadPanelState();
+                st.mode = "generate";
+                savePanelState(st);
+                destroyNaiCollectionGalleryMemory();
               });
             }
 
@@ -47856,8 +48000,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 colSortSourceIndex = -1;
                 setColStatus("");
                 switchCollectionSubView("grid");
-                renderCollectionGrid();
                 applyModeView("collection");
+                renderCollectionGrid();
                 const st = loadPanelState();
                 st.mode = "collection";
                 savePanelState(st);
@@ -47866,10 +48010,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (newBtn) {
               newBtn.addEventListener("click", () => {
-                if (isLexiconCategory() && colScope === "local" && colLexiconViewMode === "folder" && !colLexiconActiveFolder) {
-                  openLexiconFolderEditView(null);
-                  return;
-                }
                 openCreateNewBookmarkEditView();
               });
             }
@@ -47893,8 +48033,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   colSortSourceIndex = -1;
                   setColStatus("");
                   switchCollectionSubView("grid");
-                  renderCollectionGrid();
                   applyModeView("collection");
+                  renderCollectionGrid();
                 }
               });
             }
@@ -48328,13 +48468,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             // 视图四：词典分组管理页事件
-            const folderEditBackBtn = document.getElementById("mod-nai-col-folder-edit-back-btn");
-            const folderImgStage = document.getElementById("mod-nai-col-folder-img-stage");
-            const folderFileInput = document.getElementById("mod-nai-col-folder-file-input");
-            const folderGrabCoverBtn = document.getElementById("mod-nai-col-folder-grab-cover-btn");
-            const folderClearCoverBtn = document.getElementById("mod-nai-col-folder-clear-cover-btn");
-            const folderDeleteBtn = document.getElementById("mod-nai-col-folder-delete-btn");
-            const folderSaveBtn = document.getElementById("mod-nai-col-folder-save-btn");
+            const folderEditBackBtn = document.getElementById("mod-nai-folder-edit-back-btn");
+            const folderImgStage = document.getElementById("mod-nai-folder-edit-img-stage");
+            const folderFileInput = document.getElementById("mod-nai-folder-edit-file-input");
+            const folderGrabCoverBtn = document.getElementById("mod-nai-folder-edit-grab-btn");
+            const folderClearCoverBtn = document.getElementById("mod-nai-folder-edit-clear-cover-btn");
+            const folderDeleteBtn = document.getElementById("mod-nai-folder-edit-delete-btn");
+            const folderSaveBtn = document.getElementById("mod-nai-folder-edit-save-btn");
 
             if (folderEditBackBtn) {
               folderEditBackBtn.addEventListener("click", () => {
@@ -48428,6 +48568,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               st.mode = "generate";
               savePanelState(st);
               applyModeView("generate");
+              destroyNaiCollectionGalleryMemory();
             } else {
               st.mode = "collection";
               savePanelState(st);
@@ -48504,7 +48645,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             applyThemeToPanel(st.theme || "folio");
-            prewarmNaiCollectionImages();
             if (st.mode === "collection") {
               switchCollectionSubView("grid");
             }
@@ -48724,6 +48864,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 persistCurrentBookmarkEditDraft(true);
               }
             } catch (_) {}
+            syncActiveSelectedPresetsFromDom();
             syncModuleNaiToGlobal();
             persistNaiStoreToTermux(true);
           }
@@ -48903,65 +49044,91 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const candPresets = (remoteStore && remoteStore.presets) || backupPresets || (legacyGs && legacyGs.naiPresetsStore);
               if (candPresets && typeof candPresets === "object") {
                 const curP = loadPresetsStore();
-                const mergeCategoryPresets = (localArr, remoteArr) => {
-                  const map = new Map();
-                  (Array.isArray(remoteArr) ? remoteArr : []).forEach((it) => {
-                    if (it && it.name) map.set(it.name, Object.assign({}, it));
-                  });
-                  (Array.isArray(localArr) ? localArr : []).forEach((it) => {
-                    if (it && it.name) map.set(it.name, Object.assign(map.get(it.name) || {}, it));
-                  });
-                  return Array.from(map.values());
-                };
-                const mergeGroupNames = (localG, remoteG) => {
-                  return Array.from(new Set([...(Array.isArray(remoteG) ? remoteG : []), ...(Array.isArray(localG) ? localG : [])].map((x) => String(x || "").trim()).filter(Boolean)));
-                };
-                const candGroups = (candPresets.groups && typeof candPresets.groups === "object") ? candPresets.groups : {};
-                const curGroups = (curP.groups && typeof curP.groups === "object") ? curP.groups : {};
-                memoryPresetsStore = {
-                  artist: mergeCategoryPresets(curP.artist, candPresets.artist),
-                  positive: mergeCategoryPresets(curP.positive, candPresets.positive),
-                  negative: mergeCategoryPresets(curP.negative, candPresets.negative),
-                  groups: {
-                    artist: mergeGroupNames(curGroups.artist, candGroups.artist),
-                    positive: mergeGroupNames(curGroups.positive, candGroups.positive),
-                    negative: mergeGroupNames(curGroups.negative, candGroups.negative)
+                const localTs = Number(curP.updatedAt || 0);
+                const remoteTs = Number(candPresets.updatedAt || (remoteStore && remoteStore.updatedAt) || 0);
+                if (localTs === 0 || remoteTs > localTs) {
+                  const mergeCategoryPresets = (localArr, remoteArr) => {
+                    const map = new Map();
+                    (Array.isArray(localArr) ? localArr : []).forEach((it) => {
+                      if (it && it.name) map.set(it.name, Object.assign({}, it));
+                    });
+                    (Array.isArray(remoteArr) ? remoteArr : []).forEach((it) => {
+                      if (it && it.name) map.set(it.name, Object.assign(map.get(it.name) || {}, it));
+                    });
+                    return Array.from(map.values());
+                  };
+                  const mergeGroupNames = (localG, remoteG) => {
+                    return Array.from(new Set([...(Array.isArray(localG) ? localG : []), ...(Array.isArray(remoteG) ? remoteG : [])].map((x) => String(x || "").trim()).filter(Boolean)));
+                  };
+                  const candGroups = (candPresets.groups && typeof candPresets.groups === "object") ? candPresets.groups : {};
+                  const curGroups = (curP.groups && typeof curP.groups === "object") ? curP.groups : {};
+                  memoryPresetsStore = {
+                    artist: localTs === 0 ? mergeCategoryPresets(curP.artist, candPresets.artist) : (Array.isArray(candPresets.artist) ? candPresets.artist : curP.artist),
+                    positive: localTs === 0 ? mergeCategoryPresets(curP.positive, candPresets.positive) : (Array.isArray(candPresets.positive) ? candPresets.positive : curP.positive),
+                    negative: localTs === 0 ? mergeCategoryPresets(curP.negative, candPresets.negative) : (Array.isArray(candPresets.negative) ? candPresets.negative : curP.negative),
+                    groups: {
+                      artist: localTs === 0 ? mergeGroupNames(curGroups.artist, candGroups.artist) : (Array.isArray(candGroups.artist) ? candGroups.artist : (curGroups.artist || [])),
+                      positive: localTs === 0 ? mergeGroupNames(curGroups.positive, candGroups.positive) : (Array.isArray(candGroups.positive) ? candGroups.positive : (curGroups.positive || [])),
+                      negative: localTs === 0 ? mergeGroupNames(curGroups.negative, candGroups.negative) : (Array.isArray(candGroups.negative) ? candGroups.negative : (curGroups.negative || []))
+                    },
+                    updatedAt: Math.max(localTs, remoteTs, Date.now())
+                  };
+                  safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+                  if (window.state && window.state.globalSettings) {
+                    window.state.globalSettings.naiPresetsStore = memoryPresetsStore;
                   }
-                };
-                try {
-                  localStorage.setItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
-                } catch (_) {}
-                changed = true;
+                  changed = true;
+                }
               }
 
               const candState = (remoteStore && remoteStore.panelState) || backupPanelState || (legacyGs && legacyGs.naiPanelState);
               if (candState && typeof candState === "object") {
                 const curSt = loadPanelState();
-                if (!curSt.lastGeneratedImage && candState.lastGeneratedImage) {
+                const localStTs = Number(curSt.updatedAt || 0);
+                const remoteStTs = Number(candState.updatedAt || (remoteStore && remoteStore.updatedAt) || 0);
+                if (localStTs === 0 || remoteStTs > localStTs) {
+                  memoryPanelState = Object.assign({}, curSt, candState, {
+                    mode: curSt.mode || candState.mode || "generate",
+                    updatedAt: Math.max(localStTs, remoteStTs)
+                  });
+                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
+                  if (window.state && window.state.globalSettings) {
+                    window.state.globalSettings.naiPanelState = memoryPanelState;
+                  }
+                  const artistEl = document.getElementById("mod-nai-gen-artist-input");
+                  const artist2El = document.getElementById("mod-nai-gen-artist2-input");
+                  const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+                  const pos2El = document.getElementById("mod-nai-gen-pos2-input");
+                  const negEl = document.getElementById("mod-nai-gen-neg-input");
+                  if (artistEl && document.activeElement !== artistEl && memoryPanelState.artistText !== undefined) artistEl.value = memoryPanelState.artistText;
+                  if (artist2El && document.activeElement !== artist2El && memoryPanelState.artist2Text !== undefined) artist2El.value = memoryPanelState.artist2Text;
+                  if (pos1El && document.activeElement !== pos1El && memoryPanelState.pos1Text !== undefined) pos1El.value = memoryPanelState.pos1Text;
+                  if (pos2El && document.activeElement !== pos2El && memoryPanelState.pos2Text !== undefined) pos2El.value = memoryPanelState.pos2Text;
+                  if (negEl && document.activeElement !== negEl && memoryPanelState.negText !== undefined) negEl.value = memoryPanelState.negText;
+                  changed = true;
+                } else if (!curSt.lastGeneratedImage && candState.lastGeneratedImage) {
                   curSt.lastGeneratedImage = candState.lastGeneratedImage;
                   curSt.lastGeneratedTitle = candState.lastGeneratedTitle || "";
                   memoryPanelState = curSt;
-                  try {
-                    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(curSt));
-                  } catch (_) {}
+                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(curSt));
+                }
+                const finalImg = (memoryPanelState && memoryPanelState.lastGeneratedImage) || curSt.lastGeneratedImage;
+                const finalTitle = (memoryPanelState && memoryPanelState.lastGeneratedTitle) || curSt.lastGeneratedTitle;
+                if (finalImg) {
                   const genResultImg = document.getElementById("mod-nai-gen-result-img");
                   const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
                   const genStatusText = document.getElementById("mod-nai-gen-status-text");
                   if (genResultImg && (!genResultImg.getAttribute("src") || genResultImg.style.display === "none")) {
-                    if (curSt.lastGeneratedImage.startsWith("vault://")) {
-                      genResultImg.setAttribute("data-vault-ref", curSt.lastGeneratedImage);
+                    if (finalImg.startsWith("vault://")) {
+                      genResultImg.setAttribute("data-vault-ref", finalImg);
                     }
-                    bindNaiVaultAwareImage(genResultImg, curSt.lastGeneratedImage);
+                    bindNaiVaultAwareImage(genResultImg, finalImg);
                     genResultImg.style.display = "block";
                     if (genPlaceholder) genPlaceholder.style.display = "none";
-                    if (genStatusText && curSt.lastGeneratedTitle) {
-                      genStatusText.textContent = curSt.lastGeneratedTitle;
+                    if (genStatusText && finalTitle) {
+                      genStatusText.textContent = finalTitle;
                     }
                   }
-                }
-                if (!memoryPanelState) {
-                  memoryPanelState = Object.assign({}, curSt, candState);
-                  changed = true;
                 }
               }
 
@@ -48974,7 +49141,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 purgeBrowserDuplicateNaiCopies();
               }
 
-              prewarmNaiCollectionImages();
               if (changed) {
                 renderPresetSelectOptions();
                 renderCollectionGrid(true);
@@ -127484,7 +127650,7 @@ ${specificRules}`;
           }
           window.resolveVaultRefToDataUrl = resolveVaultRefToDataUrl;
 
-          async function resolveAllVaultUrlsDeepForBackup(rootObj, externalCache = null) {
+          async function resolveAllVaultUrlsDeepForBackup(rootObj, externalCache = null, emittedRefsSet = null) {
             if (!rootObj || typeof rootObj !== "object") return rootObj;
             if (typeof restoreVaultRefsInObjectDeep === "function") {
               try { restoreVaultRefsInObjectDeep(rootObj); } catch (_) {}
@@ -127508,6 +127674,7 @@ ${specificRules}`;
                 return;
               }
               for (const k of Object.keys(obj)) {
+                if (k === "senderAvatar") continue;
                 const v = obj[k];
                 if (typeof v === "string") {
                   if (v.startsWith("vault://") || v.startsWith("blob:")) {
@@ -127530,18 +127697,44 @@ ${specificRules}`;
             const strTasks = tasks.filter((t) => typeof t.val === "string");
             const jsonTasks = tasks.filter((t) => t.jsonObj);
             const cache = externalCache instanceof Map ? externalCache : new Map();
+            const dedupSet = emittedRefsSet instanceof Set ? emittedRefsSet : null;
             const BATCH = 8;
             for (let i = 0; i < strTasks.length; i += BATCH) {
               const slice = strTasks.slice(i, i + BATCH);
               await Promise.all(
                 slice.map(async (t) => {
                   try {
+                    const normRef =
+                      t.val.startsWith("blob:") && blobUrlToVaultRefMap.has(t.val)
+                        ? blobUrlToVaultRefMap.get(t.val)
+                        : t.val;
+                    if (dedupSet && normRef && normRef.startsWith("vault://")) {
+                      if (dedupSet.has(normRef)) {
+                        t.holder[t.key] = normRef;
+                        return;
+                      }
+                    }
                     if (cache.has(t.val)) {
-                      t.holder[t.key] = cache.get(t.val);
+                      const cachedDataUrl = cache.get(t.val);
+                      if (dedupSet && normRef && normRef.startsWith("vault://")) {
+                        if (dedupSet.has(normRef)) {
+                          t.holder[t.key] = normRef;
+                          return;
+                        }
+                        dedupSet.add(normRef);
+                      }
+                      t.holder[t.key] = cachedDataUrl;
                       return;
                     }
                     const dataUrl = await resolveVaultRefToDataUrl(t.val);
                     if (typeof dataUrl === "string" && dataUrl.startsWith("data:")) {
+                      if (dedupSet && normRef && normRef.startsWith("vault://")) {
+                        if (dedupSet.has(normRef)) {
+                          t.holder[t.key] = normRef;
+                          return;
+                        }
+                        dedupSet.add(normRef);
+                      }
                       if (cache.size >= 80) {
                         const firstKey = cache.keys().next().value;
                         if (firstKey !== undefined) cache.delete(firstKey);
