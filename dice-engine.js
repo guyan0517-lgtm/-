@@ -516,38 +516,130 @@ function normalizeWeatherPool(pool) {
   return pool;
 }
 
-// 获取天气池预设
+// 获取与保存天气池预设（内存直存 + IndexedDB + localStorage 多重保障，防止 localStorage 满容导致新建/添加/导入失效或跳回寒带）
+window._memoryWeatherPools = window._memoryWeatherPools || null;
+window._memoryActiveWeatherPoolId = window._memoryActiveWeatherPoolId || "";
+
+function getActiveWeatherPoolId() {
+  if (window._memoryActiveWeatherPoolId) {
+    return window._memoryActiveWeatherPoolId;
+  }
+  try {
+    const storedId = localStorage.getItem("coc_active_weather_pool_id");
+    if (storedId) {
+      window._memoryActiveWeatherPoolId = storedId;
+      return storedId;
+    }
+  } catch (e) {}
+  return "";
+}
+window.getActiveWeatherPoolId = getActiveWeatherPoolId;
+
+function setActiveWeatherPoolId(poolId) {
+  if (!poolId) return;
+  window._memoryActiveWeatherPoolId = String(poolId);
+  try {
+    localStorage.setItem("coc_active_weather_pool_id", String(poolId));
+  } catch (e) {
+    try {
+      localStorage.removeItem("system_weather_pools");
+      localStorage.setItem("coc_active_weather_pool_id", String(poolId));
+    } catch (_) {}
+  }
+  try {
+    const dbInst = window.db || (typeof db !== "undefined" ? db : null);
+    if (dbInst && dbInst.globalSettings) {
+      dbInst.globalSettings.get("global").then(rec => {
+        if (rec) {
+          rec.activeWeatherPoolId = String(poolId);
+          dbInst.globalSettings.put(rec).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+window.setActiveWeatherPoolId = setActiveWeatherPoolId;
+
 function getStoredWeatherPools() {
+  if (Array.isArray(window._memoryWeatherPools) && window._memoryWeatherPools.length > 0) {
+    return JSON.parse(JSON.stringify(window._memoryWeatherPools)).map(normalizeWeatherPool);
+  }
   try {
     const raw = localStorage.getItem("coc_weather_pools") || localStorage.getItem("system_weather_pools");
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(normalizeWeatherPool);
+        const normalized = parsed.map(normalizeWeatherPool);
+        window._memoryWeatherPools = JSON.parse(JSON.stringify(normalized));
+        return normalized;
       }
     }
   } catch (e) {
     console.error("读取天气池预设失败:", e);
   }
-  return JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS)).map(normalizeWeatherPool);
+  const defaults = JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS)).map(normalizeWeatherPool);
+  window._memoryWeatherPools = JSON.parse(JSON.stringify(defaults));
+  return defaults;
 }
 window.getStoredWeatherPools = getStoredWeatherPools;
 
 function saveStoredWeatherPools(pools) {
+  const normalized = Array.isArray(pools) && pools.length > 0
+    ? pools.map(p => normalizeWeatherPool(JSON.parse(JSON.stringify(p))))
+    : JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS)).map(normalizeWeatherPool);
+  window._memoryWeatherPools = JSON.parse(JSON.stringify(normalized));
+  const jsonStr = JSON.stringify(normalized);
   try {
-    const normalized = Array.isArray(pools) ? pools.map(normalizeWeatherPool) : [];
-    const jsonStr = JSON.stringify(normalized);
+    localStorage.removeItem("system_weather_pools");
     localStorage.setItem("coc_weather_pools", jsonStr);
-    localStorage.setItem("system_weather_pools", jsonStr);
   } catch (e) {
-    console.error("保存天气池预设失败:", e);
+    console.warn("localStorage 空间不足，已自动切换至内存与数据库存储天气池:", e);
   }
+  try {
+    const dbInst = window.db || (typeof db !== "undefined" ? db : null);
+    if (dbInst && dbInst.globalSettings) {
+      dbInst.globalSettings.get("global").then(rec => {
+        if (rec) {
+          rec.weatherPools = JSON.parse(jsonStr);
+          if (window._memoryActiveWeatherPoolId) {
+            rec.activeWeatherPoolId = window._memoryActiveWeatherPoolId;
+          }
+          dbInst.globalSettings.put(rec).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  } catch (_) {}
 }
 window.saveStoredWeatherPools = saveStoredWeatherPools;
 
+// 启动时从 IndexedDB 恢复天气池（防止 localStorage 满容后刷新丢失）
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    try {
+      const dbInst = window.db || (typeof db !== "undefined" ? db : null);
+      if (dbInst && dbInst.globalSettings) {
+        dbInst.globalSettings.get("global").then(rec => {
+          if (rec && Array.isArray(rec.weatherPools) && rec.weatherPools.length > 0) {
+            const normalized = rec.weatherPools.map(normalizeWeatherPool);
+            if (!window._memoryWeatherPools || window._memoryWeatherPools.length <= 3) {
+              window._memoryWeatherPools = JSON.parse(JSON.stringify(normalized));
+              try {
+                localStorage.setItem("coc_weather_pools", JSON.stringify(normalized));
+              } catch (_) {}
+            }
+          }
+          if (rec && rec.activeWeatherPoolId && !window._memoryActiveWeatherPoolId) {
+            window._memoryActiveWeatherPoolId = String(rec.activeWeatherPoolId);
+          }
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }, 300);
+});
+
 function getActiveWeatherPool() {
   const pools = getStoredWeatherPools();
-  const activeId = localStorage.getItem("coc_active_weather_pool_id");
+  const activeId = getActiveWeatherPoolId();
   const found = pools.find(p => p.id === activeId);
   return found || pools[0];
 }
@@ -3462,9 +3554,14 @@ let activeWeatherSeason = "春季";
 
 function renderWeatherTab(container) {
   const pools = getStoredWeatherPools();
-  const activeId = localStorage.getItem("coc_active_weather_pool_id");
+  const activeId = getActiveWeatherPoolId();
   let activePool = pools.find(p => p.id === activeId) || pools[0];
+  if (!activePool) {
+    activePool = normalizeWeatherPool(JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS[0])));
+    pools.push(activePool);
+  }
   normalizeWeatherPool(activePool);
+  setActiveWeatherPoolId(activePool.id);
 
   const seasonsList = ["春季", "夏季", "秋季", "冬季"];
   if (!seasonsList.includes(activeWeatherSeason)) {
@@ -3481,14 +3578,16 @@ function renderWeatherTab(container) {
   }).join("");
 
   let itemsHtml = currentSeasonItems.map((item, index) => {
+    const safeName = String(item.name || "").replace(/"/g, "&quot;");
+    const safeNote = String(item.note || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return `
-      <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 6px; background: var(--secondary-bg); padding: 4px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
-        <input type="text" class="moe-input weather-name-input" data-index="${index}" value="${item.name || ''}" placeholder="天气名称" style="width: 72px; flex-shrink: 0; font-size: 11px; padding: 2px 4px; border-radius: 6px;">
+      <div class="weather-item-row" style="display: flex; gap: 4px; align-items: center; margin-bottom: 6px; background: var(--secondary-bg); padding: 4px 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+        <input type="text" class="moe-input weather-name-input" data-index="${index}" value="${safeName}" placeholder="天气名称" style="width: 72px; flex-shrink: 0; font-size: 11px; padding: 2px 4px; border-radius: 6px;">
         <div style="display: flex; align-items: center; gap: 2px; width: 56px; flex-shrink: 0;">
           <input type="number" class="moe-input weather-rate-input" data-index="${index}" value="${item.rate}" placeholder="概率" style="width: 40px; font-size: 11px; padding: 2px 4px; text-align: right; border-radius: 6px;">
           <span style="font-size: 11px; color: var(--text-secondary);">%</span>
         </div>
-        <textarea class="moe-input weather-note-input" data-index="${index}" placeholder="备注" rows="1" style="flex: 1 1 auto; font-size: 11px; padding: 4px 6px; min-height: 26px; height: 26px; border-radius: 6px; resize: vertical; box-sizing: border-box;">${item.note || ''}</textarea>
+        <textarea class="moe-input weather-note-input" data-index="${index}" placeholder="备注" rows="1" style="flex: 1 1 auto; font-size: 11px; padding: 4px 6px; min-height: 26px; height: 26px; border-radius: 6px; resize: vertical; box-sizing: border-box;">${safeNote}</textarea>
         <button type="button" class="moe-btn-mini weather-del-item-btn" data-index="${index}" style="flex: 0 0 auto !important; width: 22px !important; height: 22px !important; min-width: 22px !important; padding: 0 !important; line-height: 20px !important; text-align: center; color: var(--tukey-accent-red, #ff4d4f);">&times;</button>
       </div>
     `;
@@ -3525,6 +3624,25 @@ function renderWeatherTab(container) {
       ${itemsHtml}
     </div>
 
+    <!-- 新建天气池模态弹窗 -->
+    <div id="weather-new-pool-modal" class="modal">
+      <div class="modal-content" style="max-width: 280px; padding: 14px; border-radius: 16px;">
+        <div class="modal-header" style="font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 8px;">
+          <span>新建</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">气候名称</label>
+            <input type="text" id="weather-new-pool-name-input" class="moe-input" value="新气候" placeholder="请输入气候名称" style="width: 100%; height: 34px; font-size: 12px; padding: 4px 8px; border-radius: 8px; box-sizing: border-box;">
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 10px;">
+          <button type="button" id="weather-new-pool-confirm-btn" class="moe-btn" style="flex: 1; height: 30px; font-size: 12px; border-radius: 8px;">确定</button>
+          <button type="button" id="weather-new-pool-cancel-btn" class="cancel" style="flex: 1; height: 30px; font-size: 12px; border-radius: 8px;">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 复制季节模态弹窗 -->
     <div id="weather-copy-season-modal" class="modal">
       <div class="modal-content" style="max-width: 280px; padding: 14px; border-radius: 16px;">
@@ -3558,6 +3676,24 @@ function renderWeatherTab(container) {
       </div>
     </div>
 
+    <!-- 导入天气池模态弹窗（支持选文件导入与直接粘贴文本导入） -->
+    <div id="weather-import-modal" class="modal">
+      <div class="modal-content" style="max-width: 340px; padding: 14px; border-radius: 16px;">
+        <div class="modal-header" style="font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 6px;">
+          <span>导入</span>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 8px; padding: 4px 0;">
+          <button type="button" id="weather-choose-file-btn" class="moe-btn" style="width: 100%; height: 32px; font-size: 12px; border-radius: 8px;">选择文件</button>
+          <div style="font-size: 11px; font-weight: 600; color: var(--text-primary); margin-top: 2px;">或直接粘贴天气文本：</div>
+          <textarea id="weather-direct-paste-input" class="moe-input" placeholder="将复制的天气池文本粘贴到这里，点击下方导入..." style="width: 100%; height: 120px; font-size: 11px; border-radius: 8px; resize: vertical; line-height: 1.5; padding: 6px; box-sizing: border-box; background: var(--secondary-bg); color: var(--text-primary);"></textarea>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 8px; margin-top: 10px; padding: 0; border-top: none;">
+          <button type="button" id="weather-confirm-import-btn" class="moe-btn" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">导入</button>
+          <button type="button" id="weather-cancel-import-btn" class="cancel" style="flex: 1; height: 32px; font-size: 12px; border-radius: 8px;">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 提示词指导与粘贴导入模态弹窗 -->
     <div id="weather-prompt-modal" class="modal">
       <div class="modal-content" style="max-width: 340px; padding: 14px; border-radius: 16px;">
@@ -3585,12 +3721,12 @@ function renderWeatherTab(container) {
     const names = container.querySelectorAll(".weather-name-input");
     const rates = container.querySelectorAll(".weather-rate-input");
     const notes = container.querySelectorAll(".weather-note-input");
-    if (names.length > 0 && activePool && activePool.seasons) {
+    if (activePool && activePool.seasons) {
       activePool.seasons[activeWeatherSeason] = [];
       for (let i = 0; i < names.length; i++) {
         activePool.seasons[activeWeatherSeason].push({
           name: names[i].value.trim() || "晴天",
-          rate: parseFloat(rates[i].value) || 0,
+          rate: !isNaN(parseFloat(rates[i].value)) ? parseFloat(rates[i].value) : 0,
           note: notes[i].value.trim()
         });
       }
@@ -3598,11 +3734,19 @@ function renderWeatherTab(container) {
     }
   }
 
+  // 实时同步输入变动，防止未点保存时切换或添加丢失修改
+  container.querySelectorAll(".weather-name-input, .weather-rate-input, .weather-note-input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      collectCurrentSeasonFromDOM();
+      saveStoredWeatherPools(pools);
+    });
+  });
+
   // 绑定事件：切换天气池
   document.getElementById("weather-pool-select").onchange = (e) => {
     collectCurrentSeasonFromDOM();
     saveStoredWeatherPools(pools);
-    localStorage.setItem("coc_active_weather_pool_id", e.target.value);
+    setActiveWeatherPoolId(e.target.value);
     renderWeatherTab(container);
   };
 
@@ -3620,20 +3764,19 @@ function renderWeatherTab(container) {
   document.getElementById("weather-save-pool-btn").onclick = async () => {
     collectCurrentSeasonFromDOM();
     saveStoredWeatherPools(pools);
+    setActiveWeatherPoolId(activePool.id);
     const saveBtn = document.getElementById("weather-save-pool-btn");
     saveBtn.textContent = "已保存";
     setTimeout(() => { saveBtn.textContent = "保存"; }, 1000);
   };
 
-  // 绑定事件：新建天气池
-  document.getElementById("weather-new-pool-btn").onclick = async () => {
-    let name = null;
-    if (typeof window.showCustomPrompt === "function") {
-      name = await window.showCustomPrompt("新建天气池", "请输入气候名称", "新气候");
-    } else {
-      name = prompt("请输入气候名称:");
-    }
-    if (!name || !name.trim()) return;
+  // 绑定事件：新建天气池（使用内嵌模态框，100% 稳定触发与保存）
+  const newPoolModal = document.getElementById("weather-new-pool-modal");
+  const newPoolNameInput = document.getElementById("weather-new-pool-name-input");
+  const executeCreateNewPool = () => {
+    collectCurrentSeasonFromDOM();
+    const rawName = newPoolNameInput ? newPoolNameInput.value.trim() : "";
+    const finalName = rawName || ("新气候" + (pools.length + 1));
     const newId = "weather_" + Date.now();
     const defaultList = [
       { name: "晴天", rate: 50, note: "温和宜人" },
@@ -3642,7 +3785,7 @@ function renderWeatherTab(container) {
     ];
     const newPool = normalizeWeatherPool({
       id: newId,
-      name: name.trim(),
+      name: finalName,
       seasons: {
         "春季": JSON.parse(JSON.stringify(defaultList)),
         "夏季": JSON.parse(JSON.stringify(defaultList)),
@@ -3653,9 +3796,37 @@ function renderWeatherTab(container) {
     });
     pools.push(newPool);
     saveStoredWeatherPools(pools);
-    localStorage.setItem("coc_active_weather_pool_id", newId);
+    setActiveWeatherPoolId(newId);
+    if (newPoolModal) newPoolModal.classList.remove("visible");
     renderWeatherTab(container);
   };
+
+  document.getElementById("weather-new-pool-btn").onclick = () => {
+    if (newPoolNameInput) {
+      newPoolNameInput.value = "新气候";
+    }
+    if (newPoolModal) {
+      newPoolModal.classList.add("visible");
+      setTimeout(() => {
+        if (newPoolNameInput) {
+          newPoolNameInput.focus();
+          newPoolNameInput.select();
+        }
+      }, 50);
+    }
+  };
+  document.getElementById("weather-new-pool-confirm-btn").onclick = executeCreateNewPool;
+  document.getElementById("weather-new-pool-cancel-btn").onclick = () => {
+    if (newPoolModal) newPoolModal.classList.remove("visible");
+  };
+  if (newPoolNameInput) {
+    newPoolNameInput.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        executeCreateNewPool();
+      }
+    };
+  }
 
   // 绑定事件：删除天气池
   document.getElementById("weather-del-pool-btn").onclick = async () => {
@@ -3679,7 +3850,7 @@ function renderWeatherTab(container) {
     if (idx !== -1) {
       pools.splice(idx, 1);
       saveStoredWeatherPools(pools);
-      localStorage.setItem("coc_active_weather_pool_id", pools[0].id);
+      setActiveWeatherPoolId(pools[0].id);
       renderWeatherTab(container);
     }
   };
@@ -3695,7 +3866,17 @@ function renderWeatherTab(container) {
     });
     rebuildWeatherPoolItems(activePool);
     saveStoredWeatherPools(pools);
+    setActiveWeatherPoolId(activePool.id);
     renderWeatherTab(container);
+    setTimeout(() => {
+      const allNameInputs = container.querySelectorAll(".weather-name-input");
+      const lastInput = allNameInputs[allNameInputs.length - 1];
+      if (lastInput) {
+        lastInput.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        lastInput.focus();
+        lastInput.select();
+      }
+    }, 30);
   };
 
   // 绑定事件：删除天气项
@@ -3717,6 +3898,7 @@ function renderWeatherTab(container) {
         activePool.seasons[activeWeatherSeason].splice(idx, 1);
         rebuildWeatherPoolItems(activePool);
         saveStoredWeatherPools(pools);
+        setActiveWeatherPoolId(activePool.id);
         renderWeatherTab(container);
       }
     };
@@ -3751,6 +3933,7 @@ function renderWeatherTab(container) {
       activePool.seasons[activeWeatherSeason] = JSON.parse(JSON.stringify(srcPool.seasons[srcSeason]));
       rebuildWeatherPoolItems(activePool);
       saveStoredWeatherPools(pools);
+      setActiveWeatherPoolId(activePool.id);
       if (copyModal) copyModal.classList.remove("visible");
       renderWeatherTab(container);
     }
@@ -3769,9 +3952,9 @@ function renderWeatherTab(container) {
     const importedPools = parseWeatherImportPools(rawText, fallbackName);
     if (!importedPools || importedPools.length === 0) {
       if (typeof window.showCustomAlert === "function") {
-        await window.showCustomAlert("导入失败", "未能识别到有效的天气数据，请检查每行是否包含天气名称与概率");
+        await window.showCustomAlert("导入失败", "未能识别到有效的天气数据，请检查每行是否包含天气名称与概率或描述");
       } else {
-        alert("未能识别到有效的天气数据，请检查每行是否包含天气名称与概率");
+        alert("未能识别到有效的天气数据，请检查每行是否包含天气名称与概率或描述");
       }
       return false;
     }
@@ -3781,23 +3964,43 @@ function renderWeatherTab(container) {
     let lastAddedId = null;
     const addedNames = [];
 
-    importedPools.forEach((pool, idx) => {
-      if (!pool.id) pool.id = "weather_" + Date.now() + "_" + idx;
-      normalizeWeatherPool(pool);
-      const existingIdx = latestPools.findIndex(p => p.name === pool.name && p.id !== "weather_temperate" && p.id !== "weather_tropical" && p.id !== "weather_frigid");
-      if (existingIdx !== -1) {
-        pool.id = latestPools[existingIdx].id;
-        latestPools[existingIdx] = pool;
-      } else {
-        latestPools.push(pool);
+    const isDefaultPool = (id) => (id === "weather_temperate" || id === "weather_tropical" || id === "weather_frigid");
+
+    // 如果用户刚新建并选中了一个自定义气候池，且导入的单份数据里没有指定其他气候名称，则直接填入当前选中的自定义气候池
+    if (importedPools.length === 1 && !importedPools[0]._hasExplicitName && activePool && !isDefaultPool(activePool.id)) {
+      const targetIdx = latestPools.findIndex(p => p.id === activePool.id);
+      if (targetIdx !== -1) {
+        const updatedPool = normalizeWeatherPool({
+          id: activePool.id,
+          name: activePool.name,
+          seasons: importedPools[0].seasons
+        });
+        latestPools[targetIdx] = updatedPool;
+        lastAddedId = updatedPool.id;
+        addedNames.push(updatedPool.name);
       }
-      lastAddedId = pool.id;
-      addedNames.push(pool.name);
-    });
+    }
+
+    if (!lastAddedId) {
+      importedPools.forEach((pool, idx) => {
+        delete pool._hasExplicitName;
+        if (!pool.id) pool.id = "weather_" + Date.now() + "_" + idx;
+        normalizeWeatherPool(pool);
+        const existingIdx = latestPools.findIndex(p => p.name === pool.name && !isDefaultPool(p.id));
+        if (existingIdx !== -1) {
+          pool.id = latestPools[existingIdx].id;
+          latestPools[existingIdx] = pool;
+        } else {
+          latestPools.push(pool);
+        }
+        lastAddedId = pool.id;
+        addedNames.push(pool.name);
+      });
+    }
 
     saveStoredWeatherPools(latestPools);
     if (lastAddedId) {
-      localStorage.setItem("coc_active_weather_pool_id", lastAddedId);
+      setActiveWeatherPoolId(lastAddedId);
     }
     renderWeatherTab(container);
 
@@ -3812,18 +4015,48 @@ function renderWeatherTab(container) {
     return true;
   }
 
-  // 绑定事件：导入文件
+  // 绑定事件：导入弹窗（支持选文件与直接复制粘贴文本）
+  const importModal = document.getElementById("weather-import-modal");
+  const directPasteInput = document.getElementById("weather-direct-paste-input");
   const hiddenFileInput = document.getElementById("weather-import-hidden-input");
+
   document.getElementById("weather-import-file-btn").onclick = () => {
+    if (directPasteInput) directPasteInput.value = "";
+    if (importModal) importModal.classList.add("visible");
+  };
+
+  document.getElementById("weather-cancel-import-btn").onclick = () => {
+    if (importModal) importModal.classList.remove("visible");
+  };
+
+  document.getElementById("weather-choose-file-btn").onclick = () => {
     if (hiddenFileInput) {
       hiddenFileInput.value = "";
       hiddenFileInput.click();
     }
   };
 
+  document.getElementById("weather-confirm-import-btn").onclick = async () => {
+    const pasted = directPasteInput ? directPasteInput.value : "";
+    if (!pasted || !pasted.trim()) {
+      if (typeof window.showCustomAlert === "function") {
+        await window.showCustomAlert("提示", "请先粘贴天气文本，或点击上方选择文件按钮导入文件");
+      } else {
+        alert("请先粘贴天气文本，或点击上方选择文件按钮导入文件");
+      }
+      return;
+    }
+    if (importModal) importModal.classList.remove("visible");
+    const defaultImportName = (activePool && activePool.id !== "weather_temperate" && activePool.id !== "weather_tropical" && activePool.id !== "weather_frigid")
+      ? activePool.name
+      : "导入气候";
+    await applyImportedWeatherText(pasted, defaultImportName);
+  };
+
   hiddenFileInput.onchange = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    if (importModal) importModal.classList.remove("visible");
 
     try {
       const rawText = await extractWeatherFileText(file);
@@ -3922,7 +4155,10 @@ function renderWeatherTab(container) {
       return;
     }
     if (promptModal) promptModal.classList.remove("visible");
-    await applyImportedWeatherText(pasted, "导入气候");
+    const defaultImportName = (activePool && activePool.id !== "weather_temperate" && activePool.id !== "weather_tropical" && activePool.id !== "weather_frigid")
+      ? activePool.name
+      : "导入气候";
+    await applyImportedWeatherText(pasted, defaultImportName);
   };
 }
 
@@ -4113,11 +4349,14 @@ function parseWeatherImportPools(rawText, fallbackName) {
             normalizedSeasons[s] = JSON.parse(JSON.stringify(normalizedSeasons[nonEmptySeason]));
           }
         });
-        validJsonPools.push(normalizeWeatherPool({
+        const hasExplicit = !!(entry.name && String(entry.name).trim());
+        const pObj = normalizeWeatherPool({
           id: entry.id || ("weather_" + Date.now() + "_" + idx),
-          name: (entry.name && String(entry.name).trim()) ? String(entry.name).trim() : (fallbackName || "导入气候"),
+          name: hasExplicit ? String(entry.name).trim() : (fallbackName || "导入气候"),
           seasons: normalizedSeasons
-        }));
+        });
+        pObj._hasExplicitName = hasExplicit;
+        validJsonPools.push(pObj);
       });
       if (validJsonPools.length > 0) return validJsonPools;
     } catch (jsonErr) {
@@ -4129,15 +4368,16 @@ function parseWeatherImportPools(rawText, fallbackName) {
   const lines = cleanedRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const poolsResult = [];
 
-  const createBlankPoolState = (defaultName) => ({
+  const createBlankPoolState = (defaultName, hasExplicit = false) => ({
     name: defaultName || fallbackName || "导入气候",
+    hasExplicitName: !!hasExplicit,
     seasonsData: { "春季": [], "夏季": [], "秋季": [], "冬季": [] },
     currentSeason: "春季",
     hasSeasonHeader: false,
     itemCount: 0
   });
 
-  let curState = createBlankPoolState(fallbackName || "导入气候");
+  let curState = createBlankPoolState(fallbackName || "导入气候", false);
 
   const finalizePoolState = (st, idx) => {
     if (!st || st.itemCount === 0) return null;
@@ -4158,11 +4398,13 @@ function parseWeatherImportPools(rawText, fallbackName) {
         st.seasonsData[s] = JSON.parse(JSON.stringify(fallbackSeasonItems));
       }
     });
-    return normalizeWeatherPool({
+    const pObj = normalizeWeatherPool({
       id: "weather_" + Date.now() + "_" + idx,
       name: st.name || fallbackName || "导入气候",
       seasons: st.seasonsData
     });
+    pObj._hasExplicitName = !!st.hasExplicitName;
+    return pObj;
   };
 
   const parseSingleWeatherLine = (lineStr, stateObj) => {
@@ -4189,13 +4431,12 @@ function parseWeatherImportPools(rawText, fallbackName) {
       }
     }
 
-    // 情况 A：包含竖线分割（支持普通竖线与 Markdown 表格行）
-    if (/[|｜]/.test(s)) {
-      const rawCells = s.replace(/^[|｜]+|[|｜]+$/g, "").split(/[|｜]/).map(c => c.replace(/\*+|`+/g, "").trim()).filter(Boolean);
+    // 情况 A：包含竖线或制表符分割（支持普通竖线、Markdown 表格行、Word/Excel 制表符）
+    if (/[|｜\t]/.test(s)) {
+      const rawCells = s.replace(/^[|｜\t]+|[|｜\t]+$/g, "").split(/[|｜\t]/).map(c => c.replace(/\*+|`+/g, "").trim()).filter(Boolean);
       if (rawCells.length < 2) return false;
-      // 跳过表格分隔线与表头
       if (rawCells.every(c => /^[-:：\s]+$/.test(c))) return false;
-      if (/^(?:季节|天气|天气名称|名称)$/.test(rawCells[0]) && /^(?:天气|天气名称|概率|权重|占比|比例)/.test(rawCells[1])) return false;
+      if (/^(?:季节|天气|天气名称|名称)$/.test(rawCells[0]) && /^(?:天气|天气名称|概率|权重|占比|比例|描述|备注)/.test(rawCells[1])) return false;
 
       let cells = rawCells;
       const firstCellSeason = mapSeasonKey(cells[0]);
@@ -4261,6 +4502,39 @@ function parseWeatherImportPools(rawText, fallbackName) {
       }
     }
 
+    // 情况 C：概率数字在行尾，如 "晴天：春光明媚，微风和煦（35%）"
+    const tailRateMatch = cleanNoMd.match(/^([^:：\-—\s]{1,14})\s*[:：\-—\s]+\s*(.+?)\s*[（(]?\s*(?:概率[:：\s]*)?(\d+(?:\.\d+)?)\s*%\s*[)）]?$/);
+    if (tailRateMatch) {
+      const wName = tailRateMatch[1].replace(/^[\[【"“']+|[\]】"”']+$/g, "").trim();
+      const wNote = tailRateMatch[2].replace(/^(?:备注|描述|说明|代表着)[:：\s]*/, "").trim();
+      const rateVal = parseFloat(tailRateMatch[3]);
+      if (wName && !isNaN(rateVal)) {
+        stateObj.seasonsData[targetSeason].push({
+          name: wName,
+          rate: rateVal,
+          note: wNote
+        });
+        stateObj.itemCount++;
+        return true;
+      }
+    }
+
+    // 情况 D：无概率数字的 "天气名称：描述" 行（默认分配 20% 概率）
+    const colonDescMatch = cleanNoMd.match(/^([^:：,，|｜()（）\d\s]{1,10})\s*[:：—\-]+\s*(.{2,})$/);
+    if (colonDescMatch) {
+      const wName = colonDescMatch[1].replace(/^[\[【"“']+|[\]】"”']+$/g, "").trim();
+      const wNote = colonDescMatch[2].replace(/^(?:备注|描述|说明|代表着)[:：\s]*/, "").trim();
+      if (wName && !mapSeasonKey(wName) && !/^(?:气候|名称|预设|规则|注意|提示)/.test(wName)) {
+        stateObj.seasonsData[targetSeason].push({
+          name: wName,
+          rate: 20,
+          note: wNote
+        });
+        stateObj.itemCount++;
+        return true;
+      }
+    }
+
     return false;
   };
 
@@ -4269,19 +4543,20 @@ function parseWeatherImportPools(rawText, fallbackName) {
     if (!cleanLine) continue;
 
     // 1. 匹配气候名称行
-    const nameMatch = cleanLine.match(/^(?:[\[【]?\s*(?:气候名称|天气池名称|预设名称|气候预设|天气池|气候|名称)\s*[\]】]?)\s*[:：]\s*(.+)$/);
+    const nameMatch = cleanLine.match(/^(?:[\[【]?\s*(?:气候名称|天气池名称|预设名称|气候预设|天气池|气候|名称)(?:\d+|[一二三四五六七八九十]+)?\s*[\]】]?)\s*(?:[:：]|\s+)\s*(.+)$/);
     if (nameMatch) {
       const candidateName = nameMatch[1].replace(/^[\[【"“']+|[\]】"”']+$/g, "").trim();
-      if (candidateName && candidateName !== "这里填写气候名称") {
+      if (candidateName && candidateName !== "这里填写气候名称" && !/[|｜%]/.test(candidateName)) {
         if (curState.itemCount > 0) {
           const finished = finalizePoolState(curState, poolsResult.length);
           if (finished) poolsResult.push(finished);
-          curState = createBlankPoolState(candidateName);
+          curState = createBlankPoolState(candidateName, true);
         } else {
           curState.name = candidateName;
+          curState.hasExplicitName = true;
         }
+        continue;
       }
-      continue;
     }
 
     // 2. 匹配纯季节标题行（支持【春季】、**春季：**、一、春季、春季（3-5月）等）

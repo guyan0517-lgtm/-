@@ -72,7 +72,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="avatar-frames.js"></script>
     <script src="coc-panel.js"></script>
-    <script src="dice-engine.js?v=23.2"></script>
+    <script src="dice-engine.js?v=23.3"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="/node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
     <script>if (typeof PDFLib === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"><\/script>'); }</script>
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -53834,18 +53834,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         }
 
         function getStoredWeatherPools() {
+          if (Array.isArray(window._memoryWeatherPools) && window._memoryWeatherPools.length > 0) {
+            return JSON.parse(JSON.stringify(window._memoryWeatherPools)).map(normalizeWeatherPoolInternal);
+          }
           try {
             const raw = localStorage.getItem("coc_weather_pools") || localStorage.getItem("system_weather_pools");
             if (raw) {
               const parsed = JSON.parse(raw);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed.map(normalizeWeatherPoolInternal);
+                const normalized = parsed.map(normalizeWeatherPoolInternal);
+                window._memoryWeatherPools = JSON.parse(JSON.stringify(normalized));
+                return normalized;
               }
             }
           } catch (e) {
             console.warn("读取天气池异常:", e);
           }
-          return JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS)).map(normalizeWeatherPoolInternal);
+          const defaults = JSON.parse(JSON.stringify(DEFAULT_WEATHER_POOLS)).map(normalizeWeatherPoolInternal);
+          window._memoryWeatherPools = JSON.parse(JSON.stringify(defaults));
+          return defaults;
         }
         window.getStoredWeatherPools = getStoredWeatherPools;
 

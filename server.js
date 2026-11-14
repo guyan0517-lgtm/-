@@ -4255,10 +4255,17 @@ app.post('/api/qqbot/send', async (req, res) => {
   }
 });
 
-app.use(express.static(__dirname));
+app.use(express.static(__dirname, {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    }
+  }
+}));
 
 // Client-side fallback to index.html
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
