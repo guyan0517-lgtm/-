@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43406,7 +43406,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function getNaiTermuxBaseUrl() {
             try {
-              const raw = localStorage.getItem("ephone_local_vault_config_v1");
+              const raw =
+                localStorage.getItem("ephone_local_vault_config") ||
+                localStorage.getItem("ephone_local_vault_config_v1");
               if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.url && String(parsed.url).trim()) {
@@ -43418,7 +43420,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           const predecodedImageCache = new Map();
-          const MAX_PREDECODED_CACHE_SIZE = 12;
+          const MAX_PREDECODED_CACHE_SIZE = 26;
           function predecodeResolvedUrl(url) {
             if (!url || typeof url !== "string" || url.startsWith("vault://") || url.startsWith("data:")) return;
             if (predecodedImageCache.has(url)) return;
@@ -43433,7 +43435,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const preImg = new Image();
             preImg.decoding = "async";
             preImg.src = url;
+            if (typeof preImg.decode === "function") {
+              preImg.decode().catch(() => {});
+            }
             predecodedImageCache.set(url, preImg);
+          }
+
+          function releasePredecodedUrl(url) {
+            if (!url || !predecodedImageCache.has(url)) return;
+            const oldImg = predecodedImageCache.get(url);
+            if (oldImg) oldImg.src = "";
+            predecodedImageCache.delete(url);
           }
 
           function bindNaiVaultAwareImage(imgEl, rawSrcUrl, fallbackCoverIdx) {
@@ -43443,14 +43455,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               imgEl.removeAttribute("src");
               return;
             }
-            imgEl.loading = "lazy";
-            imgEl.decoding = "async";
+            imgEl.loading = "eager";
+            imgEl.decoding = "sync";
             if (srcStr.startsWith("vault://")) {
               imgEl.setAttribute("data-vault-ref", srcStr);
               const fastCached = typeof window.getCachedVaultBlobUrl === "function"
                 ? window.getCachedVaultBlobUrl(srcStr)
                 : null;
               if (fastCached) {
+                predecodeResolvedUrl(fastCached);
                 imgEl.setAttribute("data-vault-hydrated-src", fastCached);
                 imgEl.src = fastCached;
                 return;
@@ -43458,6 +43471,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (typeof window.resolveVaultRefToUrl === "function") {
                 window.resolveVaultRefToUrl(srcStr).then((resolved) => {
                   if (resolved && resolved !== srcStr && !resolved.startsWith("vault://")) {
+                    predecodeResolvedUrl(resolved);
                     if (imgEl.getAttribute("data-vault-ref") === srcStr) {
                       imgEl.setAttribute("data-vault-hydrated-src", resolved);
                       imgEl.src = resolved;
@@ -43475,6 +43489,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             } else {
               imgEl.removeAttribute("data-vault-ref");
+              predecodeResolvedUrl(srcStr);
               if (typeof window.setCleanPreviewImgSrc === "function") {
                 window.setCleanPreviewImgSrc(imgEl, srcStr);
               } else {
@@ -45996,9 +46011,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return memoryLexiconFoldersList;
           }
 
+          let colGridDataRevision = 0;
+          const colMountedPagesMap = new Map();
+          let colLastGridContextKey = "";
+
           function saveLexiconFolders(foldersList) {
             const clean = mergeLexiconFoldersLists(foldersList, []);
             memoryLexiconFoldersList = clean;
+            colGridDataRevision++;
             safeNaiLocalSetItem(LEXICON_FOLDERS_STORE_KEY, JSON.stringify(buildSlimFoldersList(clean)));
             persistNaiStoreToTermux(false);
           }
@@ -46090,6 +46110,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else {
               memoryBookmarksList = cleanList;
             }
+            colGridDataRevision++;
             persistNaiStoreToTermux(false);
           }
 
@@ -46432,8 +46453,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const artBox = document.createElement("div");
             artBox.className = "mod-nai-trace-art-box";
             const img = document.createElement("img");
-            img.loading = "lazy";
-            img.decoding = "async";
+            img.loading = "eager";
+            img.decoding = "sync";
             const defaultFallbackIdx = itemIdx >= 0 ? itemIdx : slotIdx;
             let coverSrc = "";
             let isDefaultCover = false;
@@ -46502,7 +46523,134 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             LEXICON_DEFAULT_COVERS.forEach(predecodeResolvedUrl);
           }
 
-          function renderCollectionGrid() {
+          function clearMountedCollectionPages(gridEl, activeVaultRefsToKeep) {
+            const keepSet = activeVaultRefsToKeep instanceof Set ? activeVaultRefsToKeep : new Set();
+            const evictedRefs = [];
+            for (const [, pageEntry] of colMountedPagesMap.entries()) {
+              if (!pageEntry || !Array.isArray(pageEntry.cards)) continue;
+              pageEntry.cards.forEach((cardEl) => {
+                if (!cardEl) return;
+                const imgEl = cardEl.querySelector("img");
+                if (imgEl) {
+                  const vRef = imgEl.getAttribute("data-vault-ref") || "";
+                  const hydrated = imgEl.getAttribute("data-vault-hydrated-src") || imgEl.getAttribute("src") || "";
+                  imgEl.removeAttribute("src");
+                  imgEl.removeAttribute("data-vault-hydrated-src");
+                  if (vRef && vRef.startsWith("vault://") && !keepSet.has(vRef)) {
+                    evictedRefs.push({ vRef, hydrated });
+                  }
+                }
+                if (cardEl.parentNode) {
+                  cardEl.remove();
+                }
+              });
+            }
+            colMountedPagesMap.clear();
+            if (gridEl) {
+              gridEl.replaceChildren();
+            }
+            evictedRefs.forEach(({ vRef, hydrated }) => {
+              if (!keepSet.has(vRef)) {
+                if (hydrated) releasePredecodedUrl(hydrated);
+                if (typeof window.evictVaultBlobCacheByRef === "function") {
+                  window.evictVaultBlobCacheByRef(vRef);
+                }
+              }
+            });
+          }
+
+          function applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, buildPageCardsFn) {
+            const winStartPage = Math.max(1, curPage - 1);
+            const winEndPage = Math.min(totalPages, curPage + 1);
+
+            const evictedPages = [];
+            for (const [pageNum, pageEntry] of Array.from(colMountedPagesMap.entries())) {
+              if (pageNum < winStartPage || pageNum > winEndPage) {
+                evictedPages.push(pageEntry);
+                colMountedPagesMap.delete(pageNum);
+              }
+            }
+
+            const evictedRefs = [];
+            evictedPages.forEach((pageEntry) => {
+              if (!pageEntry || !Array.isArray(pageEntry.cards)) return;
+              pageEntry.cards.forEach((cardEl) => {
+                if (!cardEl) return;
+                const imgEl = cardEl.querySelector("img");
+                if (imgEl) {
+                  const vRef = imgEl.getAttribute("data-vault-ref") || "";
+                  const hydrated = imgEl.getAttribute("data-vault-hydrated-src") || imgEl.getAttribute("src") || "";
+                  imgEl.removeAttribute("src");
+                  imgEl.removeAttribute("data-vault-hydrated-src");
+                  if (vRef && vRef.startsWith("vault://")) {
+                    evictedRefs.push({ vRef, hydrated });
+                  }
+                }
+                if (cardEl.parentNode) {
+                  cardEl.remove();
+                }
+              });
+            });
+
+            // 优先挂载当前页，再挂载相邻前后页，总共最多维持三页十八张图在滑动窗口内
+            const mountOrder = [curPage];
+            for (let p = winStartPage; p <= winEndPage; p++) {
+              if (p !== curPage) mountOrder.push(p);
+            }
+
+            const frag = document.createDocumentFragment();
+            let hasNewCards = false;
+            mountOrder.forEach((pageNum) => {
+              if (!colMountedPagesMap.has(pageNum)) {
+                const cards = buildPageCardsFn(pageNum);
+                const refs = [];
+                cards.forEach((cEl) => {
+                  cEl.style.display = pageNum === curPage ? "" : "none";
+                  const imgEl = cEl.querySelector("img");
+                  if (imgEl) {
+                    const vRef = imgEl.getAttribute("data-vault-ref") || "";
+                    if (vRef && vRef.startsWith("vault://")) refs.push(vRef);
+                  }
+                  frag.appendChild(cEl);
+                  hasNewCards = true;
+                });
+                colMountedPagesMap.set(pageNum, { cards, refs });
+              }
+            });
+            if (hasNewCards) {
+              gridEl.appendChild(frag);
+            }
+
+            const activeWindowRefs = new Set();
+            for (const [pageNum, pageEntry] of colMountedPagesMap.entries()) {
+              const isVisiblePage = pageNum === curPage;
+              if (pageEntry && Array.isArray(pageEntry.cards)) {
+                pageEntry.cards.forEach((cEl) => {
+                  const targetDisplay = isVisiblePage ? "" : "none";
+                  if (cEl.style.display !== targetDisplay) {
+                    cEl.style.display = targetDisplay;
+                  }
+                });
+              }
+              if (pageEntry && Array.isArray(pageEntry.refs)) {
+                pageEntry.refs.forEach((r) => activeWindowRefs.add(r));
+              }
+            }
+
+            evictedRefs.forEach(({ vRef, hydrated }) => {
+              if (!activeWindowRefs.has(vRef)) {
+                if (hydrated) releasePredecodedUrl(hydrated);
+                if (typeof window.evictVaultBlobCacheByRef === "function") {
+                  window.evictVaultBlobCacheByRef(vRef);
+                }
+              }
+            });
+          }
+
+          function renderCollectionGrid(forceRebuild) {
+            if (forceRebuild === true) {
+              colGridDataRevision++;
+            }
             updateCollectionHeaderUI();
             const gridEl = document.getElementById("mod-nai-col-grid-container");
             const footerEl = document.querySelector("#mod-nai-col-grid-page .mod-nai-trace-footer");
@@ -46526,36 +46674,45 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (colLexiconFolderRootPage > totalPages) colLexiconFolderRootPage = totalPages;
               if (colLexiconFolderRootPage < 1) colLexiconFolderRootPage = 1;
               const curPage = colLexiconFolderRootPage;
-              const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
-              const endIdx = startIdx + ITEMS_PER_PAGE;
 
-              const frag = document.createDocumentFragment();
-              const pageSlice = folders.slice(startIdx, endIdx);
-              pageSlice.forEach((folderObj, slotIdx) => {
-                const absIdx = startIdx + slotIdx;
-                const folderName = folderObj.name || DEFAULT_LEXICON_FOLDER_NAME;
-                const count = allLexItems.filter((it) => getItemLexiconFolderName(it) === folderName).length;
-                const coverInfo = getLexiconFolderDisplayCover(folderObj, allLexItems, absIdx);
-                const cardEl = buildTraceCardElement(null, absIdx, slotIdx, false, {
-                  isFolderCard: true,
-                  folderName: folderName,
-                  count: count,
-                  coverSrc: coverInfo.src,
-                  isDefaultCover: coverInfo.isDefault
+              const contextKey = `folder_root|${colScope}|${colSortSourceIndex}|${totalFolders}|${colGridDataRevision}`;
+              if (colLastGridContextKey !== contextKey) {
+                clearMountedCollectionPages(gridEl);
+                colLastGridContextKey = contextKey;
+              }
+
+              applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, (pageNum) => {
+                const startIdx = (pageNum - 1) * ITEMS_PER_PAGE;
+                const endIdx = startIdx + ITEMS_PER_PAGE;
+                const pageSlice = folders.slice(startIdx, endIdx);
+                const cards = [];
+                pageSlice.forEach((folderObj, slotIdx) => {
+                  const absIdx = startIdx + slotIdx;
+                  const folderName = folderObj.name || DEFAULT_LEXICON_FOLDER_NAME;
+                  const count = allLexItems.filter((it) => getItemLexiconFolderName(it) === folderName).length;
+                  const coverInfo = getLexiconFolderDisplayCover(folderObj, allLexItems, absIdx);
+                  const cardEl = buildTraceCardElement(null, absIdx, slotIdx, false, {
+                    isFolderCard: true,
+                    folderName: folderName,
+                    count: count,
+                    coverSrc: coverInfo.src,
+                    isDefaultCover: coverInfo.isDefault
+                  });
+                  cardEl.addEventListener("click", () => {
+                    if (colScope === "local" && colSortSourceIndex !== -1) {
+                      handleTraceIndexReorderClick(absIdx);
+                      return;
+                    }
+                    colLexiconActiveFolder = folderName;
+                    colLexiconLocalPage = 1;
+                    colSortSourceIndex = -1;
+                    renderCollectionGrid();
+                  });
+                  cards.push(cardEl);
                 });
-                cardEl.addEventListener("click", () => {
-                  if (colScope === "local" && colSortSourceIndex !== -1) {
-                    handleTraceIndexReorderClick(absIdx);
-                    return;
-                  }
-                  colLexiconActiveFolder = folderName;
-                  colLexiconLocalPage = 1;
-                  colSortSourceIndex = -1;
-                  renderCollectionGrid();
-                });
-                frag.appendChild(cardEl);
+                return cards;
               });
-              gridEl.replaceChildren(frag);
+
               if (scrollContainer) scrollContainer.scrollTop = prevScrollTop;
 
               if (footerEl) footerEl.style.display = "flex";
@@ -46610,20 +46767,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             }
 
-            const startIdx = (curPage - 1) * ITEMS_PER_PAGE;
-            const endIdx = startIdx + ITEMS_PER_PAGE;
+            const contextKey = `items|${colCategory}|${colScope}|${isInsideFolder ? colLexiconActiveFolder : ""}|${colSortSourceIndex}|${totalItems}|${colGridDataRevision}`;
+            if (colLastGridContextKey !== contextKey) {
+              clearMountedCollectionPages(gridEl);
+              colLastGridContextKey = contextKey;
+            }
 
-            const frag = document.createDocumentFragment();
-            if (indexedList.length === 0) {
-              const emptyCard = buildTraceCardElement(null, 0, 0, true);
-              if (!isShared) {
-                emptyCard.addEventListener("click", () => {
-                  openCreateNewBookmarkEditView();
-                });
+            applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, (pageNum) => {
+              if (indexedList.length === 0) {
+                const emptyCard = buildTraceCardElement(null, 0, 0, true);
+                if (!isShared) {
+                  emptyCard.addEventListener("click", () => {
+                    openCreateNewBookmarkEditView();
+                  });
+                }
+                return [emptyCard];
               }
-              frag.appendChild(emptyCard);
-            } else {
+              const startIdx = (pageNum - 1) * ITEMS_PER_PAGE;
+              const endIdx = startIdx + ITEMS_PER_PAGE;
               const pageSlice = indexedList.slice(startIdx, endIdx);
+              const cards = [];
               pageSlice.forEach((entry, slotIdx) => {
                 const subIdx = startIdx + slotIdx;
                 const cardEl = buildTraceCardElement(entry.item, subIdx, slotIdx, false);
@@ -46634,10 +46797,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   openBookmarkDetailView(entry.item, entry.realIdx);
                 });
-                frag.appendChild(cardEl);
+                cards.push(cardEl);
               });
-            }
-            gridEl.replaceChildren(frag);
+              return cards;
+            });
+
             if (scrollContainer) scrollContainer.scrollTop = prevScrollTop;
 
             if (footerEl) {
@@ -47394,10 +47558,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 colSharedLoadedOnce = true;
                 setColStatus(colSharedList.length > 0 ? "" : "共享集暂无内容，可在书签页点击上传分享");
               }
-              renderCollectionGrid();
+              renderCollectionGrid(true);
             } catch (err) {
               setColStatus("同步未完成: " + (err && err.message ? err.message : "请检查网络"));
-              renderCollectionGrid();
+              renderCollectionGrid(true);
             }
           }
 
@@ -48813,7 +48977,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               prewarmNaiCollectionImages();
               if (changed) {
                 renderPresetSelectOptions();
-                renderCollectionGrid();
+                renderCollectionGrid(true);
               }
             })().finally(() => {
               _termuxNaiSyncInFlight = null;
@@ -125502,6 +125666,22 @@ ${specificRules}`;
             return blobUrlMemoryCache.get(cleanName) || null;
           };
 
+          window.evictVaultBlobCacheByRef = function (vaultRef) {
+            if (!vaultRef || typeof vaultRef !== "string") return false;
+            const cleanName = vaultRef.startsWith("vault://") ? vaultRef.slice("vault://".length) : vaultRef;
+            if (!blobUrlMemoryCache.has(cleanName)) return false;
+            const bUrl = blobUrlMemoryCache.get(cleanName);
+            if (bUrl && isBlobUrlMountedInDom(bUrl)) return false;
+            blobUrlMemoryCache.delete(cleanName);
+            if (bUrl) {
+              try {
+                URL.revokeObjectURL(bUrl);
+                liveSessionBlobUrls.delete(bUrl);
+              } catch (_) {}
+            }
+            return true;
+          };
+
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
           window.setCleanPreviewImgSrc = function (imgEl, newSrc) {
@@ -126725,7 +126905,7 @@ ${specificRules}`;
               } catch (_) {}
             }
 
-            if ((!silent || explicitHandle) && !isStaticPagesHost() && _builtInServerAvailable === true) {
+            if (explicitHandle && !cachedTermuxOk && !isStaticPagesHost() && _builtInServerAvailable === true) {
               await syncVaultBetweenOpfsAndServer(opfsMediaDir);
             }
 
@@ -129242,7 +129422,7 @@ ${specificRules}`;
                 const cfg = loadVaultConfig();
                 const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
                 if (cachedTermuxOk || (await checkTermuxEndpointReachable(baseUrl))) {
-                  const termuxJsonPaths = ["/backup.json", "/load", "/tavern_store.json"];
+                  const termuxJsonPaths = ["/backup.json", "/load", "/tavern_store.json", "/nai_collection_store.json"];
                   for (const p of termuxJsonPaths) {
                     try {
                       const r = await fetch(baseUrl + p, { cache: "no-store" });
