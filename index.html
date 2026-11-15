@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3742,9 +3742,19 @@
                     <img id="mod-nai-inspect-preview-img" alt="原图" style="display: none;" />
                   </div>
                   <div id="mod-nai-inspect-meta-status" style="font-size: 11px; color: var(--nai-muted); text-align: center;">支持包含元数据的PNG与隐写图层解析</div>
-                  <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                    <button type="button" class="mod-nai-btn" id="mod-nai-inspect-clear-btn">清空</button>
-                    <button type="button" class="mod-nai-btn primary" id="mod-nai-inspect-pick-btn" style="flex: 1; height: 32px; font-size: 12.5px;">选图</button>
+                  <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <button type="button" class="mod-nai-btn" id="mod-nai-watermark-open-btn" style="flex: 1; height: 32px; font-size: 12.5px;">
+                      <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                      </svg>
+                      <span id="mod-nai-watermark-open-text">水印</span>
+                    </button>
+                    <button type="button" class="mod-nai-btn primary" id="mod-nai-clean-open-btn" style="flex: 1; height: 32px; font-size: 12.5px;">
+                      <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                      </svg>
+                      <span>清洗</span>
+                    </button>
                   </div>
                 </div>
 
@@ -4359,6 +4369,170 @@
                   <span>保存</span>
                 </button>
                 <input type="file" id="mod-nai-settings-import-file" accept=".json,application/json" style="display: none;" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 生图提取：批量无损清洗小面板 -->
+          <div class="modal nai-theme-folio" id="mod-nai-clean-modal" style="display: none;">
+            <div class="modal-content" style="width: calc(100% - 36px); max-width: 344px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+              <i class="mod-nai-settings-anchor tl"></i>
+              <i class="mod-nai-settings-anchor tr"></i>
+              <i class="mod-nai-settings-anchor bl"></i>
+              <i class="mod-nai-settings-anchor br"></i>
+              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <div style="display: flex; align-items: baseline;">
+                  <span class="mod-nai-settings-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">清洗</span>
+                  <span class="mod-nai-settings-kicker">TRACE · PURIFY</span>
+                </div>
+                <button type="button" class="modal-close" id="mod-nai-clean-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px;">
+                <span id="mod-nai-clean-count-text" style="font-weight: 600; color: var(--nai-text);">已选 0 张</span>
+                <span id="mod-nai-clean-wm-state-badge" style="color: var(--nai-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+                  <span id="mod-nai-clean-wm-state-text">未选水印</span>
+                </span>
+              </div>
+
+              <input type="file" id="mod-nai-clean-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
+
+              <div id="mod-nai-clean-empty-box" class="mod-nai-empty-drop">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">点击多选需要清洗的图片</span>
+                <span style="font-size: 11px; color: var(--nai-muted);">彻底抹除元数据与隐写层 · 一排三个显示</span>
+              </div>
+
+              <div id="mod-nai-clean-grid" class="mod-nai-three-grid" style="display: none;"></div>
+
+              <div id="mod-nai-clean-status-text" style="font-size: 11px; color: var(--nai-muted); text-align: center; line-height: 1.4;">点击清洗按顺序逐张下载，点任意缩略图可单独下载</div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;">
+                <button type="button" class="mod-nai-btn" id="mod-nai-clean-add-btn" style="flex: 1;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <span>加图</span>
+                </button>
+                <button type="button" class="mod-nai-btn" id="mod-nai-clean-clear-btn" style="flex: 1;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  <span>清空</span>
+                </button>
+                <button type="button" class="mod-nai-btn primary" id="mod-nai-clean-run-btn" style="flex: 1.3;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  <span id="mod-nai-clean-run-text">清洗</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 生图提取：水印图库与正片叠底调色小面板 -->
+          <div class="modal nai-theme-folio" id="mod-nai-watermark-modal" style="display: none;">
+            <div class="modal-content" style="width: calc(100% - 36px); max-width: 344px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+              <i class="mod-nai-settings-anchor tl"></i>
+              <i class="mod-nai-settings-anchor tr"></i>
+              <i class="mod-nai-settings-anchor bl"></i>
+              <i class="mod-nai-settings-anchor br"></i>
+              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <div style="display: flex; align-items: baseline;">
+                  <span class="mod-nai-settings-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">水印</span>
+                  <span class="mod-nai-settings-kicker">TRACE · WATERMARK</span>
+                </div>
+                <button type="button" class="modal-close" id="mod-nai-wm-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                  <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">图库</span>
+                  <span id="mod-nai-wm-status-label" style="font-size: 11px; color: var(--nai-muted);">点选图片勾选启用</span>
+                </div>
+                <button type="button" class="mod-nai-btn" id="mod-nai-wm-upload-btn" style="height: 27px; padding: 0 10px; font-size: 11.5px;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <span>上传</span>
+                </button>
+              </div>
+
+              <input type="file" id="mod-nai-wm-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
+
+              <div id="mod-nai-wm-empty-box" class="mod-nai-empty-drop" style="min-height: 96px; padding: 14px 10px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">点击上传水印到图库</span>
+                <span style="font-size: 10.5px; color: var(--nai-muted);">勾选后在清洗图片时自动按所选模式叠加</span>
+              </div>
+
+              <div id="mod-nai-wm-gallery-grid" class="mod-nai-three-grid" style="display: none; max-height: 156px;"></div>
+
+              <div style="display: flex; flex-direction: column; gap: 7px; padding-top: 6px; border-top: 1px dashed var(--nai-border-strong);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">图层</label>
+                    <select id="mod-nai-wm-blend-select" class="moe-input mod-nai-select">
+                      <option value="screen">滤色</option>
+                      <option value="multiply">正片叠底</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                    <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">排版</label>
+                    <select id="mod-nai-wm-fit-select" class="moe-input mod-nai-select">
+                      <option value="contain">居中</option>
+                      <option value="cover">铺满</option>
+                      <option value="tile">平铺</option>
+                      <option value="corner">角落</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1px;">
+                  <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">调色</span>
+                  <span id="mod-nai-wm-preview-mode-hint" style="font-size: 10.5px; color: var(--nai-muted);">滤色 · 居中不拉伸预览</span>
+                </div>
+
+                <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage">
+                  <span id="mod-nai-wm-preview-empty" style="font-size: 11px; color: var(--nai-muted);">勾选上方水印图后实时预览效果</span>
+                  <canvas id="mod-nai-wm-preview-canvas" style="display: none;"></canvas>
+                </div>
+
+                <div class="mod-nai-slider-row">
+                  <span class="mod-nai-slider-label">透明</span>
+                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-opacity-range" min="5" max="100" step="1" value="65" />
+                  <span class="mod-nai-slider-val" id="mod-nai-wm-opacity-val">65%</span>
+                </div>
+
+                <div class="mod-nai-slider-row">
+                  <span class="mod-nai-slider-label">色相</span>
+                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-hue-range" min="-180" max="180" step="1" value="0" />
+                  <span class="mod-nai-slider-val" id="mod-nai-wm-hue-val">0°</span>
+                </div>
+
+                <div class="mod-nai-slider-row">
+                  <span class="mod-nai-slider-label">饱和</span>
+                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-sat-range" min="0" max="300" step="1" value="100" />
+                  <span class="mod-nai-slider-val" id="mod-nai-wm-sat-val">100%</span>
+                </div>
+
+                <div class="mod-nai-slider-row">
+                  <span class="mod-nai-slider-label">明度</span>
+                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-light-range" min="20" max="200" step="1" value="100" />
+                  <span class="mod-nai-slider-val" id="mod-nai-wm-light-val">100%</span>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;">
+                <button type="button" class="mod-nai-btn" id="mod-nai-wm-reset-btn" style="flex: 1;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                  <span>重置</span>
+                </button>
+                <button type="button" class="mod-nai-btn primary" id="mod-nai-wm-confirm-btn" style="flex: 1.5;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>确定</span>
+                </button>
               </div>
             </div>
           </div>
@@ -44022,6 +44196,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (memoryPanelState && typeof memoryPanelState === "object") {
               writeKeyToNaiIDB("panelState", Object.assign({}, memoryPanelState));
             }
+            const buildSlimPanelStateForGlobal = (stObj) => {
+              if (!stObj || typeof stObj !== "object") return stObj;
+              const copy = Object.assign({}, stObj);
+              if (typeof copy.lastGeneratedImage === "string" && copy.lastGeneratedImage.startsWith("data:")) {
+                copy.lastGeneratedImage = "";
+              }
+              if (Array.isArray(copy.watermarkGallery)) {
+                copy.watermarkGallery = copy.watermarkGallery
+                  .filter((w) => w && typeof w === "object")
+                  .map((w) => ({
+                    id: w.id || "",
+                    name: w.name || "水印",
+                    image: (typeof w.image === "string" && !w.image.startsWith("data:")) ? w.image : "",
+                    updatedAt: w.updatedAt || 0
+                  }))
+                  .filter((w) => Boolean(w.image));
+              }
+              return copy;
+            };
             writeKeyToNaiIDB("deletedIds", Array.from(getDeletedIdsSet()));
             writeKeyToNaiIDB("deletedPresetKeys", Array.from(getDeletedPresetKeysSet()));
 
@@ -44033,7 +44226,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
               }
               if (memoryPanelState && typeof memoryPanelState === "object") {
-                window.state.globalSettings.naiPanelState = Object.assign({}, memoryPanelState);
+                window.state.globalSettings.naiPanelState = buildSlimPanelStateForGlobal(memoryPanelState);
               }
             }
             if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
@@ -44057,7 +44250,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   touched = true;
                 }
                 if (memoryPanelState && typeof memoryPanelState === "object") {
-                  gs.naiPanelState = Object.assign({}, memoryPanelState);
+                  gs.naiPanelState = buildSlimPanelStateForGlobal(memoryPanelState);
                   touched = true;
                 }
                 if (touched) {
@@ -44170,6 +44363,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!merged.artist2Text && older.artist2Text && pTs === 0) merged.artist2Text = older.artist2Text;
             if (!merged.pos2Text && older.pos2Text && pTs === 0) merged.pos2Text = older.pos2Text;
             if (!merged.negText && older.negText && pTs === 0) merged.negText = older.negText;
+            if ((!Array.isArray(merged.watermarkGallery) || merged.watermarkGallery.length === 0) && Array.isArray(older.watermarkGallery) && older.watermarkGallery.length > 0 && pTs === 0) {
+              merged.watermarkGallery = older.watermarkGallery.slice();
+            }
             merged.updatedAt = Math.max(pTs, sTs);
             return merged;
           }
@@ -44186,6 +44382,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               if (Array.isArray(memoryLexiconFoldersList) && memoryLexiconFoldersList.length > 0) {
                 await offloadFolderListCoversToTermux(memoryLexiconFoldersList);
+              }
+              if (memoryPanelState && Array.isArray(memoryPanelState.watermarkGallery) && memoryPanelState.watermarkGallery.length > 0) {
+                await offloadBookmarkListImagesToTermux(memoryPanelState.watermarkGallery);
               }
 
               let existingRemote = null;
@@ -44321,6 +44520,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               customApiKey: "",
               lastGeneratedImage: "",
               lastGeneratedTitle: "",
+              watermarkGallery: [],
+              watermarkSelectedId: "",
+              watermarkBlendMode: "screen",
+              watermarkFitMode: "contain",
+              watermarkOpacity: 65,
+              watermarkHue: 0,
+              watermarkSat: 100,
+              watermarkLight: 100,
               updatedAt: 0
             };
           }
@@ -44543,6 +44750,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function applyThemeToPanel(themeName) {
             const panel = document.getElementById("module-nai-panel");
             const settingsModal = document.getElementById("mod-nai-settings-modal");
+            const cleanModal = document.getElementById("mod-nai-clean-modal");
+            const wmModal = document.getElementById("mod-nai-watermark-modal");
             const iconBox = document.getElementById("mod-nai-theme-icon");
             const themeSelect = document.getElementById("mod-nai-setting-theme");
             const validTheme = (themeName === "folio" || themeName === "tavern" || themeName === "default" || themeName === "puppy" || themeName === "apple") ? themeName : "folio";
@@ -44550,10 +44759,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               panel.classList.remove("nai-theme-folio", "nai-theme-tavern", "nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
               panel.classList.add("nai-theme-" + validTheme);
             }
-            if (settingsModal) {
-              settingsModal.classList.remove("nai-theme-folio", "nai-theme-tavern", "nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
-              settingsModal.classList.add("nai-theme-" + validTheme);
-            }
+            [settingsModal, cleanModal, wmModal].forEach((mEl) => {
+              if (mEl) {
+                mEl.classList.remove("nai-theme-folio", "nai-theme-tavern", "nai-theme-apple", "nai-theme-default", "nai-theme-puppy");
+                mEl.classList.add("nai-theme-" + validTheme);
+              }
+            });
             if (iconBox) {
               iconBox.innerHTML = THEME_ICONS[validTheme] || THEME_ICONS.folio;
             }
@@ -46600,11 +46811,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 6. 提取面板：上传、拖拽、清空、复制
+            // 6. 提取面板：上传、拖拽、复制 + 水印小面板与批量无损清洗小面板
             const fileInput = document.getElementById("mod-nai-inspect-file-input");
             const dropzone = document.getElementById("mod-nai-inspect-dropzone");
-            const pickBtn = document.getElementById("mod-nai-inspect-pick-btn");
-            const clearBtn = document.getElementById("mod-nai-inspect-clear-btn");
 
             const triggerPick = () => {
               if (fileInput) fileInput.click();
@@ -46622,34 +46831,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (f) handleInspectFile(f);
               });
             }
-            if (pickBtn) pickBtn.addEventListener("click", triggerPick);
             if (fileInput) {
               fileInput.addEventListener("change", () => {
                 const f = fileInput.files && fileInput.files[0];
                 if (f) handleInspectFile(f);
                 fileInput.value = "";
-              });
-            }
-            if (clearBtn) {
-              clearBtn.addEventListener("click", () => {
-                if (inspectObjectUrl) {
-                  try { URL.revokeObjectURL(inspectObjectUrl); } catch (_) {}
-                  inspectObjectUrl = null;
-                }
-                const previewImg = document.getElementById("mod-nai-inspect-preview-img");
-                const placeholder = document.getElementById("mod-nai-inspect-placeholder");
-                const statusEl = document.getElementById("mod-nai-inspect-meta-status");
-                if (previewImg) {
-                  previewImg.removeAttribute("src");
-                  previewImg.style.display = "none";
-                }
-                if (placeholder) placeholder.style.display = "flex";
-                if (statusEl) statusEl.textContent = "支持包含元数据的PNG与隐写图层解析";
-                ["mod-nai-inspect-artist-input", "mod-nai-inspect-pos-input", "mod-nai-inspect-neg-input"].forEach((id) => {
-                  const el = document.getElementById(id);
-                  if (el) el.value = "";
-                });
-                syncModuleNaiToGlobal();
               });
             }
 
@@ -46666,8 +46852,1111 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               copyInspectNeg.addEventListener("click", () => copyTextFromInput("mod-nai-inspect-neg-input", copyInspectNeg));
             }
 
+            // 6b. 水印图库与批量清洗控制器
+            bindCleanAndWatermarkEvents();
+
             // 7. 生图收藏夹与共享画册（每页6格）
             bindCollectionFolioEvents();
+          }
+
+          // ============================================================
+          // 提取面板附属：水印图库（滤色/正片叠底 + 等比不拉伸适配 + 调色）与批量元数据清洗器
+          // ============================================================
+          let cleanBatchItems = [];
+          let cleanIsRunning = false;
+          let wmDraftSelectedId = "";
+          let wmDraftBlendMode = "screen";
+          let wmDraftFitMode = "contain";
+          let wmDraftOpacity = 65;
+          let wmDraftHue = 0;
+          let wmDraftSat = 100;
+          let wmDraftLight = 100;
+          let _lastCleanDownloadTriggerTs = 0;
+          const wmLoadedImageCache = new Map();
+
+          function getNormalizedWatermarkGallery(st) {
+            const stateObj = st || loadPanelState();
+            if (!Array.isArray(stateObj.watermarkGallery)) return [];
+            return stateObj.watermarkGallery.filter((it) => it && typeof it === "object" && it.id && it.image);
+          }
+
+          function getShortBlendLabel(mode) {
+            return mode === "multiply" ? "正片叠底" : "滤色";
+          }
+
+          function getShortFitLabel(fit) {
+            if (fit === "cover") return "铺满";
+            if (fit === "tile") return "平铺";
+            if (fit === "corner") return "角落";
+            return "居中";
+          }
+
+          function updateWatermarkStatusBadges() {
+            const st = loadPanelState();
+            const gallery = getNormalizedWatermarkGallery(st);
+            const activeWm = st.watermarkSelectedId
+              ? gallery.find((x) => x.id === st.watermarkSelectedId)
+              : null;
+            const wmBtn = document.getElementById("mod-nai-watermark-open-btn");
+            const wmBtnText = document.getElementById("mod-nai-watermark-open-text");
+            const cleanWmText = document.getElementById("mod-nai-clean-wm-state-text");
+            const cleanWmBadge = document.getElementById("mod-nai-clean-wm-state-badge");
+            if (wmBtnText) {
+              wmBtnText.textContent = "水印";
+            }
+            if (wmBtn) {
+              wmBtn.style.borderColor = activeWm ? "var(--nai-seal)" : "";
+            }
+            if (cleanWmText) {
+              const blendTxt = getShortBlendLabel(st.watermarkBlendMode || "screen");
+              const fitTxt = getShortFitLabel(st.watermarkFitMode || "contain");
+              cleanWmText.textContent = activeWm
+                ? `已选水印 · ${blendTxt} · ${fitTxt}`
+                : "未选水印";
+            }
+            if (cleanWmBadge) {
+              cleanWmBadge.style.color = activeWm ? "var(--nai-seal)" : "var(--nai-muted)";
+            }
+          }
+
+          async function loadImageElementFromAnyRef(rawRef) {
+            if (!rawRef || typeof rawRef !== "string") return null;
+            const ref = rawRef.trim();
+            if (!ref) return null;
+            if (wmLoadedImageCache.has(ref)) {
+              const cachedImg = wmLoadedImageCache.get(ref);
+              if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+                return cachedImg;
+              }
+              wmLoadedImageCache.delete(ref);
+            }
+            let resolvedUrl = ref;
+            if (ref.startsWith("vault://")) {
+              const fastCached = typeof window.getCachedVaultBlobUrl === "function"
+                ? window.getCachedVaultBlobUrl(ref)
+                : null;
+              if (fastCached) {
+                resolvedUrl = fastCached;
+              } else if (typeof window.resolveVaultRefToUrl === "function") {
+                try {
+                  const r = await window.resolveVaultRefToUrl(ref);
+                  if (r && !r.startsWith("vault://")) resolvedUrl = r;
+                } catch (_) {}
+              }
+            }
+            return await new Promise((resolve) => {
+              const img = new Image();
+              img.crossOrigin = "anonymous";
+              img.onload = () => {
+                if (wmLoadedImageCache.size > 24) {
+                  const firstKey = wmLoadedImageCache.keys().next().value;
+                  if (firstKey) wmLoadedImageCache.delete(firstKey);
+                }
+                wmLoadedImageCache.set(ref, img);
+                resolve(img);
+              };
+              img.onerror = () => resolve(null);
+              img.src = resolvedUrl;
+            });
+          }
+
+          function rgbToHsl01(r, g, b) {
+            r /= 255;
+            g /= 255;
+            b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            let h = 0;
+            let s = 0;
+            const l = (max + min) / 2;
+            if (max !== min) {
+              const d = max - min;
+              s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+              switch (max) {
+                case r:
+                  h = (g - b) / d + (g < b ? 6 : 0);
+                  break;
+                case g:
+                  h = (b - r) / d + 2;
+                  break;
+                case b:
+                  h = (r - g) / d + 4;
+                  break;
+              }
+              h /= 6;
+            }
+            return [h, s, l];
+          }
+
+          function hsl01ToRgb(h, s, l) {
+            let r, g, b;
+            if (s === 0) {
+              r = g = b = l;
+            } else {
+              const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+              };
+              const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+              const p = 2 * l - q;
+              r = hue2rgb(p, q, h + 1 / 3);
+              g = hue2rgb(p, q, h);
+              b = hue2rgb(p, q, h - 1 / 3);
+            }
+            return [
+              Math.max(0, Math.min(255, Math.round(r * 255))),
+              Math.max(0, Math.min(255, Math.round(g * 255))),
+              Math.max(0, Math.min(255, Math.round(b * 255)))
+            ];
+          }
+
+          // 生成经过色相、饱和度、明度调色且适配 滤色（黑底融合）或 正片叠底（白底融合）的水印画布
+          function buildProcessedWatermarkCanvas(wmImg, hueDeg, satPct, lightPct, blendMode, maxSide) {
+            const isMultiply = blendMode === "multiply";
+            const origW = wmImg.naturalWidth || wmImg.width || 300;
+            const origH = wmImg.naturalHeight || wmImg.height || 300;
+            const limit = maxSide || 1200;
+            const scale = Math.min(1, limit / Math.max(origW, origH));
+            const w = Math.max(1, Math.round(origW * scale));
+            const h = Math.max(1, Math.round(origH * scale));
+
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            const ctx = c.getContext("2d", { willReadFrequently: true });
+            ctx.clearRect(0, 0, w, h);
+            ctx.drawImage(wmImg, 0, 0, origW, origH, 0, 0, w, h);
+
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            const hueShift = ((Number(hueDeg) || 0) % 360 + 360) % 360 / 360;
+            const hasHueShift = Math.abs(Number(hueDeg) || 0) > 0.5;
+            const satMul = Math.max(0, (Number(satPct) !== undefined ? Number(satPct) : 100) / 100);
+            const lightMul = Math.max(0.1, (Number(lightPct) !== undefined ? Number(lightPct) : 100) / 100);
+
+            for (let i = 0; i < data.length; i += 4) {
+              const a = data[i + 3] / 255;
+
+              if (isMultiply) {
+                // 正片叠底模式：先与纯白底合成，使得透明区域与白底在 multiply 下完全隐形
+                const r0 = Math.round(data[i] * a + 255 * (1 - a));
+                const g0 = Math.round(data[i + 1] * a + 255 * (1 - a));
+                const b0 = Math.round(data[i + 2] * a + 255 * (1 - a));
+
+                if (r0 >= 250 && g0 >= 250 && b0 >= 250) {
+                  data[i] = 255;
+                  data[i + 1] = 255;
+                  data[i + 2] = 255;
+                  data[i + 3] = 255;
+                  continue;
+                }
+
+                let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
+                const inkStrength = 1 - lVal;
+
+                if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
+                  hVal = hueShift;
+                  const baseSat = hasHueShift ? Math.max(0.55, Math.min(1, satMul * 0.65)) : Math.min(1, (satMul - 1) * 0.8);
+                  sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.4));
+                  if (lVal < 0.25) {
+                    lVal = 0.25 + lVal * 0.45;
+                  }
+                } else {
+                  hVal = (hVal + hueShift) % 1;
+                  sVal = Math.max(0, Math.min(1, sVal * satMul));
+                }
+
+                const adjustedL = 1 - inkStrength * (1 / lightMul);
+                lVal = Math.max(0.02, Math.min(0.98, adjustedL));
+
+                const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
+                data[i] = nr;
+                data[i + 1] = ng;
+                data[i + 2] = nb;
+                data[i + 3] = 255;
+              } else {
+                // 滤色模式（screen）：先与纯黑底合成，使得透明区域与黑底在 screen 下完全隐形
+                const r0 = Math.round(data[i] * a);
+                const g0 = Math.round(data[i + 1] * a);
+                const b0 = Math.round(data[i + 2] * a);
+
+                if (r0 <= 5 && g0 <= 5 && b0 <= 5) {
+                  data[i] = 0;
+                  data[i + 1] = 0;
+                  data[i + 2] = 0;
+                  data[i + 3] = 255;
+                  continue;
+                }
+
+                let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
+                const inkStrength = lVal; // 越亮的白字代表水印笔迹越强
+
+                if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
+                  // 黑底白字水印上色支持：当拉动色相或提高饱和度时，把纯白字迹转为鲜明彩色，同时保持边缘向黑底平滑过渡
+                  hVal = hueShift;
+                  const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
+                  sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.35));
+                  lVal = Math.max(0.02, Math.min(0.88, inkStrength * 0.58 * lightMul));
+                } else {
+                  hVal = (hVal + hueShift) % 1;
+                  sVal = Math.max(0, Math.min(1, sVal * satMul));
+                  lVal = Math.max(0.01, Math.min(0.99, lVal * lightMul));
+                }
+
+                const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
+                data[i] = nr;
+                data[i + 1] = ng;
+                data[i + 2] = nb;
+                data[i + 3] = 255;
+              }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+            return c;
+          }
+
+          // 按保持原比例不拉伸的方式（居中 / 铺满 / 平铺 / 角落）将水印绘制到目标区域
+          function drawWatermarkWithFitMode(ctx, processedWm, boxX, boxY, boxW, boxH, blendMode, opacityPct, fitMode) {
+            if (!ctx || !processedWm || !processedWm.width || !processedWm.height) return;
+            const wmW = processedWm.width;
+            const wmH = processedWm.height;
+            const compOp = blendMode === "multiply" ? "multiply" : "screen";
+            const alpha = Math.max(0.05, Math.min(1, (Number(opacityPct) || 65) / 100));
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(boxX, boxY, boxW, boxH);
+            ctx.clip();
+            ctx.globalCompositeOperation = compOp;
+            ctx.globalAlpha = alpha;
+
+            if (fitMode === "cover") {
+              // 等比铺满：按长边等比缩放，绝对不拉伸变形，超出边缘自动由 clip 裁切
+              const scale = Math.max(boxW / wmW, boxH / wmH);
+              const drawW = Math.max(1, Math.round(wmW * scale));
+              const drawH = Math.max(1, Math.round(wmH * scale));
+              const drawX = boxX + Math.round((boxW - drawW) / 2);
+              const drawY = boxY + Math.round((boxH - drawH) / 2);
+              ctx.drawImage(processedWm, drawX, drawY, drawW, drawH);
+            } else if (fitMode === "tile") {
+              // 等比平铺：保持原长宽比，按短边的 45% 作为单格尺寸无缝重复铺满横图或竖图
+              const refSide = Math.max(28, Math.round(Math.min(boxW, boxH) * 0.45));
+              const scale = refSide / Math.max(wmW, wmH);
+              const tileW = Math.max(20, Math.round(wmW * scale));
+              const tileH = Math.max(20, Math.round(wmH * scale));
+              for (let y = boxY; y < boxY + boxH; y += tileH) {
+                for (let x = boxX; x < boxX + boxW; x += tileW) {
+                  ctx.drawImage(processedWm, x, y, tileW, tileH);
+                }
+              }
+            } else if (fitMode === "corner") {
+              // 右下角落：保持原长宽比，按短边的 34% 贴在右下角
+              const refSide = Math.max(24, Math.round(Math.min(boxW, boxH) * 0.34));
+              const scale = refSide / Math.max(wmW, wmH);
+              const drawW = Math.max(16, Math.round(wmW * scale));
+              const drawH = Math.max(16, Math.round(wmH * scale));
+              const pad = Math.max(4, Math.round(Math.min(boxW, boxH) * 0.04));
+              const drawX = boxX + boxW - drawW - pad;
+              const drawY = boxY + boxH - drawH - pad;
+              ctx.drawImage(processedWm, drawX, drawY, drawW, drawH);
+            } else {
+              // 默认 contain（等比居中）：按短边等比缩放居中，一比一水印在横图或竖图上绝不拉伸变形
+              const scale = Math.min(boxW / wmW, boxH / wmH);
+              const drawW = Math.max(1, Math.round(wmW * scale));
+              const drawH = Math.max(1, Math.round(wmH * scale));
+              const drawX = boxX + Math.round((boxW - drawW) / 2);
+              const drawY = boxY + Math.round((boxH - drawH) / 2);
+              ctx.drawImage(processedWm, drawX, drawY, drawW, drawH);
+            }
+
+            ctx.restore();
+          }
+
+          async function renderWatermarkLivePreview() {
+            const emptyHint = document.getElementById("mod-nai-wm-preview-empty");
+            const canvas = document.getElementById("mod-nai-wm-preview-canvas");
+            const statusLabel = document.getElementById("mod-nai-wm-status-label");
+            const modeHint = document.getElementById("mod-nai-wm-preview-mode-hint");
+            if (!canvas) return;
+
+            if (modeHint) {
+              modeHint.textContent = `${getShortBlendLabel(wmDraftBlendMode)} · ${getShortFitLabel(wmDraftFitMode)}不拉伸预览`;
+            }
+
+            const st = loadPanelState();
+            const gallery = getNormalizedWatermarkGallery(st);
+            const activeItem = wmDraftSelectedId
+              ? gallery.find((x) => x.id === wmDraftSelectedId)
+              : null;
+
+            if (statusLabel) {
+              statusLabel.textContent = activeItem ? "已勾选 1 张水印" : "未勾选，点击图片可启用";
+            }
+
+            if (!activeItem) {
+              canvas.style.display = "none";
+              if (emptyHint) emptyHint.style.display = "block";
+              return;
+            }
+
+            const wmImg = await loadImageElementFromAnyRef(activeItem.image);
+            if (!wmImg) {
+              canvas.style.display = "none";
+              if (emptyHint) emptyHint.style.display = "block";
+              return;
+            }
+
+            if (emptyHint) emptyHint.style.display = "none";
+            canvas.style.display = "block";
+
+            const stageW = 300;
+            const stageH = 80;
+            canvas.width = stageW;
+            canvas.height = stageH;
+            const ctx = canvas.getContext("2d");
+
+            const isMultiply = wmDraftBlendMode === "multiply";
+            // 滤色模式采用深暖灰棋盘底以清晰凸显亮色水印，正片叠底采用浅米色棋盘底以凸显深色水印
+            const bgA = isMultiply ? "#ece7df" : "#433f3b";
+            const bgB = isMultiply ? "#ddd6cb" : "#36322f";
+
+            ctx.clearRect(0, 0, stageW, stageH);
+
+            // 左右并排展示「竖图比例框」与「横图比例框」，直观看到一比一水印在横竖图上的不拉伸效果
+            const frames = [
+              { x: 34, y: 6, w: 48, h: 68 },   // 竖图模拟框
+              { x: 118, y: 12, w: 148, h: 56 } // 横图模拟框
+            ];
+
+            const processedWm = buildProcessedWatermarkCanvas(
+              wmImg,
+              wmDraftHue,
+              wmDraftSat,
+              wmDraftLight,
+              wmDraftBlendMode,
+              260
+            );
+
+            frames.forEach((fr) => {
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(fr.x, fr.y, fr.w, fr.h);
+              ctx.clip();
+              ctx.fillStyle = bgA;
+              ctx.fillRect(fr.x, fr.y, fr.w, fr.h);
+              ctx.fillStyle = bgB;
+              const cell = 8;
+              for (let y = fr.y; y < fr.y + fr.h; y += cell) {
+                for (let x = fr.x; x < fr.x + fr.w; x += cell) {
+                  if ((Math.floor((x - fr.x) / cell) + Math.floor((y - fr.y) / cell)) % 2 === 0) {
+                    ctx.fillRect(x, y, cell, cell);
+                  }
+                }
+              }
+              ctx.restore();
+
+              drawWatermarkWithFitMode(
+                ctx,
+                processedWm,
+                fr.x,
+                fr.y,
+                fr.w,
+                fr.h,
+                wmDraftBlendMode,
+                wmDraftOpacity,
+                wmDraftFitMode
+              );
+
+              ctx.strokeStyle = isMultiply ? "rgba(90,80,70,0.35)" : "rgba(220,210,200,0.35)";
+              ctx.lineWidth = 1;
+              ctx.strokeRect(fr.x + 0.5, fr.y + 0.5, fr.w - 1, fr.h - 1);
+            });
+
+            processedWm.width = 0;
+            processedWm.height = 0;
+          }
+
+          function renderWatermarkGalleryGrid() {
+            const gridEl = document.getElementById("mod-nai-wm-gallery-grid");
+            const emptyBox = document.getElementById("mod-nai-wm-empty-box");
+            if (!gridEl || !emptyBox) return;
+
+            const st = loadPanelState();
+            const gallery = getNormalizedWatermarkGallery(st);
+
+            if (gallery.length === 0) {
+              gridEl.style.display = "none";
+              gridEl.replaceChildren();
+              emptyBox.style.display = "flex";
+              renderWatermarkLivePreview();
+              return;
+            }
+
+            emptyBox.style.display = "none";
+            gridEl.style.display = "grid";
+            gridEl.replaceChildren();
+
+            const frag = document.createDocumentFragment();
+            gallery.forEach((item, idx) => {
+              const isSel = item.id === wmDraftSelectedId;
+              const card = document.createElement("div");
+              card.className = "mod-nai-grid-thumb-card" + (isSel ? " is-selected" : "");
+
+              const img = document.createElement("img");
+              img.alt = item.name || `水印${idx + 1}`;
+              bindNaiVaultAwareImage(img, item.image);
+              card.appendChild(img);
+
+              const badge = document.createElement("span");
+              badge.className = "mod-nai-grid-badge-tl";
+              badge.innerHTML = isSel
+                ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                : String(idx + 1).padStart(2, "0");
+              card.appendChild(badge);
+
+              const delBtn = document.createElement("button");
+              delBtn.type = "button";
+              delBtn.className = "mod-nai-grid-del-tr";
+              delBtn.textContent = "×";
+              delBtn.title = "删除水印";
+              delBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const curSt = loadPanelState();
+                const curGal = getNormalizedWatermarkGallery(curSt);
+                const target = curGal.find((x) => x.id === item.id);
+                const nextGal = curGal.filter((x) => x.id !== item.id);
+                curSt.watermarkGallery = nextGal;
+                if (wmDraftSelectedId === item.id) {
+                  wmDraftSelectedId = "";
+                }
+                if (curSt.watermarkSelectedId === item.id) {
+                  curSt.watermarkSelectedId = "";
+                }
+                savePanelState(curSt);
+                if (target && typeof target.image === "string" && target.image.startsWith("vault://") && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+                  window.deleteVaultMediaRefIfUnreferenced(target.image).catch(() => {});
+                }
+                updateWatermarkStatusBadges();
+                renderWatermarkGalleryGrid();
+              });
+              card.appendChild(delBtn);
+
+              card.addEventListener("click", () => {
+                wmDraftSelectedId = wmDraftSelectedId === item.id ? "" : item.id;
+                renderWatermarkGalleryGrid();
+              });
+
+              frag.appendChild(card);
+            });
+
+            gridEl.appendChild(frag);
+            renderWatermarkLivePreview();
+          }
+
+          async function compressWatermarkFileToDataUrl(file) {
+            return await new Promise((resolve) => {
+              const url = URL.createObjectURL(file);
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  const origW = img.naturalWidth || img.width || 600;
+                  const origH = img.naturalHeight || img.height || 600;
+                  const maxEdge = 1024;
+                  const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+                  const targetW = Math.max(1, Math.round(origW * scale));
+                  const targetH = Math.max(1, Math.round(origH * scale));
+                  const canvas = document.createElement("canvas");
+                  canvas.width = targetW;
+                  canvas.height = targetH;
+                  const ctx = canvas.getContext("2d");
+                  ctx.clearRect(0, 0, targetW, targetH);
+                  ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
+                  let out = canvas.toDataURL("image/png");
+                  if (!out || out.length > 1800000) {
+                    out = canvas.toDataURL("image/webp", 0.9);
+                  }
+                  canvas.width = 0;
+                  canvas.height = 0;
+                  URL.revokeObjectURL(url);
+                  resolve(out);
+                } catch (_) {
+                  URL.revokeObjectURL(url);
+                  resolve("");
+                }
+              };
+              img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve("");
+              };
+              img.src = url;
+            });
+          }
+
+          function invalidateCleanedBatchCache() {
+            cleanBatchItems.forEach((it) => {
+              if (it.cleanedBlobUrl) {
+                try { URL.revokeObjectURL(it.cleanedBlobUrl); } catch (_) {}
+                it.cleanedBlobUrl = "";
+              }
+              it.cleanedBlob = null;
+              it.isCleaned = false;
+            });
+          }
+
+          function clearAllCleanBatchItems() {
+            cleanBatchItems.forEach((it) => {
+              if (it.rawThumbUrl) {
+                try { URL.revokeObjectURL(it.rawThumbUrl); } catch (_) {}
+              }
+              if (it.cleanedBlobUrl) {
+                try { URL.revokeObjectURL(it.cleanedBlobUrl); } catch (_) {}
+              }
+            });
+            cleanBatchItems = [];
+          }
+
+          function renderCleanBatchGrid() {
+            const gridEl = document.getElementById("mod-nai-clean-grid");
+            const emptyBox = document.getElementById("mod-nai-clean-empty-box");
+            const countText = document.getElementById("mod-nai-clean-count-text");
+            const statusText = document.getElementById("mod-nai-clean-status-text");
+            if (!gridEl || !emptyBox) return;
+
+            if (countText) {
+              countText.textContent = `已选 ${cleanBatchItems.length} 张`;
+            }
+
+            if (cleanBatchItems.length === 0) {
+              gridEl.style.display = "none";
+              gridEl.replaceChildren();
+              emptyBox.style.display = "flex";
+              if (statusText && !cleanIsRunning) {
+                statusText.textContent = "点击清洗按顺序逐张下载，点任意缩略图可单独下载";
+              }
+              return;
+            }
+
+            emptyBox.style.display = "none";
+            gridEl.style.display = "grid";
+            gridEl.replaceChildren();
+
+            const frag = document.createDocumentFragment();
+            cleanBatchItems.forEach((item, idx) => {
+              const idxLabel = String(idx + 1).padStart(2, "0");
+              const card = document.createElement("div");
+              card.className = "mod-nai-grid-thumb-card" + (item.isCleaned ? " is-cleaned" : "");
+              card.title = "点击单独清洗并下载此图";
+
+              const img = document.createElement("img");
+              img.src = item.cleanedBlobUrl || item.rawThumbUrl;
+              img.alt = item.name || `图片${idxLabel}`;
+              card.appendChild(img);
+
+              const badge = document.createElement("span");
+              badge.className = "mod-nai-grid-badge-tl";
+              badge.innerHTML = item.isCleaned
+                ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>${idxLabel}</span>`
+                : idxLabel;
+              card.appendChild(badge);
+
+              const delBtn = document.createElement("button");
+              delBtn.type = "button";
+              delBtn.className = "mod-nai-grid-del-tr";
+              delBtn.textContent = "×";
+              delBtn.title = "移除此图";
+              delBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (cleanIsRunning) return;
+                if (item.rawThumbUrl) {
+                  try { URL.revokeObjectURL(item.rawThumbUrl); } catch (_) {}
+                }
+                if (item.cleanedBlobUrl) {
+                  try { URL.revokeObjectURL(item.cleanedBlobUrl); } catch (_) {}
+                }
+                cleanBatchItems.splice(idx, 1);
+                renderCleanBatchGrid();
+              });
+              card.appendChild(delBtn);
+
+              const bottomTag = document.createElement("div");
+              bottomTag.className = "mod-nai-grid-bottom-tag";
+              bottomTag.innerHTML = item.isCleaned
+                ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>重下</span>'
+                : '<span>点此单下</span>';
+              card.appendChild(bottomTag);
+
+              card.addEventListener("click", async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (cleanIsRunning) return;
+                await cleanAndDownloadSingleItem(item, idx, true);
+              });
+
+              frag.appendChild(card);
+            });
+
+            gridEl.appendChild(frag);
+          }
+
+          async function cleanSingleBatchItem(item) {
+            if (item.isCleaned && item.cleanedBlob && item.cleanedBlobUrl) {
+              return item.cleanedBlobUrl;
+            }
+            if (!item || !item.file) return "";
+
+            const srcUrl = URL.createObjectURL(item.file);
+            try {
+              const img = await new Promise((resolve) => {
+                const el = new Image();
+                el.onload = () => resolve(el);
+                el.onerror = () => resolve(null);
+                el.src = srcUrl;
+              });
+              if (!img) {
+                URL.revokeObjectURL(srcUrl);
+                return "";
+              }
+
+              const w = img.naturalWidth || img.width || 1024;
+              const h = img.naturalHeight || img.height || 1024;
+              const canvas = document.createElement("canvas");
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+              // 1. 纯白底层铺底 + 原图重绘（彻底剥离所有 PNG tEXt/iTXt/zTXt 块与 EXIF/XMP 元数据）
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, w, h);
+              ctx.drawImage(img, 0, 0, w, h);
+
+              // 2. 如果勾选了水印，按所选图层混合模式（滤色/正片叠底）与不拉伸排版方式叠加
+              const st = loadPanelState();
+              const gallery = getNormalizedWatermarkGallery(st);
+              const activeWm = st.watermarkSelectedId
+                ? gallery.find((x) => x.id === st.watermarkSelectedId)
+                : null;
+              if (activeWm && activeWm.image) {
+                const wmImg = await loadImageElementFromAnyRef(activeWm.image);
+                if (wmImg) {
+                  const blendMode = st.watermarkBlendMode || "screen";
+                  const fitMode = st.watermarkFitMode || "contain";
+                  const processedWm = buildProcessedWatermarkCanvas(
+                    wmImg,
+                    st.watermarkHue || 0,
+                    st.watermarkSat !== undefined ? st.watermarkSat : 100,
+                    st.watermarkLight !== undefined ? st.watermarkLight : 100,
+                    blendMode,
+                    Math.max(w, h)
+                  );
+
+                  drawWatermarkWithFitMode(
+                    ctx,
+                    processedWm,
+                    0,
+                    0,
+                    w,
+                    h,
+                    blendMode,
+                    st.watermarkOpacity !== undefined ? st.watermarkOpacity : 65,
+                    fitMode
+                  );
+
+                  processedWm.width = 0;
+                  processedWm.height = 0;
+                }
+              }
+
+              // 3. 扰动顶部前64个像素的最低有效位，彻底打碎 stealth_pngcomp / stealth_rgbcomp 隐写签名头
+              try {
+                const stripW = Math.min(w, 64);
+                const stripH = Math.min(h, 2);
+                const headData = ctx.getImageData(0, 0, stripW, stripH);
+                const d = headData.data;
+                for (let i = 0; i < d.length; i += 4) {
+                  d[i] = (d[i] & 0xfe) | ((i >> 2) & 1);
+                  d[i + 1] = (d[i + 1] & 0xfe) | (((i >> 2) + 1) & 1);
+                  d[i + 2] = (d[i + 2] & 0xfe) | 1;
+                  d[i + 3] = 255;
+                }
+                ctx.putImageData(headData, 0, 0);
+              } catch (_) {}
+
+              // 4. 输出为干净的 JPG Blob，彻底消除 Alpha 隐写通道与原文件块
+              const blob = await new Promise((resolve) => {
+                if (typeof canvas.toBlob === "function") {
+                  canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92);
+                } else {
+                  resolve(null);
+                }
+              });
+
+              canvas.width = 0;
+              canvas.height = 0;
+              URL.revokeObjectURL(srcUrl);
+
+              if (!blob) return "";
+              if (item.cleanedBlobUrl) {
+                try { URL.revokeObjectURL(item.cleanedBlobUrl); } catch (_) {}
+              }
+              item.cleanedBlob = blob;
+              item.cleanedBlobUrl = URL.createObjectURL(blob);
+              item.isCleaned = true;
+              return item.cleanedBlobUrl;
+            } catch (_) {
+              URL.revokeObjectURL(srcUrl);
+              return "";
+            }
+          }
+
+          // 单次静默下载触发器：不挂载到 document.body 并阻断冒泡，防止外层容器二次拦截造成重复下载两次
+          function triggerBrowserDownloadUrl(blobUrl, filename) {
+            const now = Date.now();
+            if (now - _lastCleanDownloadTriggerTs < 150) return;
+            _lastCleanDownloadTriggerTs = now;
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = filename;
+            link.rel = "noopener";
+            link.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+            });
+            link.click();
+          }
+
+          function buildCleanDownloadFilename(item, idx) {
+            const seq = String(idx + 1).padStart(2, "0");
+            const rawName = String((item && item.name) || "image")
+              .replace(/\.[^/.]+$/, "")
+              .replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, "_")
+              .slice(0, 24) || "image";
+            return `clean_${seq}_${rawName}.jpg`;
+          }
+
+          async function cleanAndDownloadSingleItem(item, idx, showToastFlag) {
+            if (cleanIsRunning) return false;
+            cleanIsRunning = true;
+            const statusText = document.getElementById("mod-nai-clean-status-text");
+            try {
+              if (statusText) {
+                statusText.textContent = `正在清洗第 ${idx + 1} 张图片...`;
+              }
+              const cleanUrl = await cleanSingleBatchItem(item);
+              if (!cleanUrl) {
+                if (statusText) statusText.textContent = `第 ${idx + 1} 张图片清洗未成功，请重试`;
+                return false;
+              }
+              renderCleanBatchGrid();
+              const fileName = buildCleanDownloadFilename(item, idx);
+              triggerBrowserDownloadUrl(cleanUrl, fileName);
+              if (statusText) {
+                statusText.textContent = `已下载第 ${idx + 1} 张，点任意缩略图可再次单独下载`;
+              }
+              if (showToastFlag && typeof window.showDownloadToast === "function") {
+                window.showDownloadToast(`已下载第 ${idx + 1} 张`, "success");
+              }
+              return true;
+            } finally {
+              cleanIsRunning = false;
+            }
+          }
+
+          function bindCleanAndWatermarkEvents() {
+            if (window._naiCleanAndWmEventsBound) return;
+            window._naiCleanAndWmEventsBound = true;
+
+            const openCleanBtn = document.getElementById("mod-nai-clean-open-btn");
+            const closeCleanBtn = document.getElementById("mod-nai-clean-close-btn");
+            const cleanModal = document.getElementById("mod-nai-clean-modal");
+            const cleanFileInput = document.getElementById("mod-nai-clean-file-input");
+            const cleanEmptyBox = document.getElementById("mod-nai-clean-empty-box");
+            const cleanAddBtn = document.getElementById("mod-nai-clean-add-btn");
+            const cleanClearBtn = document.getElementById("mod-nai-clean-clear-btn");
+            const cleanRunBtn = document.getElementById("mod-nai-clean-run-btn");
+            const cleanRunText = document.getElementById("mod-nai-clean-run-text");
+            const cleanStatusText = document.getElementById("mod-nai-clean-status-text");
+            const cleanWmBadge = document.getElementById("mod-nai-clean-wm-state-badge");
+
+            const openWmBtn = document.getElementById("mod-nai-watermark-open-btn");
+            const closeWmBtn = document.getElementById("mod-nai-wm-close-btn");
+            const wmModal = document.getElementById("mod-nai-watermark-modal");
+            const wmFileInput = document.getElementById("mod-nai-wm-file-input");
+            const wmUploadBtn = document.getElementById("mod-nai-wm-upload-btn");
+            const wmEmptyBox = document.getElementById("mod-nai-wm-empty-box");
+            const wmBlendSelect = document.getElementById("mod-nai-wm-blend-select");
+            const wmFitSelect = document.getElementById("mod-nai-wm-fit-select");
+            const wmOpacityRange = document.getElementById("mod-nai-wm-opacity-range");
+            const wmOpacityVal = document.getElementById("mod-nai-wm-opacity-val");
+            const wmHueRange = document.getElementById("mod-nai-wm-hue-range");
+            const wmHueVal = document.getElementById("mod-nai-wm-hue-val");
+            const wmSatRange = document.getElementById("mod-nai-wm-sat-range");
+            const wmSatVal = document.getElementById("mod-nai-wm-sat-val");
+            const wmLightRange = document.getElementById("mod-nai-wm-light-range");
+            const wmLightVal = document.getElementById("mod-nai-wm-light-val");
+            const wmResetBtn = document.getElementById("mod-nai-wm-reset-btn");
+            const wmConfirmBtn = document.getElementById("mod-nai-wm-confirm-btn");
+
+            const syncWmSlidersUi = () => {
+              if (wmBlendSelect) wmBlendSelect.value = wmDraftBlendMode || "screen";
+              if (wmFitSelect) wmFitSelect.value = wmDraftFitMode || "contain";
+              if (wmOpacityRange) wmOpacityRange.value = String(wmDraftOpacity);
+              if (wmOpacityVal) wmOpacityVal.textContent = `${wmDraftOpacity}%`;
+              if (wmHueRange) wmHueRange.value = String(wmDraftHue);
+              if (wmHueVal) wmHueVal.textContent = `${wmDraftHue}°`;
+              if (wmSatRange) wmSatRange.value = String(wmDraftSat);
+              if (wmSatVal) wmSatVal.textContent = `${wmDraftSat}%`;
+              if (wmLightRange) wmLightRange.value = String(wmDraftLight);
+              if (wmLightVal) wmLightVal.textContent = `${wmDraftLight}%`;
+            };
+
+            const openWatermarkModalNow = () => {
+              const st = loadPanelState();
+              applyThemeToPanel(st.theme || "folio");
+              wmDraftSelectedId = st.watermarkSelectedId || "";
+              wmDraftBlendMode = st.watermarkBlendMode || "screen";
+              wmDraftFitMode = st.watermarkFitMode || "contain";
+              wmDraftOpacity = st.watermarkOpacity !== undefined ? Number(st.watermarkOpacity) : 65;
+              wmDraftHue = st.watermarkHue !== undefined ? Number(st.watermarkHue) : 0;
+              wmDraftSat = st.watermarkSat !== undefined ? Number(st.watermarkSat) : 100;
+              wmDraftLight = st.watermarkLight !== undefined ? Number(st.watermarkLight) : 100;
+              syncWmSlidersUi();
+              renderWatermarkGalleryGrid();
+              if (wmModal) wmModal.style.display = "flex";
+            };
+
+            const openCleanModalNow = () => {
+              const st = loadPanelState();
+              applyThemeToPanel(st.theme || "folio");
+              updateWatermarkStatusBadges();
+              renderCleanBatchGrid();
+              if (cleanModal) cleanModal.style.display = "flex";
+            };
+
+            if (openCleanBtn) openCleanBtn.addEventListener("click", openCleanModalNow);
+            if (closeCleanBtn) {
+              closeCleanBtn.addEventListener("click", () => {
+                if (cleanModal) cleanModal.style.display = "none";
+              });
+            }
+            if (cleanWmBadge) {
+              cleanWmBadge.addEventListener("click", () => {
+                openWatermarkModalNow();
+              });
+            }
+
+            const appendFilesToCleanBatch = (fileList) => {
+              const files = Array.from(fileList || []).filter((f) => f && f.type && f.type.startsWith("image/"));
+              if (!files.length) return;
+              files.forEach((f) => {
+                const thumbUrl = URL.createObjectURL(f);
+                cleanBatchItems.push({
+                  id: "cl_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+                  name: f.name || "image.png",
+                  file: f,
+                  rawThumbUrl: thumbUrl,
+                  cleanedBlob: null,
+                  cleanedBlobUrl: "",
+                  isCleaned: false
+                });
+              });
+              renderCleanBatchGrid();
+              if (cleanStatusText) {
+                cleanStatusText.textContent = `已载入 ${cleanBatchItems.length} 张图片，点击清洗一键顺序下载`;
+              }
+            };
+
+            const triggerCleanPick = () => {
+              if (cleanIsRunning) return;
+              if (cleanFileInput) cleanFileInput.click();
+            };
+            if (cleanEmptyBox) cleanEmptyBox.addEventListener("click", triggerCleanPick);
+            if (cleanAddBtn) cleanAddBtn.addEventListener("click", triggerCleanPick);
+            if (cleanFileInput) {
+              cleanFileInput.addEventListener("change", () => {
+                if (cleanFileInput.files && cleanFileInput.files.length > 0) {
+                  appendFilesToCleanBatch(cleanFileInput.files);
+                }
+                cleanFileInput.value = "";
+              });
+            }
+
+            if (cleanClearBtn) {
+              cleanClearBtn.addEventListener("click", () => {
+                if (cleanIsRunning) return;
+                clearAllCleanBatchItems();
+                renderCleanBatchGrid();
+                if (cleanStatusText) {
+                  cleanStatusText.textContent = "已清空列表，可重新选择图片";
+                }
+              });
+            }
+
+            if (cleanRunBtn) {
+              cleanRunBtn.addEventListener("click", async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (cleanIsRunning) return;
+                if (cleanBatchItems.length === 0) {
+                  triggerCleanPick();
+                  return;
+                }
+                cleanIsRunning = true;
+                cleanRunBtn.disabled = true;
+                const total = cleanBatchItems.length;
+                let successCount = 0;
+
+                try {
+                  for (let i = 0; i < total; i++) {
+                    const item = cleanBatchItems[i];
+                    if (cleanRunText) cleanRunText.textContent = `${i + 1}/${total}`;
+                    if (cleanStatusText) {
+                      cleanStatusText.textContent = `正在清洗并下载 ${i + 1} / ${total} ...`;
+                    }
+                    const cleanUrl = await cleanSingleBatchItem(item);
+                    if (cleanUrl) {
+                      successCount++;
+                      renderCleanBatchGrid();
+                      const fileName = buildCleanDownloadFilename(item, i);
+                      triggerBrowserDownloadUrl(cleanUrl, fileName);
+                      if (i < total - 1) {
+                        await new Promise((r) => setTimeout(r, 360));
+                      }
+                    }
+                  }
+                  if (cleanStatusText) {
+                    cleanStatusText.textContent = `已完成 ${successCount} / ${total} 张清洗与下载，漏下可点缩略图重下`;
+                  }
+                  if (typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast(`已完成 ${successCount} 张清洗下载`, "success");
+                  }
+                } finally {
+                  cleanIsRunning = false;
+                  cleanRunBtn.disabled = false;
+                  if (cleanRunText) cleanRunText.textContent = "清洗";
+                }
+              });
+            }
+
+            // 水印面板事件
+            if (openWmBtn) openWmBtn.addEventListener("click", openWatermarkModalNow);
+            if (closeWmBtn) {
+              closeWmBtn.addEventListener("click", () => {
+                if (wmModal) wmModal.style.display = "none";
+              });
+            }
+
+            const triggerWmUpload = () => {
+              if (wmFileInput) wmFileInput.click();
+            };
+            if (wmUploadBtn) wmUploadBtn.addEventListener("click", triggerWmUpload);
+            if (wmEmptyBox) wmEmptyBox.addEventListener("click", triggerWmUpload);
+
+            if (wmFileInput) {
+              wmFileInput.addEventListener("change", async () => {
+                const files = Array.from(wmFileInput.files || []);
+                wmFileInput.value = "";
+                if (!files.length) return;
+                const st = loadPanelState();
+                const gallery = getNormalizedWatermarkGallery(st);
+                let lastAddedId = "";
+                for (const f of files) {
+                  const dataUrl = await compressWatermarkFileToDataUrl(f);
+                  if (!dataUrl) continue;
+                  const storedRef = (await offloadSingleNaiImageToTermux(dataUrl)) || dataUrl;
+                  const newId = "wm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+                  gallery.push({
+                    id: newId,
+                    name: f.name || "水印",
+                    image: storedRef,
+                    updatedAt: Date.now()
+                  });
+                  lastAddedId = newId;
+                }
+                st.watermarkGallery = gallery;
+                if (lastAddedId && !wmDraftSelectedId) {
+                  wmDraftSelectedId = lastAddedId;
+                  st.watermarkSelectedId = lastAddedId;
+                }
+                savePanelState(st);
+                updateWatermarkStatusBadges();
+                renderWatermarkGalleryGrid();
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已上传至水印图库", "success");
+                }
+              });
+            }
+
+            if (wmBlendSelect) {
+              wmBlendSelect.addEventListener("change", () => {
+                wmDraftBlendMode = wmBlendSelect.value === "multiply" ? "multiply" : "screen";
+                renderWatermarkLivePreview();
+              });
+            }
+
+            if (wmFitSelect) {
+              wmFitSelect.addEventListener("change", () => {
+                const v = wmFitSelect.value;
+                wmDraftFitMode = (v === "cover" || v === "tile" || v === "corner") ? v : "contain";
+                renderWatermarkLivePreview();
+              });
+            }
+
+            const handleSliderInput = () => {
+              if (wmOpacityRange) wmDraftOpacity = Number(wmOpacityRange.value) || 65;
+              if (wmHueRange) wmDraftHue = Number(wmHueRange.value) || 0;
+              if (wmSatRange) wmDraftSat = Number(wmSatRange.value !== "" ? wmSatRange.value : 100);
+              if (wmLightRange) wmDraftLight = Number(wmLightRange.value) || 100;
+              syncWmSlidersUi();
+              renderWatermarkLivePreview();
+            };
+
+            [wmOpacityRange, wmHueRange, wmSatRange, wmLightRange].forEach((inp) => {
+              if (inp) {
+                inp.addEventListener("input", handleSliderInput);
+                inp.addEventListener("change", handleSliderInput);
+              }
+            });
+
+            if (wmResetBtn) {
+              wmResetBtn.addEventListener("click", () => {
+                wmDraftBlendMode = "screen";
+                wmDraftFitMode = "contain";
+                wmDraftOpacity = 65;
+                wmDraftHue = 0;
+                wmDraftSat = 100;
+                wmDraftLight = 100;
+                syncWmSlidersUi();
+                renderWatermarkLivePreview();
+              });
+            }
+
+            if (wmConfirmBtn) {
+              wmConfirmBtn.addEventListener("click", () => {
+                const st = loadPanelState();
+                st.watermarkSelectedId = wmDraftSelectedId || "";
+                st.watermarkBlendMode = wmDraftBlendMode || "screen";
+                st.watermarkFitMode = wmDraftFitMode || "contain";
+                st.watermarkOpacity = wmDraftOpacity;
+                st.watermarkHue = wmDraftHue;
+                st.watermarkSat = wmDraftSat;
+                st.watermarkLight = wmDraftLight;
+                savePanelState(st);
+                updateWatermarkStatusBadges();
+                invalidateCleanedBatchCache();
+                renderCleanBatchGrid();
+                if (wmModal) wmModal.style.display = "none";
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast(st.watermarkSelectedId ? "已启用水印设置" : "已保存水印设置", "success");
+                }
+              });
+            }
+
+            updateWatermarkStatusBadges();
           }
 
           // ============================================================
@@ -49375,6 +50664,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             applyThemeToPanel(st.theme || "folio");
+            if (typeof updateWatermarkStatusBadges === "function") {
+              updateWatermarkStatusBadges();
+            }
           }
 
           window.openModuleNaiPanel = function (forceGenerateMode) {
@@ -49991,6 +51283,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (curSt && typeof curSt.lastGeneratedImage === "string" && curSt.lastGeneratedImage.includes("vault://")) {
               refs.push(curSt.lastGeneratedImage);
             }
+            if (curSt && Array.isArray(curSt.watermarkGallery)) {
+              collectFromList(curSt.watermarkGallery);
+            }
             try {
               const baseUrl = getNaiTermuxBaseUrl();
               const res = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
@@ -50002,6 +51297,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   collectFromList(data.lexiconFolders);
                   if (data.panelState && typeof data.panelState.lastGeneratedImage === "string" && data.panelState.lastGeneratedImage.includes("vault://")) {
                     refs.push(data.panelState.lastGeneratedImage);
+                  }
+                  if (data.panelState && Array.isArray(data.panelState.watermarkGallery)) {
+                    collectFromList(data.panelState.watermarkGallery);
                   }
                 }
               }

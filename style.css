@@ -36859,7 +36859,8 @@ select,
 }
 
 #module-nai-panel .mod-nai-select,
-#mod-nai-settings-modal .mod-nai-select {
+#mod-nai-settings-modal .mod-nai-select,
+#mod-nai-watermark-modal .mod-nai-select {
   height: 30px !important;
   min-height: 30px !important;
   line-height: 28px !important;
@@ -36891,7 +36892,8 @@ select,
   padding: 0 22px 0 11px !important;
 }
 
-#mod-nai-settings-modal .mod-nai-select {
+#mod-nai-settings-modal .mod-nai-select,
+#mod-nai-watermark-modal .mod-nai-select {
   height: 36px !important;
   min-height: 36px !important;
   line-height: 22px !important;
@@ -38885,7 +38887,9 @@ select,
 }
 
 #mod-nai-settings-modal.nai-theme-folio .mod-nai-select,
-#mod-nai-settings-modal.nai-theme-tavern .mod-nai-select {
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-select,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-select,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-select {
   border-radius: 999px !important;
   border: 1px solid var(--nai-text) !important;
   background-color: var(--card-bg) !important;
@@ -39368,3 +39372,423 @@ select,
   background-color: var(--secondary-bg);
 }
 
+/* ============================================================
+   生图提取：清洗小面板 & 水印小面板（完全复用设置弹窗与五套主题体系）
+   ============================================================ */
+#mod-nai-clean-modal,
+#mod-nai-watermark-modal {
+  z-index: 2210 !important;
+  --nai-panel-bg: var(--background-color);
+  --nai-card-bg: var(--card-bg);
+  --nai-sub-bg: var(--secondary-bg);
+  --nai-border: var(--border-color);
+  --nai-border-strong: var(--border-color);
+  --nai-text: var(--text-primary);
+  --nai-muted: var(--text-secondary);
+  --nai-accent: var(--accent-color);
+  --nai-seal: color-mix(in srgb, var(--accent-color) 76%, var(--text-primary));
+}
+
+#mod-nai-clean-modal.nai-theme-apple,
+#mod-nai-watermark-modal.nai-theme-apple {
+  --nai-accent: color-mix(in srgb, var(--tukey-success) 52%, var(--text-primary));
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-success) 8%, var(--background-color));
+  --nai-card-bg: color-mix(in srgb, var(--tukey-success) 5%, var(--card-bg));
+  --nai-sub-bg: color-mix(in srgb, var(--tukey-success) 13%, var(--card-bg));
+  --nai-border: color-mix(in srgb, var(--tukey-success) 38%, var(--border-color));
+  --nai-border-strong: color-mix(in srgb, var(--tukey-success) 52%, var(--border-color));
+  --nai-seal: var(--nai-accent);
+}
+
+#mod-nai-clean-modal.nai-theme-puppy,
+#mod-nai-watermark-modal.nai-theme-puppy {
+  --nai-accent: color-mix(in srgb, var(--tukey-primary) 65%, var(--tukey-text-main));
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-bg) 80%, var(--secondary-bg));
+  --nai-card-bg: var(--card-bg);
+  --nai-sub-bg: color-mix(in srgb, var(--tukey-primary-light) 16%, var(--secondary-bg));
+  --nai-border: color-mix(in srgb, var(--tukey-text-light) 45%, var(--border-color));
+  --nai-border-strong: color-mix(in srgb, var(--tukey-text-main) 50%, var(--border-color));
+  --nai-text: var(--tukey-text-main);
+  --nai-muted: var(--tukey-text-light);
+  --nai-seal: var(--nai-accent);
+}
+
+#mod-nai-clean-modal .modal-content,
+#mod-nai-watermark-modal .modal-content {
+  max-height: 84vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  box-sizing: border-box;
+  background-color: var(--nai-card-bg);
+  color: var(--nai-text);
+  border: 1px solid var(--nai-border);
+}
+
+#mod-nai-clean-modal .modal-content > *,
+#mod-nai-watermark-modal .modal-content > * {
+  flex-shrink: 0;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .modal-content,
+#mod-nai-clean-modal.nai-theme-tavern .modal-content,
+#mod-nai-watermark-modal.nai-theme-folio .modal-content,
+#mod-nai-watermark-modal.nai-theme-tavern .modal-content {
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-text-light) 12%, var(--card-bg));
+  --nai-card-bg: color-mix(in srgb, var(--card-bg) 92%, var(--secondary-bg));
+  --nai-sub-bg: color-mix(in srgb, var(--secondary-bg) 52%, var(--card-bg));
+  --nai-border: color-mix(in srgb, var(--border-color) 85%, transparent);
+  --nai-border-strong: color-mix(in srgb, var(--text-primary) 34%, var(--border-color));
+  --nai-text: color-mix(in srgb, var(--text-primary) 88%, var(--text-secondary));
+  --nai-muted: color-mix(in srgb, var(--text-secondary) 88%, var(--text-primary));
+  --nai-accent: color-mix(in srgb, var(--text-primary) 88%, var(--text-secondary));
+  --nai-seal: color-mix(in srgb, var(--accent-color) 76%, var(--text-primary));
+  background-color: var(--nai-panel-bg) !important;
+  color: var(--nai-text) !important;
+  border: 1px dashed var(--nai-border-strong) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--text-primary) 16%, transparent) !important;
+  font-family: "LXGW WenKai", "Noto Serif SC", "Songti SC", serif;
+  padding: 15px 16px !important;
+}
+
+#mod-nai-clean-modal .mod-nai-settings-anchor,
+#mod-nai-watermark-modal .mod-nai-settings-anchor {
+  display: none;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-settings-anchor,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-settings-anchor,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-settings-anchor,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-settings-anchor {
+  display: block;
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--nai-text);
+  pointer-events: none;
+  z-index: 4;
+}
+
+#mod-nai-clean-modal .mod-nai-settings-anchor.tl,
+#mod-nai-watermark-modal .mod-nai-settings-anchor.tl { top: 4px; left: 4px; }
+#mod-nai-clean-modal .mod-nai-settings-anchor.tr,
+#mod-nai-watermark-modal .mod-nai-settings-anchor.tr { top: 4px; right: 4px; }
+#mod-nai-clean-modal .mod-nai-settings-anchor.bl,
+#mod-nai-watermark-modal .mod-nai-settings-anchor.bl { bottom: 4px; left: 4px; }
+#mod-nai-clean-modal .mod-nai-settings-anchor.br,
+#mod-nai-watermark-modal .mod-nai-settings-anchor.br { bottom: 4px; right: 4px; }
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-settings-head,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-settings-head,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-settings-head,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-settings-head {
+  border-bottom: 1px dashed var(--nai-border-strong) !important;
+  padding-bottom: 9px !important;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-settings-title,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-settings-title,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-settings-title,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-settings-title {
+  font-family: "Cormorant Garamond", "Playfair Display", "Noto Serif SC", "Songti SC", serif;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1px;
+  color: var(--nai-text) !important;
+}
+
+#mod-nai-clean-modal .mod-nai-settings-kicker,
+#mod-nai-watermark-modal .mod-nai-settings-kicker {
+  display: none;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-settings-kicker,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-settings-kicker,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-settings-kicker,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-settings-kicker {
+  display: inline-block;
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: var(--nai-muted);
+  margin-left: 6px;
+}
+
+#mod-nai-clean-modal .mod-nai-btn,
+#mod-nai-watermark-modal .mod-nai-btn {
+  height: 32px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--nai-border);
+  background-color: var(--nai-sub-bg);
+  color: var(--nai-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+#mod-nai-clean-modal .mod-nai-btn:active,
+#mod-nai-watermark-modal .mod-nai-btn:active {
+  transform: scale(0.96);
+}
+
+#mod-nai-clean-modal .mod-nai-btn.primary,
+#mod-nai-watermark-modal .mod-nai-btn.primary {
+  background-color: var(--nai-accent);
+  border-color: var(--nai-accent);
+  color: var(--card-bg);
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-btn,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-btn,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-btn,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-btn {
+  border-radius: 999px;
+  border: 1px solid var(--nai-text);
+  background-color: var(--card-bg);
+  color: var(--nai-text);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-btn.primary,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-btn.primary,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-btn.primary,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-btn.primary {
+  background-color: var(--nai-text);
+  border-color: var(--nai-text);
+  color: var(--nai-panel-bg);
+}
+
+/* 清洗与水印图库：一排三个缩略图网格 */
+.mod-nai-three-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.mod-nai-three-grid::-webkit-scrollbar {
+  width: 3.5px;
+}
+
+.mod-nai-three-grid::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--nai-muted) 40%, transparent);
+  border-radius: 999px;
+}
+
+.mod-nai-grid-thumb-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 9px;
+  border: 1.5px solid var(--nai-border);
+  background-color: var(--nai-sub-bg);
+  overflow: hidden;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.16s ease, transform 0.12s ease;
+  user-select: none;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-grid-thumb-card,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-grid-thumb-card,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-grid-thumb-card,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-grid-thumb-card {
+  border-radius: 4px;
+  border: 1px dashed var(--nai-border-strong);
+}
+
+.mod-nai-grid-thumb-card.is-selected,
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-grid-thumb-card.is-selected,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-grid-thumb-card.is-selected,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-grid-thumb-card.is-selected,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-grid-thumb-card.is-selected {
+  border: 2px solid var(--nai-seal);
+}
+
+.mod-nai-grid-thumb-card:active {
+  transform: scale(0.97);
+}
+
+.mod-nai-grid-thumb-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.mod-nai-grid-badge-tl {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  border: 1px solid var(--nai-border);
+  color: var(--nai-text);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  z-index: 3;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.mod-nai-grid-thumb-card.is-selected .mod-nai-grid-badge-tl,
+.mod-nai-grid-thumb-card.is-cleaned .mod-nai-grid-badge-tl {
+  background-color: var(--nai-seal);
+  border-color: var(--nai-seal);
+  color: var(--card-bg);
+}
+
+.mod-nai-grid-del-tr {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--nai-border);
+  background-color: color-mix(in srgb, var(--card-bg) 90%, transparent);
+  color: var(--nai-text);
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 4;
+  box-sizing: border-box;
+}
+
+.mod-nai-grid-bottom-tag {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 20px;
+  background-color: color-mix(in srgb, var(--card-bg) 86%, transparent);
+  border-top: 1px solid var(--nai-border);
+  color: var(--nai-text);
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.mod-nai-empty-drop {
+  width: 100%;
+  min-height: 128px;
+  padding: 18px 12px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--nai-sub-bg) 62%, transparent);
+  color: var(--nai-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+  cursor: pointer;
+  box-sizing: border-box;
+  position: relative;
+}
+
+#mod-nai-clean-modal.nai-theme-folio .mod-nai-empty-drop,
+#mod-nai-clean-modal.nai-theme-tavern .mod-nai-empty-drop,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-empty-drop,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-empty-drop {
+  border-radius: 3px;
+}
+
+/* 水印实时正片叠底与调色滑块区 */
+.mod-nai-wm-preview-stage {
+  width: 100%;
+  height: 82px;
+  border-radius: 8px;
+  border: 1px dashed var(--nai-border-strong);
+  background-color: color-mix(in srgb, var(--card-bg) 92%, var(--secondary-bg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.mod-nai-wm-preview-stage canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.mod-nai-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.mod-nai-slider-label {
+  flex: 0 0 30px;
+  width: 30px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nai-text);
+  white-space: nowrap;
+}
+
+.mod-nai-slider-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 5px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--nai-seal);
+  cursor: pointer;
+}
+
+.mod-nai-slider-val {
+  flex: 0 0 42px;
+  width: 42px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nai-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
