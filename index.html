@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v23.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -47057,10 +47057,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 ? (folderCardMeta.folderName || DEFAULT_LEXICON_FOLDER_NAME)
                 : (isEmptyGuide ? (colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME) : getItemLexiconFolderName(item));
               const safeFolderLabel = String(folderLabel).replace(/</g, "&lt;");
-              const topKickerText = isFolderCard ? safeFolderLabel : "21G";
               indexSpan.innerHTML =
                 `<span class="mod-nai-lex-idx-badge">${idxNum}</span>` +
-                `<span class="mod-nai-lex-idx-kicker">${topKickerText}</span>` +
+                `<span class="mod-nai-lex-idx-kicker">21G ${safeFolderLabel}</span>` +
                 HAND_CIRCLE_SVG;
             } else {
               indexSpan.innerHTML =
@@ -47164,14 +47163,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ).replace(/</g, "&lt;");
 
             if (isLex) {
-              const folderLabel = isFolderCard
-                ? (folderCardMeta.folderName || DEFAULT_LEXICON_FOLDER_NAME)
-                : (isEmptyGuide ? (colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME) : getItemLexiconFolderName(item));
-              const safeFolderLabel = String(folderLabel).replace(/</g, "&lt;");
-              const bottomCornerLabel = isFolderCard ? `P.${idxNum}` : safeFolderLabel;
               titleLine.innerHTML =
                 `<span><i class="mod-nai-lex-caption-bracket">「</i>${safeRawTitle}<i class="mod-nai-lex-caption-bracket">」</i></span>` +
-                `<i class="mod-nai-lex-caption-page">${bottomCornerLabel} ↗</i>`;
+                `<i class="mod-nai-lex-caption-page">P.${idxNum} ↗</i>`;
             } else {
               titleLine.innerHTML = `<span><em>Trace</em> / ${safeRawTitle}</span><i class="mod-nai-specimen-arrow">↗</i>`;
             }

@@ -37668,7 +37668,7 @@ select,
 
 #module-nai-panel .mod-nai-trace-caption-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 4px;
   font-family: var(--trace-cn-font);
@@ -37688,9 +37688,12 @@ select,
 }
 
 #module-nai-panel .mod-nai-trace-caption-title span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+  flex: 1;
+  min-width: 0;
 }
 
 #module-nai-panel .mod-nai-specimen-arrow {
