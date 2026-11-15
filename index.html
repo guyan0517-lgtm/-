@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Dancing+Script:wght@500;600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link rel="stylesheet" href="style.css?v=24.6" />
+    <link rel="stylesheet" href="style.css?v=24.8" />
     <script src="/node_modules/dexie/dist/dexie.js"></script>
     <script>if (typeof Dexie === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/dexie/dist/dexie.js"><\/script>'); }</script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -47031,30 +47031,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ];
           }
 
-          // 生成经过色相、饱和度、明度调色且适配 滤色 / 正片叠底 / 叠加 / 覆盖 四种图层模式的水印画布
-          function buildProcessedWatermarkCanvas(wmImg, hueDeg, satPct, lightPct, blendMode, maxSide) {
-            const origW = wmImg.naturalWidth || wmImg.width || 300;
-            const origH = wmImg.naturalHeight || wmImg.height || 300;
-            const limit = maxSide || 1200;
-            const scale = Math.min(1, limit / Math.max(origW, origH));
-            const w = Math.max(1, Math.round(origW * scale));
-            const h = Math.max(1, Math.round(origH * scale));
+          // 水印源像素缓存、15位色彩查找表（32768项）与处理后画布缓存：消除拖动滑块时的百万像素重复计算与卡顿
+          const _wmColorLut = new Int32Array(32768);
+          let _wmRawSourceCache = {
+            img: null,
+            w: 0,
+            h: 0,
+            pixels: null,
+            isOpaqueBlackBg: false,
+            isOpaqueWhiteBg: false
+          };
+          let _wmProcessedCanvasCache = {
+            key: "",
+            img: null,
+            canvas: null
+          };
+          let _wmPreviewRafId = 0;
+          let _wmPreviewHdTimer = null;
+          let _wmSliderIsDragging = false;
+          let _wmPreviewRenderSeq = 0;
 
-            const c = document.createElement("canvas");
-            c.width = w;
-            c.height = h;
-            const ctx = c.getContext("2d", { willReadFrequently: true });
-            ctx.clearRect(0, 0, w, h);
-            ctx.drawImage(wmImg, 0, 0, origW, origH, 0, 0, w, h);
+          function getCachedWatermarkSourceData(wmImg, w, h) {
+            if (
+              _wmRawSourceCache.img === wmImg &&
+              _wmRawSourceCache.w === w &&
+              _wmRawSourceCache.h === h &&
+              _wmRawSourceCache.pixels
+            ) {
+              return _wmRawSourceCache;
+            }
+            const origW = wmImg.naturalWidth || wmImg.width || w;
+            const origH = wmImg.naturalHeight || wmImg.height || h;
+            const tmpCanvas = document.createElement("canvas");
+            tmpCanvas.width = w;
+            tmpCanvas.height = h;
+            const tmpCtx = tmpCanvas.getContext("2d", { willReadFrequently: true });
+            tmpCtx.clearRect(0, 0, w, h);
+            tmpCtx.drawImage(wmImg, 0, 0, origW, origH, 0, 0, w, h);
+            const rawData = tmpCtx.getImageData(0, 0, w, h).data;
+            const pixels = new Uint8ClampedArray(rawData);
+            tmpCanvas.width = 0;
+            tmpCanvas.height = 0;
 
-            const imgData = ctx.getImageData(0, 0, w, h);
-            const data = imgData.data;
-            const hueShift = ((Number(hueDeg) || 0) % 360 + 360) % 360 / 360;
-            const hasHueShift = Math.abs(Number(hueDeg) || 0) > 0.5;
-            const satMul = Math.max(0, (Number(satPct) !== undefined ? Number(satPct) : 100) / 100);
-            const lightMul = Math.max(0.1, (Number(lightPct) !== undefined ? Number(lightPct) : 100) / 100);
-
-            // 检测四角背景类型（用于叠加/覆盖模式下自动抠除纯黑或纯白背景，避免非透明JPG把底图遮死）
             let cornerAlphaSum = 0;
             let cornerLumSum = 0;
             const cornerIndices = [
@@ -47064,24 +47082,86 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ((h - 1) * w + (w - 1)) * 4
             ];
             cornerIndices.forEach((ci) => {
-              if (ci >= 0 && ci + 3 < data.length) {
-                cornerAlphaSum += data[ci + 3];
-                cornerLumSum += (data[ci] + data[ci + 1] + data[ci + 2]) / 3;
+              if (ci >= 0 && ci + 3 < pixels.length) {
+                cornerAlphaSum += pixels[ci + 3];
+                cornerLumSum += (pixels[ci] + pixels[ci + 1] + pixels[ci + 2]) / 3;
               }
             });
             const avgCornerAlpha = cornerAlphaSum / 4;
             const avgCornerLum = cornerLumSum / 4;
-            const isOpaqueBlackBg = avgCornerAlpha > 242 && avgCornerLum < 32;
-            const isOpaqueWhiteBg = avgCornerAlpha > 242 && avgCornerLum > 224;
+            _wmRawSourceCache = {
+              img: wmImg,
+              w,
+              h,
+              pixels,
+              isOpaqueBlackBg: avgCornerAlpha > 242 && avgCornerLum < 32,
+              isOpaqueWhiteBg: avgCornerAlpha > 242 && avgCornerLum > 224
+            };
+            return _wmRawSourceCache;
+          }
 
-            for (let i = 0; i < data.length; i += 4) {
-              const a = data[i + 3] / 255;
+          // 生成经过色相、饱和度、明度调色且适配 滤色 / 正片叠底 / 叠加 / 覆盖 四种图层模式的水印画布
+          function buildProcessedWatermarkCanvas(wmImg, hueDeg, satPct, lightPct, blendMode, maxSide) {
+            const origW = wmImg.naturalWidth || wmImg.width || 300;
+            const origH = wmImg.naturalHeight || wmImg.height || 300;
+            const limit = maxSide || 960;
+            const scale = Math.min(1, limit / Math.max(origW, origH));
+            const w = Math.max(1, Math.round(origW * scale));
+            const h = Math.max(1, Math.round(origH * scale));
 
-              if (blendMode === "multiply") {
-                // 正片叠底模式：先与纯白底合成，使得透明区域与白底在 multiply 下完全隐形
-                const r0 = Math.round(data[i] * a + 255 * (1 - a));
-                const g0 = Math.round(data[i + 1] * a + 255 * (1 - a));
-                const b0 = Math.round(data[i + 2] * a + 255 * (1 - a));
+            const normHue = Math.round(Number(hueDeg) || 0);
+            const normSat = Math.round(Number(satPct) !== undefined ? Number(satPct) : 100);
+            const normLight = Math.round(Number(lightPct) !== undefined ? Number(lightPct) : 100);
+            const cacheKey = `${w}x${h}|${blendMode}|${normHue}|${normSat}|${normLight}`;
+
+            // 若仅调整透明度或排版模式，直接复用已计算好的水印画布（0毫秒瞬时返回）
+            if (
+              _wmProcessedCanvasCache.img === wmImg &&
+              _wmProcessedCanvasCache.key === cacheKey &&
+              _wmProcessedCanvasCache.canvas &&
+              _wmProcessedCanvasCache.canvas.width === w &&
+              _wmProcessedCanvasCache.canvas.height === h
+            ) {
+              return _wmProcessedCanvasCache.canvas;
+            }
+
+            const srcInfo = getCachedWatermarkSourceData(wmImg, w, h);
+            const srcPixels = srcInfo.pixels;
+            const isOpaqueBlackBg = srcInfo.isOpaqueBlackBg;
+            const isOpaqueWhiteBg = srcInfo.isOpaqueWhiteBg;
+
+            const c = _wmProcessedCanvasCache.canvas || document.createElement("canvas");
+            if (c.width !== w) c.width = w;
+            if (c.height !== h) c.height = h;
+            const ctx = c.getContext("2d", { willReadFrequently: true });
+            const imgData = ctx.createImageData(w, h);
+            const data = imgData.data;
+
+            const hueShift = ((normHue % 360) + 360) % 360 / 360;
+            const hasHueShift = Math.abs(normHue) > 0.5;
+            const satMul = Math.max(0, normSat / 100);
+            const lightMul = Math.max(0.1, normLight / 100);
+            const isIdentityColor = !hasHueShift && normSat === 100 && normLight === 100;
+
+            if (!isIdentityColor) {
+              _wmColorLut.fill(-1);
+            }
+
+            const len = srcPixels.length;
+            if (blendMode === "multiply") {
+              for (let i = 0; i < len; i += 4) {
+                const aByte = srcPixels[i + 3];
+                if (aByte === 0) {
+                  data[i] = 255;
+                  data[i + 1] = 255;
+                  data[i + 2] = 255;
+                  data[i + 3] = 255;
+                  continue;
+                }
+                const a = aByte / 255;
+                const r0 = aByte === 255 ? srcPixels[i] : Math.round(srcPixels[i] * a + 255 * (1 - a));
+                const g0 = aByte === 255 ? srcPixels[i + 1] : Math.round(srcPixels[i + 1] * a + 255 * (1 - a));
+                const b0 = aByte === 255 ? srcPixels[i + 2] : Math.round(srcPixels[i + 2] * a + 255 * (1 - a));
 
                 if (r0 >= 250 && g0 >= 250 && b0 >= 250) {
                   data[i] = 255;
@@ -47091,76 +47171,115 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   continue;
                 }
 
-                let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
-                const inkStrength = 1 - lVal;
-
-                if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
-                  hVal = hueShift;
-                  const baseSat = hasHueShift ? Math.max(0.55, Math.min(1, satMul * 0.65)) : Math.min(1, (satMul - 1) * 0.8);
-                  sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.4));
-                  if (lVal < 0.25) {
-                    lVal = 0.25 + lVal * 0.45;
-                  }
-                } else {
-                  hVal = (hVal + hueShift) % 1;
-                  sVal = Math.max(0, Math.min(1, sVal * satMul));
+                if (isIdentityColor) {
+                  data[i] = r0;
+                  data[i + 1] = g0;
+                  data[i + 2] = b0;
+                  data[i + 3] = 255;
+                  continue;
                 }
 
-                const adjustedL = 1 - inkStrength * (1 / lightMul);
-                lVal = Math.max(0.02, Math.min(0.98, adjustedL));
-
-                const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
-                data[i] = nr;
-                data[i + 1] = ng;
-                data[i + 2] = nb;
+                const lutIdx = ((r0 & 0xf8) << 7) | ((g0 & 0xf8) << 2) | (b0 >> 3);
+                let packed = _wmColorLut[lutIdx];
+                if (packed === -1) {
+                  let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
+                  const inkStrength = 1 - lVal;
+                  if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
+                    hVal = hueShift;
+                    const baseSat = hasHueShift ? Math.max(0.55, Math.min(1, satMul * 0.65)) : Math.min(1, (satMul - 1) * 0.8);
+                    sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.4));
+                    if (lVal < 0.25) {
+                      lVal = 0.25 + lVal * 0.45;
+                    }
+                  } else {
+                    hVal = (hVal + hueShift) % 1;
+                    sVal = Math.max(0, Math.min(1, sVal * satMul));
+                  }
+                  const adjustedL = 1 - inkStrength * (1 / lightMul);
+                  lVal = Math.max(0.02, Math.min(0.98, adjustedL));
+                  const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
+                  packed = (nr << 16) | (ng << 8) | nb;
+                  _wmColorLut[lutIdx] = packed;
+                }
+                data[i] = (packed >> 16) & 0xff;
+                data[i + 1] = (packed >> 8) & 0xff;
+                data[i + 2] = packed & 0xff;
                 data[i + 3] = 255;
-              } else if (blendMode === "overlay" || blendMode === "normal") {
-                // 叠加（overlay）或 覆盖（normal / source-over）模式：保留透明通道，若为纯黑底或纯白底无透明JPG则自动抠除底色
-                if (a <= 0.02) {
+              }
+            } else if (blendMode === "overlay" || blendMode === "normal") {
+              for (let i = 0; i < len; i += 4) {
+                const aByte = srcPixels[i + 3];
+                if (aByte <= 5) {
                   data[i + 3] = 0;
                   continue;
                 }
-                const r0 = data[i];
-                const g0 = data[i + 1];
-                const b0 = data[i + 2];
-                let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
-                let outAlpha = a;
-
-                if (isOpaqueBlackBg) {
-                  if (r0 <= 8 && g0 <= 8 && b0 <= 8) {
-                    data[i + 3] = 0;
-                    continue;
-                  }
-                  outAlpha = Math.max(0, Math.min(1, lVal * 1.15));
-                } else if (isOpaqueWhiteBg) {
-                  if (r0 >= 247 && g0 >= 247 && b0 >= 247) {
-                    data[i + 3] = 0;
-                    continue;
-                  }
-                  outAlpha = Math.max(0, Math.min(1, (1 - lVal) * 1.15));
+                const r0 = srcPixels[i];
+                const g0 = srcPixels[i + 1];
+                const b0 = srcPixels[i + 2];
+                if (isOpaqueBlackBg && r0 <= 8 && g0 <= 8 && b0 <= 8) {
+                  data[i + 3] = 0;
+                  continue;
+                }
+                if (isOpaqueWhiteBg && r0 >= 247 && g0 >= 247 && b0 >= 247) {
+                  data[i + 3] = 0;
+                  continue;
                 }
 
-                if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
-                  hVal = hueShift;
-                  const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
-                  sVal = baseSat;
-                  lVal = Math.max(0.18, Math.min(0.82, 0.52 * lightMul));
-                } else {
-                  hVal = (hVal + hueShift) % 1;
-                  sVal = Math.max(0, Math.min(1, sVal * satMul));
-                  lVal = Math.max(0.02, Math.min(0.98, lVal * lightMul));
+                if (isIdentityColor && !isOpaqueBlackBg && !isOpaqueWhiteBg) {
+                  data[i] = r0;
+                  data[i + 1] = g0;
+                  data[i + 2] = b0;
+                  data[i + 3] = aByte;
+                  continue;
                 }
 
-                const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
-                data[i] = nr;
-                data[i + 1] = ng;
-                data[i + 2] = nb;
-                data[i + 3] = Math.max(0, Math.min(255, Math.round(outAlpha * 255)));
-              } else {
-                // 滤色模式（screen）：先与纯黑底合成，使得透明区域与黑底在 screen 下完全隐形
-                const r0 = Math.round(data[i] * a);
-                const g0 = Math.round(data[i + 1] * a);
-                const b0 = Math.round(data[i + 2] * a);
+                const lutIdx = ((r0 & 0xf8) << 7) | ((g0 & 0xf8) << 2) | (b0 >> 3);
+                let packed = _wmColorLut[lutIdx];
+                if (packed === -1) {
+                  let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
+                  let alphaFactor = 255;
+                  if (isOpaqueBlackBg) {
+                    alphaFactor = Math.max(0, Math.min(255, Math.round(lVal * 1.15 * 255)));
+                  } else if (isOpaqueWhiteBg) {
+                    alphaFactor = Math.max(0, Math.min(255, Math.round((1 - lVal) * 1.15 * 255)));
+                  }
+                  if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
+                    hVal = hueShift;
+                    const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
+                    sVal = baseSat;
+                    lVal = Math.max(0.18, Math.min(0.82, 0.52 * lightMul));
+                  } else {
+                    hVal = (hVal + hueShift) % 1;
+                    sVal = Math.max(0, Math.min(1, sVal * satMul));
+                    lVal = Math.max(0.02, Math.min(0.98, lVal * lightMul));
+                  }
+                  const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
+                  packed = (alphaFactor << 24) | (nr << 16) | (ng << 8) | nb;
+                  _wmColorLut[lutIdx] = packed;
+                }
+                const lutAlpha = (packed >>> 24) & 0xff;
+                data[i] = (packed >> 16) & 0xff;
+                data[i + 1] = (packed >> 8) & 0xff;
+                data[i + 2] = packed & 0xff;
+                data[i + 3] = (isOpaqueBlackBg || isOpaqueWhiteBg)
+                  ? lutAlpha
+                  : aByte;
+              }
+            } else {
+              // 滤色模式（screen）
+              for (let i = 0; i < len; i += 4) {
+                const aByte = srcPixels[i + 3];
+                if (aByte <= 2) {
+                  data[i] = 0;
+                  data[i + 1] = 0;
+                  data[i + 2] = 0;
+                  data[i + 3] = 255;
+                  continue;
+                }
+                const a = aByte / 255;
+                const r0 = aByte === 255 ? srcPixels[i] : Math.round(srcPixels[i] * a);
+                const g0 = aByte === 255 ? srcPixels[i + 1] : Math.round(srcPixels[i + 1] * a);
+                const b0 = aByte === 255 ? srcPixels[i + 2] : Math.round(srcPixels[i + 2] * a);
 
                 if (r0 <= 5 && g0 <= 5 && b0 <= 5) {
                   data[i] = 0;
@@ -47170,29 +47289,46 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   continue;
                 }
 
-                let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
-                const inkStrength = lVal;
-
-                if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
-                  hVal = hueShift;
-                  const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
-                  sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.35));
-                  lVal = Math.max(0.02, Math.min(0.88, inkStrength * 0.58 * lightMul));
-                } else {
-                  hVal = (hVal + hueShift) % 1;
-                  sVal = Math.max(0, Math.min(1, sVal * satMul));
-                  lVal = Math.max(0.01, Math.min(0.99, lVal * lightMul));
+                if (isIdentityColor) {
+                  data[i] = r0;
+                  data[i + 1] = g0;
+                  data[i + 2] = b0;
+                  data[i + 3] = 255;
+                  continue;
                 }
 
-                const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
-                data[i] = nr;
-                data[i + 1] = ng;
-                data[i + 2] = nb;
+                const lutIdx = ((r0 & 0xf8) << 7) | ((g0 & 0xf8) << 2) | (b0 >> 3);
+                let packed = _wmColorLut[lutIdx];
+                if (packed === -1) {
+                  let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
+                  const inkStrength = lVal;
+                  if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
+                    hVal = hueShift;
+                    const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
+                    sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.35));
+                    lVal = Math.max(0.02, Math.min(0.88, inkStrength * 0.58 * lightMul));
+                  } else {
+                    hVal = (hVal + hueShift) % 1;
+                    sVal = Math.max(0, Math.min(1, sVal * satMul));
+                    lVal = Math.max(0.01, Math.min(0.99, lVal * lightMul));
+                  }
+                  const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
+                  packed = (nr << 16) | (ng << 8) | nb;
+                  _wmColorLut[lutIdx] = packed;
+                }
+                data[i] = (packed >> 16) & 0xff;
+                data[i + 1] = (packed >> 8) & 0xff;
+                data[i + 2] = packed & 0xff;
                 data[i + 3] = 255;
               }
             }
 
             ctx.putImageData(imgData, 0, 0);
+            _wmProcessedCanvasCache = {
+              key: cacheKey,
+              img: wmImg,
+              canvas: c
+            };
             return c;
           }
 
@@ -47252,12 +47388,36 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ctx.restore();
           }
 
+          function scheduleWatermarkLivePreview(isDraggingNow) {
+            if (isDraggingNow) {
+              _wmSliderIsDragging = true;
+              if (_wmPreviewHdTimer) clearTimeout(_wmPreviewHdTimer);
+              _wmPreviewHdTimer = setTimeout(() => {
+                _wmSliderIsDragging = false;
+                _wmPreviewHdTimer = null;
+                scheduleWatermarkLivePreview(false);
+              }, 90);
+            } else {
+              _wmSliderIsDragging = false;
+              if (_wmPreviewHdTimer) {
+                clearTimeout(_wmPreviewHdTimer);
+                _wmPreviewHdTimer = null;
+              }
+            }
+            if (_wmPreviewRafId) return;
+            _wmPreviewRafId = requestAnimationFrame(() => {
+              _wmPreviewRafId = 0;
+              renderWatermarkLivePreview();
+            });
+          }
+
           async function renderWatermarkLivePreview() {
             const canvas = document.getElementById("mod-nai-wm-preview-canvas");
             const statusLabel = document.getElementById("mod-nai-wm-status-label");
             const modeHint = document.getElementById("mod-nai-wm-preview-mode-hint");
             if (!canvas) return;
 
+            const mySeq = ++_wmPreviewRenderSeq;
             const st = loadPanelState();
             const gallery = getNormalizedWatermarkGallery(st);
             const activeItem = wmDraftSelectedId
@@ -47276,26 +47436,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             canvas.style.display = "block";
 
-            // 1. 加载持久保存的示例底图，并按底图真实比例以高清分辨率（最高1280px）绘制，彻底告别模糊小缩略图
             const bgRef = st.watermarkPreviewBg || DEFAULT_WM_PREVIEW_BG;
             let bgImg = await loadImageElementFromAnyRef(bgRef);
             if (!bgImg && bgRef !== DEFAULT_WM_PREVIEW_BG) {
               bgImg = await loadImageElementFromAnyRef(DEFAULT_WM_PREVIEW_BG);
             }
+            if (mySeq !== _wmPreviewRenderSeq) return;
 
-            let boxW = 960;
-            let boxH = 720;
+            let boxW = 720;
+            let boxH = 540;
             if (bgImg) {
-              const bw = bgImg.naturalWidth || bgImg.width || 960;
-              const bh = bgImg.naturalHeight || bgImg.height || 720;
-              const maxPreviewSide = 1280;
+              const bw = bgImg.naturalWidth || bgImg.width || 720;
+              const bh = bgImg.naturalHeight || bgImg.height || 540;
+              const maxPreviewSide = 780;
               const scale = Math.min(1, maxPreviewSide / Math.max(bw, bh));
-              boxW = Math.max(320, Math.round(bw * scale));
-              boxH = Math.max(240, Math.round(bh * scale));
+              boxW = Math.max(280, Math.round(bw * scale));
+              boxH = Math.max(210, Math.round(bh * scale));
             }
 
-            canvas.width = boxW;
-            canvas.height = boxH;
+            // 仅在尺寸变化时才重设画布宽高，避免每帧销毁重分配 GPU 纹理缓冲区
+            if (canvas.width !== boxW) canvas.width = boxW;
+            if (canvas.height !== boxH) canvas.height = boxH;
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, boxW, boxH);
 
@@ -47308,17 +47469,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ctx.fillRect(0, 0, boxW, boxH);
             }
 
-            // 2. 若已勾选水印，在高清真实底图之上实时合成所选图层模式与排版效果
             if (activeItem && activeItem.image) {
               const wmImg = await loadImageElementFromAnyRef(activeItem.image);
+              if (mySeq !== _wmPreviewRenderSeq) return;
               if (wmImg) {
+                const targetWmSide = _wmSliderIsDragging ? 380 : Math.max(boxW, boxH, 720);
                 const processedWm = buildProcessedWatermarkCanvas(
                   wmImg,
                   wmDraftHue,
                   wmDraftSat,
                   wmDraftLight,
                   wmDraftBlendMode,
-                  Math.max(boxW, boxH, 960)
+                  targetWmSide
                 );
 
                 drawWatermarkWithFitMode(
@@ -47332,9 +47494,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   wmDraftOpacity,
                   wmDraftFitMode
                 );
-
-                processedWm.width = 0;
-                processedWm.height = 0;
               }
             }
           }
@@ -47706,9 +47865,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     st.watermarkOpacity !== undefined ? st.watermarkOpacity : 65,
                     fitMode
                   );
-
-                  processedWm.width = 0;
-                  processedWm.height = 0;
                 }
               }
 
@@ -48226,7 +48382,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               wmBlendSelect.addEventListener("change", () => {
                 const v = wmBlendSelect.value;
                 wmDraftBlendMode = (v === "multiply" || v === "overlay" || v === "normal") ? v : "screen";
-                renderWatermarkLivePreview();
+                scheduleWatermarkLivePreview(false);
               });
             }
 
@@ -48234,23 +48390,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               wmFitSelect.addEventListener("change", () => {
                 const v = wmFitSelect.value;
                 wmDraftFitMode = (v === "cover" || v === "tile" || v === "corner") ? v : "contain";
-                renderWatermarkLivePreview();
+                scheduleWatermarkLivePreview(false);
               });
             }
 
-            const handleSliderInput = () => {
+            const updateWmSliderLabelsOnly = () => {
+              if (wmOpacityVal) wmOpacityVal.textContent = `${wmDraftOpacity}%`;
+              if (wmHueVal) wmHueVal.textContent = `${wmDraftHue}°`;
+              if (wmSatVal) wmSatVal.textContent = `${wmDraftSat}%`;
+              if (wmLightVal) wmLightVal.textContent = `${wmDraftLight}%`;
+            };
+
+            const handleSliderInput = (ev) => {
               if (wmOpacityRange) wmDraftOpacity = Number(wmOpacityRange.value) || 65;
               if (wmHueRange) wmDraftHue = Number(wmHueRange.value) || 0;
               if (wmSatRange) wmDraftSat = Number(wmSatRange.value !== "" ? wmSatRange.value : 100);
               if (wmLightRange) wmDraftLight = Number(wmLightRange.value) || 100;
-              syncWmSlidersUi();
-              renderWatermarkLivePreview();
+              updateWmSliderLabelsOnly();
+              const isChangeCommit = Boolean(ev && ev.type === "change");
+              scheduleWatermarkLivePreview(!isChangeCommit);
             };
 
             [wmOpacityRange, wmHueRange, wmSatRange, wmLightRange].forEach((inp) => {
               if (inp) {
-                inp.addEventListener("input", handleSliderInput);
-                inp.addEventListener("change", handleSliderInput);
+                inp.addEventListener("input", handleSliderInput, { passive: true });
+                inp.addEventListener("change", handleSliderInput, { passive: true });
               }
             });
 
@@ -48263,12 +48427,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 wmDraftSat = 100;
                 wmDraftLight = 100;
                 syncWmSlidersUi();
-                renderWatermarkLivePreview();
+                scheduleWatermarkLivePreview(false);
               });
             }
 
             if (wmConfirmBtn) {
               wmConfirmBtn.addEventListener("click", () => {
+                if (_wmPreviewRafId) {
+                  cancelAnimationFrame(_wmPreviewRafId);
+                  _wmPreviewRafId = 0;
+                }
+                if (_wmPreviewHdTimer) {
+                  clearTimeout(_wmPreviewHdTimer);
+                  _wmPreviewHdTimer = null;
+                }
                 const st = loadPanelState();
                 st.watermarkSelectedId = wmDraftSelectedId || "";
                 st.watermarkBlendMode = wmDraftBlendMode || "screen";

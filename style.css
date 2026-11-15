@@ -39931,11 +39931,13 @@ select,
 .mod-nai-slider-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 5px;
+  height: 22px;
   margin: 0;
   padding: 0;
   accent-color: var(--nai-seal);
   cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mod-nai-slider-val {
