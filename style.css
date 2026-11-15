@@ -36840,7 +36840,8 @@ select,
   min-width: 0;
 }
 
-#module-nai-panel .mod-nai-check {
+#module-nai-panel .mod-nai-check,
+#mod-nai-settings-modal .mod-nai-check {
   width: 17px !important;
   height: 17px !important;
   min-width: 17px !important;
@@ -36854,7 +36855,9 @@ select,
 }
 
 #module-nai-panel.nai-theme-tavern .mod-nai-check,
-#module-nai-panel.nai-theme-folio .mod-nai-check {
+#module-nai-panel.nai-theme-folio .mod-nai-check,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-check,
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-check {
   accent-color: var(--nai-seal);
 }
 

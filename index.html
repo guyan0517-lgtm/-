@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Dancing+Script:wght@500;600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link rel="stylesheet" href="style.css?v=24.8" />
+    <link rel="stylesheet" href="style.css?v=24.9" />
     <script src="/node_modules/dexie/dist/dexie.js"></script>
     <script>if (typeof Dexie === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/dexie/dist/dexie.js"><\/script>'); }</script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4278,6 +4278,11 @@
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">密钥</label>
                 <input type="password" id="mod-nai-setting-api-key" class="moe-input" placeholder="留空默认使用系统设置密钥" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
               </div>
+              <label for="mod-nai-setting-clean-gen" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--nai-sub-bg, var(--secondary-bg)); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
+                <span style="font-size: 12px; font-weight: 600; color: var(--nai-text, var(--text-primary)); flex-shrink: 0;">清洗</span>
+                <span style="flex: 1; min-width: 0; font-size: 11px; color: var(--nai-muted, var(--text-secondary)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;">生图时直接抹除内嵌参数转为JPG</span>
+                <input type="checkbox" id="mod-nai-setting-clean-gen" class="mod-nai-check" style="width: 17px; height: 17px; min-width: 17px; max-width: 17px; flex: 0 0 17px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+              </label>
 
               <!-- 底部预设与词典分组折叠卡头：画师 / 正面 / 负面 / 词典 -->
               <div class="mod-nai-preset-drawers-wrap" id="mod-nai-settings-preset-drawers">
@@ -44530,8 +44535,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               negPresetSelected: "",
               customApiUrl: "",
               customApiKey: "",
+              cleanOnGenerate: false,
               lastGeneratedImage: "",
               lastGeneratedTitle: "",
+              lastGeneratedCleaned: false,
               watermarkGallery: [],
               watermarkSelectedId: "",
               watermarkPreviewBg: "assets/trace/trace_01.jpg",
@@ -46303,6 +46310,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const themeSelect = document.getElementById("mod-nai-setting-theme");
             const apiUrlInput = document.getElementById("mod-nai-setting-api-url");
             const apiKeyInput = document.getElementById("mod-nai-setting-api-key");
+            const cleanGenCheck = document.getElementById("mod-nai-setting-clean-gen");
 
             if (openSettingsBtn && settingsModal) {
               openSettingsBtn.addEventListener("click", () => {
@@ -46312,9 +46320,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (themeSelect) themeSelect.value = st.theme || "folio";
                 if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
                 if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
+                if (cleanGenCheck) cleanGenCheck.checked = Boolean(st.cleanOnGenerate);
                 applyThemeToPanel(st.theme || "folio");
                 renderSettingsPresetDrawers();
                 settingsModal.style.display = "flex";
+              });
+            }
+
+            if (cleanGenCheck) {
+              cleanGenCheck.addEventListener("change", () => {
+                const st = loadPanelState();
+                st.cleanOnGenerate = Boolean(cleanGenCheck.checked);
+                savePanelState(st);
               });
             }
 
@@ -46571,6 +46588,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (themeSelect) themeSelect.value = st.theme || "folio";
               if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
               if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
+              if (cleanGenCheck) cleanGenCheck.checked = Boolean(st.cleanOnGenerate);
               applyThemeToPanel(st.theme || "folio");
               updateHeaderSummary();
               if (settingsModal) settingsModal.style.display = "none";
@@ -46586,6 +46604,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               if (apiUrlInput) st.customApiUrl = apiUrlInput.value.trim();
               if (apiKeyInput) st.customApiKey = apiKeyInput.value.trim();
+              if (cleanGenCheck) st.cleanOnGenerate = Boolean(cleanGenCheck.checked);
               savePanelState(st);
               updateHeaderSummary();
               if (settingsModal) settingsModal.style.display = "none";
@@ -46752,11 +46771,52 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               null
             );
 
-            // 5. 生图执行按钮（生成的图片自动持久化，关闭再打开依然保留，直到下次生图替换）
+            // 5. 生图执行按钮
             const runGenBtn = document.getElementById("mod-nai-gen-run-btn");
             const genResultImg = document.getElementById("mod-nai-gen-result-img");
             const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
             const genStatus = document.getElementById("mod-nai-gen-status-text");
+
+            const purifyGeneratedNaiDataUrl = (rawDataUrl) => {
+              return new Promise((resolve) => {
+                if (!rawDataUrl) return resolve("");
+                const img = new Image();
+                img.onload = () => {
+                  try {
+                    const w = img.naturalWidth || img.width || 1024;
+                    const h = img.naturalHeight || img.height || 1024;
+                    const cvs = document.createElement("canvas");
+                    cvs.width = w;
+                    cvs.height = h;
+                    const ctx = cvs.getContext("2d");
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    try {
+                      const patchW = Math.min(w, 64);
+                      const patchH = Math.min(h, 2);
+                      const id = ctx.getImageData(0, 0, patchW, patchH);
+                      const d = id.data;
+                      for (let i = 0; i < d.length; i += 4) {
+                        d[i] = d[i] ^ 1;
+                        d[i + 1] = d[i + 1] ^ 1;
+                        d[i + 2] = d[i + 2] ^ 1;
+                        d[i + 3] = 255;
+                      }
+                      ctx.putImageData(id, 0, 0);
+                    } catch (_) {}
+                    const cleanedJpg = cvs.toDataURL("image/jpeg", 0.92);
+                    cvs.width = 0;
+                    cvs.height = 0;
+                    resolve(cleanedJpg || rawDataUrl);
+                  } catch (_) {
+                    resolve(rawDataUrl);
+                  }
+                };
+                img.onerror = () => resolve(rawDataUrl);
+                img.src = rawDataUrl;
+              });
+            };
 
             if (runGenBtn) {
               runGenBtn.addEventListener("click", async () => {
@@ -46785,7 +46845,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                 try {
                   const stForGen = loadPanelState();
-                  const dataUrl = await callNovelAiDirect(activePosVal, {
+                  const cleanCheckDom = document.getElementById("mod-nai-setting-clean-gen");
+                  const shouldCleanOnGen = Boolean(
+                    stForGen.cleanOnGenerate || (cleanCheckDom && cleanCheckDom.checked)
+                  );
+                  const rawDataUrl = await callNovelAiDirect(activePosVal, {
                     isolatedModuleNai: true,
                     artist: activeArtistVal,
                     defaultPositive: "",
@@ -46795,21 +46859,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     customApiUrl: stForGen.customApiUrl || "",
                     customApiKey: stForGen.customApiKey || ""
                   });
-                  if (genResultImg && dataUrl) {
-                    const imgTitle = activePosVal || activeArtistVal || "NAI_Image";
+                  if (genResultImg && rawDataUrl) {
+                    const finalDataUrl = shouldCleanOnGen
+                      ? (await purifyGeneratedNaiDataUrl(rawDataUrl))
+                      : rawDataUrl;
+                    const imgTitle = shouldCleanOnGen
+                      ? "NAI_Image"
+                      : (activePosVal || activeArtistVal || "NAI_Image");
                     genResultImg.removeAttribute("data-vault-ref");
-                    genResultImg.src = dataUrl;
+                    if (shouldCleanOnGen) {
+                      genResultImg.setAttribute("data-cleaned-jpg", "1");
+                    } else {
+                      genResultImg.removeAttribute("data-cleaned-jpg");
+                    }
+                    genResultImg.src = finalDataUrl;
                     genResultImg.title = imgTitle;
                     genResultImg.style.display = "block";
                     if (genPlaceholder) genPlaceholder.style.display = "none";
                     if (genStatus) {
                       genStatus.style.display = "block";
-                      genStatus.textContent = "连点图片三下即可下载到本地";
+                      genStatus.textContent = shouldCleanOnGen
+                        ? "已自动清洗内嵌元数据，连点图片三下即可下载到本地"
+                        : "连点图片三下即可下载到本地";
                     }
-                    const persistedRef = await offloadSingleNaiImageToTermux(dataUrl);
+                    const persistedRef = await offloadSingleNaiImageToTermux(finalDataUrl);
                     const stAfterGen = loadPanelState();
-                    stAfterGen.lastGeneratedImage = persistedRef || dataUrl;
+                    stAfterGen.lastGeneratedImage = persistedRef || finalDataUrl;
                     stAfterGen.lastGeneratedTitle = imgTitle;
+                    stAfterGen.lastGeneratedCleaned = shouldCleanOnGen;
                     savePanelState(stAfterGen);
                   }
                 } catch (err) {
@@ -51092,6 +51169,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const themeEl = document.getElementById("mod-nai-setting-theme");
             const apiUrlEl = document.getElementById("mod-nai-setting-api-url");
             const apiKeyEl = document.getElementById("mod-nai-setting-api-key");
+            const cleanGenEl = document.getElementById("mod-nai-setting-clean-gen");
 
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
@@ -51138,6 +51216,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (themeEl) themeEl.value = st.theme || "folio";
               if (apiUrlEl) apiUrlEl.value = st.customApiUrl || "";
               if (apiKeyEl) apiKeyEl.value = st.customApiKey || "";
+              if (cleanGenEl) cleanGenEl.checked = Boolean(st.cleanOnGenerate);
             }
 
             if (inspectArtistEl && document.activeElement !== inspectArtistEl) inspectArtistEl.value = st.inspectArtistText || "";
@@ -51157,6 +51236,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   genResultImg.setAttribute("data-vault-ref", st.lastGeneratedImage);
                 } else {
                   genResultImg.removeAttribute("data-vault-ref");
+                }
+                if (st.lastGeneratedCleaned) {
+                  genResultImg.setAttribute("data-cleaned-jpg", "1");
+                } else {
+                  genResultImg.removeAttribute("data-cleaned-jpg");
                 }
                 bindNaiVaultAwareImage(genResultImg, st.lastGeneratedImage);
                 genResultImg.style.display = "block";
@@ -124680,7 +124764,12 @@ ${specificRules}`;
             .split(".")[0]; // 格式：20250124_123045
 
           // 生成文件名
-          return `${cleanTitle}_${timestamp}.png`;
+          const isCleanedJpg =
+            imgElement.getAttribute("data-cleaned-jpg") === "1" ||
+            String(imgElement.getAttribute("data-vault-ref") || "").toLowerCase().endsWith(".jpg") ||
+            String(imgElement.src || "").startsWith("data:image/jpeg");
+          const ext = isCleanedJpg ? "jpg" : "png";
+          return `${cleanTitle}_${timestamp}.${ext}`;
         }
 
         // 为图片添加双击时的视觉反馈
