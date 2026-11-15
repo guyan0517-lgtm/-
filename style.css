@@ -39869,7 +39869,10 @@ select,
 /* 水印大图实时底图与调色滑块区 */
 .mod-nai-wm-preview-stage {
   width: 100%;
-  height: 176px;
+  min-height: 250px;
+  max-height: 360px;
+  height: auto;
+  padding: 4px;
   border-radius: 9px;
   border: 1px dashed var(--nai-border-strong);
   background-color: color-mix(in srgb, var(--card-bg) 92%, var(--secondary-bg));
@@ -39884,9 +39887,11 @@ select,
 
 .mod-nai-wm-preview-stage canvas {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 348px;
   object-fit: contain;
   display: block;
+  border-radius: 6px;
   pointer-events: none;
 }
 

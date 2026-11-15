@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Dancing+Script:wght@500;600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,600&family=ZCOOL+XiaoWei&family=Zhi+Mang+Xing&display=swap" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link rel="stylesheet" href="style.css?v=22.9" />
+    <link rel="stylesheet" href="style.css?v=24.6" />
     <script src="/node_modules/dexie/dist/dexie.js"></script>
     <script>if (typeof Dexie === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/dexie/dist/dexie.js"><\/script>'); }</script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4431,7 +4431,7 @@
 
           <!-- 生图提取：水印图库与正片叠底调色小面板 -->
           <div class="modal nai-theme-folio" id="mod-nai-watermark-modal" style="display: none;">
-            <div class="modal-content" style="width: calc(100% - 36px); max-width: 344px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+            <div class="modal-content" style="width: calc(100% - 24px); max-width: 376px; max-height: 88vh; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
               <i class="mod-nai-settings-anchor tl"></i>
               <i class="mod-nai-settings-anchor tr"></i>
               <i class="mod-nai-settings-anchor bl"></i>
@@ -4467,7 +4467,7 @@
                 <span style="font-size: 11px; font-weight: 600; color: var(--nai-text);">点击上传水印到图库，长按水印可取名</span>
               </div>
 
-              <div id="mod-nai-wm-gallery-grid" class="mod-nai-wm-compact-grid" style="display: none;"></div>
+              <div id="mod-nai-wm-gallery-grid" class="mod-nai-wm-compact-grid" style="display: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; max-height: 76px; overflow-y: auto; overflow-x: hidden; padding: 2px; box-sizing: border-box;"></div>
 
               <div style="display: flex; flex-direction: column; gap: 7px; padding-top: 6px; border-top: 1px dashed var(--nai-border-strong);">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -4492,12 +4492,12 @@
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1px;">
-                  <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">调色</span>
+                  <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">调色与大图预览</span>
                   <span id="mod-nai-wm-preview-mode-hint" style="font-size: 10.5px; color: var(--nai-muted);">点击下方示例图可更换底图</span>
                 </div>
 
-                <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage" title="点击导入并替换示例底图">
-                  <canvas id="mod-nai-wm-preview-canvas"></canvas>
+                <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage" title="点击导入并替换示例底图" style="width: 100%; min-height: 250px; max-height: 360px; height: auto; padding: 4px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; box-sizing: border-box;">
+                  <canvas id="mod-nai-wm-preview-canvas" style="width: 100%; height: auto; max-height: 348px; object-fit: contain; display: block; border-radius: 6px; pointer-events: none;"></canvas>
                   <span class="mod-nai-wm-bg-tip">点此换底图</span>
                 </div>
 
@@ -47275,40 +47275,40 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             canvas.style.display = "block";
-            const stageW = 312;
-            const stageH = 176;
-            canvas.width = stageW;
-            canvas.height = stageH;
-            const ctx = canvas.getContext("2d");
-            ctx.clearRect(0, 0, stageW, stageH);
 
-            // 1. 加载持久保存的示例底图（默认内置底图，用户导入新底图后永久覆盖保存）
+            // 1. 加载持久保存的示例底图，并按底图真实比例以高清分辨率（最高1280px）绘制，彻底告别模糊小缩略图
             const bgRef = st.watermarkPreviewBg || DEFAULT_WM_PREVIEW_BG;
             let bgImg = await loadImageElementFromAnyRef(bgRef);
             if (!bgImg && bgRef !== DEFAULT_WM_PREVIEW_BG) {
               bgImg = await loadImageElementFromAnyRef(DEFAULT_WM_PREVIEW_BG);
             }
 
-            let boxX = 0;
-            let boxY = 0;
-            let boxW = stageW;
-            let boxH = stageH;
-
+            let boxW = 960;
+            let boxH = 720;
             if (bgImg) {
-              const bw = bgImg.naturalWidth || bgImg.width || 300;
-              const bh = bgImg.naturalHeight || bgImg.height || 300;
-              const scale = Math.min(stageW / bw, stageH / bh);
-              boxW = Math.max(1, Math.round(bw * scale));
-              boxH = Math.max(1, Math.round(bh * scale));
-              boxX = Math.round((stageW - boxW) / 2);
-              boxY = Math.round((stageH - boxH) / 2);
-              ctx.drawImage(bgImg, 0, 0, bw, bh, boxX, boxY, boxW, boxH);
-            } else {
-              ctx.fillStyle = "#524c46";
-              ctx.fillRect(0, 0, stageW, stageH);
+              const bw = bgImg.naturalWidth || bgImg.width || 960;
+              const bh = bgImg.naturalHeight || bgImg.height || 720;
+              const maxPreviewSide = 1280;
+              const scale = Math.min(1, maxPreviewSide / Math.max(bw, bh));
+              boxW = Math.max(320, Math.round(bw * scale));
+              boxH = Math.max(240, Math.round(bh * scale));
             }
 
-            // 2. 若已勾选水印，在真实底图区域之上实时合成所选图层模式与排版效果
+            canvas.width = boxW;
+            canvas.height = boxH;
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, boxW, boxH);
+
+            if (bgImg) {
+              const bw = bgImg.naturalWidth || bgImg.width || boxW;
+              const bh = bgImg.naturalHeight || bgImg.height || boxH;
+              ctx.drawImage(bgImg, 0, 0, bw, bh, 0, 0, boxW, boxH);
+            } else {
+              ctx.fillStyle = "#524c46";
+              ctx.fillRect(0, 0, boxW, boxH);
+            }
+
+            // 2. 若已勾选水印，在高清真实底图之上实时合成所选图层模式与排版效果
             if (activeItem && activeItem.image) {
               const wmImg = await loadImageElementFromAnyRef(activeItem.image);
               if (wmImg) {
@@ -47318,14 +47318,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   wmDraftSat,
                   wmDraftLight,
                   wmDraftBlendMode,
-                  Math.max(boxW, boxH, 360)
+                  Math.max(boxW, boxH, 960)
                 );
 
                 drawWatermarkWithFitMode(
                   ctx,
                   processedWm,
-                  boxX,
-                  boxY,
+                  0,
+                  0,
                   boxW,
                   boxH,
                   wmDraftBlendMode,
@@ -47390,13 +47390,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const displayName = String(item.name || `水印${idx + 1}`).replace(/\.[^/.]+$/, "");
               const wrap = document.createElement("div");
               wrap.className = "mod-nai-wm-mini-item" + (isSel ? " is-selected" : "");
+              wrap.style.cssText = "display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0;cursor:pointer;user-select:none;-webkit-user-select:none;";
               wrap.title = "点按勾选，长按改名";
 
               const thumbBox = document.createElement("div");
               thumbBox.className = "mod-nai-wm-mini-thumb";
+              thumbBox.style.cssText = "position:relative;width:100%;height:42px;border-radius:6px;overflow:hidden;box-sizing:border-box;background:var(--nai-sub-bg);border:" + (isSel ? "2px solid var(--nai-seal)" : "1px dashed var(--nai-border-strong)") + ";";
 
               const img = document.createElement("img");
               img.alt = displayName;
+              img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;";
               bindNaiVaultAwareImage(img, item.image);
               thumbBox.appendChild(img);
 
@@ -47437,6 +47440,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               const nameEl = document.createElement("div");
               nameEl.className = "mod-nai-wm-mini-name";
+              nameEl.style.cssText = "width:100%;font-size:10px;line-height:14px;height:14px;font-weight:600;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px;box-sizing:border-box;color:" + (isSel ? "var(--nai-seal)" : "var(--nai-text)") + ";";
               nameEl.textContent = displayName;
 
               wrap.appendChild(thumbBox);
@@ -47500,9 +47504,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const img = new Image();
               img.onload = () => {
                 try {
-                  const origW = img.naturalWidth || img.width || 600;
-                  const origH = img.naturalHeight || img.height || 600;
-                  const maxEdge = 1024;
+                  const origW = img.naturalWidth || img.width || 960;
+                  const origH = img.naturalHeight || img.height || 960;
+                  const maxEdge = 1600;
                   const scale = Math.min(1, maxEdge / Math.max(origW, origH));
                   const targetW = Math.max(1, Math.round(origW * scale));
                   const targetH = Math.max(1, Math.round(origH * scale));
@@ -47513,8 +47517,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   ctx.clearRect(0, 0, targetW, targetH);
                   ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
                   let out = canvas.toDataURL("image/png");
-                  if (!out || out.length > 1800000) {
-                    out = canvas.toDataURL("image/webp", 0.9);
+                  if (!out || out.length > 2600000) {
+                    out = canvas.toDataURL("image/webp", 0.95);
                   }
                   canvas.width = 0;
                   canvas.height = 0;
@@ -47765,6 +47769,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             link.click();
           }
 
+          // 将清洗后的图片直接写入手机系统图库的「水印」独立相册分类（DCIM/水印 或 Download/水印），不再混入默认 Download 相册
+          async function saveCleanedBlobToWatermarkAlbum(blob, blobUrl, filename) {
+            if (blob) {
+              let baseUrl = "http://127.0.0.1:8765";
+              try {
+                const rawCfg = localStorage.getItem("ephone_vault_config_v1");
+                if (rawCfg) {
+                  const parsed = JSON.parse(rawCfg);
+                  if (parsed && typeof parsed.url === "string" && parsed.url.trim()) {
+                    baseUrl = parsed.url.trim().replace(/\/+$/, "");
+                  }
+                }
+              } catch (_) {}
+
+              const safeFile = encodeURIComponent(filename);
+              const candidateUrls = [
+                `${baseUrl}/..%2F..%2FDCIM%2F%E6%B0%B4%E5%8D%B0%2F${safeFile}`,
+                `${baseUrl}/..%2F%E6%B0%B4%E5%8D%B0%2F${safeFile}`
+              ];
+
+              for (const putUrl of candidateUrls) {
+                try {
+                  const controller = new AbortController();
+                  const timer = setTimeout(() => controller.abort(), 2200);
+                  const res = await fetch(putUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": "image/jpeg" },
+                    body: blob,
+                    signal: controller.signal
+                  });
+                  clearTimeout(timer);
+                  if (res && res.ok) {
+                    return "album";
+                  }
+                } catch (_) {}
+              }
+            }
+
+            triggerBrowserDownloadUrl(blobUrl, filename);
+            return "browser";
+          }
+
           function buildCleanDownloadFilename(item, idx) {
             const seq = String(idx + 1).padStart(2, "0");
             const rawName = String((item && item.name) || "image")
@@ -47789,12 +47835,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               renderCleanBatchGrid();
               const fileName = buildCleanDownloadFilename(item, idx);
-              triggerBrowserDownloadUrl(cleanUrl, fileName);
+              const saveMode = await saveCleanedBlobToWatermarkAlbum(item.cleanedBlob, cleanUrl, fileName);
               if (statusText) {
-                statusText.textContent = `已下载第 ${idx + 1} 张，点任意缩略图可再次单独下载`;
+                statusText.textContent = saveMode === "album"
+                  ? `已存入手机图库「水印」分类第 ${idx + 1} 张`
+                  : `已下载第 ${idx + 1} 张，点任意缩略图可再次单独下载`;
               }
               if (showToastFlag && typeof window.showDownloadToast === "function") {
-                window.showDownloadToast(`已下载第 ${idx + 1} 张`, "success");
+                window.showDownloadToast(
+                  saveMode === "album" ? `已存入图库「水印」第 ${idx + 1} 张` : `已下载第 ${idx + 1} 张`,
+                  "success"
+                );
               }
               return true;
             } finally {
@@ -47949,28 +48000,37 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 let successCount = 0;
 
                 try {
+                  let albumCount = 0;
                   for (let i = 0; i < total; i++) {
                     const item = cleanBatchItems[i];
                     if (cleanRunText) cleanRunText.textContent = `${i + 1}/${total}`;
                     if (cleanStatusText) {
-                      cleanStatusText.textContent = `正在清洗并下载 ${i + 1} / ${total} ...`;
+                      cleanStatusText.textContent = `正在清洗并保存 ${i + 1} / ${total} ...`;
                     }
                     const cleanUrl = await cleanSingleBatchItem(item);
                     if (cleanUrl) {
                       successCount++;
                       renderCleanBatchGrid();
                       const fileName = buildCleanDownloadFilename(item, i);
-                      triggerBrowserDownloadUrl(cleanUrl, fileName);
+                      const saveMode = await saveCleanedBlobToWatermarkAlbum(item.cleanedBlob, cleanUrl, fileName);
+                      if (saveMode === "album") {
+                        albumCount++;
+                      }
                       if (i < total - 1) {
-                        await new Promise((r) => setTimeout(r, 360));
+                        await new Promise((r) => setTimeout(r, saveMode === "album" ? 120 : 360));
                       }
                     }
                   }
                   if (cleanStatusText) {
-                    cleanStatusText.textContent = `已完成 ${successCount} / ${total} 张清洗与下载，漏下可点缩略图重下`;
+                    cleanStatusText.textContent = albumCount > 0
+                      ? `已将 ${successCount} / ${total} 张存入手机图库「水印」分类`
+                      : `已完成 ${successCount} / ${total} 张清洗与下载，漏下可点缩略图重下`;
                   }
                   if (typeof window.showDownloadToast === "function") {
-                    window.showDownloadToast(`已完成 ${successCount} 张清洗下载`, "success");
+                    window.showDownloadToast(
+                      albumCount > 0 ? `已存入图库「水印」共 ${successCount} 张` : `已完成 ${successCount} 张清洗下载`,
+                      "success"
+                    );
                   }
                 } finally {
                   cleanIsRunning = false;
@@ -132603,8 +132663,13 @@ ${specificRules}`;
               " def do_PUT(s):",
               "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
               "  rel=urllib.request.unquote(s.path.split('?')[0].lstrip('/'))",
-              "  p=os.path.join(root,rel); os.makedirs(os.path.dirname(p),exist_ok=True)",
+              "  p=os.path.abspath(os.path.join(root,rel)); os.makedirs(os.path.dirname(p),exist_ok=True)",
               "  with open(p,'wb') as f: f.write(b)",
+              "  if '水印' in p:",
+              "   try:",
+              "    import subprocess",
+              "    subprocess.Popen(['am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file://'+p],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)",
+              "   except Exception: pass",
               "  s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok')",
               "class S(socketserver.ThreadingMixIn,http.server.HTTPServer):",
               " daemon_threads=True",
