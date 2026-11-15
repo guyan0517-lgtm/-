@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4447,27 +4447,27 @@
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
                   <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">图库</span>
-                  <span id="mod-nai-wm-status-label" style="font-size: 11px; color: var(--nai-muted);">点选图片勾选启用</span>
+                  <span id="mod-nai-wm-status-label" style="font-size: 10.5px; color: var(--nai-muted);">点选启用 · 长按改名</span>
                 </div>
-                <button type="button" class="mod-nai-btn" id="mod-nai-wm-upload-btn" style="height: 27px; padding: 0 10px; font-size: 11.5px;">
+                <button type="button" class="mod-nai-btn" id="mod-nai-wm-upload-btn" style="height: 26px; padding: 0 10px; font-size: 11.5px;">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   <span>上传</span>
                 </button>
               </div>
 
               <input type="file" id="mod-nai-wm-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
+              <input type="file" id="mod-nai-wm-bg-file-input" accept="image/png,image/webp,image/jpeg,image/*" style="display: none;" />
 
-              <div id="mod-nai-wm-empty-box" class="mod-nai-empty-drop" style="min-height: 96px; padding: 14px 10px;">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <div id="mod-nai-wm-empty-box" class="mod-nai-empty-drop" style="min-height: 52px; padding: 8px 10px; flex-direction: row; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
                   <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
                   <circle cx="8.5" cy="8.5" r="1.5"></circle>
                   <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">点击上传水印到图库</span>
-                <span style="font-size: 10.5px; color: var(--nai-muted);">勾选后在清洗图片时自动按所选模式叠加</span>
+                <span style="font-size: 11px; font-weight: 600; color: var(--nai-text);">点击上传水印到图库，长按水印可取名</span>
               </div>
 
-              <div id="mod-nai-wm-gallery-grid" class="mod-nai-three-grid" style="display: none; max-height: 156px;"></div>
+              <div id="mod-nai-wm-gallery-grid" class="mod-nai-wm-compact-grid" style="display: none;"></div>
 
               <div style="display: flex; flex-direction: column; gap: 7px; padding-top: 6px; border-top: 1px dashed var(--nai-border-strong);">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -4476,6 +4476,8 @@
                     <select id="mod-nai-wm-blend-select" class="moe-input mod-nai-select">
                       <option value="screen">滤色</option>
                       <option value="multiply">正片叠底</option>
+                      <option value="overlay">叠加</option>
+                      <option value="normal">覆盖</option>
                     </select>
                   </div>
                   <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
@@ -4491,12 +4493,12 @@
 
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1px;">
                   <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">调色</span>
-                  <span id="mod-nai-wm-preview-mode-hint" style="font-size: 10.5px; color: var(--nai-muted);">滤色 · 居中不拉伸预览</span>
+                  <span id="mod-nai-wm-preview-mode-hint" style="font-size: 10.5px; color: var(--nai-muted);">点击下方示例图可更换底图</span>
                 </div>
 
-                <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage">
-                  <span id="mod-nai-wm-preview-empty" style="font-size: 11px; color: var(--nai-muted);">勾选上方水印图后实时预览效果</span>
-                  <canvas id="mod-nai-wm-preview-canvas" style="display: none;"></canvas>
+                <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage" title="点击导入并替换示例底图">
+                  <canvas id="mod-nai-wm-preview-canvas"></canvas>
+                  <span class="mod-nai-wm-bg-tip">点此换底图</span>
                 </div>
 
                 <div class="mod-nai-slider-row">
@@ -44202,6 +44204,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (typeof copy.lastGeneratedImage === "string" && copy.lastGeneratedImage.startsWith("data:")) {
                 copy.lastGeneratedImage = "";
               }
+              if (typeof copy.watermarkPreviewBg === "string" && copy.watermarkPreviewBg.startsWith("data:")) {
+                copy.watermarkPreviewBg = "";
+              }
               if (Array.isArray(copy.watermarkGallery)) {
                 copy.watermarkGallery = copy.watermarkGallery
                   .filter((w) => w && typeof w === "object")
@@ -44366,6 +44371,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if ((!Array.isArray(merged.watermarkGallery) || merged.watermarkGallery.length === 0) && Array.isArray(older.watermarkGallery) && older.watermarkGallery.length > 0 && pTs === 0) {
               merged.watermarkGallery = older.watermarkGallery.slice();
             }
+            if ((!merged.watermarkPreviewBg || merged.watermarkPreviewBg === "assets/trace/trace_01.jpg") && older.watermarkPreviewBg && older.watermarkPreviewBg !== "assets/trace/trace_01.jpg") {
+              merged.watermarkPreviewBg = older.watermarkPreviewBg;
+            }
             merged.updatedAt = Math.max(pTs, sTs);
             return merged;
           }
@@ -44385,6 +44393,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               if (memoryPanelState && Array.isArray(memoryPanelState.watermarkGallery) && memoryPanelState.watermarkGallery.length > 0) {
                 await offloadBookmarkListImagesToTermux(memoryPanelState.watermarkGallery);
+              }
+              if (memoryPanelState && typeof memoryPanelState.watermarkPreviewBg === "string" && memoryPanelState.watermarkPreviewBg.startsWith("data:image/")) {
+                const bgRef = await offloadSingleNaiImageToTermux(memoryPanelState.watermarkPreviewBg);
+                if (bgRef) memoryPanelState.watermarkPreviewBg = bgRef;
               }
 
               let existingRemote = null;
@@ -44522,6 +44534,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               lastGeneratedTitle: "",
               watermarkGallery: [],
               watermarkSelectedId: "",
+              watermarkPreviewBg: "assets/trace/trace_01.jpg",
               watermarkBlendMode: "screen",
               watermarkFitMode: "contain",
               watermarkOpacity: 65,
@@ -46860,8 +46873,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // ============================================================
-          // 提取面板附属：水印图库（滤色/正片叠底 + 等比不拉伸适配 + 调色）与批量元数据清洗器
+          // 提取面板附属：水印图库（滤色/正片叠底/叠加/覆盖 + 长按改名 + 永久示例底图 + 等比适配）与批量元数据清洗器
           // ============================================================
+          const DEFAULT_WM_PREVIEW_BG = "assets/trace/trace_01.jpg";
           let cleanBatchItems = [];
           let cleanIsRunning = false;
           let wmDraftSelectedId = "";
@@ -46881,7 +46895,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function getShortBlendLabel(mode) {
-            return mode === "multiply" ? "正片叠底" : "滤色";
+            if (mode === "multiply") return "正片叠底";
+            if (mode === "overlay") return "叠加";
+            if (mode === "normal") return "覆盖";
+            return "滤色";
           }
 
           function getShortFitLabel(fit) {
@@ -47014,9 +47031,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ];
           }
 
-          // 生成经过色相、饱和度、明度调色且适配 滤色（黑底融合）或 正片叠底（白底融合）的水印画布
+          // 生成经过色相、饱和度、明度调色且适配 滤色 / 正片叠底 / 叠加 / 覆盖 四种图层模式的水印画布
           function buildProcessedWatermarkCanvas(wmImg, hueDeg, satPct, lightPct, blendMode, maxSide) {
-            const isMultiply = blendMode === "multiply";
             const origW = wmImg.naturalWidth || wmImg.width || 300;
             const origH = wmImg.naturalHeight || wmImg.height || 300;
             const limit = maxSide || 1200;
@@ -47038,10 +47054,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const satMul = Math.max(0, (Number(satPct) !== undefined ? Number(satPct) : 100) / 100);
             const lightMul = Math.max(0.1, (Number(lightPct) !== undefined ? Number(lightPct) : 100) / 100);
 
+            // 检测四角背景类型（用于叠加/覆盖模式下自动抠除纯黑或纯白背景，避免非透明JPG把底图遮死）
+            let cornerAlphaSum = 0;
+            let cornerLumSum = 0;
+            const cornerIndices = [
+              0,
+              (w - 1) * 4,
+              (h - 1) * w * 4,
+              ((h - 1) * w + (w - 1)) * 4
+            ];
+            cornerIndices.forEach((ci) => {
+              if (ci >= 0 && ci + 3 < data.length) {
+                cornerAlphaSum += data[ci + 3];
+                cornerLumSum += (data[ci] + data[ci + 1] + data[ci + 2]) / 3;
+              }
+            });
+            const avgCornerAlpha = cornerAlphaSum / 4;
+            const avgCornerLum = cornerLumSum / 4;
+            const isOpaqueBlackBg = avgCornerAlpha > 242 && avgCornerLum < 32;
+            const isOpaqueWhiteBg = avgCornerAlpha > 242 && avgCornerLum > 224;
+
             for (let i = 0; i < data.length; i += 4) {
               const a = data[i + 3] / 255;
 
-              if (isMultiply) {
+              if (blendMode === "multiply") {
                 // 正片叠底模式：先与纯白底合成，使得透明区域与白底在 multiply 下完全隐形
                 const r0 = Math.round(data[i] * a + 255 * (1 - a));
                 const g0 = Math.round(data[i + 1] * a + 255 * (1 - a));
@@ -47078,6 +47114,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 data[i + 1] = ng;
                 data[i + 2] = nb;
                 data[i + 3] = 255;
+              } else if (blendMode === "overlay" || blendMode === "normal") {
+                // 叠加（overlay）或 覆盖（normal / source-over）模式：保留透明通道，若为纯黑底或纯白底无透明JPG则自动抠除底色
+                if (a <= 0.02) {
+                  data[i + 3] = 0;
+                  continue;
+                }
+                const r0 = data[i];
+                const g0 = data[i + 1];
+                const b0 = data[i + 2];
+                let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
+                let outAlpha = a;
+
+                if (isOpaqueBlackBg) {
+                  if (r0 <= 8 && g0 <= 8 && b0 <= 8) {
+                    data[i + 3] = 0;
+                    continue;
+                  }
+                  outAlpha = Math.max(0, Math.min(1, lVal * 1.15));
+                } else if (isOpaqueWhiteBg) {
+                  if (r0 >= 247 && g0 >= 247 && b0 >= 247) {
+                    data[i + 3] = 0;
+                    continue;
+                  }
+                  outAlpha = Math.max(0, Math.min(1, (1 - lVal) * 1.15));
+                }
+
+                if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
+                  hVal = hueShift;
+                  const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
+                  sVal = baseSat;
+                  lVal = Math.max(0.18, Math.min(0.82, 0.52 * lightMul));
+                } else {
+                  hVal = (hVal + hueShift) % 1;
+                  sVal = Math.max(0, Math.min(1, sVal * satMul));
+                  lVal = Math.max(0.02, Math.min(0.98, lVal * lightMul));
+                }
+
+                const [nr, ng, nb] = hsl01ToRgb(hVal, sVal, lVal);
+                data[i] = nr;
+                data[i + 1] = ng;
+                data[i + 2] = nb;
+                data[i + 3] = Math.max(0, Math.min(255, Math.round(outAlpha * 255)));
               } else {
                 // 滤色模式（screen）：先与纯黑底合成，使得透明区域与黑底在 screen 下完全隐形
                 const r0 = Math.round(data[i] * a);
@@ -47093,10 +47171,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
 
                 let [hVal, sVal, lVal] = rgbToHsl01(r0, g0, b0);
-                const inkStrength = lVal; // 越亮的白字代表水印笔迹越强
+                const inkStrength = lVal;
 
                 if (sVal < 0.08 && (hasHueShift || satMul > 1.05)) {
-                  // 黑底白字水印上色支持：当拉动色相或提高饱和度时，把纯白字迹转为鲜明彩色，同时保持边缘向黑底平滑过渡
                   hVal = hueShift;
                   const baseSat = hasHueShift ? Math.max(0.62, Math.min(1, satMul * 0.72)) : Math.min(1, (satMul - 1) * 0.85);
                   sVal = Math.min(1, baseSat * Math.min(1, inkStrength * 1.35));
@@ -47124,7 +47201,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!ctx || !processedWm || !processedWm.width || !processedWm.height) return;
             const wmW = processedWm.width;
             const wmH = processedWm.height;
-            const compOp = blendMode === "multiply" ? "multiply" : "screen";
+            let compOp = "screen";
+            if (blendMode === "multiply") compOp = "multiply";
+            else if (blendMode === "overlay") compOp = "overlay";
+            else if (blendMode === "normal") compOp = "source-over";
             const alpha = Math.max(0.05, Math.min(1, (Number(opacityPct) || 65) / 100));
 
             ctx.save();
@@ -47135,7 +47215,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ctx.globalAlpha = alpha;
 
             if (fitMode === "cover") {
-              // 等比铺满：按长边等比缩放，绝对不拉伸变形，超出边缘自动由 clip 裁切
               const scale = Math.max(boxW / wmW, boxH / wmH);
               const drawW = Math.max(1, Math.round(wmW * scale));
               const drawH = Math.max(1, Math.round(wmH * scale));
@@ -47143,7 +47222,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const drawY = boxY + Math.round((boxH - drawH) / 2);
               ctx.drawImage(processedWm, drawX, drawY, drawW, drawH);
             } else if (fitMode === "tile") {
-              // 等比平铺：保持原长宽比，按短边的 45% 作为单格尺寸无缝重复铺满横图或竖图
               const refSide = Math.max(28, Math.round(Math.min(boxW, boxH) * 0.45));
               const scale = refSide / Math.max(wmW, wmH);
               const tileW = Math.max(20, Math.round(wmW * scale));
@@ -47154,7 +47232,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
             } else if (fitMode === "corner") {
-              // 右下角落：保持原长宽比，按短边的 34% 贴在右下角
               const refSide = Math.max(24, Math.round(Math.min(boxW, boxH) * 0.34));
               const scale = refSide / Math.max(wmW, wmH);
               const drawW = Math.max(16, Math.round(wmW * scale));
@@ -47164,7 +47241,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const drawY = boxY + boxH - drawH - pad;
               ctx.drawImage(processedWm, drawX, drawY, drawW, drawH);
             } else {
-              // 默认 contain（等比居中）：按短边等比缩放居中，一比一水印在横图或竖图上绝不拉伸变形
               const scale = Math.min(boxW / wmW, boxH / wmH);
               const drawW = Math.max(1, Math.round(wmW * scale));
               const drawH = Math.max(1, Math.round(wmH * scale));
@@ -47177,15 +47253,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           async function renderWatermarkLivePreview() {
-            const emptyHint = document.getElementById("mod-nai-wm-preview-empty");
             const canvas = document.getElementById("mod-nai-wm-preview-canvas");
             const statusLabel = document.getElementById("mod-nai-wm-status-label");
             const modeHint = document.getElementById("mod-nai-wm-preview-mode-hint");
             if (!canvas) return;
-
-            if (modeHint) {
-              modeHint.textContent = `${getShortBlendLabel(wmDraftBlendMode)} · ${getShortFitLabel(wmDraftFitMode)}不拉伸预览`;
-            }
 
             const st = loadPanelState();
             const gallery = getNormalizedWatermarkGallery(st);
@@ -47194,90 +47265,103 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               : null;
 
             if (statusLabel) {
-              statusLabel.textContent = activeItem ? "已勾选 1 张水印" : "未勾选，点击图片可启用";
+              statusLabel.textContent = activeItem
+                ? `已选「${activeItem.name || "水印"}」· 长按改名`
+                : "点选启用 · 长按可改名";
             }
 
-            if (!activeItem) {
-              canvas.style.display = "none";
-              if (emptyHint) emptyHint.style.display = "block";
-              return;
+            if (modeHint) {
+              modeHint.textContent = `${getShortBlendLabel(wmDraftBlendMode)} · ${getShortFitLabel(wmDraftFitMode)} · 点下图换底图`;
             }
 
-            const wmImg = await loadImageElementFromAnyRef(activeItem.image);
-            if (!wmImg) {
-              canvas.style.display = "none";
-              if (emptyHint) emptyHint.style.display = "block";
-              return;
-            }
-
-            if (emptyHint) emptyHint.style.display = "none";
             canvas.style.display = "block";
-
-            const stageW = 300;
-            const stageH = 80;
+            const stageW = 312;
+            const stageH = 176;
             canvas.width = stageW;
             canvas.height = stageH;
             const ctx = canvas.getContext("2d");
-
-            const isMultiply = wmDraftBlendMode === "multiply";
-            // 滤色模式采用深暖灰棋盘底以清晰凸显亮色水印，正片叠底采用浅米色棋盘底以凸显深色水印
-            const bgA = isMultiply ? "#ece7df" : "#433f3b";
-            const bgB = isMultiply ? "#ddd6cb" : "#36322f";
-
             ctx.clearRect(0, 0, stageW, stageH);
 
-            // 左右并排展示「竖图比例框」与「横图比例框」，直观看到一比一水印在横竖图上的不拉伸效果
-            const frames = [
-              { x: 34, y: 6, w: 48, h: 68 },   // 竖图模拟框
-              { x: 118, y: 12, w: 148, h: 56 } // 横图模拟框
-            ];
+            // 1. 加载持久保存的示例底图（默认内置底图，用户导入新底图后永久覆盖保存）
+            const bgRef = st.watermarkPreviewBg || DEFAULT_WM_PREVIEW_BG;
+            let bgImg = await loadImageElementFromAnyRef(bgRef);
+            if (!bgImg && bgRef !== DEFAULT_WM_PREVIEW_BG) {
+              bgImg = await loadImageElementFromAnyRef(DEFAULT_WM_PREVIEW_BG);
+            }
 
-            const processedWm = buildProcessedWatermarkCanvas(
-              wmImg,
-              wmDraftHue,
-              wmDraftSat,
-              wmDraftLight,
-              wmDraftBlendMode,
-              260
-            );
+            let boxX = 0;
+            let boxY = 0;
+            let boxW = stageW;
+            let boxH = stageH;
 
-            frames.forEach((fr) => {
-              ctx.save();
-              ctx.beginPath();
-              ctx.rect(fr.x, fr.y, fr.w, fr.h);
-              ctx.clip();
-              ctx.fillStyle = bgA;
-              ctx.fillRect(fr.x, fr.y, fr.w, fr.h);
-              ctx.fillStyle = bgB;
-              const cell = 8;
-              for (let y = fr.y; y < fr.y + fr.h; y += cell) {
-                for (let x = fr.x; x < fr.x + fr.w; x += cell) {
-                  if ((Math.floor((x - fr.x) / cell) + Math.floor((y - fr.y) / cell)) % 2 === 0) {
-                    ctx.fillRect(x, y, cell, cell);
-                  }
-                }
+            if (bgImg) {
+              const bw = bgImg.naturalWidth || bgImg.width || 300;
+              const bh = bgImg.naturalHeight || bgImg.height || 300;
+              const scale = Math.min(stageW / bw, stageH / bh);
+              boxW = Math.max(1, Math.round(bw * scale));
+              boxH = Math.max(1, Math.round(bh * scale));
+              boxX = Math.round((stageW - boxW) / 2);
+              boxY = Math.round((stageH - boxH) / 2);
+              ctx.drawImage(bgImg, 0, 0, bw, bh, boxX, boxY, boxW, boxH);
+            } else {
+              ctx.fillStyle = "#524c46";
+              ctx.fillRect(0, 0, stageW, stageH);
+            }
+
+            // 2. 若已勾选水印，在真实底图区域之上实时合成所选图层模式与排版效果
+            if (activeItem && activeItem.image) {
+              const wmImg = await loadImageElementFromAnyRef(activeItem.image);
+              if (wmImg) {
+                const processedWm = buildProcessedWatermarkCanvas(
+                  wmImg,
+                  wmDraftHue,
+                  wmDraftSat,
+                  wmDraftLight,
+                  wmDraftBlendMode,
+                  Math.max(boxW, boxH, 360)
+                );
+
+                drawWatermarkWithFitMode(
+                  ctx,
+                  processedWm,
+                  boxX,
+                  boxY,
+                  boxW,
+                  boxH,
+                  wmDraftBlendMode,
+                  wmDraftOpacity,
+                  wmDraftFitMode
+                );
+
+                processedWm.width = 0;
+                processedWm.height = 0;
               }
-              ctx.restore();
+            }
+          }
 
-              drawWatermarkWithFitMode(
-                ctx,
-                processedWm,
-                fr.x,
-                fr.y,
-                fr.w,
-                fr.h,
-                wmDraftBlendMode,
-                wmDraftOpacity,
-                wmDraftFitMode
-              );
-
-              ctx.strokeStyle = isMultiply ? "rgba(90,80,70,0.35)" : "rgba(220,210,200,0.35)";
-              ctx.lineWidth = 1;
-              ctx.strokeRect(fr.x + 0.5, fr.y + 0.5, fr.w - 1, fr.h - 1);
-            });
-
-            processedWm.width = 0;
-            processedWm.height = 0;
+          async function promptRenameWatermarkItem(itemId) {
+            const st = loadPanelState();
+            const gallery = getNormalizedWatermarkGallery(st);
+            const target = gallery.find((x) => x.id === itemId);
+            if (!target) return;
+            const oldName = String(target.name || "").trim();
+            let nextName = null;
+            if (typeof window.showCustomPrompt === "function") {
+              nextName = await window.showCustomPrompt("水印取名", "请输入水印显示名称", oldName);
+            } else {
+              nextName = window.prompt("请输入水印显示名称", oldName);
+            }
+            if (nextName === null || nextName === undefined) return;
+            const trimmed = String(nextName).trim() || "水印";
+            target.name = trimmed;
+            target.updatedAt = Date.now();
+            st.watermarkGallery = gallery;
+            savePanelState(st);
+            updateWatermarkStatusBadges();
+            renderWatermarkGalleryGrid();
+            if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast(`已改名为：${trimmed}`, "success");
+            }
           }
 
           function renderWatermarkGalleryGrid() {
@@ -47303,24 +47387,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const frag = document.createDocumentFragment();
             gallery.forEach((item, idx) => {
               const isSel = item.id === wmDraftSelectedId;
-              const card = document.createElement("div");
-              card.className = "mod-nai-grid-thumb-card" + (isSel ? " is-selected" : "");
+              const displayName = String(item.name || `水印${idx + 1}`).replace(/\.[^/.]+$/, "");
+              const wrap = document.createElement("div");
+              wrap.className = "mod-nai-wm-mini-item" + (isSel ? " is-selected" : "");
+              wrap.title = "点按勾选，长按改名";
+
+              const thumbBox = document.createElement("div");
+              thumbBox.className = "mod-nai-wm-mini-thumb";
 
               const img = document.createElement("img");
-              img.alt = item.name || `水印${idx + 1}`;
+              img.alt = displayName;
               bindNaiVaultAwareImage(img, item.image);
-              card.appendChild(img);
+              thumbBox.appendChild(img);
 
               const badge = document.createElement("span");
-              badge.className = "mod-nai-grid-badge-tl";
+              badge.className = "mod-nai-wm-mini-badge";
               badge.innerHTML = isSel
-                ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
-                : String(idx + 1).padStart(2, "0");
-              card.appendChild(badge);
+                ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                : String(idx + 1);
+              thumbBox.appendChild(badge);
 
               const delBtn = document.createElement("button");
               delBtn.type = "button";
-              delBtn.className = "mod-nai-grid-del-tr";
+              delBtn.className = "mod-nai-wm-mini-del";
               delBtn.textContent = "×";
               delBtn.title = "删除水印";
               delBtn.addEventListener("click", (e) => {
@@ -47344,14 +47433,61 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 updateWatermarkStatusBadges();
                 renderWatermarkGalleryGrid();
               });
-              card.appendChild(delBtn);
+              thumbBox.appendChild(delBtn);
 
-              card.addEventListener("click", () => {
+              const nameEl = document.createElement("div");
+              nameEl.className = "mod-nai-wm-mini-name";
+              nameEl.textContent = displayName;
+
+              wrap.appendChild(thumbBox);
+              wrap.appendChild(nameEl);
+
+              let pressTimer = null;
+              let longPressTriggered = false;
+              const startPress = (e) => {
+                if (e.target && e.target.closest && e.target.closest(".mod-nai-wm-mini-del")) return;
+                longPressTriggered = false;
+                if (pressTimer) clearTimeout(pressTimer);
+                pressTimer = setTimeout(() => {
+                  longPressTriggered = true;
+                  pressTimer = null;
+                  promptRenameWatermarkItem(item.id);
+                }, 460);
+              };
+              const cancelPress = () => {
+                if (pressTimer) {
+                  clearTimeout(pressTimer);
+                  pressTimer = null;
+                }
+              };
+
+              wrap.addEventListener("touchstart", startPress, { passive: true });
+              wrap.addEventListener("touchend", cancelPress);
+              wrap.addEventListener("touchmove", cancelPress);
+              wrap.addEventListener("touchcancel", cancelPress);
+              wrap.addEventListener("mousedown", startPress);
+              wrap.addEventListener("mouseup", cancelPress);
+              wrap.addEventListener("mouseleave", cancelPress);
+              wrap.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelPress();
+                longPressTriggered = true;
+                promptRenameWatermarkItem(item.id);
+              });
+
+              wrap.addEventListener("click", (e) => {
+                if (longPressTriggered) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  longPressTriggered = false;
+                  return;
+                }
                 wmDraftSelectedId = wmDraftSelectedId === item.id ? "" : item.id;
                 renderWatermarkGalleryGrid();
               });
 
-              frag.appendChild(card);
+              frag.appendChild(wrap);
             });
 
             gridEl.appendChild(frag);
@@ -47535,7 +47671,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ctx.fillRect(0, 0, w, h);
               ctx.drawImage(img, 0, 0, w, h);
 
-              // 2. 如果勾选了水印，按所选图层混合模式（滤色/正片叠底）与不拉伸排版方式叠加
+              // 2. 如果勾选了水印，按所选图层混合模式（滤色/正片叠底/叠加/覆盖）与不拉伸排版方式叠加
               const st = loadPanelState();
               const gallery = getNormalizedWatermarkGallery(st);
               const activeWm = st.watermarkSelectedId
@@ -47686,6 +47822,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const closeWmBtn = document.getElementById("mod-nai-wm-close-btn");
             const wmModal = document.getElementById("mod-nai-watermark-modal");
             const wmFileInput = document.getElementById("mod-nai-wm-file-input");
+            const wmBgFileInput = document.getElementById("mod-nai-wm-bg-file-input");
+            const wmPreviewStage = document.getElementById("mod-nai-wm-preview-stage");
             const wmUploadBtn = document.getElementById("mod-nai-wm-upload-btn");
             const wmEmptyBox = document.getElementById("mod-nai-wm-empty-box");
             const wmBlendSelect = document.getElementById("mod-nai-wm-blend-select");
@@ -47869,9 +48007,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (!dataUrl) continue;
                   const storedRef = (await offloadSingleNaiImageToTermux(dataUrl)) || dataUrl;
                   const newId = "wm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+                  const cleanBaseName = String(f.name || "水印").replace(/\.[^/.]+$/, "").slice(0, 12) || "水印";
                   gallery.push({
                     id: newId,
-                    name: f.name || "水印",
+                    name: cleanBaseName,
                     image: storedRef,
                     updatedAt: Date.now()
                   });
@@ -47891,9 +48030,39 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
+            // 点击示例区域导入并替换底图（立即覆盖旧底图并永久保存，不论是否点确定或中途退出都不会丢失）
+            if (wmPreviewStage && wmBgFileInput) {
+              wmPreviewStage.addEventListener("click", () => {
+                wmBgFileInput.click();
+              });
+              wmBgFileInput.addEventListener("change", async () => {
+                const file = wmBgFileInput.files && wmBgFileInput.files[0];
+                wmBgFileInput.value = "";
+                if (!file) return;
+                const dataUrl = await compressWatermarkFileToDataUrl(file);
+                if (!dataUrl) return;
+                const storedRef = (await offloadSingleNaiImageToTermux(dataUrl)) || dataUrl;
+                const st = loadPanelState();
+                const oldBgRef = st.watermarkPreviewBg || "";
+                st.watermarkPreviewBg = storedRef;
+                savePanelState(st);
+                if (oldBgRef && oldBgRef !== storedRef && oldBgRef.startsWith("vault://")) {
+                  wmLoadedImageCache.delete(oldBgRef);
+                  if (typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+                    window.deleteVaultMediaRefIfUnreferenced(oldBgRef).catch(() => {});
+                  }
+                }
+                await renderWatermarkLivePreview();
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("已更换示例底图", "success");
+                }
+              });
+            }
+
             if (wmBlendSelect) {
               wmBlendSelect.addEventListener("change", () => {
-                wmDraftBlendMode = wmBlendSelect.value === "multiply" ? "multiply" : "screen";
+                const v = wmBlendSelect.value;
+                wmDraftBlendMode = (v === "multiply" || v === "overlay" || v === "normal") ? v : "screen";
                 renderWatermarkLivePreview();
               });
             }
@@ -51283,6 +51452,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (curSt && typeof curSt.lastGeneratedImage === "string" && curSt.lastGeneratedImage.includes("vault://")) {
               refs.push(curSt.lastGeneratedImage);
             }
+            if (curSt && typeof curSt.watermarkPreviewBg === "string" && curSt.watermarkPreviewBg.includes("vault://")) {
+              refs.push(curSt.watermarkPreviewBg);
+            }
             if (curSt && Array.isArray(curSt.watermarkGallery)) {
               collectFromList(curSt.watermarkGallery);
             }
@@ -51297,6 +51469,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   collectFromList(data.lexiconFolders);
                   if (data.panelState && typeof data.panelState.lastGeneratedImage === "string" && data.panelState.lastGeneratedImage.includes("vault://")) {
                     refs.push(data.panelState.lastGeneratedImage);
+                  }
+                  if (data.panelState && typeof data.panelState.watermarkPreviewBg === "string" && data.panelState.watermarkPreviewBg.includes("vault://")) {
+                    refs.push(data.panelState.watermarkPreviewBg);
                   }
                   if (data.panelState && Array.isArray(data.panelState.watermarkGallery)) {
                     collectFromList(data.panelState.watermarkGallery);

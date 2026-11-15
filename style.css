@@ -39732,11 +39732,145 @@ select,
   border-radius: 3px;
 }
 
-/* 水印实时正片叠底与调色滑块区 */
+/* 水印图库紧凑卡片（小巧缩略图 + 下方水印名称 + 长按取名） */
+.mod-nai-wm-compact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-height: 76px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.mod-nai-wm-compact-grid::-webkit-scrollbar {
+  width: 3px;
+}
+
+.mod-nai-wm-compact-grid::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--nai-muted) 40%, transparent);
+  border-radius: 999px;
+}
+
+.mod-nai-wm-mini-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.mod-nai-wm-mini-thumb {
+  position: relative;
+  width: 100%;
+  height: 44px;
+  border-radius: 7px;
+  border: 1.5px solid var(--nai-border);
+  background-color: var(--nai-sub-bg);
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-wm-mini-thumb,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-wm-mini-thumb {
+  border-radius: 4px;
+  border: 1px dashed var(--nai-border-strong);
+}
+
+.mod-nai-wm-mini-item.is-selected .mod-nai-wm-mini-thumb,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-wm-mini-item.is-selected .mod-nai-wm-mini-thumb,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-wm-mini-item.is-selected .mod-nai-wm-mini-thumb {
+  border: 2px solid var(--nai-seal);
+}
+
+.mod-nai-wm-mini-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.mod-nai-wm-mini-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--card-bg) 88%, transparent);
+  border: 1px solid var(--nai-border);
+  color: var(--nai-text);
+  font-size: 9px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.mod-nai-wm-mini-item.is-selected .mod-nai-wm-mini-badge {
+  background-color: var(--nai-seal);
+  border-color: var(--nai-seal);
+  color: var(--card-bg);
+}
+
+.mod-nai-wm-mini-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--nai-border);
+  background-color: color-mix(in srgb, var(--card-bg) 90%, transparent);
+  color: var(--nai-text);
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 4;
+  box-sizing: border-box;
+}
+
+.mod-nai-wm-mini-name {
+  width: 100%;
+  font-size: 10px;
+  line-height: 14px;
+  height: 14px;
+  font-weight: 600;
+  color: var(--nai-text);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
+  box-sizing: border-box;
+}
+
+.mod-nai-wm-mini-item.is-selected .mod-nai-wm-mini-name {
+  color: var(--nai-seal);
+}
+
+/* 水印大图实时底图与调色滑块区 */
 .mod-nai-wm-preview-stage {
   width: 100%;
-  height: 82px;
-  border-radius: 8px;
+  height: 176px;
+  border-radius: 9px;
   border: 1px dashed var(--nai-border-strong);
   background-color: color-mix(in srgb, var(--card-bg) 92%, var(--secondary-bg));
   display: flex;
@@ -39745,13 +39879,30 @@ select,
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
+  cursor: pointer;
 }
 
 .mod-nai-wm-preview-stage canvas {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   display: block;
+  pointer-events: none;
+}
+
+.mod-nai-wm-bg-tip {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--card-bg) 86%, transparent);
+  border: 1px solid var(--nai-border);
+  color: var(--nai-text);
+  font-size: 9.5px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 3;
 }
 
 .mod-nai-slider-row {
@@ -39792,3 +39943,4 @@ select,
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
