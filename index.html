@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v24.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4355,11 +4355,10 @@
                 <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-import-btn">
                   <span>导入</span>
                 </button>
+                <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-done-btn" style="background: var(--accent-color); color: var(--card-bg); border-color: var(--accent-color); font-weight: 600;">
+                  <span>保存</span>
+                </button>
                 <input type="file" id="mod-nai-settings-import-file" accept=".json,application/json" style="display: none;" />
-              </div>
-
-              <div style="display: flex; justify-content: flex-end; padding-top: 2px;">
-                <button type="button" class="module-btn-primary" id="mod-nai-settings-done-btn" style="height: 30px; padding: 0 18px; font-size: 12px; border-radius: 8px;">确定</button>
               </div>
             </div>
           </div>
@@ -43529,10 +43528,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const PANEL_STATE_KEY = "mod_nai_panel_state_v1";
           const PRESETS_STORE_KEY = "mod_nai_presets_v1";
           const DELETED_IDS_KEY = "mod_nai_deleted_ids_v1";
+          const DELETED_PRESETS_KEY = "mod_nai_deleted_presets_v1";
           const LEXICON_FOLDERS_STORE_KEY = "mod_nai_lexicon_folders_v1";
           const DEFAULT_LEXICON_FOLDER_NAME = "徒花";
           let inspectObjectUrl = null;
           let isBound = false;
+          let _naiHydrationCompleted = false;
           let currentMode = "generate";
           let memoryPanelState = null;
           let memoryPresetsStore = null;
@@ -43540,13 +43541,93 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let memoryLexiconList = null;
           let memoryLexiconFoldersList = null;
           let memoryDeletedIdsSet = null;
+          let memoryDeletedPresetKeysSet = null;
           let colCategory = "bookmark"; // "bookmark" | "lexicon"
 
           const NAI_TERMUX_STORE_FILE = "nai_collection_store.json";
+          const NAI_DEDICATED_IDB_NAME = "ephone_nai_dedicated_idb_v1";
+          const NAI_DEDICATED_IDB_STORE = "nai_kv";
+          let _naiDedicatedIdbPromise = null;
           let _termuxNaiStoreLoadedOnce = false;
           let _termuxNaiSyncInFlight = null;
           let _termuxNaiWriteQueue = Promise.resolve();
           let _debouncedSyncTimer = null;
+
+          function openNaiDedicatedIDB() {
+            if (_naiDedicatedIdbPromise) return _naiDedicatedIdbPromise;
+            _naiDedicatedIdbPromise = new Promise((resolve) => {
+              if (typeof indexedDB === "undefined") {
+                resolve(null);
+                return;
+              }
+              try {
+                const req = indexedDB.open(NAI_DEDICATED_IDB_NAME, 1);
+                req.onupgradeneeded = (e) => {
+                  try {
+                    const dbInst = e.target.result;
+                    if (!dbInst.objectStoreNames.contains(NAI_DEDICATED_IDB_STORE)) {
+                      dbInst.createObjectStore(NAI_DEDICATED_IDB_STORE);
+                    }
+                  } catch (_) {}
+                };
+                req.onsuccess = (e) => resolve(e.target.result || null);
+                req.onerror = () => resolve(null);
+                req.onblocked = () => resolve(null);
+              } catch (_) {
+                resolve(null);
+              }
+            });
+            return _naiDedicatedIdbPromise;
+          }
+
+          async function writeKeyToNaiIDB(key, val) {
+            try {
+              const dbInst = await openNaiDedicatedIDB();
+              if (!dbInst) return false;
+              return await new Promise((resolve) => {
+                try {
+                  const tx = dbInst.transaction(NAI_DEDICATED_IDB_STORE, "readwrite");
+                  const store = tx.objectStore(NAI_DEDICATED_IDB_STORE);
+                  store.put(val, key);
+                  tx.oncomplete = () => resolve(true);
+                  tx.onerror = () => resolve(false);
+                } catch (_) {
+                  resolve(false);
+                }
+              });
+            } catch (_) {
+              return false;
+            }
+          }
+
+          async function readAllFromNaiIDB() {
+            const out = {};
+            try {
+              const dbInst = await openNaiDedicatedIDB();
+              if (!dbInst) return out;
+              await new Promise((resolve) => {
+                try {
+                  const tx = dbInst.transaction(NAI_DEDICATED_IDB_STORE, "readonly");
+                  const store = tx.objectStore(NAI_DEDICATED_IDB_STORE);
+                  const keys = ["panelState", "presets", "bookmarks", "lexicon", "lexiconFolders", "deletedIds", "deletedPresetKeys"];
+                  let pending = keys.length;
+                  keys.forEach((k) => {
+                    const r = store.get(k);
+                    r.onsuccess = () => {
+                      if (r.result !== undefined) out[k] = r.result;
+                      if (--pending <= 0) resolve();
+                    };
+                    r.onerror = () => {
+                      if (--pending <= 0) resolve();
+                    };
+                  });
+                } catch (_) {
+                  resolve();
+                }
+              });
+            } catch (_) {}
+            return out;
+          }
 
           function getDeletedIdsSet() {
             if (memoryDeletedIdsSet instanceof Set) return memoryDeletedIdsSet;
@@ -43569,7 +43650,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!itemId || typeof itemId !== "string") return;
             const s = getDeletedIdsSet();
             s.add(itemId);
-            safeNaiLocalSetItem(DELETED_IDS_KEY, JSON.stringify(Array.from(s)));
+            writeKeyToNaiIDB("deletedIds", Array.from(s));
           }
 
           function unmarkNaiItemDeleted(itemId) {
@@ -43577,7 +43658,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const s = getDeletedIdsSet();
             if (s.has(itemId)) {
               s.delete(itemId);
-              safeNaiLocalSetItem(DELETED_IDS_KEY, JSON.stringify(Array.from(s)));
+              writeKeyToNaiIDB("deletedIds", Array.from(s));
+            }
+          }
+
+          function getDeletedPresetKeysSet() {
+            if (memoryDeletedPresetKeysSet instanceof Set) return memoryDeletedPresetKeysSet;
+            memoryDeletedPresetKeysSet = new Set();
+            return memoryDeletedPresetKeysSet;
+          }
+
+          function markNaiPresetDeleted(category, presetName) {
+            const c = String(category || "").trim();
+            const n = String(presetName || "").trim();
+            if (!c || !n) return;
+            const s = getDeletedPresetKeysSet();
+            s.add(`${c}::${n}`);
+            writeKeyToNaiIDB("deletedPresetKeys", Array.from(s));
+          }
+
+          function unmarkNaiPresetDeleted(category, presetName) {
+            const c = String(category || "").trim();
+            const n = String(presetName || "").trim();
+            if (!c || !n) return;
+            const s = getDeletedPresetKeysSet();
+            const key = `${c}::${n}`;
+            if (s.has(key)) {
+              s.delete(key);
+              writeKeyToNaiIDB("deletedPresetKeys", Array.from(s));
             }
           }
 
@@ -43885,20 +43993,38 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }));
           }
 
-          function syncLightweightNaiMetadataBackup() {
+          function purgeLegacyNaiLocalStorageKeys() {
             try {
               localStorage.removeItem("mod_nai_bookmarks_v1");
               localStorage.removeItem("mod_nai_lexicon_v1");
               localStorage.removeItem("mod_nai_bookmarks_text_backup_v1");
               localStorage.removeItem("mod_nai_lexicon_text_backup_v1");
+              localStorage.removeItem(LEXICON_FOLDERS_STORE_KEY);
+              localStorage.removeItem(PRESETS_STORE_KEY);
+              localStorage.removeItem(PANEL_STATE_KEY);
             } catch (_) {}
+          }
+
+          function syncLightweightNaiMetadataBackup() {
+            if (_naiHydrationCompleted) {
+              purgeLegacyNaiLocalStorageKeys();
+            }
             const slimBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList)) : null;
             const slimLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList)) : null;
             const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList) : null;
 
-            if (slimFolders) {
-              safeNaiLocalSetItem(LEXICON_FOLDERS_STORE_KEY, JSON.stringify(slimFolders));
+            if (slimBm) writeKeyToNaiIDB("bookmarks", slimBm);
+            if (slimLex) writeKeyToNaiIDB("lexicon", slimLex);
+            if (slimFolders) writeKeyToNaiIDB("lexiconFolders", slimFolders);
+            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+              writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
             }
+            if (memoryPanelState && typeof memoryPanelState === "object") {
+              writeKeyToNaiIDB("panelState", Object.assign({}, memoryPanelState));
+            }
+            writeKeyToNaiIDB("deletedIds", Array.from(getDeletedIdsSet()));
+            writeKeyToNaiIDB("deletedPresetKeys", Array.from(getDeletedPresetKeysSet()));
+
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
               if (slimBm) window.state.globalSettings.naiBookmarksCollection = slimBm;
               if (slimLex) window.state.globalSettings.naiLexiconCollection = slimLex;
@@ -43946,22 +44072,106 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function safeNaiLocalSetItem(key, val) {
-            try {
-              localStorage.setItem(key, val);
-              return true;
-            } catch (_) {
-              try {
-                localStorage.removeItem("coc_module_draft_state_v1");
-                localStorage.removeItem("mod_nai_bookmarks_v1");
-                localStorage.removeItem("mod_nai_lexicon_v1");
-                localStorage.removeItem("mod_nai_bookmarks_text_backup_v1");
-                localStorage.removeItem("mod_nai_lexicon_text_backup_v1");
-                localStorage.setItem(key, val);
-                return true;
-              } catch (_2) {
-                return false;
-              }
+            writeKeyToNaiIDB(key, val);
+            return true;
+          }
+
+          function fillEmptyPresetValuesFromFallback(authoritativeRaw, fallbackRaw) {
+            const authNorm = normalizePresetsStoreObject(authoritativeRaw);
+            if (!fallbackRaw || typeof fallbackRaw !== "object") return authNorm;
+            const fbNorm = normalizePresetsStoreObject(fallbackRaw);
+            ["artist", "positive", "negative"].forEach((cat) => {
+              const fbList = Array.isArray(fbNorm[cat]) ? fbNorm[cat] : [];
+              if (fbList.length === 0) return;
+              (authNorm[cat] || []).forEach((item) => {
+                if (item && item.name && !String(item.value || "").trim()) {
+                  const fbMatch = fbList.find((p) => p && p.name === item.name && String(p.value || "").trim());
+                  if (fbMatch) {
+                    item.value = fbMatch.value;
+                  }
+                }
+              });
+            });
+            return authNorm;
+          }
+
+          function mergePresetsStoresSafely(primaryRaw, secondaryRaw) {
+            const pNorm = normalizePresetsStoreObject(primaryRaw);
+            const sNorm = normalizePresetsStoreObject(secondaryRaw);
+            const delPresets = getDeletedPresetKeysSet();
+            const mergeCatList = (cat, listA, listB) => {
+              const map = new Map();
+              const putOne = (item, isPrimary) => {
+                if (!item || typeof item !== "object" || !item.name) return;
+                const name = String(item.name).trim();
+                if (!name || delPresets.has(`${cat}::${name}`)) return;
+                const val = typeof item.value === "string" ? item.value.trim() : "";
+                const grp = typeof item.group === "string" ? item.group.trim() : "";
+                const prev = map.get(name);
+                if (!prev) {
+                  map.set(name, { name, value: val, group: grp });
+                } else {
+                  map.set(name, {
+                    name,
+                    value: isPrimary ? (val || prev.value) : (prev.value || val),
+                    group: isPrimary ? (grp || prev.group) : (prev.group || grp)
+                  });
+                }
+              };
+              (Array.isArray(listB) ? listB : []).forEach((x) => putOne(x, false));
+              (Array.isArray(listA) ? listA : []).forEach((x) => putOne(x, true));
+              return Array.from(map.values());
+            };
+            const mergeGroupList = (grpA, grpB, mergedCatItems) => {
+              const set = new Set();
+              (Array.isArray(grpA) ? grpA : []).forEach((g) => {
+                const s = String(g || "").trim();
+                if (s) set.add(s);
+              });
+              (Array.isArray(grpB) ? grpB : []).forEach((g) => {
+                const s = String(g || "").trim();
+                if (s) set.add(s);
+              });
+              (Array.isArray(mergedCatItems) ? mergedCatItems : []).forEach((it) => {
+                if (it && it.group) set.add(it.group);
+              });
+              return Array.from(set);
+            };
+            const artistMerged = mergeCatList("artist", pNorm.artist, sNorm.artist);
+            const posMerged = mergeCatList("positive", pNorm.positive, sNorm.positive);
+            const negMerged = mergeCatList("negative", pNorm.negative, sNorm.negative);
+            return {
+              artist: artistMerged,
+              positive: posMerged,
+              negative: negMerged,
+              groups: {
+                artist: mergeGroupList(pNorm.groups.artist, sNorm.groups.artist, artistMerged),
+                positive: mergeGroupList(pNorm.groups.positive, sNorm.groups.positive, posMerged),
+                negative: mergeGroupList(pNorm.groups.negative, sNorm.groups.negative, negMerged)
+              },
+              updatedAt: Math.max(Number(pNorm.updatedAt || 0), Number(sNorm.updatedAt || 0))
+            };
+          }
+
+          function mergePanelStatesSafely(primarySt, secondarySt) {
+            const p = primarySt && typeof primarySt === "object" ? primarySt : {};
+            const s = secondarySt && typeof secondarySt === "object" ? secondarySt : {};
+            const pTs = Number(p.updatedAt || 0);
+            const sTs = Number(s.updatedAt || 0);
+            const newer = pTs >= sTs ? p : s;
+            const older = pTs >= sTs ? s : p;
+            const merged = Object.assign({}, older, newer);
+            if (!merged.customApiUrl && older.customApiUrl && pTs === 0) merged.customApiUrl = older.customApiUrl;
+            if (!merged.customApiKey && older.customApiKey && pTs === 0) merged.customApiKey = older.customApiKey;
+            if (!merged.lastGeneratedImage && older.lastGeneratedImage) {
+              merged.lastGeneratedImage = older.lastGeneratedImage;
+              merged.lastGeneratedTitle = older.lastGeneratedTitle || "";
             }
+            if (!merged.artist2Text && older.artist2Text && pTs === 0) merged.artist2Text = older.artist2Text;
+            if (!merged.pos2Text && older.pos2Text && pTs === 0) merged.pos2Text = older.pos2Text;
+            if (!merged.negText && older.negText && pTs === 0) merged.negText = older.negText;
+            merged.updatedAt = Math.max(pTs, sTs);
+            return merged;
           }
 
           function persistNaiStoreToTermux(useKeepAlive = false) {
@@ -43997,6 +44207,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (id && typeof id === "string") delSet.add(id);
                 });
               }
+              if (existingRemote && Array.isArray(existingRemote.deletedPresetKeys)) {
+                const delPSet = getDeletedPresetKeysSet();
+                existingRemote.deletedPresetKeys.forEach((k) => {
+                  if (k && typeof k === "string") delPSet.add(k);
+                });
+              }
 
               const remoteBm = existingRemote && Array.isArray(existingRemote.bookmarks) ? existingRemote.bookmarks : [];
               const remoteLex = existingRemote && Array.isArray(existingRemote.lexicon) ? existingRemote.lexicon : [];
@@ -44015,21 +44231,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               );
 
               const outFolders = Array.isArray(memoryLexiconFoldersList)
-                ? memoryLexiconFoldersList
+                ? (!_termuxNaiStoreLoadedOnce && remoteFolders.length > 0 ? mergeLexiconFoldersLists(memoryLexiconFoldersList, remoteFolders) : memoryLexiconFoldersList)
                 : (remoteFolders.length > 0 ? remoteFolders : loadLexiconFolders());
 
               const outPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
-                ? memoryPresetsStore
-                : (existingRemote && existingRemote.presets ? existingRemote.presets : loadPresetsStore());
+                ? (!_termuxNaiStoreLoadedOnce && existingRemote && existingRemote.presets
+                    ? mergePresetsStoresSafely(memoryPresetsStore, existingRemote.presets)
+                    : memoryPresetsStore)
+                : (existingRemote && existingRemote.presets ? normalizePresetsStoreObject(existingRemote.presets) : loadPresetsStore());
 
               const outPanelState = (memoryPanelState && typeof memoryPanelState === "object")
-                ? memoryPanelState
+                ? (!_termuxNaiStoreLoadedOnce && existingRemote && existingRemote.panelState
+                    ? mergePanelStatesSafely(memoryPanelState, existingRemote.panelState)
+                    : memoryPanelState)
                 : (existingRemote && existingRemote.panelState ? existingRemote.panelState : loadPanelState());
 
               const payload = {
                 version: 1,
                 updatedAt: Date.now(),
                 deletedIds: Array.from(getDeletedIdsSet()),
+                deletedPresetKeys: Array.from(getDeletedPresetKeysSet()),
                 bookmarks: outBookmarks,
                 lexicon: outLexicon,
                 lexiconFolders: outFolders,
@@ -44072,8 +44293,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             puppy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"></circle><circle cx="18" cy="8" r="2"></circle><circle cx="4" cy="8" r="2"></circle><path d="M14.5 13.5c-1.5-1.5-3.5-1.5-5 0L7 16c-1.5 1.5-.5 4 2 4h6c2.5 0 3.5-2.5 2-4l-2.5-2.5z"></path></svg>'
           };
 
-          function loadPanelState() {
-            const defaults = {
+          function getDefaultPanelState() {
+            return {
               mode: "generate",
               theme: "folio",
               artistText: "",
@@ -44102,59 +44323,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               lastGeneratedTitle: "",
               updatedAt: 0
             };
+          }
+
+          function loadPanelState() {
+            const defaults = getDefaultPanelState();
             if (memoryPanelState && typeof memoryPanelState === "object") {
               return Object.assign({}, defaults, memoryPanelState);
             }
-            let localParsed = null;
-            try {
-              const raw = localStorage.getItem(PANEL_STATE_KEY);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === "object") {
-                  localParsed = parsed;
-                }
-              }
-            } catch (_) {}
             const gsParsed = (window.state && window.state.globalSettings && window.state.globalSettings.naiPanelState && typeof window.state.globalSettings.naiPanelState === "object")
               ? window.state.globalSettings.naiPanelState
               : null;
-            let chosen = localParsed || gsParsed;
-            if (localParsed && gsParsed) {
-              const localTs = typeof localParsed.updatedAt === "number" ? localParsed.updatedAt : 0;
-              const gsTs = typeof gsParsed.updatedAt === "number" ? gsParsed.updatedAt : 0;
-              chosen = gsTs > localTs ? gsParsed : localParsed;
-            }
-            if (chosen) {
-              memoryPanelState = Object.assign({}, defaults, chosen);
+            if (gsParsed) {
+              memoryPanelState = Object.assign({}, defaults, gsParsed);
               return Object.assign({}, memoryPanelState);
             }
             return Object.assign({}, defaults);
           }
 
           function savePanelState(stateObj) {
-            const nextState = Object.assign({}, stateObj, { updatedAt: Date.now() });
+            const nextState = Object.assign({}, getDefaultPanelState(), stateObj, { updatedAt: Date.now() });
             memoryPanelState = nextState;
-            const localCopy = Object.assign({}, nextState);
-            if (typeof localCopy.lastGeneratedImage === "string" && localCopy.lastGeneratedImage.startsWith("data:") && localCopy.lastGeneratedImage.length > 180000) {
-              if (!safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(localCopy))) {
-                const slimCopy = Object.assign({}, localCopy, { lastGeneratedImage: "" });
-                safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(slimCopy));
-              }
-            } else {
-              safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(localCopy));
-            }
+            writeKeyToNaiIDB("panelState", Object.assign({}, nextState));
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
               window.state.globalSettings.naiPanelState = Object.assign({}, nextState);
+            }
+            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+              window.db.globalSettings.get("main").then((gs) => {
+                if (gs && typeof gs === "object") {
+                  gs.naiPanelState = Object.assign({}, nextState);
+                  window.db.globalSettings.put(gs).catch(() => {});
+                }
+              }).catch(() => {});
             }
             persistNaiStoreToTermux(false);
           }
 
           function normalizePresetsStoreObject(raw) {
             const obj = raw && typeof raw === "object" ? raw : {};
-            const normList = (arr) =>
+            const delPresets = getDeletedPresetKeysSet();
+            const normList = (cat, arr) =>
               Array.isArray(arr)
                 ? arr
-                    .filter((x) => x && typeof x === "object" && x.name)
+                    .filter((x) => x && typeof x === "object" && x.name && !delPresets.has(`${cat}::${String(x.name).trim()}`))
                     .map((x) => ({
                       name: String(x.name).trim(),
                       value: typeof x.value === "string" ? x.value : "",
@@ -44175,9 +44385,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
               return Array.from(set);
             };
-            const artistList = normList(obj.artist);
-            const posList = normList(obj.positive);
-            const negList = normList(obj.negative);
+            const artistList = normList("artist", obj.artist);
+            const posList = normList("positive", obj.positive);
+            const negList = normList("negative", obj.negative);
             return {
               artist: artistList,
               positive: posList,
@@ -44210,27 +44420,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
               return clonePresetsStore(memoryPresetsStore);
             }
-            let localParsed = null;
-            try {
-              const raw = localStorage.getItem(PRESETS_STORE_KEY);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === "object") {
-                  localParsed = normalizePresetsStoreObject(parsed);
-                }
-              }
-            } catch (_) {}
             const gsParsed = (window.state && window.state.globalSettings && window.state.globalSettings.naiPresetsStore && typeof window.state.globalSettings.naiPresetsStore === "object")
               ? normalizePresetsStoreObject(window.state.globalSettings.naiPresetsStore)
               : null;
-            let chosen = localParsed || gsParsed;
-            if (localParsed && gsParsed) {
-              const localTs = typeof localParsed.updatedAt === "number" ? localParsed.updatedAt : 0;
-              const gsTs = typeof gsParsed.updatedAt === "number" ? gsParsed.updatedAt : 0;
-              chosen = gsTs > localTs ? gsParsed : localParsed;
-            }
-            if (chosen) {
-              memoryPresetsStore = chosen;
+            if (gsParsed) {
+              memoryPresetsStore = gsParsed;
               return clonePresetsStore(memoryPresetsStore);
             }
             memoryPresetsStore = normalizePresetsStoreObject({});
@@ -44238,10 +44432,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function savePresetsStore(store) {
+            const prev = memoryPresetsStore ? clonePresetsStore(memoryPresetsStore) : normalizePresetsStoreObject({});
             const norm = normalizePresetsStoreObject(store);
+            // 保护机制：禁止任何预设的提示词内容被空字符串意外清空，除非原本就是空
+            ["artist", "positive", "negative"].forEach((cat) => {
+              const prevList = Array.isArray(prev[cat]) ? prev[cat] : [];
+              (norm[cat] || []).forEach((item) => {
+                if (item && !item.value) {
+                  const oldItem = prevList.find((p) => p && p.name === item.name && p.value);
+                  if (oldItem && oldItem.value) {
+                    item.value = oldItem.value;
+                  }
+                }
+              });
+            });
             norm.updatedAt = Date.now();
             memoryPresetsStore = norm;
-            safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+            writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
               window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
             }
@@ -44257,6 +44464,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function syncActiveSelectedPresetsFromDom() {
+            if (!_naiHydrationCompleted) return false;
             const store = loadPresetsStore();
             const st = loadPanelState();
             let storeChanged = false;
@@ -44272,13 +44480,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const sel = document.getElementById(selectId);
               const inp = document.getElementById(inputId);
               if (!sel || !inp) return;
-              const selectedName = String(sel.value || st[stateKey] || "").trim();
+              const selectedName = String(sel.value || "").trim();
               if (!selectedName) return;
               if (st[stateKey] !== selectedName) {
                 st[stateKey] = selectedName;
                 stChanged = true;
               }
               const val = inp.value.trim();
+              // 绝对禁止将空输入框覆盖进预设库，避免清空当前选中预设的提示词
+              if (!val) return;
               const list = Array.isArray(store[cat]) ? store[cat] : [];
               const idx = list.findIndex((x) => x && x.name === selectedName);
               if (idx >= 0) {
@@ -44322,13 +44532,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function updateHeaderSummary() {
-            const resSelect = document.getElementById("mod-nai-setting-resolution");
-            const modelSelect = document.getElementById("mod-nai-setting-model");
             const summaryEl = document.getElementById("mod-nai-meta-summary");
             if (!summaryEl) return;
             const st = loadPanelState();
-            const resVal = (resSelect && resSelect.value) || st.resolution || "1024x1024";
-            const modelVal = (modelSelect && modelSelect.value) || st.model || "nai-diffusion-4-5-full";
+            const resVal = st.resolution || "1024x1024";
+            const modelVal = st.model || "nai-diffusion-4-5-full";
             summaryEl.textContent = getShortModelLabel(modelVal) + " · " + getShortResLabel(resVal);
           }
 
@@ -44427,6 +44635,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               clearTimeout(_debouncedSyncTimer);
               _debouncedSyncTimer = null;
             }
+            computeActiveArtistPrompt();
+            computeActivePositivePrompt();
+            if (!_naiHydrationCompleted) return;
+
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
             const artist2El = document.getElementById("mod-nai-gen-artist2-input");
             const ac1El = document.getElementById("mod-nai-artist1-check");
@@ -44436,42 +44648,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const c1El = document.getElementById("mod-nai-pos1-check");
             const c2El = document.getElementById("mod-nai-pos2-check");
             const negEl = document.getElementById("mod-nai-gen-neg-input");
-            const resEl = document.getElementById("mod-nai-setting-resolution");
-            const modelEl = document.getElementById("mod-nai-setting-model");
-            const themeEl = document.getElementById("mod-nai-setting-theme");
-            const apiUrlEl = document.getElementById("mod-nai-setting-api-url");
-            const apiKeyEl = document.getElementById("mod-nai-setting-api-key");
 
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
             const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
             const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
 
-            computeActiveArtistPrompt();
-            computeActivePositivePrompt();
-
             const st = loadPanelState();
-            const artistVal = artistEl ? artistEl.value : st.artistText;
-            const artist2Val = artist2El ? artist2El.value : (st.artist2Text || "");
-            const negVal = negEl ? negEl.value : st.negText;
-            const resVal = (resEl && resEl.value) ? resEl.value : (st.resolution || "1024x1024");
-            const modelVal = (modelEl && modelEl.value) ? modelEl.value : (st.model || "nai-diffusion-4-5-full");
-            const themeVal = (themeEl && themeEl.value) ? themeEl.value : (st.theme || "folio");
-
-            st.theme = themeVal;
-            st.artistText = artistVal;
-            st.artist2Text = artist2Val;
+            if (artistEl) st.artistText = artistEl.value;
+            if (artist2El) st.artist2Text = artist2El.value;
             st.artist1Checked = ac1El ? ac1El.checked : true;
             st.artist2Checked = ac2El ? ac2El.checked : false;
-            st.pos1Text = pos1El ? pos1El.value : st.pos1Text;
-            st.pos2Text = pos2El ? pos2El.value : st.pos2Text;
-            st.negText = negVal;
+            if (pos1El) st.pos1Text = pos1El.value;
+            if (pos2El) st.pos2Text = pos2El.value;
+            if (negEl) st.negText = negEl.value;
             st.pos1Checked = c1El ? c1El.checked : true;
             st.pos2Checked = c2El ? c2El.checked : false;
-            st.resolution = resVal;
-            st.model = modelVal;
-            if (apiUrlEl) st.customApiUrl = apiUrlEl.value.trim();
-            if (apiKeyEl) st.customApiKey = apiKeyEl.value.trim();
             if (inspectArtistEl) st.inspectArtistText = inspectArtistEl.value;
             if (inspectPosEl) st.inspectPosText = inspectPosEl.value;
             if (inspectNegEl) st.inspectNegText = inspectNegEl.value;
@@ -44806,6 +44998,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   const targetPreset = targetArr.find((x) => x && x.name === oldName);
                   if (!targetPreset) return;
+                  markNaiPresetDeleted(cat, oldName);
+                  unmarkNaiPresetDeleted(cat, newName);
                   targetPreset.name = newName;
                   savePresetsStore(curStore);
 
@@ -45113,6 +45307,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               return handleSavePreset(category, inputId, selectId, stateKey);
             }
 
+            if (!val) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("提示", "当前输入框内容为空，为防止误清空预设提示词，请填写内容后再保存；如需删除预设请点击右侧垃圾桶按钮。");
+              }
+              return;
+            }
+
+            unmarkNaiPresetDeleted(category, selectedName);
             const store = loadPresetsStore();
             const list = Array.isArray(store[category]) ? store[category] : [];
             const idx = list.findIndex((x) => x && x.name === selectedName);
@@ -45186,6 +45388,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (inputEl) inputEl.value = val;
             }
 
+            unmarkNaiPresetDeleted(category, cleanName);
             const store = loadPresetsStore();
             if (!store.groups) store.groups = { artist: [], positive: [], negative: [] };
             if (!Array.isArray(store.groups[category])) store.groups[category] = [];
@@ -45226,6 +45429,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const ok = await window.showCustomConfirm("删除预设", "确定删除预设 " + selectedName + " 吗？");
               if (!ok) return;
             }
+            markNaiPresetDeleted(category, selectedName);
             const store = loadPresetsStore();
             store[category] = (store[category] || []).filter((x) => x && x.name !== selectedName);
             savePresetsStore(store);
@@ -45879,9 +46083,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (openSettingsBtn && settingsModal) {
               openSettingsBtn.addEventListener("click", () => {
                 const st = loadPanelState();
-                if (resSelect && st.resolution) resSelect.value = st.resolution;
-                if (modelSelect && st.model) modelSelect.value = st.model;
-                if (themeSelect && st.theme) themeSelect.value = st.theme;
+                if (resSelect) resSelect.value = st.resolution || "1024x1024";
+                if (modelSelect) modelSelect.value = st.model || "nai-diffusion-4-5-full";
+                if (themeSelect) themeSelect.value = st.theme || "folio";
                 if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
                 if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
                 applyThemeToPanel(st.theme || "folio");
@@ -45889,13 +46093,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 settingsModal.style.display = "flex";
               });
             }
-
-            [apiUrlInput, apiKeyInput].forEach((inp) => {
-              if (inp) {
-                inp.addEventListener("change", () => syncModuleNaiToGlobal());
-                inp.addEventListener("blur", () => syncModuleNaiToGlobal());
-              }
-            });
 
             if (settingsModal) {
               settingsModal.querySelectorAll(".mod-nai-preset-drawer-head").forEach((headBtn) => {
@@ -46116,25 +46313,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                     if (srcObj.presets && typeof srcObj.presets === "object") {
                       const curP = loadPresetsStore();
-                      const mergeCat = (a, b) => {
-                        const m = new Map();
-                        (Array.isArray(a) ? a : []).forEach((it) => { if (it && it.name) m.set(it.name, Object.assign({}, it)); });
-                        (Array.isArray(b) ? b : []).forEach((it) => { if (it && it.name) m.set(it.name, Object.assign(m.get(it.name) || {}, it)); });
-                        return Array.from(m.values());
-                      };
-                      const mergeGrp = (a, b) => Array.from(new Set([...(Array.isArray(b) ? b : []), ...(Array.isArray(a) ? a : [])].map((x) => String(x || "").trim()).filter(Boolean)));
-                      const cg = (curP.groups && typeof curP.groups === "object") ? curP.groups : {};
-                      const ig = (srcObj.presets.groups && typeof srcObj.presets.groups === "object") ? srcObj.presets.groups : {};
-                      savePresetsStore({
-                        artist: mergeCat(curP.artist, srcObj.presets.artist),
-                        positive: mergeCat(curP.positive, srcObj.presets.positive),
-                        negative: mergeCat(curP.negative, srcObj.presets.negative),
-                        groups: {
-                          artist: mergeGrp(cg.artist, ig.artist),
-                          positive: mergeGrp(cg.positive, ig.positive),
-                          negative: mergeGrp(cg.negative, ig.negative)
-                        }
+                      ["artist", "positive", "negative"].forEach((cat) => {
+                        (Array.isArray(srcObj.presets[cat]) ? srcObj.presets[cat] : []).forEach((it) => {
+                          if (it && it.name) unmarkNaiPresetDeleted(cat, it.name);
+                        });
                       });
+                      savePresetsStore(mergePresetsStoresSafely(curP, srcObj.presets));
                     }
 
                     await persistNaiStoreToTermux(false);
@@ -46156,37 +46340,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             }
 
-            const hideSettings = () => {
-              if (themeSelect && themeSelect.value) {
-                applyThemeToPanel(themeSelect.value);
-              }
-              syncModuleNaiToGlobal();
+            const cancelSettingsModal = () => {
+              const st = loadPanelState();
+              if (resSelect) resSelect.value = st.resolution || "1024x1024";
+              if (modelSelect) modelSelect.value = st.model || "nai-diffusion-4-5-full";
+              if (themeSelect) themeSelect.value = st.theme || "folio";
+              if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
+              if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
+              applyThemeToPanel(st.theme || "folio");
+              updateHeaderSummary();
               if (settingsModal) settingsModal.style.display = "none";
             };
-            if (closeSettingsBtn) closeSettingsBtn.addEventListener("click", hideSettings);
-            if (doneSettingsBtn) {
-              doneSettingsBtn.addEventListener("click", () => {
-                hideSettings();
-                if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast("已保存设置", "success");
-                }
-              });
-            }
 
-            if (resSelect) {
-              resSelect.addEventListener("change", () => {
-                syncModuleNaiToGlobal();
-              });
-            }
-            if (modelSelect) {
-              modelSelect.addEventListener("change", () => {
-                syncModuleNaiToGlobal();
-              });
-            }
+            const commitSettingsModal = () => {
+              const st = loadPanelState();
+              if (resSelect && resSelect.value) st.resolution = resSelect.value;
+              if (modelSelect && modelSelect.value) st.model = modelSelect.value;
+              if (themeSelect && themeSelect.value) {
+                st.theme = themeSelect.value;
+                applyThemeToPanel(themeSelect.value);
+              }
+              if (apiUrlInput) st.customApiUrl = apiUrlInput.value.trim();
+              if (apiKeyInput) st.customApiKey = apiKeyInput.value.trim();
+              savePanelState(st);
+              updateHeaderSummary();
+              if (settingsModal) settingsModal.style.display = "none";
+              if (typeof window.showDownloadToast === "function") {
+                window.showDownloadToast("已保存设置", "success");
+              }
+            };
+
+            if (closeSettingsBtn) closeSettingsBtn.addEventListener("click", cancelSettingsModal);
+            if (doneSettingsBtn) doneSettingsBtn.addEventListener("click", commitSettingsModal);
+
             if (themeSelect) {
               themeSelect.addEventListener("change", () => {
                 applyThemeToPanel(themeSelect.value);
-                syncModuleNaiToGlobal();
               });
             }
 
@@ -46226,7 +46415,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const modulesBackBtn = document.getElementById("modules-back-btn");
             if (modulesBackBtn) {
               modulesBackBtn.addEventListener("click", () => {
-                syncActiveSelectedPresetsFromDom();
                 syncModuleNaiToGlobal();
                 destroyNaiCollectionGalleryMemory();
               });
@@ -46352,8 +46540,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const activeArtistVal = computeActiveArtistPrompt();
                 const activePosVal = computeActivePositivePrompt();
                 const negVal = (document.getElementById("mod-nai-gen-neg-input")?.value || "").trim();
-                const resVal = document.getElementById("mod-nai-setting-resolution")?.value || "1024x1024";
-                const modelVal = document.getElementById("mod-nai-setting-model")?.value || "nai-diffusion-4-5-full";
+                const stNow = loadPanelState();
+                const resVal = stNow.resolution || "1024x1024";
+                const modelVal = stNow.model || "nai-diffusion-4-5-full";
 
                 if (!activePosVal && !activeArtistVal) {
                   if (typeof window.showCustomAlert === "function") {
@@ -46576,14 +46765,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (other.id && indexById.has(other.id)) {
                 const pos = indexById.get(other.id);
                 const cur = merged[pos];
-                const curImgs = Array.isArray(cur.images) ? cur.images.filter(Boolean) : (cur.image ? [cur.image] : []);
-                const otherImgs = Array.isArray(other.images) ? other.images.filter(Boolean) : (other.image ? [other.image] : []);
-                if (curImgs.length === 0 && otherImgs.length > 0) {
-                  cur.images = otherImgs;
-                  cur.image = otherImgs[0] || "";
-                }
-                if (!cur.folder && other.folder) {
-                  cur.folder = other.folder;
+                const curTs = Number(cur.updatedAt || 0);
+                const otherTs = Number(other.updatedAt || 0);
+                if (otherTs > curTs) {
+                  // other 是更新的编辑版本（例如用户刚刚删掉了某张图或改了文字），直接以最新版本为准，绝不把删掉的图塞回来
+                  merged[pos] = Object.assign({}, other);
+                } else if (curTs === otherTs) {
+                  // 仅当时间戳完全相同时（例如轻量备份与完整备份合并），才用非空图片补全
+                  const curImgs = Array.isArray(cur.images) ? cur.images.filter(Boolean) : (cur.image ? [cur.image] : []);
+                  const otherImgs = Array.isArray(other.images) ? other.images.filter(Boolean) : (other.image ? [other.image] : []);
+                  if (curImgs.length === 0 && otherImgs.length > 0) {
+                    cur.images = otherImgs;
+                    cur.image = otherImgs[0] || "";
+                  }
+                  if (!cur.folder && other.folder) cur.folder = other.folder;
                 }
               } else {
                 merged.push(Object.assign({}, other));
@@ -46605,7 +46800,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (byName.has(name)) {
                 const idx = byName.get(name);
                 const existing = out[idx];
-                if (!existing.coverImage && f.coverImage && typeof f.coverImage === "string") {
+                const eTs = Number(existing.updatedAt || 0);
+                const fTs = Number(f.updatedAt || 0);
+                if (fTs > eTs) {
+                  existing.coverImage = typeof f.coverImage === "string" ? f.coverImage : "";
+                  existing.updatedAt = fTs;
+                } else if (eTs === fTs && !existing.coverImage && f.coverImage && typeof f.coverImage === "string") {
                   existing.coverImage = f.coverImage;
                 }
                 if (f.explicitCreated) {
@@ -46690,7 +46890,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const clean = mergeLexiconFoldersLists(foldersList, []);
             memoryLexiconFoldersList = clean;
             colGridDataRevision++;
-            safeNaiLocalSetItem(LEXICON_FOLDERS_STORE_KEY, JSON.stringify(buildSlimFoldersList(clean)));
+            writeKeyToNaiIDB("lexiconFolders", clean);
             persistNaiStoreToTermux(false);
           }
 
@@ -46778,8 +46978,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const isLex = cat === "lexicon";
             if (isLex) {
               memoryLexiconList = cleanList;
+              writeKeyToNaiIDB("lexicon", cleanList);
             } else {
               memoryBookmarksList = cleanList;
+              writeKeyToNaiIDB("bookmarks", cleanList);
             }
             colGridDataRevision++;
             persistNaiStoreToTermux(false);
@@ -47059,7 +47261,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const safeFolderLabel = String(folderLabel).replace(/</g, "&lt;");
               indexSpan.innerHTML =
                 `<span class="mod-nai-lex-idx-badge">${idxNum}</span>` +
-                `<span class="mod-nai-lex-idx-kicker">21G ${safeFolderLabel}</span>` +
+                `<span class="mod-nai-lex-idx-kicker">${safeFolderLabel}</span>` +
                 HAND_CIRCLE_SVG;
             } else {
               indexSpan.innerHTML =
@@ -49082,14 +49284,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           };
 
-          window.openModuleNaiPanel = function (forceGenerateMode) {
-            bindModuleNaiPanelEvents();
-            const st = loadPanelState();
-            if (forceGenerateMode === true) {
-              st.mode = "generate";
-              savePanelState(st);
-            }
-
+          function applyPanelStateAndPresetsToDom(st, store) {
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
             const artist2El = document.getElementById("mod-nai-gen-artist2-input");
             const ac1El = document.getElementById("mod-nai-artist1-check");
@@ -49110,24 +49305,51 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
             const inspectStatusEl = document.getElementById("mod-nai-inspect-meta-status");
 
-            if (artistEl) artistEl.value = st.artistText !== undefined ? st.artistText : "";
-            if (artist2El) artist2El.value = st.artist2Text !== undefined ? st.artist2Text : "";
+            const resolveTextWithPresetFallback = (rawText, selectedPresetName, cat) => {
+              const txt = rawText !== undefined && rawText !== null ? String(rawText) : "";
+              if (txt.trim()) return txt;
+              if (selectedPresetName && store && Array.isArray(store[cat])) {
+                const found = store[cat].find((p) => p && p.name === selectedPresetName && p.value && String(p.value).trim());
+                if (found) return String(found.value);
+              }
+              return txt;
+            };
+
+            const a1Val = resolveTextWithPresetFallback(st.artistText, st.artistPresetSelected, "artist");
+            const a2Val = resolveTextWithPresetFallback(st.artist2Text, st.artist2PresetSelected, "artist");
+            const p1Val = resolveTextWithPresetFallback(st.pos1Text, st.pos1PresetSelected, "positive");
+            const p2Val = resolveTextWithPresetFallback(st.pos2Text, st.pos2PresetSelected, "positive");
+            const negVal = resolveTextWithPresetFallback(st.negText, st.negPresetSelected, "negative");
+
+            st.artistText = a1Val;
+            st.artist2Text = a2Val;
+            st.pos1Text = p1Val;
+            st.pos2Text = p2Val;
+            st.negText = negVal;
+
+            if (artistEl && document.activeElement !== artistEl) artistEl.value = a1Val;
+            if (artist2El && document.activeElement !== artist2El) artist2El.value = a2Val;
             if (ac1El) ac1El.checked = st.artist1Checked !== false;
             if (ac2El) ac2El.checked = Boolean(st.artist2Checked);
-            if (pos1El) pos1El.value = st.pos1Text !== undefined ? st.pos1Text : "";
-            if (pos2El) pos2El.value = st.pos2Text !== undefined ? st.pos2Text : "";
+            if (pos1El && document.activeElement !== pos1El) pos1El.value = p1Val;
+            if (pos2El && document.activeElement !== pos2El) pos2El.value = p2Val;
             if (c1El) c1El.checked = st.pos1Checked !== false;
             if (c2El) c2El.checked = Boolean(st.pos2Checked);
-            if (negEl) negEl.value = st.negText !== undefined ? st.negText : "";
-            if (resEl) resEl.value = st.resolution || "1024x1024";
-            if (modelEl) modelEl.value = st.model || "nai-diffusion-4-5-full";
-            if (themeEl) themeEl.value = st.theme || "folio";
-            if (apiUrlEl) apiUrlEl.value = st.customApiUrl || "";
-            if (apiKeyEl) apiKeyEl.value = st.customApiKey || "";
+            if (negEl && document.activeElement !== negEl) negEl.value = negVal;
 
-            if (inspectArtistEl) inspectArtistEl.value = st.inspectArtistText || "";
-            if (inspectPosEl) inspectPosEl.value = st.inspectPosText || "";
-            if (inspectNegEl) inspectNegEl.value = st.inspectNegText || "";
+            const settingsModal = document.getElementById("mod-nai-settings-modal");
+            const settingsOpen = settingsModal && settingsModal.style.display === "flex";
+            if (!settingsOpen) {
+              if (resEl) resEl.value = st.resolution || "1024x1024";
+              if (modelEl) modelEl.value = st.model || "nai-diffusion-4-5-full";
+              if (themeEl) themeEl.value = st.theme || "folio";
+              if (apiUrlEl) apiUrlEl.value = st.customApiUrl || "";
+              if (apiKeyEl) apiKeyEl.value = st.customApiKey || "";
+            }
+
+            if (inspectArtistEl && document.activeElement !== inspectArtistEl) inspectArtistEl.value = st.inspectArtistText || "";
+            if (inspectPosEl && document.activeElement !== inspectPosEl) inspectPosEl.value = st.inspectPosText || "";
+            if (inspectNegEl && document.activeElement !== inspectNegEl) inspectNegEl.value = st.inspectNegText || "";
             if (inspectStatusEl && st.inspectStatusText) {
               inspectStatusEl.textContent = st.inspectStatusText;
             }
@@ -49153,6 +49375,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             applyThemeToPanel(st.theme || "folio");
+          }
+
+          window.openModuleNaiPanel = function (forceGenerateMode) {
+            bindModuleNaiPanelEvents();
+            const st = loadPanelState();
+            const store = loadPresetsStore();
+            if (forceGenerateMode === true) {
+              st.mode = "generate";
+              if (_naiHydrationCompleted) {
+                savePanelState(st);
+              }
+            }
+
+            applyPanelStateAndPresetsToDom(st, store);
+
             if (st.mode === "collection") {
               switchCollectionSubView("grid");
             }
@@ -49178,8 +49415,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const c1El = document.getElementById("mod-nai-pos1-check");
             const c2El = document.getElementById("mod-nai-pos2-check");
             const negEl = document.getElementById("mod-nai-gen-neg-input");
-            const resEl = document.getElementById("mod-nai-setting-resolution");
-            const modelEl = document.getElementById("mod-nai-setting-model");
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
             const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
@@ -49197,8 +49432,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               pos2Text: pos2El ? pos2El.value : (st.pos2Text || ""),
               effectivePositivePrompt: computeActivePositivePrompt(),
               negText: negEl ? negEl.value : (st.negText || ""),
-              resolution: (resEl && resEl.value) ? resEl.value : (st.resolution || "1024x1024"),
-              model: (modelEl && modelEl.value) ? modelEl.value : (st.model || "nai-diffusion-4-5-full"),
+              resolution: st.resolution || "1024x1024",
+              model: st.model || "nai-diffusion-4-5-full",
               theme: st.theme || "folio",
               savedPresets: {
                 artist: (store.artist || []).map(p => p.name),
@@ -49366,13 +49601,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           };
 
           function flushAllNaiStateBeforeExit() {
+            if (!_naiHydrationCompleted) return;
             try {
               const editPage = document.getElementById("mod-nai-col-edit-page");
               if (editPage && editPage.style.display !== "none" && colCurrentItem && colScope === "local") {
                 persistCurrentBookmarkEditDraft(true);
               }
             } catch (_) {}
-            syncActiveSelectedPresetsFromDom();
             syncModuleNaiToGlobal();
             persistNaiStoreToTermux(true);
           }
@@ -49389,6 +49624,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           async function loadNaiStoreFromTermux() {
             if (_termuxNaiSyncInFlight) return _termuxNaiSyncInFlight;
             _termuxNaiSyncInFlight = (async () => {
+              // 1. 先从独立大容量 IndexedDB 读取全部数据
+              const idbData = await readAllFromNaiIDB();
+              if (idbData && Array.isArray(idbData.deletedIds)) {
+                const delSet = getDeletedIdsSet();
+                idbData.deletedIds.forEach((id) => {
+                  if (id && typeof id === "string") delSet.add(id);
+                });
+              }
+              if (idbData && Array.isArray(idbData.deletedPresetKeys)) {
+                const delPSet = getDeletedPresetKeysSet();
+                idbData.deletedPresetKeys.forEach((k) => {
+                  if (k && typeof k === "string") delPSet.add(k);
+                });
+              }
+
+              // 2. 读取主数据库 globalSettings
+              let legacyGs = null;
+              if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
+                try {
+                  legacyGs = await window.db.globalSettings.get("main");
+                } catch (_) {}
+              }
+
+              // 3. 读取 Termux 上的 nai_collection_store.json
               const baseUrl = getNaiTermuxBaseUrl();
               let remoteStore = null;
               const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
@@ -49410,52 +49669,70 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               if (remoteStore && Array.isArray(remoteStore.deletedIds)) {
                 const delSet = getDeletedIdsSet();
-                let delAdded = false;
                 remoteStore.deletedIds.forEach((id) => {
                   const s = String(id || "").trim();
-                  if (s && !delSet.has(s)) {
-                    delSet.add(s);
-                    delAdded = true;
-                  }
+                  if (s) delSet.add(s);
                 });
-                if (delAdded) {
-                  try {
-                    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(delSet)));
-                  } catch (_) {}
-                }
+                writeKeyToNaiIDB("deletedIds", Array.from(delSet));
+              }
+              if (remoteStore && Array.isArray(remoteStore.deletedPresetKeys)) {
+                const delPSet = getDeletedPresetKeysSet();
+                remoteStore.deletedPresetKeys.forEach((k) => {
+                  const s = String(k || "").trim();
+                  if (s) delPSet.add(s);
+                });
+                writeKeyToNaiIDB("deletedPresetKeys", Array.from(delPSet));
               }
 
-              // 仅在 Termux 上的 nai_collection_store.json 完全不存在且首次加载时，才尝试从 backup.json 或旧残留中迁移一次
+              const hasEstablishedStore = Boolean(
+                remoteStore ||
+                (idbData && (Array.isArray(idbData.bookmarks) || Array.isArray(idbData.lexicon) || idbData.presets))
+              );
+
+              // 4. 仅当存在被误清空的预设提示词、或者首次尚未建立任何存储时，才去读取 backup.json
+              // 并且当已经存在正式存储时，backup.json 只用来补全现有同名空值预设的文字，绝不把已删掉的预设、已删掉的卡片或已删掉的图片重新加回来！
               let backupBookmarks = [];
               let backupLexicon = [];
               let backupFolders = [];
               let backupPresets = null;
               let backupPanelState = null;
 
-              if (!remoteStore && !_termuxNaiStoreLoadedOnce) {
+              const hasAnyEmptyPreset = (storeObj) => {
+                if (!storeObj || typeof storeObj !== "object") return false;
+                return ["artist", "positive", "negative"].some((c) =>
+                  Array.isArray(storeObj[c]) && storeObj[c].some((it) => it && it.name && !String(it.value || "").trim())
+                );
+              };
+
+              if (
+                !_termuxNaiStoreLoadedOnce &&
+                (!hasEstablishedStore || hasAnyEmptyPreset(remoteStore && remoteStore.presets) || hasAnyEmptyPreset(idbData && idbData.presets))
+              ) {
                 try {
                   const bRes = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
                   if (bRes && bRes.ok) {
                     const bJson = await bRes.json();
                     if (bJson && typeof bJson === "object") {
-                      const ls = bJson.localStorageData || {};
-                      if (typeof ls.mod_nai_bookmarks_v1 === "string") {
-                        try {
-                          const p = JSON.parse(ls.mod_nai_bookmarks_v1);
-                          if (Array.isArray(p)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, p);
-                        } catch (_) {}
-                      }
-                      if (typeof ls.mod_nai_lexicon_v1 === "string") {
-                        try {
-                          const p = JSON.parse(ls.mod_nai_lexicon_v1);
-                          if (Array.isArray(p)) backupLexicon = mergeBookmarkListsById(backupLexicon, p);
-                        } catch (_) {}
-                      }
-                      if (typeof ls.mod_nai_lexicon_folders_v1 === "string") {
-                        try {
-                          const p = JSON.parse(ls.mod_nai_lexicon_folders_v1);
-                          if (Array.isArray(p)) backupFolders = mergeLexiconFoldersLists(backupFolders, p);
-                        } catch (_) {}
+                      const ls = bJson.localStorageData || bJson.localStorageSnapshot || {};
+                      if (!hasEstablishedStore) {
+                        if (typeof ls.mod_nai_bookmarks_v1 === "string") {
+                          try {
+                            const p = JSON.parse(ls.mod_nai_bookmarks_v1);
+                            if (Array.isArray(p)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, p);
+                          } catch (_) {}
+                        }
+                        if (typeof ls.mod_nai_lexicon_v1 === "string") {
+                          try {
+                            const p = JSON.parse(ls.mod_nai_lexicon_v1);
+                            if (Array.isArray(p)) backupLexicon = mergeBookmarkListsById(backupLexicon, p);
+                          } catch (_) {}
+                        }
+                        if (typeof ls.mod_nai_lexicon_folders_v1 === "string") {
+                          try {
+                            const p = JSON.parse(ls.mod_nai_lexicon_folders_v1);
+                            if (Array.isArray(p)) backupFolders = mergeLexiconFoldersLists(backupFolders, p);
+                          } catch (_) {}
+                        }
                       }
                       if (typeof ls.mod_nai_presets_v1 === "string") {
                         try {
@@ -49463,211 +49740,226 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           if (p && typeof p === "object") backupPresets = p;
                         } catch (_) {}
                       }
-                      if (typeof ls.mod_nai_panel_state_v1 === "string") {
+                      if (!hasEstablishedStore && typeof ls.mod_nai_panel_state_v1 === "string") {
                         try {
                           const p = JSON.parse(ls.mod_nai_panel_state_v1);
                           if (p && typeof p === "object") backupPanelState = p;
                         } catch (_) {}
                       }
+                      if (bJson.naiCollectionStore && typeof bJson.naiCollectionStore === "object") {
+                        const ncs = bJson.naiCollectionStore;
+                        if (!hasEstablishedStore) {
+                          if (Array.isArray(ncs.bookmarks)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, ncs.bookmarks);
+                          if (Array.isArray(ncs.lexicon)) backupLexicon = mergeBookmarkListsById(backupLexicon, ncs.lexicon);
+                          if (Array.isArray(ncs.lexiconFolders)) backupFolders = mergeLexiconFoldersLists(backupFolders, ncs.lexiconFolders);
+                          if (ncs.panelState) backupPanelState = mergePanelStatesSafely(ncs.panelState, backupPanelState);
+                        }
+                        if (ncs.presets) backupPresets = mergePresetsStoresSafely(ncs.presets, backupPresets);
+                      }
                       const gsRows = bJson.tables && Array.isArray(bJson.tables.globalSettings) ? bJson.tables.globalSettings : [];
                       const mainGs = gsRows.find((r) => r && r.id === "main") || gsRows[0];
                       if (mainGs && typeof mainGs === "object") {
-                        if (Array.isArray(mainGs.naiBookmarksCollection)) {
-                          backupBookmarks = mergeBookmarkListsById(backupBookmarks, mainGs.naiBookmarksCollection);
+                        if (!hasEstablishedStore) {
+                          if (Array.isArray(mainGs.naiBookmarksCollection)) {
+                            backupBookmarks = mergeBookmarkListsById(backupBookmarks, mainGs.naiBookmarksCollection);
+                          }
+                          if (Array.isArray(mainGs.naiLexiconCollection)) {
+                            backupLexicon = mergeBookmarkListsById(backupLexicon, mainGs.naiLexiconCollection);
+                          }
+                          if (Array.isArray(mainGs.naiLexiconFolders)) {
+                            backupFolders = mergeLexiconFoldersLists(backupFolders, mainGs.naiLexiconFolders);
+                          }
+                          if (mainGs.naiPanelState) backupPanelState = mergePanelStatesSafely(backupPanelState, mainGs.naiPanelState);
                         }
-                        if (Array.isArray(mainGs.naiLexiconCollection)) {
-                          backupLexicon = mergeBookmarkListsById(backupLexicon, mainGs.naiLexiconCollection);
-                        }
-                        if (Array.isArray(mainGs.naiLexiconFolders)) {
-                          backupFolders = mergeLexiconFoldersLists(backupFolders, mainGs.naiLexiconFolders);
-                        }
-                        if (!backupPresets && mainGs.naiPresetsStore) backupPresets = mainGs.naiPresetsStore;
-                        if (!backupPanelState && mainGs.naiPanelState) backupPanelState = mainGs.naiPanelState;
+                        if (mainGs.naiPresetsStore) backupPresets = mergePresetsStoresSafely(backupPresets, mainGs.naiPresetsStore);
                       }
                     }
                   }
                 } catch (_) {}
               }
 
-              // 检查浏览器数据库或缓存里是否还有未迁移的旧残留条目
-              let legacyGs = null;
-              if (!_termuxNaiStoreLoadedOnce && window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
-                try {
-                  legacyGs = await window.db.globalSettings.get("main");
-                } catch (_) {}
-              }
-              const legacyBm = !_termuxNaiStoreLoadedOnce ? mergeBookmarkListsById(
+              // 只有当既没有 Termux 存储也没有独立 IDB 存储时，才从旧缓存迁移一次，绝不让旧缓存把已删除的条目复活
+              const legacyBm = (!hasEstablishedStore && !_termuxNaiStoreLoadedOnce) ? mergeBookmarkListsById(
                 legacyGs && Array.isArray(legacyGs.naiBookmarksCollection) ? legacyGs.naiBookmarksCollection : [],
                 mergeBookmarkListsById(readListFromStorageKey(BOOKMARKS_STORE_KEY), readListFromStorageKey(BOOKMARKS_TEXT_BACKUP_KEY))
               ) : [];
-              const legacyLex = !_termuxNaiStoreLoadedOnce ? mergeBookmarkListsById(
+              const legacyLex = (!hasEstablishedStore && !_termuxNaiStoreLoadedOnce) ? mergeBookmarkListsById(
                 legacyGs && Array.isArray(legacyGs.naiLexiconCollection) ? legacyGs.naiLexiconCollection : [],
                 mergeBookmarkListsById(readListFromStorageKey(LEXICON_STORE_KEY), readListFromStorageKey(LEXICON_TEXT_BACKUP_KEY))
               ) : [];
-              const legacyFolders = !_termuxNaiStoreLoadedOnce ? mergeLexiconFoldersLists(
+              const legacyFolders = (!hasEstablishedStore && !_termuxNaiStoreLoadedOnce) ? mergeLexiconFoldersLists(
                 legacyGs && Array.isArray(legacyGs.naiLexiconFolders) ? legacyGs.naiLexiconFolders : [],
                 readListFromStorageKey(LEXICON_FOLDERS_STORE_KEY) || []
               ) : [];
 
-              let mergedBm = Array.isArray(remoteStore && remoteStore.bookmarks) ? remoteStore.bookmarks : [];
-              mergedBm = mergeBookmarkListsById(mergedBm, backupBookmarks);
-              mergedBm = mergeBookmarkListsById(mergedBm, legacyBm);
+              let mergedBm = [];
+              if (Array.isArray(remoteStore && remoteStore.bookmarks) && Array.isArray(idbData && idbData.bookmarks)) {
+                mergedBm = mergeBookmarkListsById(idbData.bookmarks, remoteStore.bookmarks);
+              } else if (Array.isArray(remoteStore && remoteStore.bookmarks)) {
+                mergedBm = remoteStore.bookmarks.slice();
+              } else if (Array.isArray(idbData && idbData.bookmarks)) {
+                mergedBm = idbData.bookmarks.slice();
+              } else {
+                mergedBm = mergeBookmarkListsById(backupBookmarks, legacyBm);
+              }
               if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
                 mergedBm = mergeBookmarkListsById(memoryBookmarksList, mergedBm);
               }
               mergedBm = filterOutDeletedItems(mergedBm);
 
-              let mergedLex = Array.isArray(remoteStore && remoteStore.lexicon) ? remoteStore.lexicon : [];
-              mergedLex = mergeBookmarkListsById(mergedLex, backupLexicon);
-              mergedLex = mergeBookmarkListsById(mergedLex, legacyLex);
+              let mergedLex = [];
+              if (Array.isArray(remoteStore && remoteStore.lexicon) && Array.isArray(idbData && idbData.lexicon)) {
+                mergedLex = mergeBookmarkListsById(idbData.lexicon, remoteStore.lexicon);
+              } else if (Array.isArray(remoteStore && remoteStore.lexicon)) {
+                mergedLex = remoteStore.lexicon.slice();
+              } else if (Array.isArray(idbData && idbData.lexicon)) {
+                mergedLex = idbData.lexicon.slice();
+              } else {
+                mergedLex = mergeBookmarkListsById(backupLexicon, legacyLex);
+              }
               if (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0) {
                 mergedLex = mergeBookmarkListsById(memoryLexiconList, mergedLex);
               }
               mergedLex = filterOutDeletedItems(mergedLex);
 
-              let mergedFolders = Array.isArray(remoteStore && remoteStore.lexiconFolders) ? remoteStore.lexiconFolders : [];
-              mergedFolders = mergeLexiconFoldersLists(mergedFolders, backupFolders);
-              mergedFolders = mergeLexiconFoldersLists(mergedFolders, legacyFolders);
+              let mergedFolders = [];
+              if (Array.isArray(remoteStore && remoteStore.lexiconFolders)) {
+                mergedFolders = remoteStore.lexiconFolders.slice();
+                if (Array.isArray(idbData && idbData.lexiconFolders)) {
+                  mergedFolders = mergeLexiconFoldersLists(idbData.lexiconFolders, mergedFolders);
+                }
+              } else if (Array.isArray(idbData && idbData.lexiconFolders)) {
+                mergedFolders = idbData.lexiconFolders.slice();
+              } else {
+                mergedFolders = mergeLexiconFoldersLists(backupFolders, legacyFolders);
+              }
               if (Array.isArray(memoryLexiconFoldersList) && memoryLexiconFoldersList.length > 0) {
                 mergedFolders = mergeLexiconFoldersLists(memoryLexiconFoldersList, mergedFolders);
               }
 
               const listFp = (arr) =>
                 Array.isArray(arr)
-                  ? arr.map((x) => (x ? `${x.id || ""}:${x.name || ""}:${x.folder || ""}:${x.image || ""}:${x.coverImage || ""}` : "")).join("|")
+                  ? arr.map((x) => (x ? `${x.id || ""}:${x.name || ""}:${x.folder || ""}:${x.image || ""}:${x.coverImage || ""}:${x.updatedAt || 0}` : "")).join("|")
                   : "";
               const prevBmFp = listFp(memoryBookmarksList);
               const prevLexFp = listFp(memoryLexiconList);
               const prevFolderFp = listFp(memoryLexiconFoldersList);
 
               let gridNeedsRebuild = false;
-              let presetsChanged = false;
               if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList)) {
                 await offloadBookmarkListImagesToTermux(mergedBm);
                 if (listFp(mergedBm) !== prevBmFp) gridNeedsRebuild = true;
                 memoryBookmarksList = mergedBm;
+                writeKeyToNaiIDB("bookmarks", mergedBm);
               }
               if (mergedLex.length > 0 || !Array.isArray(memoryLexiconList)) {
                 await offloadBookmarkListImagesToTermux(mergedLex);
                 if (listFp(mergedLex) !== prevLexFp) gridNeedsRebuild = true;
                 memoryLexiconList = mergedLex;
+                writeKeyToNaiIDB("lexicon", mergedLex);
               }
               if (mergedFolders.length > 0 || !Array.isArray(memoryLexiconFoldersList)) {
                 await offloadFolderListCoversToTermux(mergedFolders);
                 memoryLexiconFoldersList = mergedFolders;
                 const cleanedFolders = loadLexiconFolders();
                 if (listFp(cleanedFolders) !== prevFolderFp) gridNeedsRebuild = true;
+                writeKeyToNaiIDB("lexiconFolders", cleanedFolders);
               }
 
-              const candPresets = (remoteStore && remoteStore.presets) || backupPresets || (legacyGs && legacyGs.naiPresetsStore);
-              if (candPresets && typeof candPresets === "object") {
-                const curP = loadPresetsStore();
-                const localTs = Number(curP.updatedAt || 0);
-                const remoteTs = Number(candPresets.updatedAt || (remoteStore && remoteStore.updatedAt) || 0);
-                if (localTs === 0 || remoteTs > localTs) {
-                  const mergeCategoryPresets = (localArr, remoteArr) => {
-                    const map = new Map();
-                    (Array.isArray(localArr) ? localArr : []).forEach((it) => {
-                      if (it && it.name) map.set(it.name, Object.assign({}, it));
-                    });
-                    (Array.isArray(remoteArr) ? remoteArr : []).forEach((it) => {
-                      if (it && it.name) map.set(it.name, Object.assign(map.get(it.name) || {}, it));
-                    });
-                    return Array.from(map.values());
-                  };
-                  const mergeGroupNames = (localG, remoteG) => {
-                    return Array.from(new Set([...(Array.isArray(localG) ? localG : []), ...(Array.isArray(remoteG) ? remoteG : [])].map((x) => String(x || "").trim()).filter(Boolean)));
-                  };
-                  const candGroups = (candPresets.groups && typeof candPresets.groups === "object") ? candPresets.groups : {};
-                  const curGroups = (curP.groups && typeof curP.groups === "object") ? curP.groups : {};
-                  memoryPresetsStore = {
-                    artist: localTs === 0 ? mergeCategoryPresets(curP.artist, candPresets.artist) : (Array.isArray(candPresets.artist) ? candPresets.artist : curP.artist),
-                    positive: localTs === 0 ? mergeCategoryPresets(curP.positive, candPresets.positive) : (Array.isArray(candPresets.positive) ? candPresets.positive : curP.positive),
-                    negative: localTs === 0 ? mergeCategoryPresets(curP.negative, candPresets.negative) : (Array.isArray(candPresets.negative) ? candPresets.negative : curP.negative),
-                    groups: {
-                      artist: localTs === 0 ? mergeGroupNames(curGroups.artist, candGroups.artist) : (Array.isArray(candGroups.artist) ? candGroups.artist : (curGroups.artist || [])),
-                      positive: localTs === 0 ? mergeGroupNames(curGroups.positive, candGroups.positive) : (Array.isArray(candGroups.positive) ? candGroups.positive : (curGroups.positive || [])),
-                      negative: localTs === 0 ? mergeGroupNames(curGroups.negative, candGroups.negative) : (Array.isArray(candGroups.negative) ? candGroups.negative : (curGroups.negative || []))
-                    },
-                    updatedAt: Math.max(localTs, remoteTs, Date.now())
-                  };
-                  safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
-                  if (window.state && window.state.globalSettings) {
-                    window.state.globalSettings.naiPresetsStore = memoryPresetsStore;
-                  }
-                  presetsChanged = true;
-                }
+              // 5. 选择最新的预设库作为唯一列表基准（绝不把旧备份里已删掉的预设或分组重新加回来），仅对现有同名空值预设补全提示词
+              const countPresetsInStore = (ps) => {
+                if (!ps || typeof ps !== "object") return 0;
+                return (Array.isArray(ps.artist) ? ps.artist.length : 0) +
+                  (Array.isArray(ps.positive) ? ps.positive.length : 0) +
+                  (Array.isArray(ps.negative) ? ps.negative.length : 0);
+              };
+
+              const presetCandidates = [
+                memoryPresetsStore,
+                idbData && idbData.presets,
+                remoteStore && remoteStore.presets,
+                legacyGs && legacyGs.naiPresetsStore
+              ].filter((c) => countPresetsInStore(c) > 0);
+
+              let authoritativePresets = null;
+              if (presetCandidates.length > 0) {
+                presetCandidates.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+                authoritativePresets = normalizePresetsStoreObject(presetCandidates[0]);
+              } else if (backupPresets && countPresetsInStore(backupPresets) > 0) {
+                authoritativePresets = normalizePresetsStoreObject(backupPresets);
+              } else {
+                authoritativePresets = loadPresetsStore();
               }
 
-              const candState = (remoteStore && remoteStore.panelState) || backupPanelState || (legacyGs && legacyGs.naiPanelState);
-              if (candState && typeof candState === "object") {
-                const curSt = loadPanelState();
-                const localStTs = Number(curSt.updatedAt || 0);
-                const remoteStTs = Number(candState.updatedAt || (remoteStore && remoteStore.updatedAt) || 0);
-                if (localStTs === 0 || remoteStTs > localStTs) {
-                  memoryPanelState = Object.assign({}, curSt, candState, {
-                    mode: curSt.mode || candState.mode || "generate",
-                    updatedAt: Math.max(localStTs, remoteStTs)
-                  });
-                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
-                  if (window.state && window.state.globalSettings) {
-                    window.state.globalSettings.naiPanelState = memoryPanelState;
-                  }
-                  const artistEl = document.getElementById("mod-nai-gen-artist-input");
-                  const artist2El = document.getElementById("mod-nai-gen-artist2-input");
-                  const pos1El = document.getElementById("mod-nai-gen-pos1-input");
-                  const pos2El = document.getElementById("mod-nai-gen-pos2-input");
-                  const negEl = document.getElementById("mod-nai-gen-neg-input");
-                  const apiUrlEl = document.getElementById("mod-nai-setting-api-url");
-                  const apiKeyEl = document.getElementById("mod-nai-setting-api-key");
-                  if (artistEl && document.activeElement !== artistEl && memoryPanelState.artistText !== undefined) artistEl.value = memoryPanelState.artistText;
-                  if (artist2El && document.activeElement !== artist2El && memoryPanelState.artist2Text !== undefined) artist2El.value = memoryPanelState.artist2Text;
-                  if (pos1El && document.activeElement !== pos1El && memoryPanelState.pos1Text !== undefined) pos1El.value = memoryPanelState.pos1Text;
-                  if (pos2El && document.activeElement !== pos2El && memoryPanelState.pos2Text !== undefined) pos2El.value = memoryPanelState.pos2Text;
-                  if (negEl && document.activeElement !== negEl && memoryPanelState.negText !== undefined) negEl.value = memoryPanelState.negText;
-                  if (apiUrlEl && document.activeElement !== apiUrlEl && memoryPanelState.customApiUrl !== undefined) apiUrlEl.value = memoryPanelState.customApiUrl;
-                  if (apiKeyEl && document.activeElement !== apiKeyEl && memoryPanelState.customApiKey !== undefined) apiKeyEl.value = memoryPanelState.customApiKey;
-                  presetsChanged = true;
-                } else if (!curSt.lastGeneratedImage && candState.lastGeneratedImage) {
-                  curSt.lastGeneratedImage = candState.lastGeneratedImage;
-                  curSt.lastGeneratedTitle = candState.lastGeneratedTitle || "";
-                  memoryPanelState = curSt;
-                  safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(curSt));
+              // 仅对当前列表中仍然存在但内容为空的预设，从其他来源找回文字，绝不复活任何已删除预设
+              [
+                idbData && idbData.presets,
+                remoteStore && remoteStore.presets,
+                legacyGs && legacyGs.naiPresetsStore,
+                backupPresets
+              ].forEach((fbSource) => {
+                if (fbSource) {
+                  authoritativePresets = fillEmptyPresetValuesFromFallback(authoritativePresets, fbSource);
                 }
-                const finalImg = (memoryPanelState && memoryPanelState.lastGeneratedImage) || curSt.lastGeneratedImage;
-                const finalTitle = (memoryPanelState && memoryPanelState.lastGeneratedTitle) || curSt.lastGeneratedTitle;
-                if (finalImg) {
-                  const genResultImg = document.getElementById("mod-nai-gen-result-img");
-                  const genPlaceholder = document.getElementById("mod-nai-gen-placeholder");
-                  const genStatusText = document.getElementById("mod-nai-gen-status-text");
-                  if (genResultImg && (!genResultImg.getAttribute("src") || genResultImg.style.display === "none")) {
-                    if (finalImg.startsWith("vault://")) {
-                      genResultImg.setAttribute("data-vault-ref", finalImg);
-                    }
-                    bindNaiVaultAwareImage(genResultImg, finalImg);
-                    genResultImg.style.display = "block";
-                    if (genPlaceholder) genPlaceholder.style.display = "none";
-                    if (genStatusText && finalTitle) {
-                      genStatusText.textContent = finalTitle;
-                    }
-                  }
-                }
+              });
+
+              memoryPresetsStore = authoritativePresets;
+              writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
+              if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
+                window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
               }
 
+              // 6. 安全合并面板与设置状态（模型 V5、尺寸、主题、生图地址、密钥、选中预设及提示词）
+              let mergedState = loadPanelState();
+              if (idbData && idbData.panelState) {
+                const iTs = Number(idbData.panelState.updatedAt || 0);
+                const mTs = Number(mergedState.updatedAt || 0);
+                mergedState = iTs >= mTs
+                  ? mergePanelStatesSafely(idbData.panelState, mergedState)
+                  : mergePanelStatesSafely(mergedState, idbData.panelState);
+              }
+              if (legacyGs && legacyGs.naiPanelState) {
+                const gTs = Number(legacyGs.naiPanelState.updatedAt || 0);
+                const mTs = Number(mergedState.updatedAt || 0);
+                mergedState = gTs > mTs
+                  ? mergePanelStatesSafely(legacyGs.naiPanelState, mergedState)
+                  : mergePanelStatesSafely(mergedState, legacyGs.naiPanelState);
+              }
+              if (remoteStore && remoteStore.panelState) {
+                const rTs = Number(remoteStore.panelState.updatedAt || remoteStore.updatedAt || 0);
+                const mTs = Number(mergedState.updatedAt || 0);
+                mergedState = rTs > mTs
+                  ? mergePanelStatesSafely(remoteStore.panelState, mergedState)
+                  : mergePanelStatesSafely(mergedState, remoteStore.panelState);
+              }
+              if (backupPanelState) {
+                mergedState = mergePanelStatesSafely(mergedState, backupPanelState);
+              }
+
+              memoryPanelState = mergedState;
+              writeKeyToNaiIDB("panelState", Object.assign({}, memoryPanelState));
+              if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
+                window.state.globalSettings.naiPanelState = Object.assign({}, memoryPanelState);
+              }
+
+              _naiHydrationCompleted = true;
               _termuxNaiStoreLoadedOnce = true;
+
+              applyPanelStateAndPresetsToDom(memoryPanelState, memoryPresetsStore);
+              renderPresetSelectOptions();
+              updateHeaderSummary();
+              computeActiveArtistPrompt();
+              computeActivePositivePrompt();
 
               if (legacyBm.length > 0 || legacyLex.length > 0 || backupBookmarks.length > 0 || backupLexicon.length > 0 || !remoteStore) {
                 await persistNaiStoreToTermux(false);
-              } else if (remoteStore) {
+              } else {
                 syncLightweightNaiMetadataBackup();
                 purgeBrowserDuplicateNaiCopies();
               }
 
               preloadAllNaiCollectionVaultImages();
 
-              if (presetsChanged) {
-                renderPresetSelectOptions();
-              }
               if (gridNeedsRebuild) {
                 renderCollectionGrid(true);
               }
@@ -49730,6 +50022,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               presets: loadPresetsStore(),
               panelState: loadPanelState(),
               deletedIds: Array.from(getDeletedIdsSet()),
+              deletedPresetKeys: Array.from(getDeletedPresetKeysSet())
             };
           };
 
@@ -49750,7 +50043,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 naiStore.deletedIds.forEach((id) => {
                   if (id && typeof id === "string") delSet.add(id);
                 });
-                safeNaiLocalSetItem(DELETED_IDS_KEY, JSON.stringify(Array.from(delSet)));
+                writeKeyToNaiIDB("deletedIds", Array.from(delSet));
               }
 
               let inBm = [];
@@ -49798,14 +50091,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (inBm.length > 0) {
                 const curBm = Array.isArray(memoryBookmarksList) ? memoryBookmarksList : [];
                 memoryBookmarksList = filterOutDeletedItems(mergeBookmarkListsById(curBm, inBm));
+                writeKeyToNaiIDB("bookmarks", memoryBookmarksList);
               }
               if (inLex.length > 0) {
                 const curLex = Array.isArray(memoryLexiconList) ? memoryLexiconList : [];
                 memoryLexiconList = filterOutDeletedItems(mergeBookmarkListsById(curLex, inLex));
+                writeKeyToNaiIDB("lexicon", memoryLexiconList);
               }
               if (inFolders.length > 0) {
                 const curF = Array.isArray(memoryLexiconFoldersList) ? memoryLexiconFoldersList : [];
                 memoryLexiconFoldersList = mergeLexiconFoldersLists(curF, inFolders);
+                writeKeyToNaiIDB("lexiconFolders", memoryLexiconFoldersList);
               }
 
               let inPresets = (naiStore && naiStore.presets) || (gs && gs.naiPresetsStore) || null;
@@ -49816,26 +50112,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               if (inPresets && typeof inPresets === "object") {
                 const curP = loadPresetsStore();
-                const mergeCat = (a, b) => {
-                  const m = new Map();
-                  (Array.isArray(b) ? b : []).forEach((it) => { if (it && it.name) m.set(it.name, Object.assign({}, it)); });
-                  (Array.isArray(a) ? a : []).forEach((it) => { if (it && it.name) m.set(it.name, Object.assign(m.get(it.name) || {}, it)); });
-                  return Array.from(m.values());
-                };
-                const mergeGrp = (a, b) => Array.from(new Set([...(Array.isArray(b) ? b : []), ...(Array.isArray(a) ? a : [])].map((x) => String(x || "").trim()).filter(Boolean)));
-                const cg = (curP.groups && typeof curP.groups === "object") ? curP.groups : {};
-                const ig = (inPresets.groups && typeof inPresets.groups === "object") ? inPresets.groups : {};
-                memoryPresetsStore = {
-                  artist: mergeCat(curP.artist, inPresets.artist),
-                  positive: mergeCat(curP.positive, inPresets.positive),
-                  negative: mergeCat(curP.negative, inPresets.negative),
-                  groups: {
-                    artist: mergeGrp(cg.artist, ig.artist),
-                    positive: mergeGrp(cg.positive, ig.positive),
-                    negative: mergeGrp(cg.negative, ig.negative),
-                  },
-                };
-                safeNaiLocalSetItem(PRESETS_STORE_KEY, JSON.stringify(memoryPresetsStore));
+                savePresetsStore(mergePresetsStoresSafely(curP, inPresets));
               }
 
               let inPanel = (naiStore && naiStore.panelState) || (gs && gs.naiPanelState) || null;
@@ -49845,23 +50122,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 } catch (_) {}
               }
               if (inPanel && typeof inPanel === "object") {
-                memoryPanelState = Object.assign({}, loadPanelState(), inPanel);
-                safeNaiLocalSetItem(PANEL_STATE_KEY, JSON.stringify(memoryPanelState));
+                savePanelState(mergePanelStatesSafely(inPanel, loadPanelState()));
               }
 
+              _naiHydrationCompleted = true;
+              applyPanelStateAndPresetsToDom(loadPanelState(), loadPresetsStore());
               await persistNaiStoreToTermux(false);
               renderPresetSelectOptions();
               renderSettingsPresetDrawers();
               renderCollectionGrid();
+              updateHeaderSummary();
             } catch (_) {}
           };
 
-          function hydrateModuleNaiFromDbIfNeeded() {
+          async function hydrateModuleNaiFromDbIfNeeded() {
+            await loadNaiStoreFromTermux();
             if (typeof window.openModuleNaiPanel === "function") {
               window.openModuleNaiPanel();
             }
-            loadNaiStoreFromTermux();
-            setTimeout(loadNaiStoreFromTermux, 500);
+            setTimeout(loadNaiStoreFromTermux, 600);
             setTimeout(loadNaiStoreFromTermux, 1800);
           }
 

@@ -578,7 +578,7 @@
   const ModuleManager = {
     version: '2.9.0',
     currentStep: 1,
-    activeSubPanel: 'library',
+    activeSubPanel: (typeof window !== 'undefined' && window._lastModuleActiveSubPanel) || (function() { try { return localStorage.getItem('ephone_module_active_subpanel_v1') || 'library'; } catch (_) { return 'library'; } })(),
     activeSubTab: 'chapters',
     cutExecutionMode: 'batch',
     mergeFileList: [],
@@ -790,7 +790,9 @@
     applyDraft(draft) {
       if (!draft || !draft.currentParsedData) return false;
       this.currentStep = draft.currentStep || 1;
-      this.activeSubPanel = draft.activeSubPanel || 'wizard';
+      let savedSubPanel = '';
+      try { savedSubPanel = localStorage.getItem('ephone_module_active_subpanel_v1') || ''; } catch (_) {}
+      this.activeSubPanel = savedSubPanel || (typeof window !== 'undefined' && window._lastModuleActiveSubPanel) || draft.activeSubPanel || this.activeSubPanel || 'library';
       this.activeSubTab = draft.activeSubTab || 'chapters';
       this.cutExecutionMode = draft.cutExecutionMode || 'batch';
       this.batchSegmentsCompleted = typeof draft.batchSegmentsCompleted === 'number' ? draft.batchSegmentsCompleted : 0;
@@ -848,7 +850,7 @@
         this.setWizardStep(1);
       }
 
-      this.activeSubPanel = draft.activeSubPanel || this.activeSubPanel || 'library';
+      this.activeSubPanel = savedSubPanel || (typeof window !== 'undefined' && window._lastModuleActiveSubPanel) || draft.activeSubPanel || this.activeSubPanel || 'library';
       return true;
     },
 
@@ -1660,8 +1662,15 @@
       this.saveDraft();
     },
 
-    switchSubPanel(panelName) {
+    switchSubPanel(panelName, isDirectTabClick) {
+      const prevSubPanel = this.activeSubPanel;
       this.activeSubPanel = panelName;
+      if (typeof window !== 'undefined') {
+        window._lastModuleActiveSubPanel = panelName;
+      }
+      try {
+        localStorage.setItem('ephone_module_active_subpanel_v1', panelName);
+      } catch (_) {}
       const wizardPanel = document.getElementById('module-wizard-panel');
       const libraryPanel = document.getElementById('module-library-panel');
       const workshopPanel = document.getElementById('module-workshop-panel');
@@ -1707,7 +1716,7 @@
         if (workshopPanel) workshopPanel.style.display = 'none';
         if (naiPanel) naiPanel.style.display = 'flex';
         if (typeof window.openModuleNaiPanel === 'function') {
-          window.openModuleNaiPanel(true);
+          window.openModuleNaiPanel(Boolean(isDirectTabClick && prevSubPanel === 'nai'));
         }
       } else {
         if (wizardPanel) wizardPanel.style.display = 'flex';
@@ -12102,7 +12111,7 @@ ${chaptersDigest}
       const tabs = document.querySelectorAll('.module-header-tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-          this.switchSubPanel(tab.dataset.tab);
+          this.switchSubPanel(tab.dataset.tab, true);
         });
       });
 
@@ -15743,19 +15752,25 @@ ${cp.roughEndingText || ''}
 
   async function renderModulesScreen() {
     console.log('[模组] 渲染模组主界面');
+    let savedSubPanel = '';
+    try {
+      savedSubPanel = localStorage.getItem('ephone_module_active_subpanel_v1') || '';
+    } catch (_) {}
+    const targetSubPanel = savedSubPanel || (typeof window !== 'undefined' && window._lastModuleActiveSubPanel) || ModuleManager.activeSubPanel || 'library';
+    ModuleManager.activeSubPanel = targetSubPanel;
     if (!ModuleManager.currentParsedData) {
       const loadedSync = ModuleManager.loadDraft();
       if (!loadedSync) {
         const loadedAsync = await ModuleManager.loadDraftAsync();
         if (!loadedAsync) {
           ModuleManager.resetImportUI();
-          ModuleManager.switchSubPanel('library');
+          ModuleManager.switchSubPanel(targetSubPanel, false);
           ModuleManager.setWizardStep(1);
           return;
         }
       }
     }
-    ModuleManager.switchSubPanel(ModuleManager.activeSubPanel || 'library');
+    ModuleManager.switchSubPanel(targetSubPanel, false);
     ModuleManager.setWizardStep(ModuleManager.currentStep || 1);
     if (ModuleManager.currentStep === 3) {
       if (ModuleManager.isCuttingRunning) {
