@@ -14518,7 +14518,99 @@ ${chaptersDigest}
         })
         .join('\n');
 
+      text = this.stripChapterOpeningSummary(text);
+
       return text.trim();
+    },
+
+    stripChapterOpeningSummary(rawText) {
+      if (!rawText || typeof rawText !== 'string') return '';
+      const lines = rawText.split('\n');
+      const out = [];
+      let inOpeningZone = true;
+      let skippingSummaryBlock = false;
+      let nonEmptySeen = 0;
+
+      const summaryHeaderRe = /^(?:[\[【▍#*\-\s]*)(?:本章简介|本章概要|本章内容|本章主要内容|本章大纲|本章概述|本章导读|本章目标|本章要点|本章总结|本章核心事件|本章流程|本章看点|本节简介|本节概要|本节内容|章节简介|章节概要|章节导读|章节内容|剧情简介|剧情概要|场景简介|场景概要|前文衔接与起因|核心事件与调查地点|人物行动与对话分支|推进至下一章的事件|本卷拓写重点|本章拓写重点|AI3\s*分配给本章|本章专属拓写任务)(?:[\]】\s:：—\-]|$)/i;
+      const summaryIntroSentenceRe = /^(?:[\[【▍#*\-\s]*)(?:本章主要(?:讲述|围绕|描写|包含|分为|内容)|在本章中[，,]|本章节?(?:讲述|围绕|包含|主要内容|核心内容|将展开)|本章剧情(?:概述|简介|概要|要点)|以下为本章(?:内容|要点|流程))/i;
+      const numberedOutlineItemRe = /^(?:[1-9]\s*[.、．)）]|[一二三四五六七八九]\s*[、.．)）]|[\[【(（][1-9一二三四五六七八九][\]】)）])\s*\S+/;
+      const realModuleContentRe = /^(?:【正文】|【KP信息】|【检定】|▼|・当|·当)/;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          if (skippingSummaryBlock) {
+            let nextNonEmpty = '';
+            for (let j = i + 1; j < lines.length; j++) {
+              if (lines[j].trim()) {
+                nextNonEmpty = lines[j].trim();
+                break;
+              }
+            }
+            if (!numberedOutlineItemRe.test(nextNonEmpty) && !summaryHeaderRe.test(nextNonEmpty) && !summaryIntroSentenceRe.test(nextNonEmpty)) {
+              skippingSummaryBlock = false;
+            }
+            continue;
+          }
+          out.push(line);
+          continue;
+        }
+
+        if (/^(?:【正文】|【KP信息】)$/.test(trimmed)) {
+          out.push(line);
+          continue;
+        }
+
+        nonEmptySeen++;
+        if (nonEmptySeen > 22 || /^▼/.test(trimmed) || /^[・·]当/.test(trimmed)) {
+          inOpeningZone = false;
+          skippingSummaryBlock = false;
+        }
+
+        if (summaryHeaderRe.test(trimmed)) {
+          if (inOpeningZone) {
+            skippingSummaryBlock = true;
+          }
+          continue;
+        }
+
+        if (inOpeningZone && summaryIntroSentenceRe.test(trimmed)) {
+          skippingSummaryBlock = true;
+          continue;
+        }
+
+        if (skippingSummaryBlock) {
+          if (realModuleContentRe.test(trimmed)) {
+            skippingSummaryBlock = false;
+          } else if (numberedOutlineItemRe.test(trimmed) || /^[-*·•]\s+/.test(trimmed) || trimmed.length < 140) {
+            continue;
+          } else {
+            skippingSummaryBlock = false;
+          }
+        }
+
+        if (inOpeningZone && nonEmptySeen <= 8 && numberedOutlineItemRe.test(trimmed)) {
+          let consecutiveNumbered = 1;
+          for (let j = i + 1; j < Math.min(lines.length, i + 8); j++) {
+            const nt = lines[j].trim();
+            if (!nt) continue;
+            if (numberedOutlineItemRe.test(nt)) consecutiveNumbered++;
+            else break;
+          }
+          if (consecutiveNumbered >= 2) {
+            skippingSummaryBlock = true;
+            continue;
+          }
+        }
+
+        out.push(line);
+      }
+
+      let joined = out.join('\n').trim();
+      joined = joined.replace(/^【KP信息】\s*(?=【正文】)/, '').trim();
+      return joined;
     },
 
     salvageAi1BlueprintFromRaw(rawText, fallbackTitle = '') {
@@ -14784,7 +14876,7 @@ ${chaptersDigest}
       return batches;
     },
 
-    // 解析单次 AI3 初稿输出，提取其撰写的详细初稿以及它为 AI4 决定的拓写拆章调用方案
+    // 解析单次 AI3 初稿输出，提取其撰写的详细初稿以及它为 AI4 决定的拓写拆章方案（AI4 每 3 章调用 1 次 API）
     parseAi3BatchDraftAndExpansion(rawText, batchObj, lengthMode = 'medium') {
       const cleaned = this.cleanModuleChapterOutput(String(rawText || ''));
       const fallbackScenes = Array.isArray(batchObj?.scenes) ? batchObj.scenes : [];
@@ -14800,7 +14892,7 @@ ${chaptersDigest}
         planLines = rawPlanText
           .split('\n')
           .map(l => l.replace(/^[-*·\d.、\s]+/, '').trim())
-          .filter(l => l.length >= 4 && !/^===/.test(l));
+          .filter(l => l.length >= 4 && !/^===/.test(l) && !/^(?:本批规划AI4章节数|AI4调用次数|对应AI4调用次数)/i.test(l));
       }
       if (bodyMatch && bodyMatch[1] && bodyMatch[1].trim().length > 100) {
         draftBody = bodyMatch[1].trim();
@@ -14808,13 +14900,15 @@ ${chaptersDigest}
         draftBody = cleaned.replace(planMatch[0], '').replace(/===\s*本批初稿正文\s*===/i, '').trim();
       }
 
+      draftBody = this.stripChapterOpeningSummary(draftBody);
+
       const ai4TasksFromBatch = [];
       planLines.forEach((line) => {
         const parts = line.split(/[｜|：:——-]+/).map(s => s.trim()).filter(Boolean);
         if (parts.length >= 2) {
           const chTitle = parts[0].replace(/^[\[【(（]|[\]】)）]$/g, '').trim();
           const chEvents = parts.slice(1).join('：').trim();
-          if (chTitle) {
+          if (chTitle && !/^(?:本批规划|章节总数|调用次数)/.test(chTitle)) {
             ai4TasksFromBatch.push({
               chapterTitle: chTitle,
               expandBlueprint: chEvents,
@@ -14825,27 +14919,27 @@ ${chaptersDigest}
         }
       });
 
-      // 若 AI3 未按标记行输出足够的拆章项，则根据本批细纲自动构建逐级拓写任务（中长篇自动将大章拆细为更多子章）
+      // 若 AI3 未按标记行输出足够的拆章项，则根据本批细纲自动构建拓写任务
       if (ai4TasksFromBatch.length === 0) {
         fallbackScenes.forEach((sc, idx) => {
           const baseTitle = sc.sceneTitle || `第${idx + 1}章`;
           const baseBlueprint = [
-            `【前文衔接与起因】：${sc.atmosphereCues || sc.pacingNote || ''}`,
-            `【核心事件与调查地点】：${sc.cluesOrEvents || sc.purpose || ''}`,
-            `【人物行动与对话分支】：${sc.kpcInteractionDesign || ''}`,
-            `【推进至下一章的事件】：${sc.pacingRule || ''}`
-          ].join('\n');
+            sc.atmosphereCues || sc.pacingNote || '',
+            sc.cluesOrEvents || sc.purpose || '',
+            sc.kpcInteractionDesign || '',
+            sc.pacingRule || ''
+          ].filter(Boolean).join('；');
 
           if (lengthMode === 'long' || (lengthMode === 'medium' && fallbackScenes.length <= 5 && idx % 2 === 1)) {
             ai4TasksFromBatch.push({
               chapterTitle: `${baseTitle}·上`,
-              expandBlueprint: `${baseBlueprint}\n【本卷拓写重点】：重点展开进入该场景的起因、前半段空间探索、前两处▼调查点与物证发现、以及与人物的初步事件交锋。`,
+              expandBlueprint: `${baseBlueprint}。重点写进入场景的具体事件起因、前半段区域调查点▼与物证发现、以及人物初步行动交锋。`,
               sourceBatchIndex: batchObj.batchIndex,
               sourceBatchDraft: draftBody
             });
             ai4TasksFromBatch.push({
               chapterTitle: `${baseTitle}·下`,
-              expandBlueprint: `${baseBlueprint}\n【本卷拓写重点】：紧接上卷，深入展开后半段突发事件、深层线索揭露、核心行动冲突与迈向下一阶段的转折。`,
+              expandBlueprint: `${baseBlueprint}。紧接上篇深入展开后半段突发事件、深层线索揭露、核心行动冲突与迈向下一阶段的转折。`,
               sourceBatchIndex: batchObj.batchIndex,
               sourceBatchDraft: draftBody
             });
@@ -14862,8 +14956,125 @@ ${chaptersDigest}
 
       return {
         draftText: draftBody,
-        ai4Tasks: ai4TasksFromBatch
+        ai4Tasks: ai4TasksFromBatch,
+        ai4CallCount: Math.max(1, Math.ceil(ai4TasksFromBatch.length / 3))
       };
+    },
+
+    // 解析 AI4 单次调用输出的多个章节（每次调用最多输出 3 章），拆分为独立章节并清除任何开头总结
+    parseAi4MultiChapterOutput(rawText, batchTasks, boundarySuffix) {
+      const cleanedFull = this.cleanModuleChapterOutput(String(rawText || ''));
+      const tasks = Array.isArray(batchTasks) ? batchTasks : [];
+      if (tasks.length === 0) return [];
+
+      const finalizeSingleChapter = (textChunk) => {
+        let ch = String(textChunk || '')
+          .replace(/^===\s*章节(?:分割)?[^=\n]*===\s*/gim, '')
+          .trim();
+        ch = this.cleanModuleChapterOutput(ch);
+        ch = this.stripChapterOpeningSummary(ch);
+        if (!ch) return '';
+        const boundaryClean = boundarySuffix.trim();
+        if (boundaryClean && ch.includes('至此本小章节结束')) {
+          ch = ch.replace(/\n*至此本小章节结束[^\n]*/g, '').trim();
+        }
+        if (!ch.includes('【正文】') && !ch.includes('【KP信息】')) {
+          ch = `【正文】\n${ch}`;
+        }
+        ch = `${ch.trim()}${boundarySuffix}`;
+        return ch;
+      };
+
+      if (tasks.length === 1) {
+        const singleContent = finalizeSingleChapter(cleanedFull);
+        return [{
+          title: tasks[0].chapterTitle || '第1章',
+          content: singleContent
+        }];
+      }
+
+      let rawSegments = [];
+
+      // 策略1：按 ===章节分割：...=== 标记切分
+      const splitMarkerRegex = /===\s*章节(?:分割)?\s*[:：]?\s*([^=\n]*?)\s*===/gi;
+      const markerMatches = [...cleanedFull.matchAll(splitMarkerRegex)];
+      if (markerMatches.length >= tasks.length) {
+        for (let i = 0; i < tasks.length; i++) {
+          const startPos = markerMatches[i].index + markerMatches[i][0].length;
+          const endPos = (i + 1 < markerMatches.length) ? markerMatches[i + 1].index : cleanedFull.length;
+          rawSegments.push(cleanedFull.slice(startPos, endPos).trim());
+        }
+      } else if (markerMatches.length > 0) {
+        const parts = cleanedFull.split(/===\s*章节(?:分割)?[^=\n]*===/i).map(s => s.trim()).filter(l => l.length > 30);
+        if (parts.length === tasks.length) {
+          rawSegments = parts;
+        }
+      }
+
+      // 策略2：若标记不足，按各章标题在文本中的出现位置顺序切分
+      if (rawSegments.length !== tasks.length) {
+        const escapeRx = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const positions = [];
+        let searchFrom = 0;
+        for (let i = 0; i < tasks.length; i++) {
+          const tTitle = String(tasks[i].chapterTitle || '').trim();
+          if (!tTitle) continue;
+          const rx = new RegExp(`(?:^|\\n)\\s*(?:===|# +|▍\\s*|【)?(?:章节(?:分割)?\\s*[:：]\\s*)?${escapeRx(tTitle)}(?:】|\\s*===)?\\s*(?:\\n|$)`, 'i');
+          const sub = cleanedFull.slice(searchFrom);
+          const m = sub.match(rx);
+          if (m && typeof m.index === 'number') {
+            const absIdx = searchFrom + m.index;
+            positions.push({ taskIdx: i, start: absIdx, bodyStart: absIdx + m[0].length });
+            searchFrom = absIdx + m[0].length + 60;
+          }
+        }
+        if (positions.length === tasks.length) {
+          rawSegments = positions.map((pos, idx) => {
+            const end = (idx + 1 < positions.length) ? positions[idx + 1].start : cleanedFull.length;
+            return cleanedFull.slice(pos.bodyStart, end).trim();
+          });
+        }
+      }
+
+      // 策略3：若仍不足 tasks.length 段，则按自然段落比例均衡切分，确保每一章都有完整正文
+      if (rawSegments.length !== tasks.length) {
+        const paragraphs = cleanedFull.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+        if (paragraphs.length >= tasks.length) {
+          rawSegments = [];
+          const totalChars = cleanedFull.length;
+          const targetPerTask = Math.floor(totalChars / tasks.length);
+          let curBucket = [];
+          let curLen = 0;
+          for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+            curBucket.push(paragraphs[pIdx]);
+            curLen += paragraphs[pIdx].length;
+            const remainingTasks = tasks.length - rawSegments.length - 1;
+            const remainingParas = paragraphs.length - pIdx - 1;
+            if (remainingTasks > 0 && (curLen >= targetPerTask || remainingParas <= remainingTasks)) {
+              rawSegments.push(curBucket.join('\n\n'));
+              curBucket = [];
+              curLen = 0;
+            }
+          }
+          if (curBucket.length > 0) {
+            if (rawSegments.length < tasks.length) {
+              rawSegments.push(curBucket.join('\n\n'));
+            } else if (rawSegments.length > 0) {
+              rawSegments[rawSegments.length - 1] += '\n\n' + curBucket.join('\n\n');
+            }
+          }
+        } else {
+          rawSegments = tasks.map((_, idx) => (idx === 0 ? cleanedFull : ''));
+        }
+      }
+
+      return tasks.map((t, idx) => {
+        const seg = rawSegments[idx] || '';
+        return {
+          title: t.chapterTitle || `第${idx + 1}章`,
+          content: finalizeSingleChapter(seg)
+        };
+      });
     },
 
     async runAiModulePipeline(isResume = false) {
@@ -14970,8 +15181,9 @@ ${chaptersDigest}
    - 每一章都必须往前推演具体的故事：去了哪个新地点、发现了什么异常现象或尸体/物证、遇到了哪位NPC、打开了哪扇锁住的门、触发了什么突发危机、解开了哪一条核心线索。人物之间的感情升温或冲突，必须建立在共同行动、共同破局的具体事件之上。
 3. 思考正常人走进场景的真实反应，用具体的事件动静推动探索：
    - 调查员到达一个场景时，要有实实在在的动静或切身原因吸引他去调查，比如走廊尽头传来的声响、桌上未写完的信件、停摆的钟表、必须找到的钥匙或出路。
-4. 排版干净纯粹：
-   - 使用【正文】写公开场景描写、具体发生的事件与自然台词；使用【KP信息】写客观事实、机关真相与事件触发条件；使用【检定】写技能检定与成败结果；使用「▼具体地点或物品」列出可调查区域；使用「・当调查员……时 → 角色具体行动与台词」写互动分支。
+4. 排版干净纯粹，绝对禁止在章节开头写简介或一二三总结：
+   - 严禁在每一章的开头写任何「本章简介」「本章概要」「本章内容」「本章主要内容」「本章导读」「本章大纲」或者「本章内容：1. …… 2. …… 3. ……」之类的总结清单！那些一二三的要点你自己心里知道就行了，绝对不要写进模组正文当中，否则带团时AI看到开头的总结就会一直剧透提起后面的事。
+   - 普通模组怎么写你就怎么写：每一章一开头就直接进入【正文】的具体场景描写、当下发生的动静与事件，接着写「▼具体地点或物品」可调查区域、【检定】要求与「・当调查员……时 → 角色具体行动与台词」；【KP信息】只客观写具体机关真相与触发规则。
    - 不要添加星号 * 或场外括号注解，不要画流程图代码，不要设计带团AI无法执行的暗中检定。若有累计次数的互动环节，在【KP信息】中客观注明使用 [计数:名称+1] 与结算后 [计数:名称 清除]。`;
 
         // ==========================================================
@@ -15184,17 +15396,17 @@ ${JSON.stringify({
         }
 
         // ==========================================================
-        // 第三阶段：AI3 初稿（按 AI2 决定的批次调用，写出详细剧情初稿，并由 AI3 决定 AI4 要拆分成几章、调用几次进行拓写）
+        // 第三阶段：AI3 初稿（按 AI2 决定的批次调用，写出详细剧情初稿，并由 AI3 规划 AI4 章节数及除以 3 后的 AI4 调用次数）
         // ==========================================================
         cp.activeStep = 3;
         this.setAiWriterStepActive(3);
 
         const ai3DraftSystem = `你是一位文笔扎实、擅长写丰富具体剧情事件的人类跑团模组作者。
-现在是【AI3 分批撰写详细初稿 + 规划 AI4 拓写拆章】阶段。
+现在是【AI3 分批撰写详细初稿 + 规划 AI4 拓写章节数与调用次数】阶段。
 ${craftPhilosophy}
 你在每次调用中必须完成两件事：
-第一件事：在【===AI4拓写拆章规划===】区块中，根据本批次剧情的丰富程度，决定接下来的 AI4 定稿阶段要把本批次初稿进一步拆解、拓写成哪几个独立章节（每一行代表 AI4 的一次独立拓写调用，格式为「章节标题｜本章具体展开的剧情事件、探索地点与线索细节」）。如果本批有 3 章初稿，你可以根据剧情容量将其拆解拓写为 4 至 6 个更细致的章节交由 AI4 逐一扩写！
-第二件事：在【===本批初稿正文===】区块中，详实写出本批次所有章节的完整初稿，把每一章的具体事件起因、空间环境、▼可调查位置、【检定】与线索、NPC与同伴的具体行动和自然对话全部写出来。严禁在初稿中写任何教AI怎么演戏或怎么渲染绝望偏执的说教词，也严禁写原地干聊拉扯。`;
+第一件事：在【===AI4拓写拆章规划===】区块中，根据本批次剧情的丰富程度，决定接下来的 AI4 定稿阶段要把本批次初稿拆解、拓写成哪几个独立章节。由于 AI4 单次调用最多可输出五至六万字，AI4 将采用「每 3 个章节合并调用 1 次 API」的方式执行，即 AI4 的调用次数等于规划的章节总数除以 3 向上取整！请在第一行写明本批规划章节数与除以 3 后的调用次数，随后每行写一个章节标题与内部构思要点。
+第二件事：在【===本批初稿正文===】区块中，详实写出本批次所有章节的完整初稿，直接从具体场景环境与发生的事件写起，严禁在章节开头写「本章简介」「本章内容一二三」等剧透式总结，也严禁写教AI怎么演戏的说教词。`;
 
         const startBatchIdx = typeof cp.completedAi3BatchCount === 'number' ? cp.completedAi3BatchCount : 0;
         let prevBatchTail = startBatchIdx > 0 && cp.roughBatchDrafts[startBatchIdx - 1]
@@ -15207,15 +15419,15 @@ ${craftPhilosophy}
           const progressPct = 30 + Math.round(((bIdx + 1) / (ai3Batches.length + 1)) * 28);
           this.updateAiWriterStatus(
             progressPct,
-            `AI3 初稿（第 ${bIdx + 1} / ${ai3Batches.length} 批）：正在撰写《${batchObj.batchTitle}》详细初稿并规划 AI4 拓写章节...`
+            `AI3 初稿第 ${bIdx + 1} / ${ai3Batches.length} 批：正在撰写《${batchObj.batchTitle}》初稿并计算 AI4 章节数除以 3 的调用次数...`
           );
           await this.saveAiWriterDraftToIDB();
 
           const expandTargetHint = lengthMode === 'short'
-            ? `建议将本批次的 ${batchScenes.length} 章初稿规划为 ${Math.max(batchScenes.length, batchScenes.length + 1)} 个 AI4 拓写章节`
+            ? `建议将本批次的 ${batchScenes.length} 章初稿规划为 3 个 AI4 拓写章节，除以 3 后对应 1 次 AI4 接口调用`
             : (lengthMode === 'long'
-              ? `建议将本批次的 ${batchScenes.length} 章初稿进一步拆细拓写为 ${Math.max(batchScenes.length + 1, batchScenes.length * 2)} 个饱含具体剧情事件的 AI4 拓写章节`
-              : `建议将本批次的 ${batchScenes.length} 章初稿进一步拆细拓写为 ${Math.max(batchScenes.length + 1, Math.round(batchScenes.length * 1.6))} 个饱含具体剧情事件的 AI4 拓写章节`);
+              ? `建议将本批次的 ${batchScenes.length} 章初稿进一步拆细拓写为 6 个饱含具体剧情事件的 AI4 拓写章节，除以 3 后对应 2 次 AI4 接口调用`
+              : `建议将本批次的 ${batchScenes.length} 章初稿进一步拆细拓写为 3 至 6 个饱含具体剧情事件的 AI4 拓写章节，每 3 章调用 1 次 AI4 接口`);
 
           const ai3BatchUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
@@ -15225,7 +15437,7 @@ ${craftPhilosophy}
 ${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
 
 当前为 AI3 初稿阶段的第 ${bIdx + 1} / ${ai3Batches.length} 次调用：【${batchObj.batchTitle}】
-${prevBatchTail ? '上一批初稿结尾回顾（请自然承接此处的剧情事件）：\n' + prevBatchTail + '\n' : '这是模组的第一批初稿，请从具体的事件起因与真实场景切入。\n'}
+${prevBatchTail ? '上一批初稿结尾回顾：\n' + prevBatchTail + '\n' : '这是模组的第一批初稿，请直接从具体的事件起因与真实场景切入。\n'}
 
 本批次需要撰写的章节细纲列表：
 ${batchScenes.map((sc, idx) => [
@@ -15236,15 +15448,16 @@ ${batchScenes.map((sc, idx) => [
   `- 迈向下一章的触发事件：${sc.pacingRule || ''}`
 ].join('\n')).join('\n\n')}
 
-请严格按以下两个区块的格式输出（${expandTargetHint}，每一行将对应一次 AI4 深度拓写调用）：
+请严格按以下两个区块的格式输出（${expandTargetHint}）：
 
 ===AI4拓写拆章规划===
-章节标题1｜该章要详写的具体事件、具体调查地点▼、物证线索与人物行动推进
-章节标题2｜该章要详写的具体事件、具体调查地点▼、物证线索与人物行动推进
-...
+本批规划AI4章节数：X章｜除以3对应AI4调用次数：Y次
+章节标题1｜供AI4内部参考的本章具体事件、调查地点▼、物证线索与人物行动推进
+章节标题2｜供AI4内部参考的本章具体事件、调查地点▼、物证线索与人物行动推进
+章节标题3｜供AI4内部参考的本章具体事件、调查地点▼、物证线索与人物行动推进
 
 ===本批初稿正文===
-（在此处详实写出本批次每一章的完整初稿，包含【正文】场景与具体事件推进、▼可调查位置、【检定】、人物自然台词互动、以及客观说明事实与规则的【KP信息】）`;
+在此处详实写出本批次每一章的完整初稿，直接进入【正文】场景描写与具体事件、▼可调查位置、【检定】、人物自然台词互动与客观【KP信息】，严禁在任何章节开头写本章简介或一二三内容总结`;
 
           const roughBatchRaw = await this.callAI(ai3DraftSystem, ai3BatchUser, null, 'writeModule');
           const parsedBatch = this.parseAi3BatchDraftAndExpansion(roughBatchRaw, batchObj, lengthMode);
@@ -15268,9 +15481,10 @@ ${batchScenes.map((sc, idx) => [
             }
           });
 
+          const plannedAi4CallCount = Math.max(1, Math.ceil(cp.ai4Tasks.length / 3));
           prevBatchTail = parsedBatch.draftText.slice(-900);
           if (previewMetaEl) {
-            previewMetaEl.textContent = `AI3初稿批次 ${cp.completedAi3BatchCount}/${ai3Batches.length} · 已规划 ${cp.ai4Tasks.length} 个AI4拓写章节`;
+            previewMetaEl.textContent = `AI3批次 ${cp.completedAi3BatchCount}/${ai3Batches.length} · 共 ${cp.ai4Tasks.length} 章除以3将调用AI4 ${plannedAi4CallCount} 次`;
           }
           await this.saveAiWriterDraftToIDB();
         }
@@ -15397,28 +15611,44 @@ ${ai1Data.endingsPlan || ''}
         const finalChapters = cp.finalChapters;
 
         const ai4PolishSystem = `你是一位文风自然扎实、注重实质剧情与可玩性的人类跑团模组作者。
-现在进入【AI4 按拆章方案逐章深度拓写定稿阶段】。
-你将收到 AI3 撰写的批次初稿，以及 AI3 为本章专门分配的拓写任务。请将本章扩写为一篇剧情事件充实、空间探索细节丰富、人物互动自然的完整模组正文章节（单章字数建议充实饱满，达到 2500 至 4500 字以上）：
-1. 必须把实质剧情事件写透：写清楚人物进入本章的具体起因、在场景里看到了什么具体陈设、发生了什么具体变故或事件，绝不要让角色停在原地空洞拉扯聊天。
-2. 把本章所有的可调查点（「▼具体地点或物品名称」）、公开【检定】条件与成功失败所得的具体线索物证全部展开写细。
-3. 把「・当调查员……时 → 角色具体举动与台词」写得像真实人类一样自然生动。
-4. 【KP信息】只平实客观地写本章的事件真相、触发条件与后续指向，绝对禁止在模组任何地方写「这里是剧情高潮，必须把他的偏执绝望写出来」「KP请注意渲染情绪」之类的写作指导或演技说教！`;
+现在进入【AI4 按章节数除以 3 的批次进行深度拓写定稿阶段】。
+单次接口调用可输出五至六万字，因此你每次调用将一口气连续拓写最多 3 个完整的模组正文章节（每章字数建议充实饱满，达到 3000 至 5000 字以上）：
+1. 【最高禁令：严禁在章节开头写简介或一二三总结】：
+   - 提示词里给你的本章核心事件与规划要点，只是供你自己在脑海里参考的内部提纲，绝对禁止把它们写成「本章简介」「本章概要」「本章内容」「本章主要内容」「本章导读」或「1. …… 2. …… 3. ……」的总结放在章节开头或模组正文里！
+   - 普通跑团模组怎么写你就怎么写：每一章一上来必须直接进入【正文】的具体场景环境、当下正在发生的具体事件与动静，严禁在开头写剧透性质的章节总结！
+2. 必须把实质剧情事件写透：写清楚人物进入本章的具体起因、在场景里看到了什么具体陈设、发生了什么具体变故或事件，绝不要让角色停在原地空洞拉扯聊天。
+3. 把每一章所有的可调查点「▼具体地点或物品名称」、公开【检定】条件与成功失败所得的具体线索物证全部展开写细。
+4. 把「・当调查员……时 → 角色具体举动与台词」写得像真实人类一样自然生动。
+5. 【KP信息】只平实客观地写本章具体机关或事件的真相、触发条件与后续指向，绝对禁止在模组任何地方写「这里是剧情高潮，必须把他的偏执绝望写出来」「KP请注意渲染情绪」之类的写作指导或演技说教！`;
 
         let previousSceneTail = cp.previousSceneTail || '';
         const startSceneIdx = typeof cp.completedSceneCount === 'number' ? cp.completedSceneCount : 0;
+        const AI4_CHAPTERS_PER_CALL = 3;
+        const totalAi4ApiCalls = Math.max(1, Math.ceil(ai4Tasks.length / AI4_CHAPTERS_PER_CALL));
 
-        for (let sIdx = startSceneIdx; sIdx < ai4Tasks.length; sIdx++) {
-          const taskItem = ai4Tasks[sIdx];
-          const sTitle = taskItem.chapterTitle || `第 ${sIdx + 1} 章`;
-          const nextTitle = (sIdx + 1 < ai4Tasks.length)
-            ? (ai4Tasks[sIdx + 1].chapterTitle || `第 ${sIdx + 2} 章`)
+        for (let sIdx = startSceneIdx; sIdx < ai4Tasks.length; sIdx += AI4_CHAPTERS_PER_CALL) {
+          const batchTasks = ai4Tasks.slice(sIdx, sIdx + AI4_CHAPTERS_PER_CALL);
+          const currentCallIdx = Math.floor(sIdx / AI4_CHAPTERS_PER_CALL) + 1;
+          const batchTitlesLabel = batchTasks.map(t => `《${t.chapterTitle}》`).join('、');
+          const afterBatchTitle = (sIdx + batchTasks.length < ai4Tasks.length)
+            ? (ai4Tasks[sIdx + batchTasks.length].chapterTitle || `第 ${sIdx + batchTasks.length + 1} 章`)
             : `${finalModTitle}-结局`;
-          const progressPct = 62 + Math.round(((sIdx + 1) / (ai4Tasks.length + 1)) * 32);
+
+          const progressPct = 62 + Math.round((currentCallIdx / (totalAi4ApiCalls + 1)) * 32);
           this.updateAiWriterStatus(
             progressPct,
-            `AI4 拓写（第 ${sIdx + 1} / ${ai4Tasks.length} 次调用）：正在深度扩写《${sTitle}》...`
+            `AI4 拓写第 ${currentCallIdx} / ${totalAi4ApiCalls} 次调用：正在连续扩写 ${batchTitlesLabel}...`
           );
           await this.saveAiWriterDraftToIDB();
+
+          const uniqueSourceDrafts = [];
+          const seenBatchIdx = new Set();
+          batchTasks.forEach(t => {
+            if (t.sourceBatchDraft && !seenBatchIdx.has(t.sourceBatchIndex)) {
+              seenBatchIdx.add(t.sourceBatchIndex);
+              uniqueSourceDrafts.push(String(t.sourceBatchDraft).slice(0, 6000));
+            }
+          });
 
           const ai4SceneUser = `模组名称：《${finalModTitle}》
 选定标签：${allTags.join('、')}
@@ -15426,48 +15656,40 @@ ${ai1Data.endingsPlan || ''}
 核心人物档案：
 ${JSON.stringify(ai1Data.catAndNpcProfiles || [], null, 2)}
 
-全模组正文章节总目录（共 ${ai4Tasks.length} 章，当前为第 ${sIdx + 1} 章【${sTitle}】，下一章为【${nextTitle}】）：
+全模组正文章节总目录（共 ${ai4Tasks.length} 章，除以 3 共分 ${totalAi4ApiCalls} 次调用 AI4；当前为第 ${currentCallIdx} / ${totalAi4ApiCalls} 次调用，负责第 ${sIdx + 1} 至 ${sIdx + batchTasks.length} 章，本批结束后下一章为【${afterBatchTitle}】）：
 ${ai4Tasks.map((t, i) => `${i + 1}. ${t.chapterTitle}`).join('\n')}
 
-${previousSceneTail ? '上一章定稿结尾回顾（请紧接此处已经发生的事件往下推进，切勿重复上一章已经探索过的事件）：\n' + previousSceneTail.slice(-900) + '\n' : '这是模组的开篇第一章，请从真实具体的事件起因与场景切入。\n'}
+${previousSceneTail ? '上一章定稿结尾回顾（请紧接此处已经发生的事件往下推进，切勿重复上一章已经探索过的事件）：\n' + previousSceneTail.slice(-900) + '\n' : '这是模组的开篇第一章，请直接从真实具体的事件起因与场景切入。\n'}
 
-当前 AI4 拓写目标章节：【${sTitle}】
-AI3 分配给本章的专属拓写任务与核心事件：
-${taskItem.expandBlueprint || ''}
+本次调用需要你一口气连续完成深度拓写的 ${batchTasks.length} 个章节内部构思参考（仅供你心里知晓，严禁将以下提纲写成章节开头的本章简介或一二三总结！）：
+${batchTasks.map((t, idx) => `【待拓写章节 ${idx + 1}：${t.chapterTitle}】\n内部参考要点：${t.expandBlueprint || ''}`).join('\n\n')}
 
-参考的本批次 AI3 初稿底本：
-${String(taskItem.sourceBatchDraft || '').slice(0, 6000)}
+参考的 AI3 初稿底本：
+${uniqueSourceDrafts.join('\n\n---\n\n')}
 
-请将【${sTitle}】深度拓写为完整的定稿章节正文：
-- 充实展开本章的具体事件经过、环境细节、每一个「▼可探索位置」与【检定】物证、以及自然的人物行动与台词分支；
-- 【KP信息】只写客观事实与触发规则，严禁写任何教AI怎么写作或怎么演戏的说教句，直接输出【${sTitle}】完整正文：`;
+请严格按照以下格式，依次输出本次调用的 ${batchTasks.length} 个完整定稿章节，每个章节之间必须用单独一行的「===章节分割：章节标题===」隔开：
+${batchTasks.map(t => `===章节分割：${t.chapterTitle}===\n在此处直接进入【正文】场景描写与具体事件推进、每一个「▼可探索位置」与【检定】物证、自然的人物行动与台词分支、以及客观说明事实与规则的【KP信息】。严禁在开头写本章简介、本章内容一二三总结或任何剧透总览！`).join('\n\n')}`;
 
           const sceneTextRaw = await this.callAI(ai4PolishSystem, ai4SceneUser, null, 'writeModule');
-          let cleanSceneText = this.cleanModuleChapterOutput(String(sceneTextRaw || ''));
-          if (!cleanSceneText) {
-            cleanSceneText = this.cleanModuleChapterOutput(String(taskItem.expandBlueprint || ''));
-          }
-          if (!cleanSceneText) {
-            throw new Error(`AI4 拓写第 ${sIdx + 1} 章【${sTitle}】返回内容为空，已保存前序章节，请点击继续接着生成`);
-          }
-          if (!cleanSceneText.includes('【正文】') && !cleanSceneText.includes('【KP信息】')) {
-            cleanSceneText = `【正文】\n${cleanSceneText}`;
-          }
-          if (!cleanSceneText.includes('至此本小章节结束')) {
-            cleanSceneText += boundarySuffix;
+          const parsedChapters = this.parseAi4MultiChapterOutput(sceneTextRaw, batchTasks, boundarySuffix);
+          if (!parsedChapters || parsedChapters.length === 0 || parsedChapters.some(ch => !ch.content || ch.content.length < 40)) {
+            throw new Error(`AI4 第 ${currentCallIdx} / ${totalAi4ApiCalls} 次调用返回内容不完整，已保存前序章节，请点击继续接着生成`);
           }
 
-          finalChapters.push({
-            title: sTitle,
-            category: sIdx === 0 ? '模组导入' : '主线事件',
-            content: cleanSceneText
+          parsedChapters.forEach((chObj, localIdx) => {
+            const globalSceneIdx = sIdx + localIdx;
+            finalChapters.push({
+              title: chObj.title,
+              category: globalSceneIdx === 0 ? '模组导入' : '主线事件',
+              content: chObj.content
+            });
+            previousSceneTail = chObj.content.replace(boundarySuffix, '');
           });
 
-          previousSceneTail = cleanSceneText.replace(boundarySuffix, '');
-          cp.completedSceneCount = sIdx + 1;
+          cp.completedSceneCount = sIdx + batchTasks.length;
           cp.previousSceneTail = previousSceneTail;
           if (previewMetaEl) {
-            previewMetaEl.textContent = `AI4已拓写 ${cp.completedSceneCount}/${ai4Tasks.length} 正文章节`;
+            previewMetaEl.textContent = `AI4调用 ${currentCallIdx}/${totalAi4ApiCalls} · 已完成 ${cp.completedSceneCount}/${ai4Tasks.length} 正文章节`;
           }
           await this.saveAiWriterDraftToIDB();
         }
