@@ -2164,11 +2164,14 @@
     async resolveImageToPortableDataUrl(rawUrl) {
       if (!rawUrl || typeof rawUrl !== 'string') return '';
       if (rawUrl.startsWith('data:')) return rawUrl;
-      if (rawUrl.startsWith('vault:') && typeof window.resolveVaultDataUrl === 'function') {
-        try {
-          const resolved = await window.resolveVaultDataUrl(rawUrl);
-          if (resolved && resolved.startsWith('data:')) return resolved;
-        } catch (_) {}
+      if (rawUrl.startsWith('vault:')) {
+        const resolverFn = window.resolveVaultRefToDataUrl || window.resolveVaultDataUrl;
+        if (typeof resolverFn === 'function') {
+          try {
+            const resolved = await resolverFn(rawUrl);
+            if (resolved && resolved.startsWith('data:')) return resolved;
+          } catch (_) {}
+        }
       }
       try {
         const rawFetch = window._rawNativeFetch || window.fetch;

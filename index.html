@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -46172,16 +46172,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               try { URL.revokeObjectURL(inspectObjectUrl); } catch (_) {}
               inspectObjectUrl = null;
             }
-            inspectObjectUrl = URL.createObjectURL(file);
-            if (previewImg) {
-              previewImg.src = inspectObjectUrl;
-              previewImg.style.display = "block";
-            }
-            if (placeholder) placeholder.style.display = "none";
             if (statusEl) statusEl.textContent = "正在解析原图元数据...";
 
             try {
               const buffer = await file.arrayBuffer();
+              const stableBlob = (buffer && buffer.byteLength > 0)
+                ? new Blob([buffer], { type: file.type || "image/png" })
+                : file;
+              inspectObjectUrl = URL.createObjectURL(stableBlob);
+              if (previewImg) {
+                previewImg.src = inspectObjectUrl;
+                previewImg.style.display = "block";
+              }
+              if (placeholder) placeholder.style.display = "none";
+
               let metaObj = await parsePngChunksFromBuffer(buffer);
               let parsed = metaObj ? parseMetadataToPrompts(metaObj) : null;
 
@@ -46191,7 +46195,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   previewImg.onload = () => resolve();
                   previewImg.onerror = () => resolve();
                 });
-                const stealthObj = await extractStealthPngInfoFromImage(previewImg, file);
+                const stealthObj = await extractStealthPngInfoFromImage(previewImg, stableBlob);
                 if (stealthObj) {
                   const stealthParsed = parseMetadataToPrompts(stealthObj);
                   if (stealthParsed) {
@@ -46922,9 +46926,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
             if (fileInput) {
-              fileInput.addEventListener("change", () => {
+              fileInput.addEventListener("change", async () => {
                 const f = fileInput.files && fileInput.files[0];
-                if (f) handleInspectFile(f);
+                if (f) await handleInspectFile(f);
                 fileInput.value = "";
               });
             }
@@ -47724,6 +47728,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   return;
                 }
                 wmDraftSelectedId = wmDraftSelectedId === item.id ? "" : item.id;
+                const curSt = loadPanelState();
+                curSt.watermarkSelectedId = wmDraftSelectedId || "";
+                savePanelState(curSt);
+                updateWatermarkStatusBadges();
+                invalidateCleanedBatchCache();
+                renderCleanBatchGrid();
                 renderWatermarkGalleryGrid();
               });
 
@@ -47735,8 +47745,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           async function compressWatermarkFileToDataUrl(file) {
+            let safeBlob = file;
+            if (file && typeof file.arrayBuffer === "function") {
+              try {
+                const ab = await file.arrayBuffer();
+                if (ab && ab.byteLength > 0) {
+                  safeBlob = new Blob([ab], { type: file.type || "image/png" });
+                }
+              } catch (_) {}
+            }
             return await new Promise((resolve) => {
-              const url = URL.createObjectURL(file);
+              let url = "";
+              try {
+                url = URL.createObjectURL(safeBlob);
+              } catch (_) {
+                resolve("");
+                return;
+              }
               const img = new Image();
               img.onload = () => {
                 try {
@@ -47773,6 +47798,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
           }
 
+          function getActiveWatermarkSignature(stObj) {
+            const st = stObj || loadPanelState();
+            const gallery = getNormalizedWatermarkGallery(st);
+            const activeWm = st.watermarkSelectedId
+              ? gallery.find((x) => x.id === st.watermarkSelectedId)
+              : null;
+            if (!activeWm || !activeWm.image) return "none";
+            return [
+              activeWm.id,
+              activeWm.image,
+              st.watermarkBlendMode || "screen",
+              st.watermarkFitMode || "contain",
+              st.watermarkOpacity !== undefined ? st.watermarkOpacity : 65,
+              st.watermarkHue || 0,
+              st.watermarkSat !== undefined ? st.watermarkSat : 100,
+              st.watermarkLight !== undefined ? st.watermarkLight : 100
+            ].join("|");
+          }
+
           function invalidateCleanedBatchCache() {
             cleanBatchItems.forEach((it) => {
               if (it.cleanedBlobUrl) {
@@ -47780,6 +47824,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 it.cleanedBlobUrl = "";
               }
               it.cleanedBlob = null;
+              it.cleanedWmSig = "";
               it.isCleaned = false;
             });
           }
@@ -47792,6 +47837,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (it.cleanedBlobUrl) {
                 try { URL.revokeObjectURL(it.cleanedBlobUrl); } catch (_) {}
               }
+              it.stableBlob = null;
+              it.file = null;
             });
             cleanBatchItems = [];
           }
@@ -47855,6 +47902,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (item.cleanedBlobUrl) {
                   try { URL.revokeObjectURL(item.cleanedBlobUrl); } catch (_) {}
                 }
+                item.stableBlob = null;
+                item.file = null;
                 cleanBatchItems.splice(idx, 1);
                 renderCleanBatchGrid();
               });
@@ -47880,22 +47929,77 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             gridEl.appendChild(frag);
           }
 
-          async function cleanSingleBatchItem(item) {
-            if (item.isCleaned && item.cleanedBlob && item.cleanedBlobUrl) {
-              return item.cleanedBlobUrl;
-            }
-            if (!item || !item.file) return "";
-
-            const srcUrl = URL.createObjectURL(item.file);
+          function dataUrlToBlobSync(dataUrl) {
             try {
-              const img = await new Promise((resolve) => {
+              const parts = String(dataUrl || "").split(",");
+              if (parts.length < 2) return null;
+              const mimeMatch = parts[0].match(/:(.*?);/);
+              const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+              const bstr = atob(parts[1]);
+              let n = bstr.length;
+              const u8 = new Uint8Array(n);
+              while (n--) {
+                u8[n] = bstr.charCodeAt(n);
+              }
+              return new Blob([u8], { type: mime });
+            } catch (_) {
+              return null;
+            }
+          }
+
+          async function decodeCleanItemImageSource(item) {
+            const loadFromUrl = (u) =>
+              new Promise((resolve) => {
+                if (!u) return resolve(null);
                 const el = new Image();
                 el.onload = () => resolve(el);
                 el.onerror = () => resolve(null);
-                el.src = srcUrl;
+                el.src = u;
               });
+
+            const blobSource = (item && item.stableBlob) || (item && item.file) || null;
+            if (blobSource) {
+              let tempUrl = "";
+              try {
+                tempUrl = URL.createObjectURL(blobSource);
+                const img = await loadFromUrl(tempUrl);
+                URL.revokeObjectURL(tempUrl);
+                if (img) return img;
+              } catch (_) {
+                if (tempUrl) {
+                  try { URL.revokeObjectURL(tempUrl); } catch (_) {}
+                }
+              }
+            }
+            if (item && item.rawThumbUrl) {
+              const imgFromThumb = await loadFromUrl(item.rawThumbUrl);
+              if (imgFromThumb) return imgFromThumb;
+            }
+            if (blobSource && typeof createImageBitmap === "function") {
+              try {
+                const bmp = await createImageBitmap(blobSource);
+                if (bmp && bmp.width && bmp.height) return bmp;
+              } catch (_) {}
+            }
+            return null;
+          }
+
+          async function cleanSingleBatchItem(item) {
+            if (!item) return "";
+            const st = loadPanelState();
+            const currentWmSig = getActiveWatermarkSignature(st);
+            if (
+              item.isCleaned &&
+              item.cleanedBlob &&
+              item.cleanedBlobUrl &&
+              item.cleanedWmSig === currentWmSig
+            ) {
+              return item.cleanedBlobUrl;
+            }
+
+            try {
+              const img = await decodeCleanItemImageSource(item);
               if (!img) {
-                URL.revokeObjectURL(srcUrl);
                 return "";
               }
 
@@ -47910,9 +48014,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ctx.fillStyle = "#ffffff";
               ctx.fillRect(0, 0, w, h);
               ctx.drawImage(img, 0, 0, w, h);
+              if (typeof img.close === "function") {
+                try { img.close(); } catch (_) {}
+              }
 
               // 2. 如果勾选了水印，按所选图层混合模式（滤色/正片叠底/叠加/覆盖）与不拉伸排版方式叠加
-              const st = loadPanelState();
               const gallery = getNormalizedWatermarkGallery(st);
               const activeWm = st.watermarkSelectedId
                 ? gallery.find((x) => x.id === st.watermarkSelectedId)
@@ -47961,17 +48067,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } catch (_) {}
 
               // 4. 输出为干净的 JPG Blob，彻底消除 Alpha 隐写通道与原文件块
-              const blob = await new Promise((resolve) => {
+              let blob = await new Promise((resolve) => {
                 if (typeof canvas.toBlob === "function") {
                   canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92);
                 } else {
                   resolve(null);
                 }
               });
+              if (!blob) {
+                try {
+                  const fallbackDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+                  blob = dataUrlToBlobSync(fallbackDataUrl);
+                } catch (_) {}
+              }
 
               canvas.width = 0;
               canvas.height = 0;
-              URL.revokeObjectURL(srcUrl);
 
               if (!blob) return "";
               if (item.cleanedBlobUrl) {
@@ -47979,27 +48090,35 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               item.cleanedBlob = blob;
               item.cleanedBlobUrl = URL.createObjectURL(blob);
+              item.cleanedWmSig = currentWmSig;
               item.isCleaned = true;
               return item.cleanedBlobUrl;
             } catch (_) {
-              URL.revokeObjectURL(srcUrl);
               return "";
             }
           }
 
-          // 单次静默下载触发器：不挂载到 document.body 并阻断冒泡，防止外层容器二次拦截造成重复下载两次
+          // 单次静默下载触发器：短暂挂载到 document.body 并阻断冒泡，兼顾移动端浏览器兼容与防二次拦截
           function triggerBrowserDownloadUrl(blobUrl, filename) {
+            if (!blobUrl) return;
             const now = Date.now();
             if (now - _lastCleanDownloadTriggerTs < 150) return;
             _lastCleanDownloadTriggerTs = now;
             const link = document.createElement("a");
             link.href = blobUrl;
-            link.download = filename;
+            link.download = filename || "clean.jpg";
             link.rel = "noopener";
+            link.style.display = "none";
             link.addEventListener("click", (ev) => {
               ev.stopPropagation();
             });
+            document.body.appendChild(link);
             link.click();
+            setTimeout(() => {
+              if (link.parentNode) {
+                link.parentNode.removeChild(link);
+              }
+            }, 200);
           }
 
           // 自动热更新正在运行的 Termux 后台服务，使其支持独立相册 /sdcard/DCIM/水印 写入并立即刷新系统图库，且绝不触碰隐藏的 EPhoneVault 目录
@@ -48099,11 +48218,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
               const safeFile = encodeURIComponent(filename);
               const albumEndpoint = `${baseUrl}/watermark-album/${safeFile}`;
+              let termuxReachable = false;
 
               for (let attempt = 0; attempt < 2; attempt++) {
                 try {
                   const controller = new AbortController();
-                  const timer = setTimeout(() => controller.abort(), 2400);
+                  const timer = setTimeout(() => controller.abort(), attempt === 0 ? 450 : 1400);
                   const res = await fetch(albumEndpoint, {
                     method: "PUT",
                     headers: { "Content-Type": "image/jpeg" },
@@ -48112,6 +48232,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   });
                   clearTimeout(timer);
                   if (res && res.ok) {
+                    termuxReachable = true;
                     const txt = (await res.text()).trim();
                     if (txt === "WATERMARK_ALBUM_OK") {
                       return "album";
@@ -48126,21 +48247,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
 
-              // 兜底绝对路径直写 /sdcard/DCIM/水印（以 /%2F 开头使 os.path.join 直接采用绝对路径，完全脱离 EPhoneVault）
-              try {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 2200);
-                const res = await fetch(`${baseUrl}/%2Fsdcard%2FDCIM%2F%E6%B0%B4%E5%8D%B0%2F${safeFile}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "image/jpeg" },
-                  body: blob,
-                  signal: controller.signal
-                });
-                clearTimeout(timer);
-                if (res && res.ok) {
-                  return "album";
-                }
-              } catch (_) {}
+              // 仅在 Termux 已响应时才尝试兜底绝对路径直写，防止 Termux 未启动时超时过久导致浏览器拦截下载手势
+              if (termuxReachable) {
+                try {
+                  const controller = new AbortController();
+                  const timer = setTimeout(() => controller.abort(), 1200);
+                  const res = await fetch(`${baseUrl}/%2Fsdcard%2FDCIM%2F%E6%B0%B4%E5%8D%B0%2F${safeFile}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "image/jpeg" },
+                    body: blob,
+                    signal: controller.signal
+                  });
+                  clearTimeout(timer);
+                  if (res && res.ok) {
+                    return "album";
+                  }
+                } catch (_) {}
+              }
             }
 
             triggerBrowserDownloadUrl(blobUrl, filename);
@@ -48265,6 +48388,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (openCleanBtn) openCleanBtn.addEventListener("click", openCleanModalNow);
             if (closeCleanBtn) {
               closeCleanBtn.addEventListener("click", () => {
+                if (!cleanIsRunning) {
+                  clearAllCleanBatchItems();
+                  renderCleanBatchGrid();
+                }
                 if (cleanModal) cleanModal.style.display = "none";
               });
             }
@@ -48274,21 +48401,43 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            const appendFilesToCleanBatch = (fileList) => {
-              const files = Array.from(fileList || []).filter((f) => f && f.type && f.type.startsWith("image/"));
-              if (!files.length) return;
-              files.forEach((f) => {
-                const thumbUrl = URL.createObjectURL(f);
+            const appendFilesToCleanBatch = async (fileList) => {
+              const rawArr = Array.from(fileList || []).filter((f) => {
+                if (!f) return false;
+                if (f.type && f.type.startsWith("image/")) return true;
+                if (/\.(png|jpe?g|webp|bmp|gif|avif|heic|heif)$/i.test(String(f.name || ""))) return true;
+                return !f.type && f.size > 0;
+              });
+              if (!rawArr.length) return;
+
+              // 立即在清空 input 前把文件字节快照到独立内存 Blob，防止安卓切换窗口或清空 input 后系统撤销临时文件读取权限导致清洗与下载失败
+              for (const f of rawArr) {
+                let stableBlob = f;
+                const mime = (f.type && f.type.startsWith("image/")) ? f.type : "image/png";
+                if (typeof f.arrayBuffer === "function") {
+                  try {
+                    const ab = await f.arrayBuffer();
+                    if (ab && ab.byteLength > 0) {
+                      stableBlob = new Blob([ab], { type: mime });
+                    }
+                  } catch (_) {}
+                }
+                let thumbUrl = "";
+                try {
+                  thumbUrl = URL.createObjectURL(stableBlob);
+                } catch (_) {}
                 cleanBatchItems.push({
                   id: "cl_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
                   name: f.name || "image.png",
-                  file: f,
+                  file: stableBlob,
+                  stableBlob: stableBlob,
                   rawThumbUrl: thumbUrl,
                   cleanedBlob: null,
                   cleanedBlobUrl: "",
+                  cleanedWmSig: "",
                   isCleaned: false
                 });
-              });
+              }
               renderCleanBatchGrid();
               if (cleanStatusText) {
                 cleanStatusText.textContent = `已载入 ${cleanBatchItems.length} 张图片，点击清洗一键顺序下载`;
@@ -48302,9 +48451,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (cleanEmptyBox) cleanEmptyBox.addEventListener("click", triggerCleanPick);
             if (cleanAddBtn) cleanAddBtn.addEventListener("click", triggerCleanPick);
             if (cleanFileInput) {
-              cleanFileInput.addEventListener("change", () => {
-                if (cleanFileInput.files && cleanFileInput.files.length > 0) {
-                  appendFilesToCleanBatch(cleanFileInput.files);
+              cleanFileInput.addEventListener("change", async () => {
+                const picked = cleanFileInput.files ? Array.from(cleanFileInput.files) : [];
+                if (picked.length > 0) {
+                  await appendFilesToCleanBatch(picked);
                 }
                 cleanFileInput.value = "";
               });
@@ -48376,7 +48526,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 水印面板事件
+            const commitWatermarkDraftToState = () => {
+              if (_wmPreviewRafId) {
+                cancelAnimationFrame(_wmPreviewRafId);
+                _wmPreviewRafId = 0;
+              }
+              if (_wmPreviewHdTimer) {
+                clearTimeout(_wmPreviewHdTimer);
+                _wmPreviewHdTimer = null;
+              }
+              const st = loadPanelState();
+              const prevSig = getActiveWatermarkSignature(st);
+              st.watermarkSelectedId = wmDraftSelectedId || "";
+              st.watermarkBlendMode = wmDraftBlendMode || "screen";
+              st.watermarkFitMode = wmDraftFitMode || "contain";
+              st.watermarkOpacity = wmDraftOpacity;
+              st.watermarkHue = wmDraftHue;
+              st.watermarkSat = wmDraftSat;
+              st.watermarkLight = wmDraftLight;
+              savePanelState(st);
+              updateWatermarkStatusBadges();
+              if (getActiveWatermarkSignature(st) !== prevSig) {
+                invalidateCleanedBatchCache();
+              }
+              renderCleanBatchGrid();
+              return st;
+            };
+
+            // 水印面板事件：右上角关闭仅关闭弹窗并放弃未点确定的滑块草稿，底部确定才正式保存调色与排版参数
             if (openWmBtn) openWmBtn.addEventListener("click", openWatermarkModalNow);
             if (closeWmBtn) {
               closeWmBtn.addEventListener("click", () => {
@@ -48393,8 +48570,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (wmFileInput) {
               wmFileInput.addEventListener("change", async () => {
                 const files = Array.from(wmFileInput.files || []);
-                wmFileInput.value = "";
-                if (!files.length) return;
+                if (!files.length) {
+                  wmFileInput.value = "";
+                  return;
+                }
                 const st = loadPanelState();
                 const gallery = getNormalizedWatermarkGallery(st);
                 let lastAddedId = "";
@@ -48412,6 +48591,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   });
                   lastAddedId = newId;
                 }
+                wmFileInput.value = "";
                 st.watermarkGallery = gallery;
                 if (lastAddedId && !wmDraftSelectedId) {
                   wmDraftSelectedId = lastAddedId;
@@ -48419,6 +48599,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 savePanelState(st);
                 updateWatermarkStatusBadges();
+                invalidateCleanedBatchCache();
+                renderCleanBatchGrid();
                 renderWatermarkGalleryGrid();
                 if (typeof window.showDownloadToast === "function") {
                   window.showDownloadToast("已上传至水印图库", "success");
@@ -48433,9 +48615,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
               wmBgFileInput.addEventListener("change", async () => {
                 const file = wmBgFileInput.files && wmBgFileInput.files[0];
-                wmBgFileInput.value = "";
-                if (!file) return;
+                if (!file) {
+                  wmBgFileInput.value = "";
+                  return;
+                }
                 const dataUrl = await compressWatermarkFileToDataUrl(file);
+                wmBgFileInput.value = "";
                 if (!dataUrl) return;
                 const storedRef = (await offloadSingleNaiImageToTermux(dataUrl)) || dataUrl;
                 const st = loadPanelState();
@@ -48510,29 +48695,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (wmConfirmBtn) {
               wmConfirmBtn.addEventListener("click", () => {
-                if (_wmPreviewRafId) {
-                  cancelAnimationFrame(_wmPreviewRafId);
-                  _wmPreviewRafId = 0;
-                }
-                if (_wmPreviewHdTimer) {
-                  clearTimeout(_wmPreviewHdTimer);
-                  _wmPreviewHdTimer = null;
-                }
-                const st = loadPanelState();
-                st.watermarkSelectedId = wmDraftSelectedId || "";
-                st.watermarkBlendMode = wmDraftBlendMode || "screen";
-                st.watermarkFitMode = wmDraftFitMode || "contain";
-                st.watermarkOpacity = wmDraftOpacity;
-                st.watermarkHue = wmDraftHue;
-                st.watermarkSat = wmDraftSat;
-                st.watermarkLight = wmDraftLight;
-                savePanelState(st);
-                updateWatermarkStatusBadges();
-                invalidateCleanedBatchCache();
-                renderCleanBatchGrid();
+                const st = commitWatermarkDraftToState();
                 if (wmModal) wmModal.style.display = "none";
                 if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast(st.watermarkSelectedId ? "已启用水印设置" : "已保存水印设置", "success");
+                  window.showDownloadToast(st.watermarkSelectedId ? "已启用水印设置" : "已取消水印并保存设置", "success");
                 }
               });
             }
@@ -50113,8 +50279,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           // 保留原图自然横竖方比例压缩（外层缩略图由 CSS 1:1 裁切展示，展开详情卡片则按真实竖图/横图/方图比例完整呈现）
           async function compressImageFileToSquareDataUrl(file) {
+            let safeBlob = file;
+            if (file && typeof file.arrayBuffer === "function") {
+              try {
+                const ab = await file.arrayBuffer();
+                if (ab && ab.byteLength > 0) {
+                  safeBlob = new Blob([ab], { type: file.type || "image/png" });
+                }
+              } catch (_) {}
+            }
             return await new Promise((resolve) => {
-              const url = URL.createObjectURL(file);
+              let url = "";
+              try {
+                url = URL.createObjectURL(safeBlob);
+              } catch (_) {
+                resolve("");
+                return;
+              }
               const img = new Image();
               img.onload = () => {
                 try {
@@ -50793,8 +50974,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
               editFileInput.addEventListener("change", async () => {
                 const files = Array.from(editFileInput.files || []);
-                editFileInput.value = "";
-                if (!files.length) return;
+                if (!files.length) {
+                  editFileInput.value = "";
+                  return;
+                }
                 const newUrls = [];
                 for (const f of files) {
                   const sqUrl = await compressImageFileToSquareDataUrl(f);
@@ -50803,6 +50986,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     if (termuxRef) newUrls.push(termuxRef);
                   }
                 }
+                editFileInput.value = "";
                 if (!newUrls.length) return;
 
                 const prevVaultRefs = colEditImagesDraft.filter((u) => typeof u === "string" && u.startsWith("vault://"));
@@ -51041,9 +51225,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
               folderFileInput.addEventListener("change", async () => {
                 const file = folderFileInput.files && folderFileInput.files[0];
-                folderFileInput.value = "";
-                if (!file) return;
+                if (!file) {
+                  folderFileInput.value = "";
+                  return;
+                }
                 const sqUrl = await compressImageFileToSquareDataUrl(file);
+                folderFileInput.value = "";
                 if (!sqUrl) return;
                 const termuxRef = await offloadSingleNaiImageToTermux(sqUrl);
                 colFolderCoverDraft = termuxRef || sqUrl;
@@ -51504,6 +51691,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           async function loadNaiStoreFromTermux() {
             if (_termuxNaiSyncInFlight) return _termuxNaiSyncInFlight;
             _termuxNaiSyncInFlight = (async () => {
+              // 0. 先等待当前正在写入 Termux 的队列完成，防止切去系统相册选图再返回时读到尚未写完的旧水印勾选状态
+              try {
+                await _termuxNaiWriteQueue;
+              } catch (_) {}
+
               // 1. 先从独立大容量 IndexedDB 读取全部数据
               const idbData = await readAllFromNaiIDB();
               if (idbData && Array.isArray(idbData.deletedIds)) {
@@ -129181,7 +129373,7 @@ ${specificRules}`;
           let cachedTermuxOk = false;
           let lastTermuxCheckTime = 0;
           let inflightTermuxPingPromise = null;
-          let _builtInServerAvailable = null;
+          let _builtInServerAvailable = false;
 
           function isCapacitorApkEnvironment() {
             if (typeof window === "undefined") return false;
@@ -129287,32 +129479,8 @@ ${specificRules}`;
           }
 
           async function checkBuiltInVaultServer() {
-            if (isStaticPagesHost() || _builtInServerAvailable === false) {
-              _builtInServerAvailable = false;
-              return null;
-            }
-            try {
-              const res = await fetch("/api/local-vault/ping", { method: "GET" });
-              if (!res.ok) {
-                _builtInServerAvailable = false;
-                return null;
-              }
-              const ct = String(res.headers.get("content-type") || "").toLowerCase();
-              if (ct.includes("text/html")) {
-                _builtInServerAvailable = false;
-                return null;
-              }
-              const data = await res.json();
-              if (data && data.ok) {
-                _builtInServerAvailable = true;
-                return data;
-              }
-              _builtInServerAvailable = false;
-              return null;
-            } catch (_) {
-              _builtInServerAvailable = false;
-              return null;
-            }
+            _builtInServerAvailable = false;
+            return null;
           }
 
           async function testVaultConnection(silent = false) {
