@@ -38809,14 +38809,34 @@ select,
 
 #mod-nai-settings-modal .modal-content {
   max-height: 82vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
   position: relative;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 #mod-nai-settings-modal .modal-content > * {
+  flex-shrink: 0;
+}
+
+#mod-nai-settings-modal .modal-content > .mod-nai-modal-scroll-body,
+#mod-nai-clean-modal .modal-content > .mod-nai-modal-scroll-body,
+#mod-nai-watermark-modal .modal-content > .mod-nai-modal-scroll-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding-right: 1px;
+}
+
+#mod-nai-settings-modal .mod-nai-modal-scroll-body > *,
+#mod-nai-clean-modal .mod-nai-modal-scroll-body > *,
+#mod-nai-watermark-modal .mod-nai-modal-scroll-body > * {
   flex-shrink: 0;
 }
 
@@ -39001,7 +39021,7 @@ select,
   transition: transform 0.18s ease;
 }
 
-#mod-nai-settings-modal .mod-nai-preset-drawer.is-open .mod-nai-preset-drawer-arrow {
+#mod-nai-settings-modal .mod-nai-preset-drawer.is-open > .mod-nai-preset-drawer-head .mod-nai-preset-drawer-arrow {
   transform: rotate(180deg);
 }
 
@@ -39015,7 +39035,7 @@ select,
   flex-shrink: 0;
 }
 
-#mod-nai-settings-modal .mod-nai-preset-drawer.is-open .mod-nai-preset-drawer-body {
+#mod-nai-settings-modal .mod-nai-preset-drawer.is-open > .mod-nai-preset-drawer-body {
   display: flex !important;
 }
 
@@ -39419,14 +39439,14 @@ select,
 #mod-nai-clean-modal .modal-content,
 #mod-nai-watermark-modal .modal-content {
   max-height: 84vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
   position: relative;
   box-sizing: border-box;
   background-color: var(--nai-card-bg);
   color: var(--nai-text);
   border: 1px solid var(--nai-border);
+  display: flex;
+  flex-direction: column;
 }
 
 #mod-nai-clean-modal .modal-content > *,

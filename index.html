@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4225,321 +4225,337 @@
 
           <!-- 生图极简设置弹窗 -->
           <div class="modal nai-theme-folio" id="mod-nai-settings-modal" style="display: none;">
-            <div class="modal-content" style="width: calc(100% - 36px); max-width: 340px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+            <div class="modal-content" style="width: calc(100% - 36px); max-width: 340px; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); overflow: hidden;">
               <i class="mod-nai-settings-anchor tl"></i>
               <i class="mod-nai-settings-anchor tr"></i>
               <i class="mod-nai-settings-anchor bl"></i>
               <i class="mod-nai-settings-anchor br"></i>
-              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-shrink: 0;">
                 <div style="display: flex; align-items: baseline;">
                   <span class="mod-nai-settings-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">设置</span>
                   <span class="mod-nai-settings-kicker">TRACE · CONFIG</span>
                 </div>
                 <button type="button" class="modal-close" id="mod-nai-settings-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
               </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">尺寸</label>
-                <select id="mod-nai-setting-resolution" class="moe-input mod-nai-select">
-                  <option value="832x1216">竖图 832x1216</option>
-                  <option value="1216x832">横图 1216x832</option>
-                  <option value="1024x1024">方图 1024x1024</option>
-                  <option value="512x768">小竖 512x768</option>
-                  <option value="768x512">小横 768x512</option>
-                  <option value="640x640">小方 640x640</option>
-                  <option value="1088x1920">长竖 1088x1920</option>
-                  <option value="1920x1088">宽横 1920x1088</option>
-                </select>
-              </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">版本</label>
-                <select id="mod-nai-setting-model" class="moe-input mod-nai-select">
-                  <option value="nai-diffusion-4-5-full">V4.5 Full</option>
-                  <option value="nai-diffusion-4-curated-preview">V4.5 Curated</option>
-                  <option value="nai-diffusion-5-full">V5 Full</option>
-                  <option value="nai-diffusion-5-curated">V5 Curated</option>
-                  <option value="nai-diffusion-3">V3 Anime</option>
-                </select>
-              </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">外观</label>
-                <select id="mod-nai-setting-theme" class="moe-input mod-nai-select">
-                  <option value="folio">手札</option>
-                  <option value="tavern">酒馆</option>
-                  <option value="apple">青苹果</option>
-                  <option value="puppy">狗塑</option>
-                  <option value="default">初始</option>
-                </select>
-              </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地址</label>
-                <input type="text" id="mod-nai-setting-api-url" class="moe-input" placeholder="留空默认跟随系统，可填生图网址" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
-              </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">密钥</label>
-                <input type="password" id="mod-nai-setting-api-key" class="moe-input" placeholder="留空默认使用系统设置密钥" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
-              </div>
-              <label for="mod-nai-setting-clean-gen" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--nai-sub-bg, var(--secondary-bg)); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
-                <span style="font-size: 12px; font-weight: 600; color: var(--nai-text, var(--text-primary)); flex-shrink: 0;">清洗</span>
-                <span style="flex: 1; min-width: 0; font-size: 11px; color: var(--nai-muted, var(--text-secondary)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;">生图时直接抹除内嵌参数转为JPG</span>
-                <input type="checkbox" id="mod-nai-setting-clean-gen" class="mod-nai-check" style="width: 17px; height: 17px; min-width: 17px; max-width: 17px; flex: 0 0 17px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
-              </label>
+              <div class="mod-nai-modal-scroll-body">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">尺寸</label>
+                  <select id="mod-nai-setting-resolution" class="moe-input mod-nai-select">
+                    <option value="832x1216">竖图 832x1216</option>
+                    <option value="1216x832">横图 1216x832</option>
+                    <option value="1024x1024">方图 1024x1024</option>
+                    <option value="512x768">小竖 512x768</option>
+                    <option value="768x512">小横 768x512</option>
+                    <option value="640x640">小方 640x640</option>
+                    <option value="1088x1920">长竖 1088x1920</option>
+                    <option value="1920x1088">宽横 1920x1088</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">版本</label>
+                  <select id="mod-nai-setting-model" class="moe-input mod-nai-select">
+                    <option value="nai-diffusion-4-5-full">V4.5 Full</option>
+                    <option value="nai-diffusion-4-curated-preview">V4.5 Curated</option>
+                    <option value="nai-diffusion-5-full">V5 Full</option>
+                    <option value="nai-diffusion-5-curated">V5 Curated</option>
+                    <option value="nai-diffusion-3">V3 Anime</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">外观</label>
+                  <select id="mod-nai-setting-theme" class="moe-input mod-nai-select">
+                    <option value="folio">手札</option>
+                    <option value="tavern">酒馆</option>
+                    <option value="apple">青苹果</option>
+                    <option value="puppy">狗塑</option>
+                    <option value="default">初始</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">地址</label>
+                  <input type="text" id="mod-nai-setting-api-url" class="moe-input" placeholder="留空默认跟随系统，可填生图网址" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">密钥</label>
+                  <input type="password" id="mod-nai-setting-api-key" class="moe-input" placeholder="留空默认使用系统设置密钥" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
+                </div>
+                <label for="mod-nai-setting-clean-gen" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--nai-sub-bg, var(--secondary-bg)); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
+                  <span style="font-size: 12px; font-weight: 600; color: var(--nai-text, var(--text-primary)); flex-shrink: 0;">清洗</span>
+                  <span style="flex: 1; min-width: 0; font-size: 11px; color: var(--nai-muted, var(--text-secondary)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;">生图时直接抹除内嵌参数转为JPG</span>
+                  <input type="checkbox" id="mod-nai-setting-clean-gen" class="mod-nai-check" style="width: 17px; height: 17px; min-width: 17px; max-width: 17px; flex: 0 0 17px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+                </label>
 
-              <!-- 底部预设与词典分组折叠卡头：画师 / 正面 / 负面 / 词典 -->
-              <div class="mod-nai-preset-drawers-wrap" id="mod-nai-settings-preset-drawers">
-                <!-- 1. 画师预设分组抽屉 -->
-                <div class="mod-nai-preset-drawer" data-preset-cat="artist" id="mod-nai-drawer-artist">
-                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="artist">
-                    <span class="mod-nai-preset-drawer-head-left">
-                      <i class="mod-nai-preset-drawer-dot"></i>
-                      <span class="mod-nai-preset-drawer-title">画师</span>
-                    </span>
-                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-artist">0</span>
-                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-artist">
-                    <div class="mod-nai-group-Quickbar">
-                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-artist" placeholder="新建分组名称" autocomplete="off" />
-                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-artist">新建</button>
+                <!-- 底部预设与词典分组总折叠分类：预设（默认折叠） -->
+                <div class="mod-nai-preset-drawers-wrap" id="mod-nai-settings-preset-drawers">
+                  <div class="mod-nai-preset-drawer" data-preset-cat="master" id="mod-nai-drawer-master-preset">
+                    <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="master">
+                      <span class="mod-nai-preset-drawer-head-left">
+                        <i class="mod-nai-preset-drawer-dot"></i>
+                        <span class="mod-nai-preset-drawer-title">预设</span>
+                      </span>
+                      <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-master">0</span>
+                      <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-master" style="display: none;">
+                      <!-- 1. 画师预设分组抽屉 -->
+                      <div class="mod-nai-preset-drawer" data-preset-cat="artist" id="mod-nai-drawer-artist">
+                        <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="artist">
+                          <span class="mod-nai-preset-drawer-head-left">
+                            <i class="mod-nai-preset-drawer-dot"></i>
+                            <span class="mod-nai-preset-drawer-title">画师</span>
+                          </span>
+                          <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-artist">0</span>
+                          <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-artist">
+                          <div class="mod-nai-group-Quickbar">
+                            <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-artist" placeholder="新建分组名称" autocomplete="off" />
+                            <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-artist">新建</button>
+                          </div>
+                          <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-artist"></div>
+                        </div>
+                      </div>
+
+                      <!-- 2. 正面预设分组抽屉 -->
+                      <div class="mod-nai-preset-drawer" data-preset-cat="positive" id="mod-nai-drawer-positive">
+                        <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="positive">
+                          <span class="mod-nai-preset-drawer-head-left">
+                            <i class="mod-nai-preset-drawer-dot"></i>
+                            <span class="mod-nai-preset-drawer-title">正面</span>
+                          </span>
+                          <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-positive">0</span>
+                          <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-positive">
+                          <div class="mod-nai-group-Quickbar">
+                            <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-positive" placeholder="新建分组名称" autocomplete="off" />
+                            <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-positive">新建</button>
+                          </div>
+                          <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-positive"></div>
+                        </div>
+                      </div>
+
+                      <!-- 3. 负面预设分组抽屉 -->
+                      <div class="mod-nai-preset-drawer" data-preset-cat="negative" id="mod-nai-drawer-negative">
+                        <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="negative">
+                          <span class="mod-nai-preset-drawer-head-left">
+                            <i class="mod-nai-preset-drawer-dot"></i>
+                            <span class="mod-nai-preset-drawer-title">负面</span>
+                          </span>
+                          <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-negative">0</span>
+                          <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-negative">
+                          <div class="mod-nai-group-Quickbar">
+                            <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-negative" placeholder="新建分组名称" autocomplete="off" />
+                            <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-negative">新建</button>
+                          </div>
+                          <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-negative"></div>
+                        </div>
+                      </div>
+
+                      <!-- 4. 词典分组抽屉 -->
+                      <div class="mod-nai-preset-drawer" data-preset-cat="lexicon" id="mod-nai-drawer-lexicon">
+                        <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="lexicon">
+                          <span class="mod-nai-preset-drawer-head-left">
+                            <i class="mod-nai-preset-drawer-dot"></i>
+                            <span class="mod-nai-preset-drawer-title">词典</span>
+                          </span>
+                          <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-lexicon">0</span>
+                          <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-lexicon">
+                          <div class="mod-nai-group-Quickbar">
+                            <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-lexicon" placeholder="新建分组名称" autocomplete="off" />
+                            <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-lexicon">新建</button>
+                          </div>
+                          <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-lexicon"></div>
+                        </div>
+                      </div>
                     </div>
-                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-artist"></div>
                   </div>
                 </div>
 
-                <!-- 2. 正面预设分组抽屉 -->
-                <div class="mod-nai-preset-drawer" data-preset-cat="positive" id="mod-nai-drawer-positive">
-                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="positive">
-                    <span class="mod-nai-preset-drawer-head-left">
-                      <i class="mod-nai-preset-drawer-dot"></i>
-                      <span class="mod-nai-preset-drawer-title">正面</span>
-                    </span>
-                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-positive">0</span>
-                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <div class="mod-nai-settings-io-bar">
+                  <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-export-btn">
+                    <span>导出</span>
                   </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-positive">
-                    <div class="mod-nai-group-Quickbar">
-                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-positive" placeholder="新建分组名称" autocomplete="off" />
-                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-positive">新建</button>
-                    </div>
-                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-positive"></div>
-                  </div>
-                </div>
-
-                <!-- 3. 负面预设分组抽屉 -->
-                <div class="mod-nai-preset-drawer" data-preset-cat="negative" id="mod-nai-drawer-negative">
-                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="negative">
-                    <span class="mod-nai-preset-drawer-head-left">
-                      <i class="mod-nai-preset-drawer-dot"></i>
-                      <span class="mod-nai-preset-drawer-title">负面</span>
-                    </span>
-                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-negative">0</span>
-                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-import-btn">
+                    <span>导入</span>
                   </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-negative">
-                    <div class="mod-nai-group-Quickbar">
-                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-negative" placeholder="新建分组名称" autocomplete="off" />
-                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-negative">新建</button>
-                    </div>
-                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-negative"></div>
-                  </div>
-                </div>
-
-                <!-- 4. 词典分组抽屉 -->
-                <div class="mod-nai-preset-drawer" data-preset-cat="lexicon" id="mod-nai-drawer-lexicon">
-                  <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="lexicon">
-                    <span class="mod-nai-preset-drawer-head-left">
-                      <i class="mod-nai-preset-drawer-dot"></i>
-                      <span class="mod-nai-preset-drawer-title">词典</span>
-                    </span>
-                    <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-lexicon">0</span>
-                    <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-done-btn" style="background: var(--accent-color); color: var(--card-bg); border-color: var(--accent-color); font-weight: 600;">
+                    <span>保存</span>
                   </button>
-                  <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-lexicon">
-                    <div class="mod-nai-group-Quickbar">
-                      <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-lexicon" placeholder="新建分组名称" autocomplete="off" />
-                      <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-lexicon">新建</button>
-                    </div>
-                    <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-lexicon"></div>
-                  </div>
+                  <input type="file" id="mod-nai-settings-import-file" accept=".json,application/json" style="display: none;" />
                 </div>
-              </div>
-
-              <div class="mod-nai-settings-io-bar">
-                <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-export-btn">
-                  <span>导出</span>
-                </button>
-                <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-import-btn">
-                  <span>导入</span>
-                </button>
-                <button type="button" class="mod-nai-settings-io-btn" id="mod-nai-settings-done-btn" style="background: var(--accent-color); color: var(--card-bg); border-color: var(--accent-color); font-weight: 600;">
-                  <span>保存</span>
-                </button>
-                <input type="file" id="mod-nai-settings-import-file" accept=".json,application/json" style="display: none;" />
               </div>
             </div>
           </div>
 
           <!-- 生图提取：批量无损清洗小面板 -->
           <div class="modal nai-theme-folio" id="mod-nai-clean-modal" style="display: none;">
-            <div class="modal-content" style="width: calc(100% - 36px); max-width: 344px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+            <div class="modal-content" style="width: calc(100% - 36px); max-width: 344px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg); overflow: hidden;">
               <i class="mod-nai-settings-anchor tl"></i>
               <i class="mod-nai-settings-anchor tr"></i>
               <i class="mod-nai-settings-anchor bl"></i>
               <i class="mod-nai-settings-anchor br"></i>
-              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-shrink: 0;">
                 <div style="display: flex; align-items: baseline;">
                   <span class="mod-nai-settings-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">清洗</span>
                   <span class="mod-nai-settings-kicker">TRACE · PURIFY</span>
                 </div>
                 <button type="button" class="modal-close" id="mod-nai-clean-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
               </div>
+              <div class="mod-nai-modal-scroll-body">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px;">
+                  <span id="mod-nai-clean-count-text" style="font-weight: 600; color: var(--nai-text);">已选 0 张</span>
+                  <span id="mod-nai-clean-wm-state-badge" style="color: var(--nai-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+                    <span id="mod-nai-clean-wm-state-text">未选水印</span>
+                  </span>
+                </div>
 
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px;">
-                <span id="mod-nai-clean-count-text" style="font-weight: 600; color: var(--nai-text);">已选 0 张</span>
-                <span id="mod-nai-clean-wm-state-badge" style="color: var(--nai-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
-                  <span id="mod-nai-clean-wm-state-text">未选水印</span>
-                </span>
-              </div>
+                <input type="file" id="mod-nai-clean-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
 
-              <input type="file" id="mod-nai-clean-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
+                <div id="mod-nai-clean-empty-box" class="mod-nai-empty-drop">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                  <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">点击多选需要清洗的图片</span>
+                  <span style="font-size: 11px; color: var(--nai-muted);">彻底抹除元数据与隐写层 · 一排三个显示</span>
+                </div>
 
-              <div id="mod-nai-clean-empty-box" class="mod-nai-empty-drop">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">点击多选需要清洗的图片</span>
-                <span style="font-size: 11px; color: var(--nai-muted);">彻底抹除元数据与隐写层 · 一排三个显示</span>
-              </div>
+                <div id="mod-nai-clean-grid" class="mod-nai-three-grid" style="display: none;"></div>
 
-              <div id="mod-nai-clean-grid" class="mod-nai-three-grid" style="display: none;"></div>
+                <div id="mod-nai-clean-status-text" style="font-size: 11px; color: var(--nai-muted); text-align: center; line-height: 1.4;">点击清洗按顺序逐张下载，点任意缩略图可单独下载</div>
 
-              <div id="mod-nai-clean-status-text" style="font-size: 11px; color: var(--nai-muted); text-align: center; line-height: 1.4;">点击清洗按顺序逐张下载，点任意缩略图可单独下载</div>
-
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;">
-                <button type="button" class="mod-nai-btn" id="mod-nai-clean-add-btn" style="flex: 1;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  <span>加图</span>
-                </button>
-                <button type="button" class="mod-nai-btn" id="mod-nai-clean-clear-btn" style="flex: 1;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                  <span>清空</span>
-                </button>
-                <button type="button" class="mod-nai-btn primary" id="mod-nai-clean-run-btn" style="flex: 1.3;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  <span id="mod-nai-clean-run-text">清洗</span>
-                </button>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;">
+                  <button type="button" class="mod-nai-btn" id="mod-nai-clean-add-btn" style="flex: 1;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>加图</span>
+                  </button>
+                  <button type="button" class="mod-nai-btn" id="mod-nai-clean-clear-btn" style="flex: 1;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <span>清空</span>
+                  </button>
+                  <button type="button" class="mod-nai-btn primary" id="mod-nai-clean-run-btn" style="flex: 1.3;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span id="mod-nai-clean-run-text">清洗</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- 生图提取：水印图库与正片叠底调色小面板 -->
           <div class="modal nai-theme-folio" id="mod-nai-watermark-modal" style="display: none;">
-            <div class="modal-content" style="width: calc(100% - 24px); max-width: 376px; max-height: 88vh; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
+            <div class="modal-content" style="width: calc(100% - 24px); max-width: 376px; max-height: 88vh; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 14px; border: 1px solid var(--border-color); background: var(--card-bg);">
               <i class="mod-nai-settings-anchor tl"></i>
               <i class="mod-nai-settings-anchor tr"></i>
               <i class="mod-nai-settings-anchor bl"></i>
               <i class="mod-nai-settings-anchor br"></i>
-              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <div class="mod-nai-settings-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; flex-shrink: 0;">
                 <div style="display: flex; align-items: baseline;">
                   <span class="mod-nai-settings-title" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">水印</span>
                   <span class="mod-nai-settings-kicker">TRACE · WATERMARK</span>
                 </div>
                 <button type="button" class="modal-close" id="mod-nai-wm-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 18px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;">&times;</button>
               </div>
-
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-                  <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">图库</span>
-                  <span id="mod-nai-wm-status-label" style="font-size: 10.5px; color: var(--nai-muted);">点选启用 · 长按改名</span>
-                </div>
-                <button type="button" class="mod-nai-btn" id="mod-nai-wm-upload-btn" style="height: 26px; padding: 0 10px; font-size: 11.5px;">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  <span>上传</span>
-                </button>
-              </div>
-
-              <input type="file" id="mod-nai-wm-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
-              <input type="file" id="mod-nai-wm-bg-file-input" accept="image/png,image/webp,image/jpeg,image/*" style="display: none;" />
-
-              <div id="mod-nai-wm-empty-box" class="mod-nai-empty-drop" style="min-height: 52px; padding: 8px 10px; flex-direction: row; gap: 8px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
-                  <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
-                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                  <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-                <span style="font-size: 11px; font-weight: 600; color: var(--nai-text);">点击上传水印到图库，长按水印可取名</span>
-              </div>
-
-              <div id="mod-nai-wm-gallery-grid" class="mod-nai-wm-compact-grid" style="display: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; max-height: 76px; overflow-y: auto; overflow-x: hidden; padding: 2px; box-sizing: border-box;"></div>
-
-              <div style="display: flex; flex-direction: column; gap: 7px; padding-top: 6px; border-top: 1px dashed var(--nai-border-strong);">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
-                    <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">图层</label>
-                    <select id="mod-nai-wm-blend-select" class="moe-input mod-nai-select">
-                      <option value="screen">滤色</option>
-                      <option value="multiply">正片叠底</option>
-                      <option value="overlay">叠加</option>
-                      <option value="normal">覆盖</option>
-                    </select>
+              <div class="mod-nai-modal-scroll-body">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--nai-text);">图库</span>
+                    <span id="mod-nai-wm-status-label" style="font-size: 10.5px; color: var(--nai-muted);">点选启用 · 长按改名</span>
                   </div>
-                  <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
-                    <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">排版</label>
-                    <select id="mod-nai-wm-fit-select" class="moe-input mod-nai-select">
-                      <option value="contain">居中</option>
-                      <option value="cover">铺满</option>
-                      <option value="tile">平铺</option>
-                      <option value="corner">角落</option>
-                    </select>
+                  <button type="button" class="mod-nai-btn" id="mod-nai-wm-upload-btn" style="height: 26px; padding: 0 10px; font-size: 11.5px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>上传</span>
+                  </button>
+                </div>
+
+                <input type="file" id="mod-nai-wm-file-input" accept="image/png,image/webp,image/jpeg,image/*" multiple style="display: none;" />
+                <input type="file" id="mod-nai-wm-bg-file-input" accept="image/png,image/webp,image/jpeg,image/*" style="display: none;" />
+
+                <div id="mod-nai-wm-empty-box" class="mod-nai-empty-drop" style="min-height: 52px; padding: 8px 10px; flex-direction: row; gap: 8px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                    <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                  <span style="font-size: 11px; font-weight: 600; color: var(--nai-text);">点击上传水印到图库，长按水印可取名</span>
+                </div>
+
+                <div id="mod-nai-wm-gallery-grid" class="mod-nai-wm-compact-grid" style="display: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; max-height: 76px; overflow-y: auto; overflow-x: hidden; padding: 2px; box-sizing: border-box;"></div>
+
+                <div style="display: flex; flex-direction: column; gap: 7px; padding-top: 6px; border-top: 1px dashed var(--nai-border-strong);">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                      <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">图层</label>
+                      <select id="mod-nai-wm-blend-select" class="moe-input mod-nai-select">
+                        <option value="screen">滤色</option>
+                        <option value="multiply">正片叠底</option>
+                        <option value="overlay">叠加</option>
+                        <option value="normal">覆盖</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                      <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">排版</label>
+                      <select id="mod-nai-wm-fit-select" class="moe-input mod-nai-select">
+                        <option value="contain">居中</option>
+                        <option value="cover">铺满</option>
+                        <option value="tile">平铺</option>
+                        <option value="corner">角落</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1px;">
+                    <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">调色与大图预览</span>
+                    <span id="mod-nai-wm-preview-mode-hint" style="font-size: 10.5px; color: var(--nai-muted);">点击下方示例图可更换底图</span>
+                  </div>
+
+                  <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage" title="点击导入并替换示例底图" style="width: 100%; min-height: 250px; max-height: 360px; height: auto; padding: 4px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; box-sizing: border-box;">
+                    <canvas id="mod-nai-wm-preview-canvas" style="width: 100%; height: auto; max-height: 348px; object-fit: contain; display: block; border-radius: 6px; pointer-events: none;"></canvas>
+                    <span class="mod-nai-wm-bg-tip">点此换底图</span>
+                  </div>
+
+                  <div class="mod-nai-slider-row">
+                    <span class="mod-nai-slider-label">透明</span>
+                    <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-opacity-range" min="5" max="100" step="1" value="65" />
+                    <span class="mod-nai-slider-val" id="mod-nai-wm-opacity-val">65%</span>
+                  </div>
+
+                  <div class="mod-nai-slider-row">
+                    <span class="mod-nai-slider-label">色相</span>
+                    <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-hue-range" min="-180" max="180" step="1" value="0" />
+                    <span class="mod-nai-slider-val" id="mod-nai-wm-hue-val">0°</span>
+                  </div>
+
+                  <div class="mod-nai-slider-row">
+                    <span class="mod-nai-slider-label">饱和</span>
+                    <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-sat-range" min="0" max="300" step="1" value="100" />
+                    <span class="mod-nai-slider-val" id="mod-nai-wm-sat-val">100%</span>
+                  </div>
+
+                  <div class="mod-nai-slider-row">
+                    <span class="mod-nai-slider-label">明度</span>
+                    <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-light-range" min="20" max="200" step="1" value="100" />
+                    <span class="mod-nai-slider-val" id="mod-nai-wm-light-val">100%</span>
                   </div>
                 </div>
 
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1px;">
-                  <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text);">调色与大图预览</span>
-                  <span id="mod-nai-wm-preview-mode-hint" style="font-size: 10.5px; color: var(--nai-muted);">点击下方示例图可更换底图</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;">
+                  <button type="button" class="mod-nai-btn" id="mod-nai-wm-reset-btn" style="flex: 1;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                    <span>重置</span>
+                  </button>
+                  <button type="button" class="mod-nai-btn primary" id="mod-nai-wm-confirm-btn" style="flex: 1.5;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>确定</span>
+                  </button>
                 </div>
-
-                <div class="mod-nai-wm-preview-stage" id="mod-nai-wm-preview-stage" title="点击导入并替换示例底图" style="width: 100%; min-height: 250px; max-height: 360px; height: auto; padding: 4px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; box-sizing: border-box;">
-                  <canvas id="mod-nai-wm-preview-canvas" style="width: 100%; height: auto; max-height: 348px; object-fit: contain; display: block; border-radius: 6px; pointer-events: none;"></canvas>
-                  <span class="mod-nai-wm-bg-tip">点此换底图</span>
-                </div>
-
-                <div class="mod-nai-slider-row">
-                  <span class="mod-nai-slider-label">透明</span>
-                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-opacity-range" min="5" max="100" step="1" value="65" />
-                  <span class="mod-nai-slider-val" id="mod-nai-wm-opacity-val">65%</span>
-                </div>
-
-                <div class="mod-nai-slider-row">
-                  <span class="mod-nai-slider-label">色相</span>
-                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-hue-range" min="-180" max="180" step="1" value="0" />
-                  <span class="mod-nai-slider-val" id="mod-nai-wm-hue-val">0°</span>
-                </div>
-
-                <div class="mod-nai-slider-row">
-                  <span class="mod-nai-slider-label">饱和</span>
-                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-sat-range" min="0" max="300" step="1" value="100" />
-                  <span class="mod-nai-slider-val" id="mod-nai-wm-sat-val">100%</span>
-                </div>
-
-                <div class="mod-nai-slider-row">
-                  <span class="mod-nai-slider-label">明度</span>
-                  <input type="range" class="mod-nai-slider-input" id="mod-nai-wm-light-range" min="20" max="200" step="1" value="100" />
-                  <span class="mod-nai-slider-val" id="mod-nai-wm-light-val">100%</span>
-                </div>
-              </div>
-
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;">
-                <button type="button" class="mod-nai-btn" id="mod-nai-wm-reset-btn" style="flex: 1;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-                  <span>重置</span>
-                </button>
-                <button type="button" class="mod-nai-btn primary" id="mod-nai-wm-confirm-btn" style="flex: 1.5;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span>确定</span>
-                </button>
               </div>
             </div>
           </div>
@@ -11777,9 +11793,9 @@
     <div id="novelai-settings-modal" class="modal" style="display: none">
       <div
         class="modal-content"
-        style="max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto"
+        style="max-width: 600px; width: 90%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;"
       >
-        <div class="modal-header">
+        <div class="modal-header" style="flex-shrink: 0;">
           <span>NovelAI 生成设置</span>
           <span
             class="close"
@@ -11793,7 +11809,7 @@
             >&times;</span
           >
         </div>
-        <div class="modal-body" style="padding: 20px">
+        <div class="modal-body" style="padding: 20px; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;">
           <div class="form-group">
             <label style="color: #333">图像尺寸（oplus可无限出小图）</label>
             <select
@@ -23234,13 +23250,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (termuxBase.includes("127.0.0.1")) {
             termuxCandidates.push(termuxBase.replace("127.0.0.1", "localhost"));
           }
+          const initTimeoutMs = window._localProxyBackendVerified ? 5000 : 350;
           for (const tBase of termuxCandidates) {
             if (callerSignal && callerSignal.aborted) throw makeAbortErr();
             let createRes = null;
             let createTxt = "";
             try {
               const initCtrl = new AbortController();
-              const initTimer = setTimeout(() => initCtrl.abort(), 1400);
+              const initTimer = setTimeout(() => initCtrl.abort(), initTimeoutMs);
               createRes = await origFetch(tBase + "/proxy", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -23307,87 +23324,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                       if (callerSignal && callerSignal.aborted) throw makeAbortErr();
                       if (String(pollErr.message || "").includes("本地后台任务已丢失")) throw pollErr;
                     }
-                  }
-                }
-              }
-            }
-          }
-
-          // 2. Try built-in Node server /api/proxy asyncTask (if not on static pages host)
-          const hostName = (window.location && window.location.hostname ? window.location.hostname : "").toLowerCase();
-          const isStaticHost = !hostName || window.location.protocol === "file:" || hostName.endsWith(".github.io") || hostName.endsWith(".pages.dev") || hostName.endsWith(".netlify.app") || hostName.endsWith(".vercel.app");
-          if (!isStaticHost && window._nodeProxyAvailable !== false) {
-            if (callerSignal && callerSignal.aborted) throw makeAbortErr();
-            let nodeCreateData = null;
-            try {
-              const nodeInitCtrl = new AbortController();
-              const nodeInitTimer = setTimeout(() => nodeInitCtrl.abort(), 2500);
-              const nodeRes = await origFetch("/api/proxy", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  url: targetUrl,
-                  method: "POST",
-                  headers: headers || {},
-                  body: bodyObj,
-                  asyncTask: true,
-                }),
-                signal: nodeInitCtrl.signal,
-              });
-              clearTimeout(nodeInitTimer);
-              if (nodeRes && nodeRes.status === 404) {
-                window._nodeProxyAvailable = false;
-              } else if (nodeRes && nodeRes.ok) {
-                const ct = String(nodeRes.headers.get("content-type") || "").toLowerCase();
-                if (ct.includes("application/json")) {
-                  nodeCreateData = await nodeRes.json();
-                }
-              }
-            } catch (_) {
-              nodeCreateData = null;
-            }
-            if (nodeCreateData && nodeCreateData.taskId) {
-              const tid = nodeCreateData.taskId;
-              window._localProxyBackendVerified = true;
-              while (true) {
-                if (callerSignal && callerSignal.aborted) {
-                  origFetch("/api/proxy-abort/" + encodeURIComponent(tid), { method: "POST" }).catch(() => {});
-                  throw makeAbortErr();
-                }
-                await sleepOneSec();
-                if (typeof onProgressTick === "function") {
-                  try { onProgressTick(); } catch (_) {}
-                }
-                if (callerSignal && callerSignal.aborted) {
-                  origFetch("/api/proxy-abort/" + encodeURIComponent(tid), { method: "POST" }).catch(() => {});
-                  throw makeAbortErr();
-                }
-                try {
-                  const pollCtrl = new AbortController();
-                  const pollTimer = setTimeout(() => pollCtrl.abort(), 5000);
-                  const pollRes = await origFetch("/api/proxy-task/" + encodeURIComponent(tid), {
-                    method: "GET",
-                    cache: "no-store",
-                    signal: pollCtrl.signal,
-                  });
-                  clearTimeout(pollTimer);
-                  if (pollRes && pollRes.status === 404) {
-                    throw new Error("后台转发任务已丢失");
-                  }
-                  if (pollRes && pollRes.ok) {
-                    const pollData = await pollRes.json();
-                    if (pollData && pollData.status === "done") {
-                      const statusCode = Number(pollData.httpStatus) || (pollData.ok ? 200 : 502);
-                      const respText = typeof pollData.bodyText === "string" ? pollData.bodyText : "";
-                      return new Response(respText, {
-                        status: statusCode,
-                        headers: { "Content-Type": pollData.contentType || "application/json" },
-                      });
-                    }
-                  }
-                } catch (pollErr) {
-                  if (pollErr && String(pollErr.message || "").includes("后台转发任务已丢失")) {
-                    throw pollErr;
                   }
                 }
               }
@@ -43193,7 +43129,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   dynamic_thresholding: false,
                   controlnet_strength: 1,
                   legacy: false,
-                  add_original_image: true,
+                  add_original_image: false,
                   cfg_rescale: 0,
                   noise_schedule: "karras", // V4/V5使用karras
                   legacy_v3_extend: false,
@@ -43262,16 +43198,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             console.log("📊 使用模型:", model);
             console.log("📋 请求体:", JSON.stringify(requestBody, null, 2));
 
-            // 根据模型选择不同的API端点
-            let apiUrl;
-
-            // V4/V4.5/V5 模型使用流式端点
-            if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-              apiUrl = "https://image.novelai.net/ai/generate-image-stream";
-            } else {
-              // V3 及更早版本使用标准端点
-              apiUrl = "https://image.novelai.net/ai/generate-image";
-            }
+            // 统一使用标准ZIP响应端点，只下载最终成品图，节省流量
+            let apiUrl = "https://image.novelai.net/ai/generate-image";
 
             let corsProxy = settings.cors_proxy;
 
@@ -43618,7 +43546,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 noise_schedule: "karras",
                 deliberate_euler_ancestral_bug: false,
                 prefer_brownian: true,
-                add_original_image: true,
+                add_original_image: false,
                 cfg_rescale: 0,
                 dynamic_thresholding: false,
                 legacy: false,
@@ -43656,14 +43584,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const baseHost = customBaseUrl || "https://image.novelai.net";
           const isCustomHost = Boolean(customBaseUrl && !customBaseUrl.includes("novelai.net"));
-          const primaryEndpoint = isCustomHost
-            ? `${baseHost}/ai/generate-image`
-            : ((model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-                ? `${baseHost}/ai/generate-image-stream`
-                : `${baseHost}/ai/generate-image`);
-          const fallbackEndpoint = isCustomHost
-            ? `${baseHost}/ai/generate-image-stream`
-            : `${baseHost}/ai/generate-image`;
+          const primaryEndpoint = `${baseHost}/ai/generate-image`;
+          const fallbackEndpoint = null;
           const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
           const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
@@ -45294,6 +45216,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               document.getElementById("mod-nai-drawer-count-lexicon"),
               null
             );
+
+            const masterCountEl = document.getElementById("mod-nai-drawer-count-master");
+            if (masterCountEl) {
+              const totalPresetsCount =
+                (Array.isArray(store.artist) ? store.artist.length : 0) +
+                (Array.isArray(store.positive) ? store.positive.length : 0) +
+                (Array.isArray(store.negative) ? store.negative.length : 0) +
+                loadLocalBookmarksForCategory("lexicon").length;
+              masterCountEl.textContent = String(totalPresetsCount);
+            }
           }
 
           function renderLexiconGroupingUI(listContainer, countEl, externalTagsContainer) {
@@ -46326,6 +46258,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
                 if (cleanGenCheck) cleanGenCheck.checked = Boolean(st.cleanOnGenerate);
                 applyThemeToPanel(st.theme || "folio");
+                settingsModal.querySelectorAll(".mod-nai-preset-drawer").forEach((drawerEl) => {
+                  drawerEl.classList.remove("is-open");
+                  const bodyEl = Array.from(drawerEl.children).find((el) => el.classList && el.classList.contains("mod-nai-preset-drawer-body"));
+                  if (bodyEl) bodyEl.style.display = "none";
+                });
+                const scrollBody = settingsModal.querySelector(".mod-nai-modal-scroll-body");
+                if (scrollBody) scrollBody.scrollTop = 0;
                 renderSettingsPresetDrawers();
                 settingsModal.style.display = "flex";
               });
@@ -46344,7 +46283,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 headBtn.addEventListener("click", () => {
                   const drawer = headBtn.closest(".mod-nai-preset-drawer");
                   if (!drawer) return;
-                  const body = drawer.querySelector(".mod-nai-preset-drawer-body");
+                  const body = Array.from(drawer.children).find((el) => el.classList && el.classList.contains("mod-nai-preset-drawer-body"));
                   const willOpen = !drawer.classList.contains("is-open");
                   if (willOpen) {
                     renderSettingsPresetDrawers();
@@ -50026,9 +49965,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const vaultAttr = genImg ? (genImg.getAttribute("data-vault-ref") || "") : "";
             const curGenSrc = (genImg && genImg.style.display !== "none" && (vaultAttr || (genImg.src && (genImg.src.startsWith("data:") || genImg.src.startsWith("blob:") || genImg.src.startsWith("http")))))
               ? (vaultAttr || st.lastGeneratedImage || genImg.src)
-              : "";
+              : (st.lastGeneratedImage || "");
             const defaultModelTag = st.model && String(st.model).includes("-5-") ? "V5" : "V4.5";
             const defaultFolder = isLex ? (colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME) : "";
+            const pos1InpEl = document.getElementById("mod-nai-gen-pos1-input");
+            const firstPosText = (pos1InpEl && pos1InpEl.value.trim()) ? pos1InpEl.value.trim() : (st.pos1Text || "");
 
             colCurrentItem = {
               id: (isLex ? "lx_" : "bm_") + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
@@ -50037,10 +49978,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               folder: defaultFolder,
               modelTag: defaultModelTag,
               remark: "",
-              image: isLex ? "" : curGenSrc,
-              images: !isLex && curGenSrc ? [curGenSrc] : [],
+              image: curGenSrc,
+              images: curGenSrc ? [curGenSrc] : [],
               artist: isLex ? "" : (computeActiveArtistPrompt() || st.artistText || ""),
-              positive: isLex ? "" : (computeActivePositivePrompt() || st.pos1Text || ""),
+              positive: firstPosText || computeActivePositivePrompt() || "",
               negative: isLex ? "" : (st.negText || ""),
               updatedAt: Date.now()
             };
@@ -50048,6 +49989,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colEditImagesDraft = getBookmarkImagesArray(colCurrentItem);
             colEditImageDraft = colEditImagesDraft[0] || "";
             colEditModelDraft = defaultModelTag;
+
+            if (curGenSrc && curGenSrc.startsWith("data:")) {
+              const targetNewItem = colCurrentItem;
+              offloadSingleNaiImageToTermux(curGenSrc).then((termuxRef) => {
+                if (termuxRef && colCurrentItem === targetNewItem) {
+                  targetNewItem.image = termuxRef;
+                  targetNewItem.images = [termuxRef];
+                  colEditImagesDraft = [termuxRef];
+                  colEditImageDraft = termuxRef;
+                }
+              }).catch(() => {});
+            }
 
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
@@ -51025,8 +50978,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
                 const posInp = document.getElementById("mod-nai-col-edit-pos-input");
                 const negInp = document.getElementById("mod-nai-col-edit-neg-input");
+                const pos1InpEl = document.getElementById("mod-nai-gen-pos1-input");
+                const firstPosText = (pos1InpEl && pos1InpEl.value.trim()) ? pos1InpEl.value.trim() : (st.pos1Text || "");
                 if (!isLex && artistInp) artistInp.value = computeActiveArtistPrompt() || st.artistText || "";
-                if (posInp) posInp.value = computeActivePositivePrompt() || st.pos1Text || "";
+                if (posInp) posInp.value = firstPosText || computeActivePositivePrompt() || "";
                 if (!isLex && negInp) negInp.value = st.negText || "";
                 const genImg = document.getElementById("mod-nai-gen-result-img");
                 const vaultAttr = genImg ? (genImg.getAttribute("data-vault-ref") || "") : "";
@@ -52030,8 +51985,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 purgeBrowserDuplicateNaiCopies();
               }
 
-              preloadAllNaiCollectionVaultImages();
-
               if (gridNeedsRebuild) {
                 renderCollectionGrid(true);
               }
@@ -52224,8 +52177,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (typeof window.openModuleNaiPanel === "function") {
               window.openModuleNaiPanel();
             }
-            setTimeout(loadNaiStoreFromTermux, 600);
-            setTimeout(loadNaiStoreFromTermux, 1800);
           }
 
           if (document.readyState === "loading") {
@@ -70133,7 +70084,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                               dynamic_thresholding: false,
                               controlnet_strength: 1,
                               legacy: false,
-                              add_original_image: true,
+                              add_original_image: false,
                               cfg_rescale: 0,
                               noise_schedule: "karras", // V4使用karras
                               legacy_v3_extend: false,
@@ -70200,18 +70151,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                         console.log("🚀 发送NAI请求:", requestBody);
 
-                        // 根据模型选择不同的API端点
-                        let apiUrl;
-
-                        // V4/V4.5/V5 模型使用流式端点
-                        if (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5")) {
-                          apiUrl =
-                            "https://image.novelai.net/ai/generate-image-stream";
-                        } else {
-                          // V3 及更早版本使用标准端点
-                          apiUrl =
-                            "https://image.novelai.net/ai/generate-image";
-                        }
+                        // 统一使用标准端点，只下载最终成品图
+                        let apiUrl = "https://image.novelai.net/ai/generate-image";
 
                         let corsProxy = settings.cors_proxy;
 
@@ -75508,7 +75449,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   noise_schedule: "karras",
                   deliberate_euler_ancestral_bug: false,
                   prefer_brownian: true,
-                  add_original_image: true,
+                  add_original_image: false,
                   cfg_rescale: 0,
                   dynamic_thresholding: false,
                   legacy: false,
@@ -75549,9 +75490,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               };
             }
 
-            let apiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-              ? "https://image.novelai.net/ai/generate-image-stream"
-              : "https://image.novelai.net/ai/generate-image";
+            let apiUrl = "https://image.novelai.net/ai/generate-image";
             let corsProxy =
               settings.cors_proxy === "custom"
                 ? settings.custom_proxy_url
@@ -90746,24 +90685,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             lastErr = dirErr;
           }
 
-          try {
-            const serverProxyRes = await fetch("/api/proxy", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                url: targetApiUrl,
-                method: "POST",
-                headers,
-                body: requestBody,
-              }),
-            });
-            if (serverProxyRes.ok) return serverProxyRes;
-            const srvErrTxt = await serverProxyRes.text().catch(() => "");
-            lastErr = new Error(`NovelAI 请求失败 (${serverProxyRes.status}): ${srvErrTxt.slice(0, 160)}`);
-          } catch (srvErr) {
-            lastErr = srvErr;
-          }
-
           if (isDefaultSlowProxy && corsProxyUrl) {
             try {
               const proxiedUrl = corsProxyUrl + encodeURIComponent(targetApiUrl);
@@ -90911,7 +90832,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       dynamic_thresholding: false,
                       controlnet_strength: 1,
                       legacy: false,
-                      add_original_image: true,
+                      add_original_image: false,
                       cfg_rescale: 0,
                       noise_schedule: "karras",
                       legacy_v3_extend: false,
@@ -90963,9 +90884,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 };
               };
 
-              const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-                ? "https://image.novelai.net/ai/generate-image-stream"
-                : "https://image.novelai.net/ai/generate-image";
+              const targetApiUrl = "https://image.novelai.net/ai/generate-image";
               const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
 
               let imageDataUrl = null;
@@ -91138,7 +91057,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       dynamic_thresholding: false,
                       controlnet_strength: 1,
                       legacy: false,
-                      add_original_image: true,
+                      add_original_image: false,
                       cfg_rescale: 0,
                       noise_schedule: "karras",
                       legacy_v3_extend: false,
@@ -91190,9 +91109,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 };
               };
 
-              const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-                ? "https://image.novelai.net/ai/generate-image-stream"
-                : "https://image.novelai.net/ai/generate-image";
+              const targetApiUrl = "https://image.novelai.net/ai/generate-image";
               const corsProxy = settings.cors_proxy === "custom" ? (settings.custom_proxy_url || "") : settings.cors_proxy;
 
               let imageDataUrl = null;
@@ -91336,7 +91253,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   noise_schedule: "karras",
                   deliberate_euler_ancestral_bug: false,
                   prefer_brownian: true,
-                  add_original_image: true,
+                  add_original_image: false,
                   cfg_rescale: 0,
                   dynamic_thresholding: false,
                   legacy: false,
@@ -91364,9 +91281,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               };
             }
 
-            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-              ? "https://image.novelai.net/ai/generate-image-stream"
-              : "https://image.novelai.net/ai/generate-image";
+            const targetApiUrl = "https://image.novelai.net/ai/generate-image";
             const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
             const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
@@ -91706,7 +91621,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   noise_schedule: "karras",
                   deliberate_euler_ancestral_bug: false,
                   prefer_brownian: true,
-                  add_original_image: true,
+                  add_original_image: false,
                   cfg_rescale: 0,
                   dynamic_thresholding: false,
                   legacy: false,
@@ -91734,9 +91649,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               };
             }
 
-            const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-              ? "https://image.novelai.net/ai/generate-image-stream"
-              : "https://image.novelai.net/ai/generate-image";
+            const targetApiUrl = "https://image.novelai.net/ai/generate-image";
             const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
             const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
@@ -92622,7 +92535,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       noise_schedule: "karras",
                       deliberate_euler_ancestral_bug: false,
                       prefer_brownian: true,
-                      add_original_image: true,
+                      add_original_image: false,
                       cfg_rescale: 0,
                       dynamic_thresholding: false,
                       legacy: false,
@@ -92658,9 +92571,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 };
               };
 
-              const targetApiUrl = (model.includes("nai-diffusion-4") || model.includes("nai-diffusion-5"))
-                ? "https://image.novelai.net/ai/generate-image-stream"
-                : "https://image.novelai.net/ai/generate-image";
+              const targetApiUrl = "https://image.novelai.net/ai/generate-image";
               const corsProxy = settings.cors_proxy === "custom" ? settings.custom_proxy_url : settings.cors_proxy;
 
               const isChrome = /Chrome/.test(navigator.userAgent) && !/Edg/.test(navigator.userAgent);
@@ -133427,7 +133338,6 @@ ${specificRules}`;
                   }
                 } catch (_) {}
                 const res = await origPut(rowObj, ...rest);
-                if (!_suspendVaultAutoOffload) scheduleAutoTermuxBackupSave();
                 return res;
               };
               if (typeof table.add === "function") {
@@ -133446,7 +133356,6 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   const res = await origAdd(rowObj, ...rest);
-                  if (!_suspendVaultAutoOffload) scheduleAutoTermuxBackupSave();
                   return res;
                 };
               }
@@ -133468,7 +133377,6 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   const res = await origBulkAdd(rows, ...rest);
-                  if (!_suspendVaultAutoOffload) scheduleAutoTermuxBackupSave();
                   return res;
                 };
               }
@@ -133490,7 +133398,6 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   const res = await origBulkPut(rows, ...rest);
-                  if (!_suspendVaultAutoOffload) scheduleAutoTermuxBackupSave();
                   return res;
                 };
               }
@@ -133511,7 +133418,6 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   const res = await origUpdate(key, changes, ...rest);
-                  scheduleAutoTermuxBackupSave();
                   return res;
                 };
               }
@@ -133519,7 +133425,6 @@ ${specificRules}`;
                 const origDelete = table.delete.bind(table);
                 table.delete = async function (...args) {
                   const res = await origDelete(...args);
-                  scheduleAutoTermuxBackupSave();
                   return res;
                 };
               }

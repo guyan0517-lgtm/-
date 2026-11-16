@@ -10905,7 +10905,6 @@ function buildFallbackCodeFromItem(drinkObj) {
       })
       .catch(() => {});
   }
-  preloadLocalMilkteaHtml();
 
   function resolveMilkteaFullHtmlFromCardOrCache() {
     if (localMilkteaHtmlCache && localMilkteaHtmlCache.includes('unlockedIngredients')) {
