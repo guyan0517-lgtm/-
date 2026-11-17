@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43893,6 +43893,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (srcStr.startsWith("vault://")) {
               imgEl._naiTargetVaultRef = srcStr;
+              imgEl._naiFallbackCoverIdx = typeof fallbackCoverIdx === "number" ? fallbackCoverIdx : undefined;
               imgEl._naiErrRetryCount = 0;
               imgEl.setAttribute("data-vault-ref", srcStr);
               const fastCached = typeof window.getCachedVaultBlobUrl === "function"
@@ -43901,6 +43902,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (fastCached) {
                 predecodeResolvedUrl(fastCached);
                 imgEl.removeAttribute("data-vault-pending");
+                imgEl.removeAttribute("data-vault-fallback-shown");
                 imgEl.setAttribute("data-vault-hydrated-src", fastCached);
                 imgEl.src = fastCached;
                 return;
@@ -43917,16 +43919,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (cachedNow) {
                   predecodeResolvedUrl(cachedNow);
                   imgEl.removeAttribute("data-vault-pending");
+                  imgEl.removeAttribute("data-vault-fallback-shown");
                   imgEl.setAttribute("data-vault-ref", srcStr);
                   imgEl.setAttribute("data-vault-hydrated-src", cachedNow);
                   imgEl.src = cachedNow;
                   return;
                 }
                 if (typeof window.resolveVaultRefToUrl !== "function") {
-                  if (attempt < 5) {
+                  if (attempt < 8) {
                     setTimeout(() => tryResolveWithRetries(attempt + 1), 350);
                   } else if (typeof fallbackCoverIdx === "number") {
-                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-fallback-shown", "1");
                     imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
                   }
                   return;
@@ -43936,21 +43939,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (resolved && resolved !== srcStr && !resolved.startsWith("vault://")) {
                     predecodeResolvedUrl(resolved);
                     imgEl.removeAttribute("data-vault-pending");
+                    imgEl.removeAttribute("data-vault-fallback-shown");
                     imgEl.setAttribute("data-vault-ref", srcStr);
                     imgEl.setAttribute("data-vault-hydrated-src", resolved);
                     imgEl.src = resolved;
-                  } else if (attempt < 4) {
-                    setTimeout(() => tryResolveWithRetries(attempt + 1), 450 * (attempt + 1));
+                  } else if (attempt < 8) {
+                    setTimeout(() => tryResolveWithRetries(attempt + 1), 400 * (attempt + 1));
                   } else if (typeof fallbackCoverIdx === "number") {
-                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-fallback-shown", "1");
                     imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
                   }
                 }).catch(() => {
                   if (imgEl._naiTargetVaultRef !== srcStr) return;
-                  if (attempt < 4) {
-                    setTimeout(() => tryResolveWithRetries(attempt + 1), 450 * (attempt + 1));
+                  if (attempt < 8) {
+                    setTimeout(() => tryResolveWithRetries(attempt + 1), 400 * (attempt + 1));
                   } else if (typeof fallbackCoverIdx === "number") {
-                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-fallback-shown", "1");
                     imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
                   }
                 });
@@ -43960,6 +43964,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               imgEl._naiTargetVaultRef = "";
               imgEl.removeAttribute("data-vault-ref");
               imgEl.removeAttribute("data-vault-pending");
+              imgEl.removeAttribute("data-vault-fallback-shown");
               predecodeResolvedUrl(srcStr);
               if (typeof window.setCleanPreviewImgSrc === "function") {
                 window.setCleanPreviewImgSrc(imgEl, srcStr);
@@ -44058,13 +44063,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return folders;
           }
 
-          function buildSlimMetadataList(list) {
+          function buildSlimMetadataList(list, keepDataUrls = false) {
             if (!Array.isArray(list)) return [];
             return list
               .filter((it) => it && typeof it === "object")
               .map((it) => {
-                const rawImgs = Array.isArray(it.images) ? it.images : (it.image ? [it.image] : []);
-                const slimImgs = rawImgs.filter((u) => typeof u === "string" && !u.startsWith("data:"));
+                const rawImgs = Array.isArray(it.images) && it.images.length > 0
+                  ? it.images
+                  : (it.image ? [it.image] : []);
+                const normImgs = rawImgs
+                  .map((u) => {
+                    if (typeof u !== "string") return "";
+                    const s = u.trim();
+                    if (s.startsWith("blob:") && window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.has(s)) {
+                      return window.blobUrlToVaultRefMap.get(s);
+                    }
+                    return s;
+                  })
+                  .filter((u) => u && (keepDataUrls || !u.startsWith("data:")));
                 return {
                   id: it.id || "",
                   _category: it._category || "",
@@ -44072,8 +44088,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   modelTag: it.modelTag || "V4.5",
                   remark: it.remark || "",
                   folder: typeof it.folder === "string" ? it.folder : "",
-                  image: slimImgs[0] || "",
-                  images: slimImgs,
+                  image: normImgs[0] || "",
+                  images: normImgs,
+                  _imageExplicitlyCleared: Boolean(it._imageExplicitlyCleared),
                   artist: it.artist || "",
                   positive: it.positive || "",
                   negative: it.negative || "",
@@ -44083,17 +44100,26 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
           }
 
-          function buildSlimFoldersList(folders) {
+          function buildSlimFoldersList(folders, keepDataUrls = false) {
             if (!Array.isArray(folders)) return [];
             return folders
               .filter((f) => f && typeof f === "object" && f.name)
-              .map((f) => ({
-                id: f.id || ("lf_" + f.name),
-                name: String(f.name).trim(),
-                coverImage: (typeof f.coverImage === "string" && !f.coverImage.startsWith("data:")) ? f.coverImage : "",
-                explicitCreated: Boolean(f.explicitCreated),
-                updatedAt: f.updatedAt || 0
-              }));
+              .map((f) => {
+                let cImg = typeof f.coverImage === "string" ? f.coverImage.trim() : "";
+                if (cImg.startsWith("blob:") && window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.has(cImg)) {
+                  cImg = window.blobUrlToVaultRefMap.get(cImg);
+                }
+                if (!keepDataUrls && cImg.startsWith("data:")) {
+                  cImg = "";
+                }
+                return {
+                  id: f.id || ("lf_" + f.name),
+                  name: String(f.name).trim(),
+                  coverImage: cImg,
+                  explicitCreated: Boolean(f.explicitCreated),
+                  updatedAt: f.updatedAt || 0
+                };
+              });
           }
 
           function purgeLegacyNaiLocalStorageKeys() {
@@ -44112,13 +44138,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (_naiHydrationCompleted) {
               purgeLegacyNaiLocalStorageKeys();
             }
-            const slimBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList)) : null;
-            const slimLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList)) : null;
-            const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList) : null;
+            const idbBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList), true) : null;
+            const idbLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList), true) : null;
+            const idbFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, true) : null;
 
-            if (slimBm) writeKeyToNaiIDB("bookmarks", slimBm);
-            if (slimLex) writeKeyToNaiIDB("lexicon", slimLex);
-            if (slimFolders) writeKeyToNaiIDB("lexiconFolders", slimFolders);
+            const slimBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList), false) : null;
+            const slimLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList), false) : null;
+            const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, false) : null;
+
+            if (idbBm) writeKeyToNaiIDB("bookmarks", idbBm);
+            if (idbLex) writeKeyToNaiIDB("lexicon", idbLex);
+            if (idbFolders) writeKeyToNaiIDB("lexiconFolders", idbFolders);
             if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
               writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
             }
@@ -48742,15 +48772,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const cur = merged[pos];
                 const curTs = Number(cur.updatedAt || 0);
                 const otherTs = Number(other.updatedAt || 0);
+                const curImgs = getBookmarkImagesArray(cur);
+                const otherImgs = getBookmarkImagesArray(other);
                 if (otherTs > curTs) {
-                  // other 是更新的编辑版本（例如用户刚刚删掉了某张图或改了文字），直接以最新版本为准，绝不把删掉的图塞回来
-                  merged[pos] = Object.assign({}, other);
-                } else if (curTs === otherTs) {
-                  // 仅当时间戳完全相同时（例如轻量备份与完整备份合并），才用非空图片补全
-                  const curImgs = Array.isArray(cur.images) ? cur.images.filter(Boolean) : (cur.image ? [cur.image] : []);
-                  const otherImgs = Array.isArray(other.images) ? other.images.filter(Boolean) : (other.image ? [other.image] : []);
-                  if (curImgs.length === 0 && otherImgs.length > 0) {
-                    cur.images = otherImgs;
+                  const nextItem = Object.assign({}, other);
+                  if (otherImgs.length === 0 && curImgs.length > 0 && !other._imageExplicitlyCleared) {
+                    nextItem.images = curImgs.slice();
+                    nextItem.image = curImgs[0] || "";
+                  }
+                  merged[pos] = nextItem;
+                } else {
+                  if (curImgs.length === 0 && otherImgs.length > 0 && !cur._imageExplicitlyCleared) {
+                    cur.images = otherImgs.slice();
                     cur.image = otherImgs[0] || "";
                   }
                   if (!cur.folder && other.folder) cur.folder = other.folder;
@@ -49092,12 +49125,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function getBookmarkImagesArray(item) {
             if (!item) return [];
+            const normalizeOne = (u) => {
+              if (typeof u !== "string") return "";
+              const s = u.trim();
+              if (!s) return "";
+              if (s.startsWith("blob:") && window.blobUrlToVaultRefMap && window.blobUrlToVaultRefMap.has(s)) {
+                return window.blobUrlToVaultRefMap.get(s);
+              }
+              return s;
+            };
             if (Array.isArray(item.images)) {
-              const clean = item.images.filter((u) => typeof u === "string" && u.trim().length > 0);
+              const clean = item.images.map(normalizeOne).filter(Boolean);
               if (clean.length > 0) return clean;
             }
             if (typeof item.image === "string" && item.image.trim().length > 0) {
-              return [item.image.trim()];
+              const single = normalizeOne(item.image);
+              if (single) return [single];
             }
             return [];
           }
@@ -49378,33 +49421,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, buildPageCardsFn) {
-            // 进入收藏与词典界面时：优先挂载当前页，随后把其余全部页码也在后台挂载并预加载封面图，翻页时零延迟秒切；退出收藏与词典界面时由 destroyNaiCollectionGalleryMemory 统一销毁释放内存
-            const mountOrder = [curPage];
+            // 一次性挂载全部页（先挂载当前页确保最优先进入队列，随后立即挂载其余全部页），点击下一页零等待秒切
+            const pageOrder = [curPage];
             for (let p = 1; p <= totalPages; p++) {
-              if (p !== curPage) mountOrder.push(p);
+              if (p !== curPage) pageOrder.push(p);
             }
-
-            const frag = document.createDocumentFragment();
-            let hasNewCards = false;
-            mountOrder.forEach((pageNum) => {
-              if (!colMountedPagesMap.has(pageNum)) {
-                const cards = buildPageCardsFn(pageNum);
+            for (const p of pageOrder) {
+              if (!colMountedPagesMap.has(p)) {
+                const frag = document.createDocumentFragment();
+                const cards = buildPageCardsFn(p);
                 const refs = [];
                 cards.forEach((cEl) => {
-                  cEl.style.display = pageNum === curPage ? "" : "none";
+                  cEl.style.display = p === curPage ? "" : "none";
                   const imgEl = cEl.querySelector("img");
                   if (imgEl) {
                     const vRef = imgEl.getAttribute("data-vault-ref") || "";
                     if (vRef && vRef.startsWith("vault://")) refs.push(vRef);
                   }
                   frag.appendChild(cEl);
-                  hasNewCards = true;
                 });
-                colMountedPagesMap.set(pageNum, { cards, refs });
+                colMountedPagesMap.set(p, { cards, refs });
+                gridEl.appendChild(frag);
               }
-            });
-            if (hasNewCards) {
-              gridEl.appendChild(frag);
             }
 
             for (const [pageNum, pageEntry] of colMountedPagesMap.entries()) {
@@ -49414,6 +49452,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const targetDisplay = isVisiblePage ? "" : "none";
                   if (cEl.style.display !== targetDisplay) {
                     cEl.style.display = targetDisplay;
+                  }
+                  if (isVisiblePage) {
+                    const imgEl = cEl.querySelector("img[data-vault-ref]");
+                    if (imgEl) {
+                      const vRef = imgEl.getAttribute("data-vault-ref") || "";
+                      const curSrc = imgEl.getAttribute("src") || "";
+                      if (
+                        vRef &&
+                        vRef.startsWith("vault://") &&
+                        (imgEl.getAttribute("data-vault-fallback-shown") === "1" ||
+                          curSrc === NAI_TRANSPARENT_PIXEL ||
+                          curSrc.includes("assets/trace/"))
+                      ) {
+                        bindNaiVaultAwareImage(imgEl, vRef, imgEl._naiFallbackCoverIdx);
+                      }
+                    }
                   }
                 });
               }
@@ -49642,6 +49696,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const removedUrl = colEditImagesDraft[idx];
                 colEditImagesDraft.splice(idx, 1);
                 colEditImageDraft = colEditImagesDraft[0] || "";
+                if (colCurrentItem) {
+                  colCurrentItem._imageExplicitlyCleared = colEditImagesDraft.length === 0;
+                }
                 renderEditSquarePreview(colEditImagesDraft);
                 persistCurrentBookmarkEditDraft(false);
                 if (
@@ -49992,12 +50049,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (curGenSrc && curGenSrc.startsWith("data:")) {
               const targetNewItem = colCurrentItem;
+              const targetNewCat = colCategory;
               offloadSingleNaiImageToTermux(curGenSrc).then((termuxRef) => {
-                if (termuxRef && colCurrentItem === targetNewItem) {
-                  targetNewItem.image = termuxRef;
-                  targetNewItem.images = [termuxRef];
+                if (!termuxRef) return;
+                targetNewItem.image = termuxRef;
+                targetNewItem.images = [termuxRef];
+                if (colCurrentItem === targetNewItem) {
                   colEditImagesDraft = [termuxRef];
                   colEditImageDraft = termuxRef;
+                }
+                const savedList = loadLocalBookmarksForCategory(targetNewCat).slice();
+                const savedIdx = savedList.findIndex((x) => x && x.id === targetNewItem.id);
+                if (savedIdx >= 0) {
+                  savedList[savedIdx].image = termuxRef;
+                  savedList[savedIdx].images = [termuxRef];
+                  saveLocalBookmarks(savedList, targetNewCat);
                 }
               }).catch(() => {});
             }
@@ -50103,6 +50169,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             colCurrentItem.modelTag = normalizeModelTagValue(colEditModelDraft);
             colCurrentItem.remark = remarkVal;
+            if (colEditImagesDraft.length > 0) {
+              colCurrentItem._imageExplicitlyCleared = false;
+            }
             colCurrentItem.images = colEditImagesDraft.slice();
             colCurrentItem.image = colEditImagesDraft[0] || "";
             colCurrentItem.artist = artistVal;
@@ -51819,6 +51888,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 readListFromStorageKey(LEXICON_FOLDERS_STORE_KEY) || []
               ) : [];
 
+              const hasAnyEmptyBookmarkImage = (arr) =>
+                Array.isArray(arr) &&
+                arr.some((it) => it && it.id && !it._imageExplicitlyCleared && getBookmarkImagesArray(it).length === 0);
+
+              const fillMissingBookmarkImagesFromFallbackList = (targetList, fallbackList) => {
+                if (!Array.isArray(targetList) || !Array.isArray(fallbackList) || fallbackList.length === 0) return;
+                const fbMap = new Map();
+                fallbackList.forEach((fb) => {
+                  if (!fb || !fb.id) return;
+                  const imgs = getBookmarkImagesArray(fb);
+                  if (imgs.length > 0) fbMap.set(fb.id, imgs);
+                });
+                if (fbMap.size === 0) return;
+                targetList.forEach((it) => {
+                  if (!it || !it.id || it._imageExplicitlyCleared) return;
+                  if (getBookmarkImagesArray(it).length === 0 && fbMap.has(it.id)) {
+                    const recovered = fbMap.get(it.id);
+                    it.images = recovered.slice();
+                    it.image = recovered[0] || "";
+                  }
+                });
+              };
+
               let mergedBm = [];
               if (Array.isArray(remoteStore && remoteStore.bookmarks) && Array.isArray(idbData && idbData.bookmarks)) {
                 mergedBm = mergeBookmarkListsById(idbData.bookmarks, remoteStore.bookmarks);
@@ -51848,6 +51940,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 mergedLex = mergeBookmarkListsById(memoryLexiconList, mergedLex);
               }
               mergedLex = filterOutDeletedItems(mergedLex);
+
+              if (hasAnyEmptyBookmarkImage(mergedBm)) {
+                fillMissingBookmarkImagesFromFallbackList(mergedBm, remoteStore && remoteStore.bookmarks);
+                fillMissingBookmarkImagesFromFallbackList(mergedBm, idbData && idbData.bookmarks);
+                fillMissingBookmarkImagesFromFallbackList(mergedBm, legacyGs && legacyGs.naiBookmarksCollection);
+                fillMissingBookmarkImagesFromFallbackList(mergedBm, backupBookmarks);
+              }
+              if (hasAnyEmptyBookmarkImage(mergedLex)) {
+                fillMissingBookmarkImagesFromFallbackList(mergedLex, remoteStore && remoteStore.lexicon);
+                fillMissingBookmarkImagesFromFallbackList(mergedLex, idbData && idbData.lexicon);
+                fillMissingBookmarkImagesFromFallbackList(mergedLex, legacyGs && legacyGs.naiLexiconCollection);
+                fillMissingBookmarkImagesFromFallbackList(mergedLex, backupLexicon);
+              }
 
               let mergedFolders = [];
               if (Array.isArray(remoteStore && remoteStore.lexiconFolders)) {
@@ -52012,6 +52117,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             collectFromList(memoryBookmarksList);
             collectFromList(memoryLexiconList);
             collectFromList(memoryLexiconFoldersList);
+            try {
+              const idbSnap = await readAllFromNaiIDB();
+              if (idbSnap && typeof idbSnap === "object") {
+                collectFromList(idbSnap.bookmarks);
+                collectFromList(idbSnap.lexicon);
+                collectFromList(idbSnap.lexiconFolders);
+              }
+            } catch (_) {}
             const curSt = loadPanelState();
             if (curSt && typeof curSt.lastGeneratedImage === "string" && curSt.lastGeneratedImage.includes("vault://")) {
               refs.push(curSt.lastGeneratedImage);
