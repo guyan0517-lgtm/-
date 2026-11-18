@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43815,25 +43815,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           const predecodedImageCache = new Map();
-          const MAX_PREDECODED_CACHE_SIZE = 240;
-          function predecodeResolvedUrl(url) {
-            if (!url || typeof url !== "string" || url.startsWith("vault://") || url.startsWith("data:")) return;
-            if (predecodedImageCache.has(url)) return;
-            if (predecodedImageCache.size >= MAX_PREDECODED_CACHE_SIZE) {
-              const oldestKey = predecodedImageCache.keys().next().value;
-              if (oldestKey !== undefined) {
-                const oldImg = predecodedImageCache.get(oldestKey);
-                if (oldImg) oldImg.src = "";
-                predecodedImageCache.delete(oldestKey);
-              }
-            }
-            const preImg = new Image();
-            preImg.decoding = "async";
-            preImg.src = url;
-            if (typeof preImg.decode === "function") {
-              preImg.decode().catch(() => {});
-            }
-            predecodedImageCache.set(url, preImg);
+          function predecodeResolvedUrl(_url) {
+            // 不在浏览器内存中驻留额外的离线 Image 解码位图，避免几百兆未压缩像素堆积导致浏览器卡顿
           }
 
           function releasePredecodedUrl(url) {
@@ -43975,36 +43958,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function preloadAllNaiCollectionVaultImages() {
-            if (typeof window.resolveVaultRefToUrl !== "function") return;
-            const refs = new Set();
-            const collectArr = (arr) => {
-              if (!Array.isArray(arr)) return;
-              arr.forEach((it) => {
-                if (!it || typeof it !== "object") return;
-                if (typeof it.image === "string" && it.image.startsWith("vault://")) refs.add(it.image);
-                if (typeof it.coverImage === "string" && it.coverImage.startsWith("vault://")) refs.add(it.coverImage);
-                if (Array.isArray(it.images)) {
-                  it.images.forEach((u) => {
-                    if (typeof u === "string" && u.startsWith("vault://")) refs.add(u);
-                  });
-                }
-              });
-            };
-            collectArr(memoryBookmarksList);
-            collectArr(memoryLexiconList);
-            collectArr(memoryLexiconFoldersList);
-            refs.forEach((vRef) => {
-              const cached = typeof window.getCachedVaultBlobUrl === "function" ? window.getCachedVaultBlobUrl(vRef) : null;
-              if (cached) {
-                predecodeResolvedUrl(cached);
-              } else {
-                window.resolveVaultRefToUrl(vRef).then((resolved) => {
-                  if (resolved && !resolved.startsWith("vault://")) {
-                    predecodeResolvedUrl(resolved);
-                  }
-                }).catch(() => {});
-              }
-            });
+            // 按需由当前展示卡片的 img 元素直接从 Termux 流式解析，不在后台一次性把数百张收藏图全部拉进浏览器内存
           }
 
           async function offloadSingleNaiImageToTermux(imgUrl) {
@@ -44141,20 +44095,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const idbBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList), true) : null;
             const idbLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList), true) : null;
             const idbFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, true) : null;
-
             const slimBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList), false) : null;
             const slimLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList), false) : null;
             const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, false) : null;
 
-            if (idbBm) writeKeyToNaiIDB("bookmarks", idbBm);
-            if (idbLex) writeKeyToNaiIDB("lexicon", idbLex);
-            if (idbFolders) writeKeyToNaiIDB("lexiconFolders", idbFolders);
-            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
-              writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
-            }
-            if (memoryPanelState && typeof memoryPanelState === "object") {
-              writeKeyToNaiIDB("panelState", Object.assign({}, memoryPanelState));
-            }
             const buildSlimPanelStateForGlobal = (stObj) => {
               if (!stObj || typeof stObj !== "object") return stObj;
               const copy = Object.assign({}, stObj);
@@ -44177,6 +44121,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               return copy;
             };
+
+            if (idbBm) writeKeyToNaiIDB("bookmarks", idbBm);
+            if (idbLex) writeKeyToNaiIDB("lexicon", idbLex);
+            if (idbFolders) writeKeyToNaiIDB("lexiconFolders", idbFolders);
+            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
+              writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
+            }
+            if (memoryPanelState && typeof memoryPanelState === "object") {
+              writeKeyToNaiIDB("panelState", buildSlimPanelStateForGlobal(memoryPanelState));
+            }
             writeKeyToNaiIDB("deletedIds", Array.from(getDeletedIdsSet()));
             writeKeyToNaiIDB("deletedPresetKeys", Array.from(getDeletedPresetKeysSet()));
 
@@ -44336,7 +44290,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function persistNaiStoreToTermux(useKeepAlive = false) {
-            syncLightweightNaiMetadataBackup();
+            if (useKeepAlive) {
+              syncLightweightNaiMetadataBackup();
+            }
             _termuxNaiWriteQueue = _termuxNaiWriteQueue.then(async () => {
               const baseUrl = getNaiTermuxBaseUrl();
               if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
@@ -44355,6 +44311,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const bgRef = await offloadSingleNaiImageToTermux(memoryPanelState.watermarkPreviewBg);
                 if (bgRef) memoryPanelState.watermarkPreviewBg = bgRef;
               }
+              // 先完成 Termux 图片分离（连着 Termux 时原图已变成 35 字节的 vault:// 短链接），再同步写入浏览器备用库，彻底避免把几兆的原图先写进浏览器底层造成历史碎片
+              syncLightweightNaiMetadataBackup();
 
               let existingRemote = null;
               if (!_termuxNaiStoreLoadedOnce) {
@@ -51708,7 +51666,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (document.visibilityState === "hidden") {
               flushAllNaiStateBeforeExit();
             } else if (document.visibilityState === "visible") {
-              loadNaiStoreFromTermux();
+              // 已经完成初始加载后，从系统选图器返回时绝不重新覆盖当前生图面板的视图与模式，防止用着用着跳回旧状态导致无法清洗
+              if (!_naiHydrationCompleted) {
+                loadNaiStoreFromTermux();
+              }
             }
           });
 
@@ -52042,6 +52003,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
 
               // 6. 安全合并面板与设置状态（模型 V5、尺寸、主题、生图地址、密钥、选中预设及提示词）
+              const wasHydratedBefore = _naiHydrationCompleted;
+              const liveStateBefore = memoryPanelState ? Object.assign({}, memoryPanelState) : null;
               let mergedState = loadPanelState();
               if (idbData && idbData.panelState) {
                 const iTs = Number(idbData.panelState.updatedAt || 0);
@@ -52058,7 +52021,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   : mergePanelStatesSafely(mergedState, legacyGs.naiPanelState);
               }
               if (remoteStore && remoteStore.panelState) {
-                const rTs = Number(remoteStore.panelState.updatedAt || remoteStore.updatedAt || 0);
+                const rTs = Number(remoteStore.panelState.updatedAt || 0);
                 const mTs = Number(mergedState.updatedAt || 0);
                 mergedState = rTs > mTs
                   ? mergePanelStatesSafely(remoteStore.panelState, mergedState)
@@ -52066,6 +52029,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               if (backupPanelState) {
                 mergedState = mergePanelStatesSafely(mergedState, backupPanelState);
+              }
+
+              // 若用户已经在当前会话中操作面板，严格保留当前正在使用的模式（如提取/清洗）、主题与生图自动清洗开关，绝不被后台同步强行切回旧状态
+              if (wasHydratedBefore && liveStateBefore) {
+                if (liveStateBefore.mode) mergedState.mode = liveStateBefore.mode;
+                if (liveStateBefore.theme) mergedState.theme = liveStateBefore.theme;
+                if (typeof liveStateBefore.cleanOnGenerate === "boolean") {
+                  mergedState.cleanOnGenerate = liveStateBefore.cleanOnGenerate;
+                }
               }
 
               memoryPanelState = mergedState;
@@ -52077,7 +52049,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               _naiHydrationCompleted = true;
               _termuxNaiStoreLoadedOnce = true;
 
-              applyPanelStateAndPresetsToDom(memoryPanelState, memoryPresetsStore);
+              const cleanModalEl = document.getElementById("mod-nai-clean-modal");
+              const wmModalEl = document.getElementById("mod-nai-watermark-modal");
+              const isCleanOrWmOpen =
+                (cleanModalEl && cleanModalEl.style.display === "flex") ||
+                (wmModalEl && wmModalEl.style.display === "flex");
+              if (!isCleanOrWmOpen) {
+                applyPanelStateAndPresetsToDom(memoryPanelState, memoryPresetsStore);
+              }
               renderPresetSelectOptions();
               updateHeaderSummary();
               computeActiveArtistPrompt();
@@ -93483,7 +93462,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const cleanupAndReset = () => {
                   if (isTtsPlaying) {
                     isTtsPlaying = false;
-                    if (targetMsg.audioHex) URL.revokeObjectURL(audioUrl);
+                    if (typeof rawSavedAudio === "string" && rawSavedAudio.startsWith("vault://")) {
+                      try { ttsPlayer.removeAttribute("src"); } catch (_) {}
+                      if (typeof window.evictVaultBlobCacheByRef === "function") {
+                        try { window.evictVaultBlobCacheByRef(rawSavedAudio); } catch (_) {}
+                      }
+                    } else if (targetMsg.audioHex) {
+                      URL.revokeObjectURL(audioUrl);
+                    }
                     if (window.currentAnimatingBubbles) {
                       window.currentAnimatingBubbles.forEach((b) =>
                         b.classList.remove("playing"),
@@ -93742,7 +93728,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               settled = true;
               isTtsPlaying = false;
               if (bubble) bubble.classList.remove("playing-quote-audio");
-              if (!audioHexOrData.startsWith("data:") && !audioHexOrData.startsWith("blob:")) {
+              if (typeof audioHexOrData === "string" && audioHexOrData.startsWith("vault://")) {
+                try { ttsPlayer.removeAttribute("src"); } catch (_) {}
+                if (typeof window.evictVaultBlobCacheByRef === "function") {
+                  try { window.evictVaultBlobCacheByRef(audioHexOrData); } catch (_) {}
+                }
+              } else if (!audioHexOrData.startsWith("data:") && !audioHexOrData.startsWith("blob:")) {
                 URL.revokeObjectURL(audioUrl);
               }
               ttsPlayer.onended = null;
@@ -96811,17 +96802,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return new Blob([str]).size;
           };
 
-          const vaultSizeMap = typeof window.fetchVaultMediaSizeMap === "function"
-            ? await window.fetchVaultMediaSizeMap().catch(() => new Map())
-            : new Map();
           const isAnyImgUrl = (v) => typeof v === "string" && (v.startsWith("data:image") || v.startsWith("vault://"));
           const getImgRealBytes = (v) => {
             if (!v || typeof v !== "string") return 0;
-            if (v.startsWith("vault://")) {
-              const fn = v.slice("vault://".length).split("?")[0].trim();
-              const stem = fn.replace(/\.[^.]+$/, "");
-              return vaultSizeMap.get(fn) || vaultSizeMap.get(stem + ".epdat") || 184320;
-            }
+            // 已经分离到 Termux 本地的 vault:// 图片只统计其在浏览器中占用的短链接字节（约35字节），绝不把手机本地磁盘文件虚算进浏览器内存
             return new Blob([v]).size;
           };
 
@@ -98313,18 +98297,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           } catch (_) {}
           const calcScanImageBytes = (u) => {
-            if (typeof u === "string" && u.startsWith("vault://")) {
-              const fn = u.slice("vault://".length).split("?")[0].trim();
-              const stem = fn.replace(/\.[a-zA-Z0-9]+$/, "");
-              if (vaultSizeMapForList) {
-                const exact =
-                  vaultSizeMapForList.get(fn) ||
-                  vaultSizeMapForList.get(stem + ".epdat") ||
-                  vaultSizeMapForList.get(stem);
-                if (typeof exact === "number" && exact > 0) return exact;
-              }
-              return 184320;
-            }
             return new Blob([u || ""]).size;
           };
           const isScanUrlCompressed = (u, flag = false) => {
@@ -110102,10 +110074,17 @@ ${specificRules}`;
         // 4. 初始化函数 init()
         // ===================================================================
         async function init() {
-          // ▼▼▼▼▼▼▼▼▼▼▼▼ 修改：注册真正的 sw.js 文件 ▼▼▼▼▼▼▼▼▼▼▼▼
+          // ▼▼▼▼▼▼▼▼▼▼▼▼ 修改：注册真正的 sw.js 文件并清理旧版页面缓存 ▼▼▼▼▼▼▼▼▼▼▼▼
+          if ("caches" in window && typeof window.caches.keys === "function") {
+            window.caches.keys().then((names) => {
+              names.forEach((n) => {
+                window.caches.delete(n).catch(() => {});
+              });
+            }).catch(() => {});
+          }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js")
+              .register("sw.js?v=25.6", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -128671,7 +128650,7 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
-          const MAX_BLOB_CACHE_ITEMS = 500;
+          const MAX_BLOB_CACHE_ITEMS = 80;
           function isBlobUrlMountedInDom(targetUrl) {
             if (!targetUrl) return false;
             try {
@@ -128975,12 +128954,13 @@ ${specificRules}`;
               const raw = localStorage.getItem(VAULT_CFG_KEY);
               if (raw) {
                 const parsed = JSON.parse(raw);
+                const normMode = normalizeVaultMode(parsed.mode);
                 return {
-                  mode: normalizeVaultMode(parsed.mode),
+                  mode: normMode,
                   url: parsed.url || "http://127.0.0.1:8765",
                   username: parsed.username || "",
                   password: parsed.password || "",
-                  auto: parsed.auto !== undefined ? Boolean(parsed.auto) : true,
+                  auto: normMode === "server" ? true : (parsed.auto !== undefined ? Boolean(parsed.auto) : true),
                   folderName: parsed.folderName || "EPhoneVault",
                 };
               }
@@ -129493,6 +129473,9 @@ ${specificRules}`;
                   purgeBrowserOpfsMediaCacheIfExternalActive().catch(() => {});
                   if (typeof autoOffloadAllStickersToVault === "function") {
                     autoOffloadAllStickersToVault().catch(() => {});
+                  }
+                  if (typeof autoOffloadAllBrowserDataToTermuxSilently === "function") {
+                    autoOffloadAllBrowserDataToTermuxSilently().catch(() => {});
                   }
                 }, 400);
               }
@@ -130785,6 +130768,161 @@ ${specificRules}`;
           }
           window.autoOffloadAllStickersToVault = autoOffloadAllStickersToVault;
 
+          let _isAutoOffloadingAllToTermux = false;
+          let _hasCompletedInitialAutoTermuxOffload = false;
+          async function autoOffloadAllBrowserDataToTermuxSilently() {
+            if (_isAutoOffloadingAllToTermux || _hasCompletedInitialAutoTermuxOffload || !cachedTermuxOk) return 0;
+            _isAutoOffloadingAllToTermux = true;
+            const counter = { count: 0, savedBytes: 0, uniqueFiles: new Set() };
+            try {
+              const cfg = loadVaultConfig();
+              const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              await ensureTermuxMediaListSynced(baseUrl);
+              const yieldToMain = () => new Promise((r) => setTimeout(r, 0));
+
+              // 1. 自动扫描并把浏览器 IndexedDB 各表中的内联图片、头像、壁纸、音频全部静默搬入 Termux 本地磁盘
+              if (typeof db !== "undefined" && Array.isArray(db.tables)) {
+                for (const table of db.tables) {
+                  if (!table || table.name === "apiConfig") continue;
+                  try {
+                    const rows = await table.toArray();
+                    let tableModified = false;
+                    for (let idx = 0; idx < rows.length; idx++) {
+                      const rawRow = rows[idx];
+                      if (!rawRow || typeof rawRow !== "object") continue;
+                      // 对 chats 表直接基于运行内存中的实时会话对象做原地图片分离，严禁用几秒前的旧快照覆盖用户正在发送或接收的新消息
+                      const row =
+                        table.name === "chats" &&
+                        typeof state !== "undefined" &&
+                        state.chats &&
+                        rawRow.id !== undefined &&
+                        (state.chats[rawRow.id] || state.chats[String(rawRow.id)])
+                          ? state.chats[rawRow.id] || state.chats[String(rawRow.id)]
+                          : rawRow;
+                      let dedupedMainLine = false;
+                      if (
+                        table.name === "chats" &&
+                        row.isGroup &&
+                        row.activeLineMode !== "solo" &&
+                        Array.isArray(row.mainLineHistory) &&
+                        row.mainLineHistory.length > 0 &&
+                        Array.isArray(row.history) &&
+                        row.history.length > 0
+                      ) {
+                        row.mainLineHistory = [];
+                        dedupedMainLine = true;
+                      }
+                      const changed = await offloadObjectImagesDeep(row, cfg, counter, null, true);
+                      if (changed || dedupedMainLine) {
+                        tableModified = true;
+                        const latestRowToSave =
+                          table.name === "chats" &&
+                          typeof state !== "undefined" &&
+                          state.chats &&
+                          row.id !== undefined &&
+                          (state.chats[row.id] || state.chats[String(row.id)])
+                            ? state.chats[row.id] || state.chats[String(row.id)]
+                            : row;
+                        const prevSuspend = _suspendVaultAutoOffload;
+                        _suspendVaultAutoOffload = true;
+                        try {
+                          await table.put(latestRowToSave);
+                        } finally {
+                          _suspendVaultAutoOffload = prevSuspend;
+                        }
+                        if (table.name === "globalSettings" && typeof state !== "undefined" && state.globalSettings) {
+                          Object.assign(state.globalSettings, latestRowToSave);
+                        }
+                      }
+                      if (idx % 6 === 5) await yieldToMain();
+                    }
+                    if (tableModified && typeof state !== "undefined") {
+                      if (table.name === "userStickers") {
+                        state.userStickers = await table.toArray();
+                      } else if (table.name === "charStickers") {
+                        state.charStickers = await table.toArray();
+                      }
+                    }
+                  } catch (_) {}
+                }
+              }
+
+              // 2. 自动分离 localStorage 中残留的 Base64 大图、壁纸与音频
+              try {
+                for (let i = 0; i < localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (!k || k === VAULT_CFG_KEY || k === "ephone_mashu_cloud_stickers_v1") continue;
+                  const rawVal = localStorage.getItem(k);
+                  if (!rawVal || rawVal.length < 4096) continue;
+                  if (isOffloadableStringValue(rawVal, k)) {
+                    const nextRef = await offloadDataUrlString(rawVal, cfg, counter, null, k);
+                    if (nextRef && nextRef !== rawVal) {
+                      localStorage.setItem(k, nextRef);
+                    }
+                  } else if (
+                    (rawVal.startsWith("[") || rawVal.startsWith("{")) &&
+                    (rawVal.includes("data:image/") || rawVal.includes("data:audio/"))
+                  ) {
+                    try {
+                      const parsedObj = JSON.parse(rawVal);
+                      if (parsedObj && typeof parsedObj === "object") {
+                        const objChanged = await offloadObjectImagesDeep(parsedObj, cfg, counter, null, true);
+                        if (objChanged) {
+                          localStorage.setItem(k, JSON.stringify(parsedObj));
+                        }
+                      }
+                    } catch (_) {}
+                  }
+                }
+              } catch (_) {}
+
+              // 3. 自动分离酒馆数据库 EPhoneTavernDB 中的内联图片
+              if (
+                typeof window.getTavernStateForFullBackup === "function" &&
+                typeof window.restoreTavernStateFromFullBackup === "function"
+              ) {
+                try {
+                  const tvState = await window.getTavernStateForFullBackup();
+                  if (tvState && typeof tvState === "object") {
+                    const tvChanged = await offloadObjectImagesDeep(tvState, cfg, counter, null, true);
+                    if (tvChanged) {
+                      await window.restoreTavernStateFromFullBackup(tvState);
+                    }
+                  }
+                } catch (_) {}
+              }
+
+              // 4. 清理已拆解完成的模组原始底稿冗余副本与 OPFS 残留（后台静默更新绝不执行 close/deleteDatabase 删库重建，防止用户发消息或刷新时发生写冲突）
+              let hadRedundantRawFiles = false;
+              try {
+                if (typeof db !== "undefined" && db && db.moduleRawFiles && db.moduleChapters) {
+                  const rawCount = await db.moduleRawFiles.count();
+                  const chCount = await db.moduleChapters.count();
+                  if (rawCount > 0 && chCount > 0) {
+                    await db.moduleRawFiles.clear();
+                    hadRedundantRawFiles = true;
+                  }
+                }
+              } catch (_) {}
+
+              await purgeBrowserOpfsMediaCacheIfExternalActive();
+              releaseUnusedBrowserBlobCache();
+
+              if (counter.count > 0 || hadRedundantRawFiles) {
+                hydrateDomVaultImages();
+                if (typeof calculateAndRenderStorageBreakdown === "function") {
+                  try { await calculateAndRenderStorageBreakdown(); } catch (_) {}
+                }
+              }
+              _hasCompletedInitialAutoTermuxOffload = true;
+            } catch (_) {
+            } finally {
+              _isAutoOffloadingAllToTermux = false;
+            }
+            return counter.count;
+          }
+          window.autoOffloadAllBrowserDataToTermuxSilently = autoOffloadAllBrowserDataToTermuxSilently;
+
           async function offloadDataUrlString(str, cfg, counter, sharedMediaDir = null, propKey = "") {
             if (!isOffloadableStringValue(str, propKey)) {
               return str;
@@ -130937,11 +131075,39 @@ ${specificRules}`;
                     const rows = await table.toArray();
                     let tableModified = false;
                     for (let idx = 0; idx < rows.length; idx++) {
-                      const row = rows[idx];
+                      const rawRow = rows[idx];
+                      if (!rawRow || typeof rawRow !== "object") continue;
+                      const row =
+                        table.name === "chats" &&
+                        typeof state !== "undefined" &&
+                        state.chats &&
+                        rawRow.id !== undefined &&
+                        (state.chats[rawRow.id] || state.chats[String(rawRow.id)])
+                          ? state.chats[rawRow.id] || state.chats[String(rawRow.id)]
+                          : rawRow;
+                      let dedupedMainLine = false;
+                      if (
+                        table.name === "chats" &&
+                        row.isGroup &&
+                        row.activeLineMode !== "solo" &&
+                        Array.isArray(row.mainLineHistory) &&
+                        row.mainLineHistory.length > 0 &&
+                        Array.isArray(row.history) &&
+                        row.history.length > 0
+                      ) {
+                        row.mainLineHistory = [];
+                        dedupedMainLine = true;
+                      }
                       const changed = await offloadObjectImagesDeep(row, cfg, counter, sharedMediaDir, true);
-                      if (changed) {
+                      if (changed || dedupedMainLine) {
                         tableModified = true;
-                        await table.put(row);
+                        const prevSuspend = _suspendVaultAutoOffload;
+                        _suspendVaultAutoOffload = true;
+                        try {
+                          await table.put(row);
+                        } finally {
+                          _suspendVaultAutoOffload = prevSuspend;
+                        }
                         if (table.name === "chats" && typeof state !== "undefined" && state.chats && row.id !== undefined) {
                           state.chats[row.id] = row;
                           state.chats[String(row.id)] = row;
@@ -133433,10 +133599,27 @@ ${specificRules}`;
             for (const table of db.tables) {
               if (!table || table.name === "apiConfig" || table._vaultHooked) continue;
               table._vaultHooked = true;
+              const trimRedundantGroupMainLine = (obj) => {
+                if (
+                  table.name === "chats" &&
+                  obj &&
+                  typeof obj === "object" &&
+                  obj.isGroup &&
+                  obj.activeLineMode !== "solo" &&
+                  Array.isArray(obj.mainLineHistory) &&
+                  obj.mainLineHistory.length > 0 &&
+                  Array.isArray(obj.history) &&
+                  obj.history.length > 0
+                ) {
+                  obj.mainLineHistory = [];
+                }
+              };
               const origPut = table.put.bind(table);
               table.put = async function (rowObj, ...rest) {
                 try {
                   if (rowObj && typeof rowObj === "object") {
+                    // 先清空主线模式下重复的 20MB mainLineHistory（同时释放运行内存并避免后续 offloadObjectImagesDeep 重复扫描两遍）
+                    trimRedundantGroupMainLine(rowObj);
                     restoreVaultRefsInObjectDeep(rowObj);
                     if (!_suspendVaultAutoOffload) {
                       const cfg = loadVaultConfig();
@@ -133458,6 +133641,7 @@ ${specificRules}`;
                 table.add = async function (rowObj, ...rest) {
                   try {
                     if (rowObj && typeof rowObj === "object") {
+                      trimRedundantGroupMainLine(rowObj);
                       restoreVaultRefsInObjectDeep(rowObj);
                       if (!_suspendVaultAutoOffload) {
                         const cfg = loadVaultConfig();
@@ -133480,6 +133664,7 @@ ${specificRules}`;
                       const cfg = loadVaultConfig();
                       for (const r of rows) {
                         if (r && typeof r === "object") {
+                          trimRedundantGroupMainLine(r);
                           restoreVaultRefsInObjectDeep(r);
                           if (!_suspendVaultAutoOffload && cfg.auto) {
                             const counter = { count: 0, savedBytes: 0 };
@@ -133501,6 +133686,7 @@ ${specificRules}`;
                       const cfg = loadVaultConfig();
                       for (const r of rows) {
                         if (r && typeof r === "object") {
+                          trimRedundantGroupMainLine(r);
                           restoreVaultRefsInObjectDeep(r);
                           if (!_suspendVaultAutoOffload && cfg.auto) {
                             const counter = { count: 0, savedBytes: 0 };
