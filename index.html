@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43962,6 +43962,47 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // 按需由当前展示卡片的 img 元素直接从 Termux 流式解析，不在后台一次性把数百张收藏图全部拉进浏览器内存
           }
 
+          async function convertInlineImageToHighQualityWebp(dataUrl) {
+            if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return dataUrl;
+            if (dataUrl.startsWith("data:image/webp") || dataUrl.startsWith("data:image/gif") || dataUrl.length < 45000) {
+              return dataUrl;
+            }
+            try {
+              return await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  try {
+                    const origW = img.naturalWidth || img.width || 1024;
+                    const origH = img.naturalHeight || img.height || 1024;
+                    const maxEdge = 1440;
+                    const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+                    const targetW = Math.max(1, Math.round(origW * scale));
+                    const targetH = Math.max(1, Math.round(origH * scale));
+                    const canvas = document.createElement("canvas");
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
+                    const webpOut = canvas.toDataURL("image/webp", 0.90);
+                    canvas.width = 0;
+                    canvas.height = 0;
+                    if (webpOut && webpOut.startsWith("data:image/webp") && webpOut.length < dataUrl.length) {
+                      resolve(webpOut);
+                    } else {
+                      resolve(dataUrl);
+                    }
+                  } catch (_) {
+                    resolve(dataUrl);
+                  }
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+              });
+            } catch (_) {
+              return dataUrl;
+            }
+          }
+
           async function offloadSingleNaiImageToTermux(imgUrl) {
             if (!imgUrl || typeof imgUrl !== "string") return "";
             const trimmed = imgUrl.trim();
@@ -43972,7 +44013,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (trimmed.startsWith("data:image/") && typeof window.saveStickerToLocalVault === "function") {
               try {
-                const vaultRef = await window.saveStickerToLocalVault(trimmed, false);
+                const webpDataUrl = await convertInlineImageToHighQualityWebp(trimmed);
+                const vaultRef = await window.saveStickerToLocalVault(webpDataUrl, false);
                 if (vaultRef && typeof vaultRef === "string" && vaultRef.startsWith("vault://")) {
                   return vaultRef;
                 }
@@ -43986,9 +44028,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             for (let i = 0; i < list.length; i++) {
               const item = list[i];
               if (!item || typeof item !== "object") continue;
-              const rawImgs = Array.isArray(item.images) && item.images.length > 0
+              const hasImgsArr = Array.isArray(item.images) && item.images.length > 0;
+              const singleImg = typeof item.image === "string" ? item.image : "";
+              const needsWork = hasImgsArr
+                ? item.images.some((u) => typeof u === "string" && (u.startsWith("data:image/") || u.startsWith("blob:")))
+                : Boolean(singleImg && (singleImg.startsWith("data:image/") || singleImg.startsWith("blob:")));
+              if (!needsWork) {
+                if (hasImgsArr && !item.image) item.image = item.images[0] || "";
+                else if (!hasImgsArr && singleImg) item.images = [singleImg];
+                continue;
+              }
+              const rawImgs = hasImgsArr
                 ? item.images.filter(Boolean)
-                : (item.image ? [item.image] : []);
+                : (singleImg ? [singleImg] : []);
               if (rawImgs.length > 0) {
                 const nextImgs = [];
                 for (let j = 0; j < rawImgs.length; j++) {
@@ -44010,7 +44062,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             for (let i = 0; i < folders.length; i++) {
               const f = folders[i];
               if (!f || typeof f !== "object") continue;
-              if (f.coverImage && typeof f.coverImage === "string" && f.coverImage.startsWith("data:image/")) {
+              if (f.coverImage && typeof f.coverImage === "string" && (f.coverImage.startsWith("data:image/") || f.coverImage.startsWith("blob:"))) {
                 const ref = await offloadSingleNaiImageToTermux(f.coverImage);
                 if (ref) f.coverImage = ref;
               }
@@ -44089,16 +44141,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } catch (_) {}
           }
 
-          function syncLightweightNaiMetadataBackup() {
+          let _naiLightweightBackupTimer = null;
+          function executeLightweightNaiMetadataBackupNow() {
             if (_naiHydrationCompleted) {
               purgeLegacyNaiLocalStorageKeys();
             }
-            const idbBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList), true) : null;
-            const idbLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList), true) : null;
-            const idbFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, true) : null;
-            const slimBm = Array.isArray(memoryBookmarksList) ? buildSlimMetadataList(filterOutDeletedItems(memoryBookmarksList), false) : null;
-            const slimLex = Array.isArray(memoryLexiconList) ? buildSlimMetadataList(filterOutDeletedItems(memoryLexiconList), false) : null;
+            const keepInlineForIdb = !_termuxNaiStoreLoadedOnce;
+            const filteredBm = Array.isArray(memoryBookmarksList) ? filterOutDeletedItems(memoryBookmarksList) : null;
+            const filteredLex = Array.isArray(memoryLexiconList) ? filterOutDeletedItems(memoryLexiconList) : null;
+            const slimBm = filteredBm ? buildSlimMetadataList(filteredBm, false) : null;
+            const slimLex = filteredLex ? buildSlimMetadataList(filteredLex, false) : null;
             const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, false) : null;
+            const idbBm = filteredBm ? (keepInlineForIdb ? buildSlimMetadataList(filteredBm, true) : slimBm) : null;
+            const idbLex = filteredLex ? (keepInlineForIdb ? buildSlimMetadataList(filteredLex, true) : slimLex) : null;
+            const idbFolders = Array.isArray(memoryLexiconFoldersList)
+              ? (keepInlineForIdb ? buildSlimFoldersList(memoryLexiconFoldersList, true) : slimFolders)
+              : null;
 
             const buildSlimPanelStateForGlobal = (stObj) => {
               if (!stObj || typeof stObj !== "object") return stObj;
@@ -44123,15 +44181,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               return copy;
             };
 
+            const clonedPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
+              ? clonePresetsStore(memoryPresetsStore)
+              : null;
+            const slimPanelSt = (memoryPanelState && typeof memoryPanelState === "object")
+              ? buildSlimPanelStateForGlobal(memoryPanelState)
+              : null;
+
             if (idbBm) writeKeyToNaiIDB("bookmarks", idbBm);
             if (idbLex) writeKeyToNaiIDB("lexicon", idbLex);
             if (idbFolders) writeKeyToNaiIDB("lexiconFolders", idbFolders);
-            if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
-              writeKeyToNaiIDB("presets", clonePresetsStore(memoryPresetsStore));
-            }
-            if (memoryPanelState && typeof memoryPanelState === "object") {
-              writeKeyToNaiIDB("panelState", buildSlimPanelStateForGlobal(memoryPanelState));
-            }
+            if (clonedPresets) writeKeyToNaiIDB("presets", clonedPresets);
+            if (slimPanelSt) writeKeyToNaiIDB("panelState", slimPanelSt);
             writeKeyToNaiIDB("deletedIds", Array.from(getDeletedIdsSet()));
             writeKeyToNaiIDB("deletedPresetKeys", Array.from(getDeletedPresetKeysSet()));
 
@@ -44139,12 +44200,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (slimBm) window.state.globalSettings.naiBookmarksCollection = slimBm;
               if (slimLex) window.state.globalSettings.naiLexiconCollection = slimLex;
               if (slimFolders) window.state.globalSettings.naiLexiconFolders = slimFolders;
-              if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
-                window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
-              }
-              if (memoryPanelState && typeof memoryPanelState === "object") {
-                window.state.globalSettings.naiPanelState = buildSlimPanelStateForGlobal(memoryPanelState);
-              }
+              if (clonedPresets) window.state.globalSettings.naiPresetsStore = clonedPresets;
+              if (slimPanelSt) window.state.globalSettings.naiPanelState = slimPanelSt;
             }
             if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
               window.db.globalSettings.get("main").then((gs) => {
@@ -44162,12 +44219,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   gs.naiLexiconFolders = slimFolders;
                   touched = true;
                 }
-                if (memoryPresetsStore && typeof memoryPresetsStore === "object") {
-                  gs.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
+                if (clonedPresets) {
+                  gs.naiPresetsStore = clonedPresets;
                   touched = true;
                 }
-                if (memoryPanelState && typeof memoryPanelState === "object") {
-                  gs.naiPanelState = buildSlimPanelStateForGlobal(memoryPanelState);
+                if (slimPanelSt) {
+                  gs.naiPanelState = slimPanelSt;
                   touched = true;
                 }
                 if (touched) {
@@ -44177,8 +44234,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
+          function syncLightweightNaiMetadataBackup(immediate = false) {
+            if (_naiLightweightBackupTimer) {
+              clearTimeout(_naiLightweightBackupTimer);
+              _naiLightweightBackupTimer = null;
+            }
+            if (immediate) {
+              executeLightweightNaiMetadataBackupNow();
+              return;
+            }
+            _naiLightweightBackupTimer = setTimeout(() => {
+              _naiLightweightBackupTimer = null;
+              executeLightweightNaiMetadataBackupNow();
+            }, 250);
+          }
+
           function purgeBrowserDuplicateNaiCopies() {
-            syncLightweightNaiMetadataBackup();
+            syncLightweightNaiMetadataBackup(false);
           }
 
           function safeNaiLocalSetItem(key, val) {
@@ -44290,132 +44362,148 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return merged;
           }
 
+          let _naiTermuxPersistDebounceTimer = null;
           function persistNaiStoreToTermux(useKeepAlive = false) {
             if (useKeepAlive && _termuxNaiStoreLoadedOnce) {
-              syncLightweightNaiMetadataBackup();
+              syncLightweightNaiMetadataBackup(true);
             }
-            _termuxNaiWriteQueue = _termuxNaiWriteQueue.then(async () => {
-              const baseUrl = getNaiTermuxBaseUrl();
-              let existingRemote = null;
-              if (!_termuxNaiStoreLoadedOnce) {
-                try {
-                  const r = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
-                  if (r && r.ok) {
-                    const txt = await r.text();
-                    if (txt && txt.trim().startsWith("{")) {
-                      existingRemote = JSON.parse(txt);
+            const enqueuePersistTask = () => {
+              _termuxNaiWriteQueue = _termuxNaiWriteQueue.then(async () => {
+                const baseUrl = getNaiTermuxBaseUrl();
+                let existingRemote = null;
+                if (!_termuxNaiStoreLoadedOnce) {
+                  try {
+                    const r = await fetch(`${baseUrl}/${NAI_TERMUX_STORE_FILE}`, { method: "GET", cache: "no-store" });
+                    if (r && r.ok) {
+                      const txt = await r.text();
+                      if (txt && txt.trim().startsWith("{")) {
+                        existingRemote = JSON.parse(txt);
+                      }
                     }
-                  }
-                } catch (_) {}
-              }
+                  } catch (_) {}
+                }
 
-              if (existingRemote && Array.isArray(existingRemote.deletedIds)) {
-                const delSet = getDeletedIdsSet();
-                existingRemote.deletedIds.forEach((id) => {
-                  if (id && typeof id === "string") delSet.add(id);
-                });
-              }
-              if (existingRemote && Array.isArray(existingRemote.deletedPresetKeys)) {
-                const delPSet = getDeletedPresetKeysSet();
-                existingRemote.deletedPresetKeys.forEach((k) => {
-                  if (k && typeof k === "string") delPSet.add(k);
-                });
-              }
-
-              const remoteBm = existingRemote && Array.isArray(existingRemote.bookmarks) ? existingRemote.bookmarks : [];
-              const remoteLex = existingRemote && Array.isArray(existingRemote.lexicon) ? existingRemote.lexicon : [];
-              const remoteFolders = existingRemote && Array.isArray(existingRemote.lexiconFolders) ? existingRemote.lexiconFolders : [];
-
-              const outBookmarks = filterOutDeletedItems(
-                Array.isArray(memoryBookmarksList)
-                  ? (!_termuxNaiStoreLoadedOnce && remoteBm.length > 0 ? mergeBookmarkListsById(memoryBookmarksList, remoteBm) : memoryBookmarksList)
-                  : remoteBm
-              );
-
-              const outLexicon = filterOutDeletedItems(
-                Array.isArray(memoryLexiconList)
-                  ? (!_termuxNaiStoreLoadedOnce && remoteLex.length > 0 ? mergeBookmarkListsById(memoryLexiconList, remoteLex) : memoryLexiconList)
-                  : remoteLex
-              );
-
-              const outFolders = Array.isArray(memoryLexiconFoldersList)
-                ? (!_termuxNaiStoreLoadedOnce && remoteFolders.length > 0 ? mergeLexiconFoldersLists(memoryLexiconFoldersList, remoteFolders) : memoryLexiconFoldersList)
-                : (remoteFolders.length > 0 ? remoteFolders : loadLexiconFolders());
-
-              const outPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
-                ? (!_termuxNaiStoreLoadedOnce && existingRemote && existingRemote.presets
-                    ? mergePresetsStoresSafely(memoryPresetsStore, existingRemote.presets)
-                    : memoryPresetsStore)
-                : (existingRemote && existingRemote.presets ? normalizePresetsStoreObject(existingRemote.presets) : loadPresetsStore());
-
-              const outPanelState = (memoryPanelState && typeof memoryPanelState === "object")
-                ? (!_termuxNaiStoreLoadedOnce && existingRemote && existingRemote.panelState
-                    ? mergePanelStatesSafely(memoryPanelState, existingRemote.panelState)
-                    : memoryPanelState)
-                : (existingRemote && existingRemote.panelState ? existingRemote.panelState : loadPanelState());
-
-              if (Array.isArray(outBookmarks) && outBookmarks.length > 0) {
-                await offloadBookmarkListImagesToTermux(outBookmarks);
-              }
-              if (Array.isArray(outLexicon) && outLexicon.length > 0) {
-                await offloadBookmarkListImagesToTermux(outLexicon);
-              }
-              if (Array.isArray(outFolders) && outFolders.length > 0) {
-                await offloadFolderListCoversToTermux(outFolders);
-              }
-              if (outPanelState && Array.isArray(outPanelState.watermarkGallery) && outPanelState.watermarkGallery.length > 0) {
-                await offloadBookmarkListImagesToTermux(outPanelState.watermarkGallery);
-              }
-              if (outPanelState && typeof outPanelState.watermarkPreviewBg === "string" && outPanelState.watermarkPreviewBg.startsWith("data:image/")) {
-                const bgRef = await offloadSingleNaiImageToTermux(outPanelState.watermarkPreviewBg);
-                if (bgRef) outPanelState.watermarkPreviewBg = bgRef;
-              }
-
-              memoryBookmarksList = outBookmarks;
-              memoryLexiconList = outLexicon;
-              memoryLexiconFoldersList = outFolders;
-              memoryPresetsStore = outPresets;
-              memoryPanelState = outPanelState;
-
-              // 先完成与 Termux 已有数据的合并及图片分离，再同步写入浏览器备用库，防止未完成初始读取前把不完整列表写进备用库
-              syncLightweightNaiMetadataBackup();
-
-              const payload = {
-                version: 1,
-                updatedAt: Date.now(),
-                deletedIds: Array.from(getDeletedIdsSet()),
-                deletedPresetKeys: Array.from(getDeletedPresetKeysSet()),
-                bookmarks: outBookmarks,
-                lexicon: outLexicon,
-                lexiconFolders: outFolders,
-                presets: outPresets,
-                panelState: outPanelState
-              };
-              const bodyStr = JSON.stringify(payload);
-              const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
-              if (baseUrl.includes("127.0.0.1")) {
-                urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
-              }
-              let savedToTermux = false;
-              for (const u of urls) {
-                try {
-                  const putRes = await fetch(u, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json; charset=utf-8" },
-                    body: bodyStr,
-                    keepalive: Boolean(useKeepAlive && bodyStr.length < 60000)
+                if (existingRemote && Array.isArray(existingRemote.deletedIds)) {
+                  const delSet = getDeletedIdsSet();
+                  existingRemote.deletedIds.forEach((id) => {
+                    if (id && typeof id === "string") delSet.add(id);
                   });
-                  if (putRes && putRes.ok) {
-                    savedToTermux = true;
-                    break;
-                  }
-                } catch (_) {}
+                }
+                if (existingRemote && Array.isArray(existingRemote.deletedPresetKeys)) {
+                  const delPSet = getDeletedPresetKeysSet();
+                  existingRemote.deletedPresetKeys.forEach((k) => {
+                    if (k && typeof k === "string") delPSet.add(k);
+                  });
+                }
+
+                const remoteBm = existingRemote && Array.isArray(existingRemote.bookmarks) ? existingRemote.bookmarks : [];
+                const remoteLex = existingRemote && Array.isArray(existingRemote.lexicon) ? existingRemote.lexicon : [];
+                const remoteFolders = existingRemote && Array.isArray(existingRemote.lexiconFolders) ? existingRemote.lexiconFolders : [];
+
+                const outBookmarks = filterOutDeletedItems(
+                  Array.isArray(memoryBookmarksList)
+                    ? (!_termuxNaiStoreLoadedOnce && remoteBm.length > 0 ? mergeBookmarkListsById(memoryBookmarksList, remoteBm) : memoryBookmarksList)
+                    : remoteBm
+                );
+
+                const outLexicon = filterOutDeletedItems(
+                  Array.isArray(memoryLexiconList)
+                    ? (!_termuxNaiStoreLoadedOnce && remoteLex.length > 0 ? mergeBookmarkListsById(memoryLexiconList, remoteLex) : memoryLexiconList)
+                    : remoteLex
+                );
+
+                const outFolders = Array.isArray(memoryLexiconFoldersList)
+                  ? (!_termuxNaiStoreLoadedOnce && remoteFolders.length > 0 ? mergeLexiconFoldersLists(memoryLexiconFoldersList, remoteFolders) : memoryLexiconFoldersList)
+                  : (remoteFolders.length > 0 ? remoteFolders : loadLexiconFolders());
+
+                const outPresets = (memoryPresetsStore && typeof memoryPresetsStore === "object")
+                  ? (!_termuxNaiStoreLoadedOnce && existingRemote && existingRemote.presets
+                      ? mergePresetsStoresSafely(memoryPresetsStore, existingRemote.presets)
+                      : memoryPresetsStore)
+                  : (existingRemote && existingRemote.presets ? normalizePresetsStoreObject(existingRemote.presets) : loadPresetsStore());
+
+                const outPanelState = (memoryPanelState && typeof memoryPanelState === "object")
+                  ? (!_termuxNaiStoreLoadedOnce && existingRemote && existingRemote.panelState
+                      ? mergePanelStatesSafely(memoryPanelState, existingRemote.panelState)
+                      : memoryPanelState)
+                  : (existingRemote && existingRemote.panelState ? existingRemote.panelState : loadPanelState());
+
+                if (Array.isArray(outBookmarks) && outBookmarks.length > 0) {
+                  await offloadBookmarkListImagesToTermux(outBookmarks);
+                }
+                if (Array.isArray(outLexicon) && outLexicon.length > 0) {
+                  await offloadBookmarkListImagesToTermux(outLexicon);
+                }
+                if (Array.isArray(outFolders) && outFolders.length > 0) {
+                  await offloadFolderListCoversToTermux(outFolders);
+                }
+                if (outPanelState && Array.isArray(outPanelState.watermarkGallery) && outPanelState.watermarkGallery.length > 0) {
+                  await offloadBookmarkListImagesToTermux(outPanelState.watermarkGallery);
+                }
+                if (outPanelState && typeof outPanelState.watermarkPreviewBg === "string" && outPanelState.watermarkPreviewBg.startsWith("data:image/")) {
+                  const bgRef = await offloadSingleNaiImageToTermux(outPanelState.watermarkPreviewBg);
+                  if (bgRef) outPanelState.watermarkPreviewBg = bgRef;
+                }
+
+                memoryBookmarksList = outBookmarks;
+                memoryLexiconList = outLexicon;
+                memoryLexiconFoldersList = outFolders;
+                memoryPresetsStore = outPresets;
+                memoryPanelState = outPanelState;
+
+                const payload = {
+                  version: 1,
+                  updatedAt: Date.now(),
+                  deletedIds: Array.from(getDeletedIdsSet()),
+                  deletedPresetKeys: Array.from(getDeletedPresetKeysSet()),
+                  bookmarks: outBookmarks,
+                  lexicon: outLexicon,
+                  lexiconFolders: outFolders,
+                  presets: outPresets,
+                  panelState: outPanelState
+                };
+                const bodyStr = JSON.stringify(payload);
+                const urls = [baseUrl + "/" + NAI_TERMUX_STORE_FILE];
+                if (baseUrl.includes("127.0.0.1")) {
+                  urls.push(baseUrl.replace("127.0.0.1", "localhost") + "/" + NAI_TERMUX_STORE_FILE);
+                }
+                let savedToTermux = false;
+                for (const u of urls) {
+                  try {
+                    const putRes = await fetch(u, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json; charset=utf-8" },
+                      body: bodyStr,
+                      keepalive: Boolean(useKeepAlive && bodyStr.length < 60000)
+                    });
+                    if (putRes && putRes.ok) {
+                      savedToTermux = true;
+                      break;
+                    }
+                  } catch (_) {}
+                }
+                if (savedToTermux) {
+                  _termuxNaiStoreLoadedOnce = true;
+                }
+                syncLightweightNaiMetadataBackup(useKeepAlive);
+              }).catch(() => {});
+              return _termuxNaiWriteQueue;
+            };
+
+            if (useKeepAlive) {
+              if (_naiTermuxPersistDebounceTimer) {
+                clearTimeout(_naiTermuxPersistDebounceTimer);
+                _naiTermuxPersistDebounceTimer = null;
               }
-              if (savedToTermux) {
-                _termuxNaiStoreLoadedOnce = true;
-                syncLightweightNaiMetadataBackup();
-              }
-            }).catch(() => {});
+              return enqueuePersistTask();
+            }
+            if (_naiTermuxPersistDebounceTimer) {
+              clearTimeout(_naiTermuxPersistDebounceTimer);
+            }
+            _naiTermuxPersistDebounceTimer = setTimeout(() => {
+              _naiTermuxPersistDebounceTimer = null;
+              enqueuePersistTask();
+            }, 180);
             return _termuxNaiWriteQueue;
           }
 
@@ -44488,17 +44576,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function savePanelState(stateObj) {
             const nextState = Object.assign({}, getDefaultPanelState(), stateObj, { updatedAt: Date.now() });
             memoryPanelState = nextState;
-            writeKeyToNaiIDB("panelState", Object.assign({}, nextState));
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
               window.state.globalSettings.naiPanelState = Object.assign({}, nextState);
-            }
-            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
-              window.db.globalSettings.get("main").then((gs) => {
-                if (gs && typeof gs === "object") {
-                  gs.naiPanelState = Object.assign({}, nextState);
-                  window.db.globalSettings.put(gs).catch(() => {});
-                }
-              }).catch(() => {});
             }
             persistNaiStoreToTermux(false);
           }
@@ -45061,6 +45140,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function renderSettingsPresetDrawers() {
             const store = loadPresetsStore();
             const categories = ["artist", "positive", "negative"];
+            const lexListCount = loadLocalBookmarksForCategory("lexicon").length;
+            const lexCountEl = document.getElementById("mod-nai-drawer-count-lexicon");
+            if (lexCountEl) lexCountEl.textContent = String(lexListCount);
+            const masterCountEl = document.getElementById("mod-nai-drawer-count-master");
+            if (masterCountEl) {
+              const totalPresetsCount =
+                (Array.isArray(store.artist) ? store.artist.length : 0) +
+                (Array.isArray(store.positive) ? store.positive.length : 0) +
+                (Array.isArray(store.negative) ? store.negative.length : 0) +
+                lexListCount;
+              masterCountEl.textContent = String(totalPresetsCount);
+            }
+            categories.forEach((cat) => {
+              const list = Array.isArray(store[cat]) ? store[cat] : [];
+              const countEl = document.getElementById(`mod-nai-drawer-count-${cat}`);
+              if (countEl) countEl.textContent = String(list.length);
+            });
+            const settingsModalEl = document.getElementById("mod-nai-settings-modal");
+            if (!settingsModalEl || settingsModalEl.style.display === "none" || !settingsModalEl.style.display) {
+              return;
+            }
             categories.forEach((cat) => {
               const list = Array.isArray(store[cat]) ? store[cat] : [];
               const groups = (store.groups && Array.isArray(store.groups[cat])) ? store.groups[cat] : [];
@@ -47712,9 +47812,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const ctx = canvas.getContext("2d");
                   ctx.clearRect(0, 0, targetW, targetH);
                   ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
-                  let out = canvas.toDataURL("image/png");
-                  if (!out || out.length > 2600000) {
-                    out = canvas.toDataURL("image/webp", 0.95);
+                  let out = canvas.toDataURL("image/webp", 0.92);
+                  if (!out || !out.startsWith("data:image/webp")) {
+                    out = canvas.toDataURL("image/png");
                   }
                   canvas.width = 0;
                   canvas.height = 0;
@@ -49387,10 +49487,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, buildPageCardsFn) {
-            // 一次性挂载全部页（先挂载当前页确保最优先进入队列，随后立即挂载其余全部页），点击下一页零等待秒切
+            // 滑动窗口挂载：立即同步挂载当前页，同时挂载前后各2页（共5页窗口），点击上一页/下一页零等待秒切，且绝不在DOM中堆积数百张卡片
+            const keepPagesSet = new Set();
             const pageOrder = [curPage];
-            for (let p = 1; p <= totalPages; p++) {
-              if (p !== curPage) pageOrder.push(p);
+            keepPagesSet.add(curPage);
+            for (let delta = 1; delta <= 2; delta++) {
+              if (curPage + delta <= totalPages) {
+                pageOrder.push(curPage + delta);
+                keepPagesSet.add(curPage + delta);
+              }
+              if (curPage - delta >= 1) {
+                pageOrder.push(curPage - delta);
+                keepPagesSet.add(curPage - delta);
+              }
+            }
+            for (const [mountedPage, entry] of Array.from(colMountedPagesMap.entries())) {
+              if (!keepPagesSet.has(mountedPage)) {
+                if (entry && Array.isArray(entry.cards)) {
+                  entry.cards.forEach((cEl) => {
+                    if (cEl && cEl.parentNode) cEl.parentNode.removeChild(cEl);
+                  });
+                }
+                colMountedPagesMap.delete(mountedPage);
+              }
             }
             for (const p of pageOrder) {
               if (!colMountedPagesMap.has(p)) {
@@ -50289,7 +50408,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 try {
                   const origW = img.naturalWidth || img.width || 600;
                   const origH = img.naturalHeight || img.height || 600;
-                  const maxEdge = 840;
+                  const maxEdge = 1280;
                   const scale = Math.min(1, maxEdge / Math.max(origW, origH));
                   const targetW = Math.max(1, Math.round(origW * scale));
                   const targetH = Math.max(1, Math.round(origH * scale));
@@ -50298,9 +50417,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   canvas.height = targetH;
                   const ctx = canvas.getContext("2d");
                   ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
-                  let out = canvas.toDataURL("image/webp", 0.84);
+                  let out = canvas.toDataURL("image/webp", 0.90);
                   if (!out || out.length < 32 || !out.startsWith("data:image/webp")) {
-                    out = canvas.toDataURL("image/jpeg", 0.86);
+                    out = canvas.toDataURL("image/jpeg", 0.90);
                   }
                   canvas.width = 0;
                   canvas.height = 0;
@@ -52073,11 +52192,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (legacyBm.length > 0 || legacyLex.length > 0 || backupBookmarks.length > 0 || backupLexicon.length > 0 || !remoteStore) {
                 await persistNaiStoreToTermux(false);
               } else {
-                syncLightweightNaiMetadataBackup();
-                purgeBrowserDuplicateNaiCopies();
+                syncLightweightNaiMetadataBackup(false);
               }
 
-              if (gridNeedsRebuild) {
+              const colViewEl = document.getElementById("mod-nai-collection-view");
+              if (gridNeedsRebuild && (currentMode === "collection" || (colViewEl && colViewEl.style.display !== "none"))) {
                 renderCollectionGrid(true);
               }
             })().finally(() => {
@@ -52305,10 +52424,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           };
 
           async function hydrateModuleNaiFromDbIfNeeded() {
+            bindModuleNaiPanelEvents();
             await loadNaiStoreFromTermux();
-            if (typeof window.openModuleNaiPanel === "function") {
-              window.openModuleNaiPanel();
-            }
           }
 
           if (document.readyState === "loading") {
@@ -100358,7 +100475,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       return;
                     }
                     ctx.drawImage(img, 0, 0, curW, curH);
-                    let compressedBase64 = canvas.toDataURL("image/jpeg", curQ);
+                    let compressedBase64 = canvas.toDataURL("image/webp", curQ);
+                    if (!compressedBase64 || !compressedBase64.startsWith("data:image/webp")) {
+                      compressedBase64 = canvas.toDataURL("image/jpeg", curQ);
+                    }
 
                     if (compressedBase64 && compressedBase64.length >= base64Str.length) {
                       for (let retry = 0; retry < 6; retry++) {
@@ -100370,7 +100490,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                         ctx = canvas.getContext("2d");
                         if (!ctx) break;
                         ctx.drawImage(img, 0, 0, curW, curH);
-                        const retryBase64 = canvas.toDataURL("image/jpeg", curQ);
+                        let retryBase64 = canvas.toDataURL("image/webp", curQ);
+                        if (!retryBase64 || !retryBase64.startsWith("data:image/webp")) {
+                          retryBase64 = canvas.toDataURL("image/jpeg", curQ);
+                        }
                         if (retryBase64 && retryBase64.length < base64Str.length) {
                           compressedBase64 = retryBase64;
                           break;
@@ -128944,22 +129067,24 @@ ${specificRules}`;
             return avatarSrc;
           };
 
-          function restoreVaultRefsInObjectDeep(obj, visited = new WeakSet()) {
+          function restoreVaultRefsInObjectDeep(obj, visited = new WeakSet(), domVaultMap = null) {
             if (!obj || typeof obj !== "object" || visited.has(obj)) return false;
             visited.add(obj);
             let changed = false;
-            const domVaultMap = new Map();
-            try {
-              const domImgs = document.querySelectorAll("img[data-vault-ref]");
-              domImgs.forEach((el) => {
-                const vRef = el.getAttribute("data-vault-ref");
-                const curSrc = el.src || el.getAttribute("src");
-                if (vRef && vRef.startsWith("vault://") && curSrc && curSrc.startsWith("blob:")) {
-                  blobUrlToVaultRefMap.set(curSrc, vRef);
-                  domVaultMap.set(curSrc, vRef);
-                }
-              });
-            } catch (_) {}
+            if (!domVaultMap) {
+              domVaultMap = new Map();
+              try {
+                const domImgs = document.querySelectorAll("img[data-vault-ref]");
+                domImgs.forEach((el) => {
+                  const vRef = el.getAttribute("data-vault-ref");
+                  const curSrc = el.src || el.getAttribute("src");
+                  if (vRef && vRef.startsWith("vault://") && curSrc && curSrc.startsWith("blob:")) {
+                    blobUrlToVaultRefMap.set(curSrc, vRef);
+                    domVaultMap.set(curSrc, vRef);
+                  }
+                });
+              } catch (_) {}
+            }
 
             if (Array.isArray(obj)) {
               for (let i = 0; i < obj.length; i++) {
@@ -128971,7 +129096,7 @@ ${specificRules}`;
                     changed = true;
                   }
                 } else if (val && typeof val === "object") {
-                  if (restoreVaultRefsInObjectDeep(val, visited)) changed = true;
+                  if (restoreVaultRefsInObjectDeep(val, visited, domVaultMap)) changed = true;
                 }
               }
               return changed;
@@ -128985,7 +129110,7 @@ ${specificRules}`;
                   changed = true;
                 }
               } else if (val && typeof val === "object") {
-                if (restoreVaultRefsInObjectDeep(val, visited)) changed = true;
+                if (restoreVaultRefsInObjectDeep(val, visited, domVaultMap)) changed = true;
               }
             }
             return changed;
@@ -130708,6 +130833,47 @@ ${specificRules}`;
             return false;
           }
 
+          async function transcodeToHighQualityWebpIfBeneficial(dataUrl) {
+            if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return dataUrl;
+            if (dataUrl.startsWith("data:image/webp") || dataUrl.startsWith("data:image/gif") || dataUrl.length < 55000) {
+              return dataUrl;
+            }
+            try {
+              return await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                  try {
+                    const origW = img.naturalWidth || img.width || 1024;
+                    const origH = img.naturalHeight || img.height || 1024;
+                    const maxEdge = 1440;
+                    const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+                    const targetW = Math.max(1, Math.round(origW * scale));
+                    const targetH = Math.max(1, Math.round(origH * scale));
+                    const canvas = document.createElement("canvas");
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
+                    const webpOut = canvas.toDataURL("image/webp", 0.90);
+                    canvas.width = 0;
+                    canvas.height = 0;
+                    if (webpOut && webpOut.startsWith("data:image/webp") && webpOut.length < dataUrl.length) {
+                      resolve(webpOut);
+                    } else {
+                      resolve(dataUrl);
+                    }
+                  } catch (_) {
+                    resolve(dataUrl);
+                  }
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+              });
+            } catch (_) {
+              return dataUrl;
+            }
+          }
+
           async function saveStickerToLocalVault(dataUrl, skipBlobCache = false) {
             if (!dataUrl || typeof dataUrl !== "string") return dataUrl;
             if (dataUrl.startsWith("vault://") || dataUrl.startsWith("http") || dataUrl.startsWith("/api/")) {
@@ -130718,13 +130884,14 @@ ${specificRules}`;
               if (mapped) return mapped;
             }
             if (!dataUrl.startsWith("data:image/")) return dataUrl;
-            const parts = parseDataUrlToParts(dataUrl, "url");
+            const optimizedDataUrl = await transcodeToHighQualityWebpIfBeneficial(dataUrl);
+            const parts = parseDataUrlToParts(optimizedDataUrl, "url");
             if (!parts) return dataUrl;
             const cfg = loadVaultConfig();
             const prefix = parts.prefix || "img_";
-            const fileName = prefix + hashDataUrl(dataUrl) + "." + parts.ext;
+            const fileName = prefix + hashDataUrl(optimizedDataUrl) + "." + parts.ext;
             const ref = await storeImageInVault(fileName, parts, cfg, null, skipBlobCache);
-            return ref || dataUrl;
+            return ref || optimizedDataUrl;
           }
           window.saveStickerToLocalVault = saveStickerToLocalVault;
 
@@ -132294,15 +132461,42 @@ ${specificRules}`;
           }
 
           function hydrateDomVaultImages() {
-            const rawImgs = Array.from(document.querySelectorAll('img[src^="vault://"], img[data-vault-ref], img[data-vault-pending]'));
-            const vh = window.innerHeight || 800;
-            rawImgs.sort((a, b) => {
-              const ra = a.getBoundingClientRect();
-              const rb = b.getBoundingClientRect();
-              const aVis = ra.bottom >= -300 && ra.top <= vh + 300 ? 0 : 1;
-              const bVis = rb.bottom >= -300 && rb.top <= vh + 300 ? 0 : 1;
-              return aVis - bVis;
-            });
+            const allVaultImgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref], img[data-vault-pending]');
+            if (!allVaultImgs || allVaultImgs.length === 0) {
+              // 无需处理图片时继续检查下面的 audio / 背景图
+            }
+            const rawImgs = [];
+            for (let i = 0; i < allVaultImgs.length; i++) {
+              const img = allVaultImgs[i];
+              const attrSrc = img.getAttribute("src") || "";
+              const existingRef = img.getAttribute("data-vault-ref");
+              const hydratedSrc = img.getAttribute("data-vault-hydrated-src");
+              if (
+                existingRef &&
+                !attrSrc.startsWith("vault://") &&
+                !img.hasAttribute("data-vault-pending") &&
+                attrSrc.startsWith("blob:") &&
+                liveSessionBlobUrls.has(attrSrc) &&
+                (hydratedSrc === attrSrc || blobUrlToVaultRefMap.get(attrSrc) === existingRef)
+              ) {
+                blobUrlToVaultRefMap.set(attrSrc, existingRef);
+                if (hydratedSrc !== attrSrc) {
+                  img.setAttribute("data-vault-hydrated-src", attrSrc);
+                }
+                continue;
+              }
+              rawImgs.push(img);
+            }
+            if (rawImgs.length > 1) {
+              const vh = window.innerHeight || 800;
+              const visMap = new Map();
+              for (let i = 0; i < rawImgs.length; i++) {
+                const el = rawImgs[i];
+                const r = el.getBoundingClientRect();
+                visMap.set(el, r.bottom >= -300 && r.top <= vh + 300 ? 0 : 1);
+              }
+              rawImgs.sort((a, b) => (visMap.get(a) || 0) - (visMap.get(b) || 0));
+            }
             rawImgs.forEach((img) => {
               const attrSrc = img.getAttribute("src") || "";
               const existingRef = img.getAttribute("data-vault-ref");
@@ -132340,7 +132534,9 @@ ${specificRules}`;
                 liveSessionBlobUrls.has(attrSrc)
               ) {
                 blobUrlToVaultRefMap.set(attrSrc, ref);
-                img.setAttribute("data-vault-hydrated-src", attrSrc);
+                if (img.getAttribute("data-vault-hydrated-src") !== attrSrc) {
+                  img.setAttribute("data-vault-hydrated-src", attrSrc);
+                }
                 return;
               }
               const cachedFast = window.getCachedVaultBlobUrl ? window.getCachedVaultBlobUrl(ref) : null;
@@ -132349,7 +132545,9 @@ ${specificRules}`;
                 if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                   img.className = "realimag-image";
                 }
-                img.setAttribute("data-vault-hydrated-src", cachedFast);
+                if (img.getAttribute("data-vault-hydrated-src") !== cachedFast) {
+                  img.setAttribute("data-vault-hydrated-src", cachedFast);
+                }
                 if (img.getAttribute("src") !== cachedFast) {
                   img.setAttribute("src", cachedFast);
                 }
@@ -133715,9 +133913,7 @@ ${specificRules}`;
               table.put = async function (rowObj, ...rest) {
                 try {
                   if (rowObj && typeof rowObj === "object") {
-                    // 先清空主线模式下重复的 20MB mainLineHistory（同时释放运行内存并避免后续 offloadObjectImagesDeep 重复扫描两遍）
                     trimRedundantGroupMainLine(rowObj);
-                    restoreVaultRefsInObjectDeep(rowObj);
                     if (!_suspendVaultAutoOffload) {
                       const cfg = loadVaultConfig();
                       if (cfg.auto) {
@@ -133726,7 +133922,11 @@ ${specificRules}`;
                         if (counter.count > 0) {
                           setTimeout(hydrateDomVaultImages, 50);
                         }
+                      } else {
+                        restoreVaultRefsInObjectDeep(rowObj);
                       }
+                    } else {
+                      restoreVaultRefsInObjectDeep(rowObj);
                     }
                   }
                 } catch (_) {}
@@ -133739,13 +133939,16 @@ ${specificRules}`;
                   try {
                     if (rowObj && typeof rowObj === "object") {
                       trimRedundantGroupMainLine(rowObj);
-                      restoreVaultRefsInObjectDeep(rowObj);
                       if (!_suspendVaultAutoOffload) {
                         const cfg = loadVaultConfig();
                         if (cfg.auto) {
                           const counter = { count: 0, savedBytes: 0 };
                           await offloadObjectImagesDeep(rowObj, cfg, counter);
+                        } else {
+                          restoreVaultRefsInObjectDeep(rowObj);
                         }
+                      } else {
+                        restoreVaultRefsInObjectDeep(rowObj);
                       }
                     }
                   } catch (_) {}
@@ -133759,13 +133962,25 @@ ${specificRules}`;
                   try {
                     if (Array.isArray(rows)) {
                       const cfg = loadVaultConfig();
+                      const domVaultMap = new Map();
+                      try {
+                        document.querySelectorAll("img[data-vault-ref]").forEach((el) => {
+                          const vRef = el.getAttribute("data-vault-ref");
+                          const curSrc = el.src || el.getAttribute("src");
+                          if (vRef && vRef.startsWith("vault://") && curSrc && curSrc.startsWith("blob:")) {
+                            blobUrlToVaultRefMap.set(curSrc, vRef);
+                            domVaultMap.set(curSrc, vRef);
+                          }
+                        });
+                      } catch (_) {}
                       for (const r of rows) {
                         if (r && typeof r === "object") {
                           trimRedundantGroupMainLine(r);
-                          restoreVaultRefsInObjectDeep(r);
                           if (!_suspendVaultAutoOffload && cfg.auto) {
                             const counter = { count: 0, savedBytes: 0 };
                             await offloadObjectImagesDeep(r, cfg, counter);
+                          } else {
+                            restoreVaultRefsInObjectDeep(r, new WeakSet(), domVaultMap);
                           }
                         }
                       }
@@ -133781,13 +133996,25 @@ ${specificRules}`;
                   try {
                     if (Array.isArray(rows)) {
                       const cfg = loadVaultConfig();
+                      const domVaultMap = new Map();
+                      try {
+                        document.querySelectorAll("img[data-vault-ref]").forEach((el) => {
+                          const vRef = el.getAttribute("data-vault-ref");
+                          const curSrc = el.src || el.getAttribute("src");
+                          if (vRef && vRef.startsWith("vault://") && curSrc && curSrc.startsWith("blob:")) {
+                            blobUrlToVaultRefMap.set(curSrc, vRef);
+                            domVaultMap.set(curSrc, vRef);
+                          }
+                        });
+                      } catch (_) {}
                       for (const r of rows) {
                         if (r && typeof r === "object") {
                           trimRedundantGroupMainLine(r);
-                          restoreVaultRefsInObjectDeep(r);
                           if (!_suspendVaultAutoOffload && cfg.auto) {
                             const counter = { count: 0, savedBytes: 0 };
                             await offloadObjectImagesDeep(r, cfg, counter);
+                          } else {
+                            restoreVaultRefsInObjectDeep(r, new WeakSet(), domVaultMap);
                           }
                         }
                       }
@@ -133802,7 +134029,6 @@ ${specificRules}`;
                 table.update = async function (key, changes, ...rest) {
                   try {
                     if (changes && typeof changes === "object") {
-                      restoreVaultRefsInObjectDeep(changes);
                       const cfg = loadVaultConfig();
                       if (cfg.auto) {
                         const counter = { count: 0, savedBytes: 0 };
@@ -133810,6 +134036,8 @@ ${specificRules}`;
                         if (counter.count > 0) {
                           setTimeout(hydrateDomVaultImages, 50);
                         }
+                      } else {
+                        restoreVaultRefsInObjectDeep(changes);
                       }
                     }
                   } catch (_) {}
@@ -134350,7 +134578,12 @@ ${specificRules}`;
             let hydrateTimer = null;
             function nodeContainsVaultRef(n) {
               if (!n || n.nodeType !== 1) return false;
-              if (n.hasAttribute && (n.hasAttribute("data-vault-pending") || n.hasAttribute("data-vault-ref") || n.hasAttribute("data-vault-bg-ref"))) {
+              if (
+                n.hasAttribute &&
+                (n.hasAttribute("data-vault-pending") ||
+                  n.hasAttribute("data-vault-bg-ref") ||
+                  (n.hasAttribute("data-vault-ref") && !n.hasAttribute("data-vault-hydrated-src")))
+              ) {
                 return true;
               }
               const srcVal = n.getAttribute && (n.getAttribute("src") || n.getAttribute("style") || "");
@@ -134360,7 +134593,7 @@ ${specificRules}`;
               }
               if (n.querySelector) {
                 return Boolean(
-                  n.querySelector('img[src^="vault://"], img[data-vault-pending], img[data-vault-ref], audio[src^="vault://"], [style*="vault://"], [data-vault-bg-ref]')
+                  n.querySelector('img[src^="vault://"], img[data-vault-pending], img[data-vault-ref]:not([data-vault-hydrated-src]), audio[src^="vault://"], [style*="vault://"], [data-vault-bg-ref]')
                 );
               }
               return false;
@@ -134375,11 +134608,16 @@ ${specificRules}`;
                   continue;
                 }
                 if (m.type === "attributes") {
-                  if (target.hasAttribute && (target.hasAttribute("data-vault-pending") || target.hasAttribute("data-vault-ref"))) {
+                  const curSrc = target.getAttribute && (target.getAttribute("src") || "");
+                  const hydSrc = target.getAttribute && (target.getAttribute("data-vault-hydrated-src") || "");
+                  if (curSrc && hydSrc && curSrc === hydSrc && !target.hasAttribute("data-vault-pending")) {
+                    continue;
+                  }
+                  if (target.hasAttribute && (target.hasAttribute("data-vault-pending") || (target.hasAttribute("data-vault-ref") && !hydSrc))) {
                     mayContainVaultImg = true;
                     break;
                   }
-                  const val = target.getAttribute && (target.getAttribute("src") || target.getAttribute("style") || "");
+                  const val = curSrc || (target.getAttribute && target.getAttribute("style")) || "";
                   if (val && val.includes("vault://")) {
                     mayContainVaultImg = true;
                     break;
