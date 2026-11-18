@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v25.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -41595,6 +41595,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             state.globalSettings.notificationSoundUrl =
               "https://laddy-lulu.github.io/Ephone-stuffs/message.mp3";
           }
+          window._ephoneMainDbHydrated = true;
         }
 
         function getEffectiveApiConfig(purpose) {
@@ -44290,30 +44291,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function persistNaiStoreToTermux(useKeepAlive = false) {
-            if (useKeepAlive) {
+            if (useKeepAlive && _termuxNaiStoreLoadedOnce) {
               syncLightweightNaiMetadataBackup();
             }
             _termuxNaiWriteQueue = _termuxNaiWriteQueue.then(async () => {
               const baseUrl = getNaiTermuxBaseUrl();
-              if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
-                await offloadBookmarkListImagesToTermux(memoryBookmarksList);
-              }
-              if (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0) {
-                await offloadBookmarkListImagesToTermux(memoryLexiconList);
-              }
-              if (Array.isArray(memoryLexiconFoldersList) && memoryLexiconFoldersList.length > 0) {
-                await offloadFolderListCoversToTermux(memoryLexiconFoldersList);
-              }
-              if (memoryPanelState && Array.isArray(memoryPanelState.watermarkGallery) && memoryPanelState.watermarkGallery.length > 0) {
-                await offloadBookmarkListImagesToTermux(memoryPanelState.watermarkGallery);
-              }
-              if (memoryPanelState && typeof memoryPanelState.watermarkPreviewBg === "string" && memoryPanelState.watermarkPreviewBg.startsWith("data:image/")) {
-                const bgRef = await offloadSingleNaiImageToTermux(memoryPanelState.watermarkPreviewBg);
-                if (bgRef) memoryPanelState.watermarkPreviewBg = bgRef;
-              }
-              // 先完成 Termux 图片分离（连着 Termux 时原图已变成 35 字节的 vault:// 短链接），再同步写入浏览器备用库，彻底避免把几兆的原图先写进浏览器底层造成历史碎片
-              syncLightweightNaiMetadataBackup();
-
               let existingRemote = null;
               if (!_termuxNaiStoreLoadedOnce) {
                 try {
@@ -44371,6 +44353,32 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     ? mergePanelStatesSafely(memoryPanelState, existingRemote.panelState)
                     : memoryPanelState)
                 : (existingRemote && existingRemote.panelState ? existingRemote.panelState : loadPanelState());
+
+              if (Array.isArray(outBookmarks) && outBookmarks.length > 0) {
+                await offloadBookmarkListImagesToTermux(outBookmarks);
+              }
+              if (Array.isArray(outLexicon) && outLexicon.length > 0) {
+                await offloadBookmarkListImagesToTermux(outLexicon);
+              }
+              if (Array.isArray(outFolders) && outFolders.length > 0) {
+                await offloadFolderListCoversToTermux(outFolders);
+              }
+              if (outPanelState && Array.isArray(outPanelState.watermarkGallery) && outPanelState.watermarkGallery.length > 0) {
+                await offloadBookmarkListImagesToTermux(outPanelState.watermarkGallery);
+              }
+              if (outPanelState && typeof outPanelState.watermarkPreviewBg === "string" && outPanelState.watermarkPreviewBg.startsWith("data:image/")) {
+                const bgRef = await offloadSingleNaiImageToTermux(outPanelState.watermarkPreviewBg);
+                if (bgRef) outPanelState.watermarkPreviewBg = bgRef;
+              }
+
+              memoryBookmarksList = outBookmarks;
+              memoryLexiconList = outLexicon;
+              memoryLexiconFoldersList = outFolders;
+              memoryPresetsStore = outPresets;
+              memoryPanelState = outPanelState;
+
+              // 先完成与 Termux 已有数据的合并及图片分离，再同步写入浏览器备用库，防止未完成初始读取前把不完整列表写进备用库
+              syncLightweightNaiMetadataBackup();
 
               const payload = {
                 version: 1,
@@ -52155,6 +52163,38 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             };
           };
 
+          window.offloadNaiDedicatedStoreToTermuxSilently = async function () {
+            try {
+              if (!_termuxNaiStoreLoadedOnce) {
+                await loadNaiStoreFromTermux();
+              }
+              const listHasInlineDataImage = (arr) =>
+                Array.isArray(arr) &&
+                arr.some(
+                  (it) =>
+                    it &&
+                    ((typeof it.image === "string" && it.image.startsWith("data:image/")) ||
+                      (typeof it.coverImage === "string" && it.coverImage.startsWith("data:image/")) ||
+                      (Array.isArray(it.images) && it.images.some((u) => typeof u === "string" && u.startsWith("data:image/"))))
+                );
+              const panelHasInlineDataImage =
+                memoryPanelState &&
+                ((typeof memoryPanelState.lastGeneratedImage === "string" && memoryPanelState.lastGeneratedImage.startsWith("data:image/")) ||
+                  (typeof memoryPanelState.watermarkPreviewBg === "string" && memoryPanelState.watermarkPreviewBg.startsWith("data:image/")) ||
+                  listHasInlineDataImage(memoryPanelState.watermarkGallery));
+              if (
+                listHasInlineDataImage(memoryBookmarksList) ||
+                listHasInlineDataImage(memoryLexiconList) ||
+                listHasInlineDataImage(memoryLexiconFoldersList) ||
+                panelHasInlineDataImage
+              ) {
+                await persistNaiStoreToTermux(false);
+              } else {
+                syncLightweightNaiMetadataBackup();
+              }
+            } catch (_) {}
+          };
+
           window.restoreNaiCollectionFromBackup = async function (backupObj) {
             if (!backupObj || typeof backupObj !== "object") return;
             try {
@@ -57833,15 +57873,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             chat.activeLineMode = "main";
             if ((!Array.isArray(chat.history) || chat.history.length === 0) && Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
               chat.history = [...chat.mainLineHistory];
-            } else if (Array.isArray(chat.history)) {
-              chat.mainLineHistory = [...chat.history];
             }
+            chat.mainLineHistory = [];
           } else if (chat.isGroup && chat.activeLineMode !== "solo") {
             if ((!Array.isArray(chat.history) || chat.history.length === 0) && Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
               chat.history = [...chat.mainLineHistory];
-            } else if (Array.isArray(chat.history)) {
-              chat.mainLineHistory = [...chat.history];
             }
+            chat.mainLineHistory = [];
           } else if (chat.isGroup && (chat.isPeerGroup || chat.peerGroupId) && chat.activeLineMode === "solo") {
             const cfg = typeof window.ensureSoloLineConfig === "function" ? window.ensureSoloLineConfig(chat) : null;
             if (cfg) {
@@ -63855,8 +63893,8 @@ ${recentHistoryText}
                   try { chat = await db.chats.get(String(chatId)); } catch (e) {}
                 }
               } else {
-                if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.history)) {
-                  chat.mainLineHistory = [...chat.history];
+                if (chat.isGroup && chat.activeLineMode !== "solo") {
+                  chat.mainLineHistory = [];
                 }
                 try { await db.chats.put(chat); } catch (_) {}
               }
@@ -64445,7 +64483,7 @@ ${recentHistoryText}
                   }
                 }
               } else if (Array.isArray(chat.history)) {
-                chat.mainLineHistory = [...chat.history];
+                chat.mainLineHistory = [];
               }
             }
             await db.chats.put(chat);
@@ -71900,8 +71938,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       chat.viewingPeerSoloThread.publicHistory = [...chat.history];
                     }
                   }
-                } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
-                  chat.mainLineHistory = [...chat.history];
+                } else if (chat.isGroup) {
+                  chat.mainLineHistory = [];
                 }
                 if (aiMessage.type === "system_status" && isPeerGroupChatInstance(chat) && typeof window.onPeerPhoneStatusBarUpdated === "function") {
                   try { window.onPeerPhoneStatusBarUpdated(chat, aiMessage); } catch (e) {}
@@ -72208,8 +72246,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             chat.viewingPeerSoloThread.publicHistory = [...chat.history];
                           }
                         }
-                      } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
-                        chat.mainLineHistory = [...chat.history];
+                      } else if (chat.isGroup) {
+                        chat.mainLineHistory = [];
                       }
                       if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                         window.PeerManager.broadcastGroupMessage(chat, diceMsg, false);
@@ -72226,8 +72264,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                             exMsg.isSoloMessage = true;
                           }
                           chat.history.push(exMsg);
-                          if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory)) {
-                            chat.mainLineHistory = [...chat.history];
+                          if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
+                            window.syncCurrentSoloThreadHistory(chat);
+                          } else if (chat.isGroup) {
+                            chat.mainLineHistory = [];
                           }
                           if (chat.isGroup && chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
                             window.PeerManager.broadcastGroupMessage(chat, exMsg, false);
@@ -75042,8 +75082,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   chat.unreadCount = 0;
                 }
                 chat.history.push(aiMessage);
-                if (chat.isGroup && Array.isArray(chat.mainLineHistory) && chat.activeLineMode !== "solo") {
-                  chat.mainLineHistory = [...chat.history];
+                if (chat.isGroup && chat.activeLineMode !== "solo") {
+                  chat.mainLineHistory = [];
                 }
                 if (String(state.activeChatId) === String(chatId) && typeof appendMessage === "function") {
                   appendMessage(aiMessage, chat);
@@ -76419,8 +76459,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
           if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
             window.syncCurrentSoloThreadHistory(chat);
-          } else if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
-            chat.mainLineHistory = [...chat.history];
+          } else if (chat.isGroup) {
+            chat.mainLineHistory = [];
           }
 
           await db.chats.put(chat);
@@ -80367,8 +80407,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     timestamp: messageTimestamp++,
                   };
                   chat.history.push(aiMessage);
-                  if (chat.isGroup && Array.isArray(chat.mainLineHistory) && chat.activeLineMode !== "solo") {
-                    chat.mainLineHistory = [...chat.history];
+                  if (chat.isGroup && chat.activeLineMode !== "solo") {
+                    chat.mainLineHistory = [];
                   }
                   if (String(state.activeChatId) === String(chat.id) && typeof appendMessage === "function") {
                     appendMessage(aiMessage, chat);
@@ -83527,7 +83567,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           if (chat.isGroup && chat.activeLineMode !== "solo") {
-            chat.mainLineHistory = [...chat.history];
+            chat.mainLineHistory = [];
           } else if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
             window.syncCurrentSoloThreadHistory(chat);
           }
@@ -89442,14 +89482,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           chat.history.push(summaryMessage);
           if (chat.isGroup) {
             if (chat.activeLineMode === "solo") {
-              if (!Array.isArray(chat.mainLineHistory)) chat.mainLineHistory = [];
-              if (!chat.mainLineHistory.some((m) => m && m.timestamp === summaryMessage.timestamp)) {
-                chat.mainLineHistory.push({ ...summaryMessage });
+              if (typeof window.syncCurrentSoloThreadHistory === "function") {
+                window.syncCurrentSoloThreadHistory(chat);
               }
-            } else if (Array.isArray(chat.mainLineHistory)) {
-              if (!chat.mainLineHistory.some((m) => m && m.timestamp === summaryMessage.timestamp)) {
-                chat.mainLineHistory.push({ ...summaryMessage });
+              if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+                if (!chat.mainLineHistory.some((m) => m && m.timestamp === summaryMessage.timestamp)) {
+                  chat.mainLineHistory.push({ ...summaryMessage });
+                }
               }
+            } else {
+              chat.mainLineHistory = [];
             }
           }
           if (chat.settings && chat.settings.summary) {
@@ -89839,8 +89881,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           } else {
             chat.history.push(newSummary);
           }
-          if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
-            chat.mainLineHistory.push({ ...newSummary });
+          if (chat.isGroup) {
+            if (chat.activeLineMode === "solo") {
+              if (typeof window.syncCurrentSoloThreadHistory === "function") {
+                window.syncCurrentSoloThreadHistory(chat);
+              }
+              if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+                chat.mainLineHistory.push({ ...newSummary });
+              }
+            } else {
+              chat.mainLineHistory = [];
+            }
           }
           if (chat.settings && chat.settings.summary) {
             chat.settings.summary.lastSummaryIndex = chat.history.length - 1;
@@ -92547,8 +92598,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           };
 
           chat.history.push(pendingMsg);
-          if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory)) {
-            chat.mainLineHistory = [...chat.history];
+          if (chat.isGroup && chat.activeLineMode !== "solo") {
+            chat.mainLineHistory = [];
           }
           if (state.chats) {
             state.chats[chat.id] = chat;
@@ -116989,7 +117040,7 @@ ${specificRules}`;
                     }
                   }
                 } else if (Array.isArray(chat.history)) {
-                  chat.mainLineHistory = [...chat.history];
+                  chat.mainLineHistory = [];
                 }
               }
               if (chat.id === window.MASHU_COMPANION_ID || chat.isMashuAuthor) {
@@ -126003,9 +126054,7 @@ ${specificRules}`;
             } else {
               if (!Array.isArray(chat.history)) chat.history = [];
               chat.history.push(sysMsg);
-              if (Array.isArray(chat.mainLineHistory)) {
-                chat.mainLineHistory = [...chat.history];
-              }
+              chat.mainLineHistory = [];
             }
           }
           if (chat.isPeerGroup && window.PeerManager && typeof window.PeerManager.broadcastGroupMessage === "function") {
@@ -126038,9 +126087,10 @@ ${specificRules}`;
             if (chat.mainGroupName) {
               chat.name = chat.mainGroupName;
             }
-            if (Array.isArray(chat.mainLineHistory)) {
+            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
               chat.history = [...chat.mainLineHistory];
             }
+            chat.mainLineHistory = [];
             if (!isWatchOnly) {
               if (!chat.settings.peerPhoneData || typeof chat.settings.peerPhoneData !== "object") {
                 chat.settings.peerPhoneData = { friendships: [], messages: [], signalByLine: { main: true }, playerActiveLine: {}, lineGameTime: {} };
@@ -130775,6 +130825,12 @@ ${specificRules}`;
             _isAutoOffloadingAllToTermux = true;
             const counter = { count: 0, savedBytes: 0, uniqueFiles: new Set() };
             try {
+              // 等待主数据库 loadAllDataFromDB 完成将所有会话装载入 state.chats，防止启动初期 400ms 时 state.chats 尚未就绪
+              let waitHydrateLoops = 0;
+              while (!window._ephoneMainDbHydrated && waitHydrateLoops < 40) {
+                await new Promise((r) => setTimeout(r, 200));
+                waitHydrateLoops++;
+              }
               const cfg = loadVaultConfig();
               const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
               await ensureTermuxMediaListSynced(baseUrl);
@@ -130889,6 +130945,13 @@ ${specificRules}`;
                       await window.restoreTavernStateFromFullBackup(tvState);
                     }
                   }
+                } catch (_) {}
+              }
+
+              // 3b. 自动分离生图独立数据库 ephone_nai_dedicated_idb_v1 中的收藏夹、词典与水印内联图片
+              if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
+                try {
+                  await window.offloadNaiDedicatedStoreToTermuxSilently();
                 } catch (_) {}
               }
 
@@ -131171,6 +131234,13 @@ ${specificRules}`;
                       await window.restoreTavernStateFromFullBackup(tvState);
                     }
                   }
+                } catch (_) {}
+              }
+
+              // 同步分离生图独立数据库 ephone_nai_dedicated_idb_v1 中的收藏夹、词典与水印内联图片
+              if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
+                try {
+                  await window.offloadNaiDedicatedStoreToTermuxSilently();
                 } catch (_) {}
               }
 
@@ -131674,13 +131744,43 @@ ${specificRules}`;
                 out.npcLibrary = newNpcs.length > 0 ? newNpcs : oldNpcs;
               }
             }
-            out.history = mergeChatHistoriesChronologically(olderChat.history, newerChat.history);
+            if (out.isGroup) {
+              const extractEffectiveMainLine = (c) => {
+                if (!c || typeof c !== "object") return [];
+                if (c.activeLineMode === "solo" && Array.isArray(c.mainLineHistory) && c.mainLineHistory.length > 0) {
+                  return c.mainLineHistory;
+                }
+                if (Array.isArray(c.history) && c.history.length > 0) {
+                  return c.history;
+                }
+                return Array.isArray(c.mainLineHistory) ? c.mainLineHistory : [];
+              };
+              const mergedMain = mergeChatHistoriesChronologically(
+                extractEffectiveMainLine(olderChat),
+                extractEffectiveMainLine(newerChat)
+              );
+              if (out.activeLineMode === "solo") {
+                out.mainLineHistory = mergedMain;
+                const oldSolo = olderChat.activeLineMode === "solo" && Array.isArray(olderChat.history) ? olderChat.history : [];
+                const newSolo = newerChat.activeLineMode === "solo" && Array.isArray(newerChat.history) ? newerChat.history : [];
+                out.history = mergeChatHistoriesChronologically(oldSolo, newSolo);
+              } else {
+                out.history = mergedMain;
+                out.mainLineHistory = [];
+              }
+            } else {
+              out.history = mergeChatHistoriesChronologically(olderChat.history, newerChat.history);
+            }
 
             // 若合并后单聊或群成员头像仍缺失，从合并后的历史消息气泡 senderAvatar 中自动找回并同步修复
-            if (Array.isArray(out.history) && out.history.length > 0) {
+            const historyForAvatarRepair =
+              out.isGroup && out.activeLineMode === "solo" && Array.isArray(out.mainLineHistory) && out.mainLineHistory.length > 0
+                ? out.mainLineHistory
+                : out.history;
+            if (Array.isArray(historyForAvatarRepair) && historyForAvatarRepair.length > 0) {
               if (!out.isGroup && !isUsableAvatarOrMedia(out.settings.aiAvatar)) {
-                for (let i = out.history.length - 1; i >= 0; i--) {
-                  const hm = out.history[i];
+                for (let i = historyForAvatarRepair.length - 1; i >= 0; i--) {
+                  const hm = historyForAvatarRepair[i];
                   if (hm && hm.role !== "user" && isUsableAvatarOrMedia(hm.senderAvatar)) {
                     out.settings.aiAvatar = hm.senderAvatar;
                     break;
@@ -131688,8 +131788,8 @@ ${specificRules}`;
                 }
               }
               if (!isUsableAvatarOrMedia(out.settings.myAvatar)) {
-                for (let i = out.history.length - 1; i >= 0; i--) {
-                  const hm = out.history[i];
+                for (let i = historyForAvatarRepair.length - 1; i >= 0; i--) {
+                  const hm = historyForAvatarRepair[i];
                   if (hm && hm.role === "user" && isUsableAvatarOrMedia(hm.senderAvatar)) {
                     out.settings.myAvatar = hm.senderAvatar;
                     break;
@@ -131699,8 +131799,8 @@ ${specificRules}`;
               if (out.isGroup && Array.isArray(out.members)) {
                 for (const mem of out.members) {
                   if (!mem || isUsableAvatarOrMedia(mem.avatar)) continue;
-                  for (let i = out.history.length - 1; i >= 0; i--) {
-                    const hm = out.history[i];
+                  for (let i = historyForAvatarRepair.length - 1; i >= 0; i--) {
+                    const hm = historyForAvatarRepair[i];
                     if (!hm || hm.role === "user") continue;
                     const sName = hm.senderName || hm.sender || "";
                     if (
@@ -131716,7 +131816,7 @@ ${specificRules}`;
                 }
               }
               // 将已恢复的有效头像反向修复历史消息中失效的 senderAvatar
-              for (const hm of out.history) {
+              for (const hm of historyForAvatarRepair) {
                 if (!hm || isUsableAvatarOrMedia(hm.senderAvatar)) continue;
                 if (hm.role === "user") {
                   if (isUsableAvatarOrMedia(out.settings.myAvatar)) hm.senderAvatar = out.settings.myAvatar;
@@ -131732,9 +131832,6 @@ ${specificRules}`;
                   }
                 }
               }
-            }
-            if (Array.isArray(out.mainLineHistory) && Array.isArray(out.history)) {
-              out.mainLineHistory = [...out.history];
             }
             return out;
           }
