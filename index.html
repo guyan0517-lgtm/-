@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43852,7 +43852,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const vRef = imgEl._naiTargetVaultRef || imgEl.getAttribute("data-vault-ref") || "";
                 if (!vRef || !vRef.startsWith("vault://")) return;
                 const retryNum = (imgEl._naiErrRetryCount || 0) + 1;
-                if (retryNum > 4) return;
+                if (retryNum > 4) {
+                  imgEl.removeAttribute("data-vault-pending");
+                  imgEl.setAttribute("data-vault-dead", "1");
+                  return;
+                }
                 imgEl._naiErrRetryCount = retryNum;
                 if (typeof window.evictVaultBlobCacheByRef === "function") {
                   try { window.evictVaultBlobCacheByRef(vRef); } catch (_) {}
@@ -43865,6 +43869,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       if (resolved && resolved !== vRef && !resolved.startsWith("vault://")) {
                         predecodeResolvedUrl(resolved);
                         imgEl.removeAttribute("data-vault-pending");
+                        imgEl.removeAttribute("data-vault-dead");
                         imgEl.setAttribute("data-vault-ref", vRef);
                         imgEl.setAttribute("data-vault-hydrated-src", resolved);
                         imgEl.src = resolved;
@@ -43879,6 +43884,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               imgEl._naiTargetVaultRef = srcStr;
               imgEl._naiFallbackCoverIdx = typeof fallbackCoverIdx === "number" ? fallbackCoverIdx : undefined;
               imgEl._naiErrRetryCount = 0;
+              imgEl.removeAttribute("data-vault-dead");
               imgEl.setAttribute("data-vault-ref", srcStr);
               const fastCached = typeof window.getCachedVaultBlobUrl === "function"
                 ? window.getCachedVaultBlobUrl(srcStr)
@@ -43904,6 +43910,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   predecodeResolvedUrl(cachedNow);
                   imgEl.removeAttribute("data-vault-pending");
                   imgEl.removeAttribute("data-vault-fallback-shown");
+                  imgEl.removeAttribute("data-vault-dead");
                   imgEl.setAttribute("data-vault-ref", srcStr);
                   imgEl.setAttribute("data-vault-hydrated-src", cachedNow);
                   imgEl.src = cachedNow;
@@ -43912,9 +43919,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (typeof window.resolveVaultRefToUrl !== "function") {
                   if (attempt < 8) {
                     setTimeout(() => tryResolveWithRetries(attempt + 1), 350);
-                  } else if (typeof fallbackCoverIdx === "number") {
-                    imgEl.setAttribute("data-vault-fallback-shown", "1");
-                    imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                  } else {
+                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-dead", "1");
+                    if (typeof fallbackCoverIdx === "number") {
+                      imgEl.setAttribute("data-vault-fallback-shown", "1");
+                      imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                    }
                   }
                   return;
                 }
@@ -43924,22 +43935,31 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     predecodeResolvedUrl(resolved);
                     imgEl.removeAttribute("data-vault-pending");
                     imgEl.removeAttribute("data-vault-fallback-shown");
+                    imgEl.removeAttribute("data-vault-dead");
                     imgEl.setAttribute("data-vault-ref", srcStr);
                     imgEl.setAttribute("data-vault-hydrated-src", resolved);
                     imgEl.src = resolved;
                   } else if (attempt < 8) {
                     setTimeout(() => tryResolveWithRetries(attempt + 1), 400 * (attempt + 1));
-                  } else if (typeof fallbackCoverIdx === "number") {
-                    imgEl.setAttribute("data-vault-fallback-shown", "1");
-                    imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                  } else {
+                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-dead", "1");
+                    if (typeof fallbackCoverIdx === "number") {
+                      imgEl.setAttribute("data-vault-fallback-shown", "1");
+                      imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                    }
                   }
                 }).catch(() => {
                   if (imgEl._naiTargetVaultRef !== srcStr) return;
                   if (attempt < 8) {
                     setTimeout(() => tryResolveWithRetries(attempt + 1), 400 * (attempt + 1));
-                  } else if (typeof fallbackCoverIdx === "number") {
-                    imgEl.setAttribute("data-vault-fallback-shown", "1");
-                    imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                  } else {
+                    imgEl.removeAttribute("data-vault-pending");
+                    imgEl.setAttribute("data-vault-dead", "1");
+                    if (typeof fallbackCoverIdx === "number") {
+                      imgEl.setAttribute("data-vault-fallback-shown", "1");
+                      imgEl.src = getTraceDefaultCoverUrl(fallbackCoverIdx);
+                    }
                   }
                 });
               };
@@ -43949,6 +43969,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               imgEl.removeAttribute("data-vault-ref");
               imgEl.removeAttribute("data-vault-pending");
               imgEl.removeAttribute("data-vault-fallback-shown");
+              imgEl.removeAttribute("data-vault-dead");
               predecodeResolvedUrl(srcStr);
               if (typeof window.setCleanPreviewImgSrc === "function") {
                 window.setCleanPreviewImgSrc(imgEl, srcStr);
@@ -43958,8 +43979,70 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
+          let _naiCollectionPreloadRunning = false;
           function preloadAllNaiCollectionVaultImages() {
-            // 按需由当前展示卡片的 img 元素直接从 Termux 流式解析，不在后台一次性把数百张收藏图全部拉进浏览器内存
+            if (_naiCollectionPreloadRunning) return;
+            if (typeof window.resolveVaultRefToUrl !== "function") return;
+            const refsToWarm = [];
+            const seenRefs = new Set();
+            const addCoverRef = (u) => {
+              if (typeof u !== "string") return;
+              const s = u.trim();
+              if (!s.startsWith("vault://") || seenRefs.has(s)) return;
+              seenRefs.add(s);
+              if (typeof window.getCachedVaultBlobUrl === "function" && window.getCachedVaultBlobUrl(s)) return;
+              refsToWarm.push(s);
+            };
+            const collectListCovers = (arr) => {
+              if (!Array.isArray(arr)) return;
+              for (let i = 0; i < arr.length; i++) {
+                const it = arr[i];
+                if (!it || typeof it !== "object") continue;
+                if (typeof it.coverImage === "string" && it.coverImage.startsWith("vault://")) {
+                  addCoverRef(it.coverImage);
+                }
+                if (Array.isArray(it.images) && it.images.length > 0) {
+                  addCoverRef(it.images[0]);
+                } else if (typeof it.image === "string") {
+                  addCoverRef(it.image);
+                }
+              }
+            };
+            collectListCovers(memoryBookmarksList);
+            collectListCovers(memoryLexiconList);
+            collectListCovers(memoryLexiconFoldersList);
+            if (refsToWarm.length === 0) return;
+            _naiCollectionPreloadRunning = true;
+            (async () => {
+              try {
+                const BATCH = 6;
+                for (let i = 0; i < refsToWarm.length; i += BATCH) {
+                  const slice = refsToWarm.slice(i, i + BATCH);
+                  await Promise.all(
+                    slice.map((ref) =>
+                      window.resolveVaultRefToUrl(ref).then((resolved) => {
+                        if (resolved && !resolved.startsWith("vault://")) {
+                          try {
+                            const waitingImgs = document.querySelectorAll(`#module-nai-panel img[data-vault-ref="${ref}"]`);
+                            waitingImgs.forEach((imgEl) => {
+                              imgEl.removeAttribute("data-vault-pending");
+                              imgEl.removeAttribute("data-vault-fallback-shown");
+                              imgEl.removeAttribute("data-vault-dead");
+                              imgEl.setAttribute("data-vault-hydrated-src", resolved);
+                              if (imgEl.getAttribute("src") !== resolved) {
+                                imgEl.src = resolved;
+                              }
+                            });
+                          } catch (_) {}
+                        }
+                      }).catch(() => {})
+                    )
+                  );
+                }
+              } finally {
+                _naiCollectionPreloadRunning = false;
+              }
+            })();
           }
 
           async function convertInlineImageToHighQualityWebp(dataUrl) {
@@ -44858,7 +44941,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return parts.join(", ");
           }
 
-          function syncModuleNaiToGlobal() {
+          function syncModuleNaiToGlobal(shouldPersist = false) {
             if (_debouncedSyncTimer) {
               clearTimeout(_debouncedSyncTimer);
               _debouncedSyncTimer = null;
@@ -44898,7 +44981,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (inspectStatusEl && inspectStatusEl.textContent) {
               st.inspectStatusText = inspectStatusEl.textContent;
             }
-            savePanelState(st);
+            memoryPanelState = Object.assign({}, getDefaultPanelState(), st);
+            if (shouldPersist === true) {
+              savePanelState(st);
+            }
             updateHeaderSummary();
           }
 
@@ -44908,7 +44994,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (_debouncedSyncTimer) clearTimeout(_debouncedSyncTimer);
             _debouncedSyncTimer = setTimeout(() => {
               _debouncedSyncTimer = null;
-              syncModuleNaiToGlobal();
+              syncModuleNaiToGlobal(false);
             }, 360);
           }
 
@@ -46262,7 +46348,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function handleManualSaveWithFeedback(btnEl) {
             syncActiveSelectedPresetsFromDom();
-            syncModuleNaiToGlobal();
+            syncModuleNaiToGlobal(true);
             renderPresetSelectOptions();
             if (btnEl) {
               const spanEl = btnEl.querySelector("span");
@@ -46651,7 +46737,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 3. 生图面板与提取面板：文本框防抖同步 + 失焦立刻保存
+            // 3. 生图面板与提取面板：输入时仅在内存中同步状态与高亮，只有点击保存按钮才写入存储
             [
               "mod-nai-gen-artist-input",
               "mod-nai-gen-artist2-input",
@@ -46665,29 +46751,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const el = document.getElementById(id);
               if (el) {
                 el.addEventListener("input", debouncedSyncModuleNaiToGlobal);
-                el.addEventListener("change", syncModuleNaiToGlobal);
-                el.addEventListener("blur", syncModuleNaiToGlobal);
+                el.addEventListener("change", () => syncModuleNaiToGlobal(false));
+                el.addEventListener("blur", () => syncModuleNaiToGlobal(false));
               }
             });
 
             ["mod-nai-artist1-check", "mod-nai-artist2-check", "mod-nai-pos1-check", "mod-nai-pos2-check"].forEach((id) => {
               const el = document.getElementById(id);
               if (el) {
-                el.addEventListener("change", syncModuleNaiToGlobal);
+                el.addEventListener("change", () => syncModuleNaiToGlobal(false));
               }
             });
 
-            window.addEventListener("pagehide", syncModuleNaiToGlobal);
-            window.addEventListener("beforeunload", syncModuleNaiToGlobal);
-            document.addEventListener("visibilitychange", () => {
-              if (document.visibilityState === "hidden") {
-                syncModuleNaiToGlobal();
-              }
-            });
             const modulesBackBtn = document.getElementById("modules-back-btn");
             if (modulesBackBtn) {
               modulesBackBtn.addEventListener("click", () => {
-                syncModuleNaiToGlobal();
+                syncModuleNaiToGlobal(false);
                 destroyNaiCollectionGalleryMemory();
               });
             }
@@ -49477,46 +49556,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           function applySlidingWindowPagesToGrid(gridEl, curPage, totalPages, buildPageCardsFn) {
-            // 滑动窗口挂载：立即同步挂载当前页，同时挂载前后各2页（共5页窗口），点击上一页/下一页零等待秒切，且绝不在DOM中堆积数百张卡片
-            const keepPagesSet = new Set();
-            const pageOrder = [curPage];
-            keepPagesSet.add(curPage);
-            for (let delta = 1; delta <= 2; delta++) {
-              if (curPage + delta <= totalPages) {
-                pageOrder.push(curPage + delta);
-                keepPagesSet.add(curPage + delta);
-              }
-              if (curPage - delta >= 1) {
-                pageOrder.push(curPage - delta);
-                keepPagesSet.add(curPage - delta);
-              }
-            }
-            for (const [mountedPage, entry] of Array.from(colMountedPagesMap.entries())) {
-              if (!keepPagesSet.has(mountedPage)) {
-                if (entry && Array.isArray(entry.cards)) {
-                  entry.cards.forEach((cEl) => {
-                    if (cEl && cEl.parentNode) cEl.parentNode.removeChild(cEl);
-                  });
+            // 全页预挂载与图片预热：立即同步挂载当前页，同时把全部页面挂载在DOM中（非当前页display:none）并预热图片到Blob缓存，无论直接翻到第几页（如第20页）都是0毫秒瞬切，不闪裂图
+            const mountOnePage = (p) => {
+              if (colMountedPagesMap.has(p)) return;
+              const frag = document.createDocumentFragment();
+              const cards = buildPageCardsFn(p);
+              const refs = [];
+              cards.forEach((cEl) => {
+                cEl.style.display = p === curPage ? "" : "none";
+                const imgEl = cEl.querySelector("img");
+                if (imgEl) {
+                  const vRef = imgEl.getAttribute("data-vault-ref") || "";
+                  if (vRef && vRef.startsWith("vault://")) refs.push(vRef);
                 }
-                colMountedPagesMap.delete(mountedPage);
-              }
-            }
-            for (const p of pageOrder) {
-              if (!colMountedPagesMap.has(p)) {
-                const frag = document.createDocumentFragment();
-                const cards = buildPageCardsFn(p);
-                const refs = [];
-                cards.forEach((cEl) => {
-                  cEl.style.display = p === curPage ? "" : "none";
-                  const imgEl = cEl.querySelector("img");
-                  if (imgEl) {
-                    const vRef = imgEl.getAttribute("data-vault-ref") || "";
-                    if (vRef && vRef.startsWith("vault://")) refs.push(vRef);
-                  }
-                  frag.appendChild(cEl);
-                });
-                colMountedPagesMap.set(p, { cards, refs });
-                gridEl.appendChild(frag);
+                frag.appendChild(cEl);
+              });
+              colMountedPagesMap.set(p, { cards, refs });
+              gridEl.appendChild(frag);
+            };
+
+            mountOnePage(curPage);
+            for (let p = 1; p <= totalPages; p++) {
+              if (p !== curPage) {
+                mountOnePage(p);
               }
             }
 
@@ -49547,6 +49609,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 });
               }
             }
+            preloadAllNaiCollectionVaultImages();
           }
 
           function renderCollectionGrid(forceRebuild) {
@@ -50779,9 +50842,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (colScope !== "local") {
                   switchScopeTo("local");
                 } else {
-                  if (colActiveSubView === "edit") {
-                    persistCurrentBookmarkEditDraft(true);
-                  }
                   colCurrentItem = null;
                   colCurrentIndex = -1;
                   colIsCreatingNew = false;
@@ -50982,7 +51042,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const st = loadPanelState();
                 st.mode = "generate";
                 savePanelState(st);
-                syncModuleNaiToGlobal();
+                syncModuleNaiToGlobal(true);
                 if (typeof window.showDownloadToast === "function") {
                   window.showDownloadToast(isLex ? "已填入正面提示词" : "已填入生图面板", "success");
                 }
@@ -51004,7 +51064,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               );
             }
 
-            // 视图三：一目了然编辑模式事件
+            // 视图三：一目了然编辑模式事件（仅在用户明确点击“保存”按钮时才保存，输入或返回绝不自动保存）
             const editBackBtn = document.getElementById("mod-nai-col-edit-back-btn");
             const editGrabBtn = document.getElementById("mod-nai-col-edit-grab-current-btn");
             const editImgStage = document.getElementById("mod-nai-col-edit-img-stage");
@@ -51020,26 +51080,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (colScope === "shared") return;
                   colEditModelDraft = normalizeModelTagValue(btn.getAttribute("data-model-tag"));
                   syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
-                  persistCurrentBookmarkEditDraft(false);
                 });
               });
             }
-
-            [
-              "mod-nai-col-edit-name-input",
-              "mod-nai-col-edit-remark-input",
-              "mod-nai-col-edit-artist-input",
-              "mod-nai-col-edit-pos-input",
-              "mod-nai-col-edit-neg-input",
-              "mod-nai-col-edit-folder-select"
-            ].forEach((id) => {
-              const el = document.getElementById(id);
-              if (el) {
-                el.addEventListener("input", () => persistCurrentBookmarkEditDraft(false, false));
-                el.addEventListener("change", () => persistCurrentBookmarkEditDraft(false, false));
-                el.addEventListener("blur", () => persistCurrentBookmarkEditDraft(false, false));
-              }
-            });
 
             const editFolderAddBtn = document.getElementById("mod-nai-col-edit-folder-add-btn");
             const editFolderInp = document.getElementById("mod-nai-col-edit-folder-input");
@@ -51086,7 +51129,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 editFileInput.value = "";
                 if (!newUrls.length) return;
 
-                const prevVaultRefs = colEditImagesDraft.filter((u) => typeof u === "string" && u.startsWith("vault://"));
                 if (colEditImagesDraft.length > 0 && typeof window.showChoiceModal === "function") {
                   const mode = await window.showChoiceModal("上传图片方式", [
                     { text: "追加到当前图片后面", value: "append" },
@@ -51103,15 +51145,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 colEditImageDraft = colEditImagesDraft[0] || "";
                 renderEditSquarePreview(colEditImagesDraft);
-                persistCurrentBookmarkEditDraft(false);
-                if (prevVaultRefs.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
-                  const currentSet = new Set(colEditImagesDraft);
-                  for (const oldRef of prevVaultRefs) {
-                    if (!currentSet.has(oldRef)) {
-                      window.deleteVaultMediaRefIfUnreferenced(oldRef).catch(() => {});
-                    }
-                  }
-                }
               });
             }
 
@@ -51139,9 +51172,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   colEditImageDraft = colEditImagesDraft[0] || "";
                   renderEditSquarePreview(colEditImagesDraft);
                 }
-                persistCurrentBookmarkEditDraft(false);
                 if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast("已读取当前生图内容", "success");
+                  window.showDownloadToast("已读取当前生图内容，点击底部保存生效", "success");
                 }
               });
             }
@@ -51149,9 +51181,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (editBackBtn) {
               editBackBtn.addEventListener("click", () => {
                 const wasCreating = colIsCreatingNew;
-                if (colScope === "local") {
-                  persistCurrentBookmarkEditDraft(false, true);
-                }
                 if (!wasCreating && colCurrentItem) {
                   openBookmarkDetailView(colCurrentItem, colCurrentIndex);
                 } else {
@@ -51767,15 +51796,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           };
 
           function flushAllNaiStateBeforeExit() {
-            if (!_naiHydrationCompleted) return;
-            try {
-              const editPage = document.getElementById("mod-nai-col-edit-page");
-              if (editPage && editPage.style.display !== "none" && colCurrentItem && colScope === "local") {
-                persistCurrentBookmarkEditDraft(true);
-              }
-            } catch (_) {}
-            syncModuleNaiToGlobal();
-            persistNaiStoreToTermux(true);
+            // 仅当用户主动点击保存按钮时才写入存储，离开页面或隐藏标签页绝不静默保存未点击保存的草稿
           }
           window.addEventListener("pagehide", flushAllNaiStateBeforeExit);
           window.addEventListener("beforeunload", flushAllNaiStateBeforeExit);
@@ -52164,7 +52185,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
 
               _naiHydrationCompleted = true;
-              _termuxNaiStoreLoadedOnce = true;
+              if (remoteStore) {
+                _termuxNaiStoreLoadedOnce = true;
+              }
 
               const cleanModalEl = document.getElementById("mod-nai-clean-modal");
               const wmModalEl = document.getElementById("mod-nai-watermark-modal");
@@ -52185,6 +52208,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 syncLightweightNaiMetadataBackup(false);
               }
 
+              preloadAllNaiCollectionVaultImages();
+
               const colViewEl = document.getElementById("mod-nai-collection-view");
               if (gridNeedsRebuild && (currentMode === "collection" || (colViewEl && colViewEl.style.display !== "none"))) {
                 renderCollectionGrid(true);
@@ -52197,6 +52222,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           window.getNaiVaultMediaReferences = async function () {
             const refs = [];
+            if (Array.isArray(colEditImagesDraft)) {
+              colEditImagesDraft.forEach((u) => {
+                if (typeof u === "string" && u.includes("vault://")) refs.push(u);
+              });
+            }
+            if (typeof colEditImageDraft === "string" && colEditImageDraft.includes("vault://")) {
+              refs.push(colEditImageDraft);
+            }
+            if (typeof colFolderCoverDraft === "string" && colFolderCoverDraft.includes("vault://")) {
+              refs.push(colFolderCoverDraft);
+            }
             const collectFromList = (arr) => {
               if (!Array.isArray(arr)) return;
               arr.forEach((it) => {
@@ -128813,9 +128849,32 @@ ${specificRules}`;
           const liveSessionBlobUrls = new Set();
           window.blobUrlToVaultRefMap = blobUrlToVaultRefMap;
 
-          const MAX_BLOB_CACHE_ITEMS = 80;
-          function isBlobUrlMountedInDom(targetUrl) {
+          const MAX_BLOB_CACHE_ITEMS = 600;
+          const VAULT_TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+          function collectMountedDomBlobUrlsSet() {
+            const set = new Set();
+            try {
+              const activeEls = document.querySelectorAll('img[src^="blob:"], img[data-vault-hydrated-src], [style*="blob:"]');
+              for (let i = 0; i < activeEls.length; i++) {
+                const el = activeEls[i];
+                const s = el.getAttribute("src");
+                if (s && s.startsWith("blob:")) set.add(s);
+                const h = el.getAttribute("data-vault-hydrated-src");
+                if (h && h.startsWith("blob:")) set.add(h);
+                const st = el.getAttribute("style") || "";
+                if (st.includes("blob:")) {
+                  const m = st.match(/blob:[^\s"')]+/g);
+                  if (m) m.forEach((u) => set.add(u));
+                }
+              }
+            } catch (_) {}
+            return set;
+          }
+
+          function isBlobUrlMountedInDom(targetUrl, precomputedSet = null) {
             if (!targetUrl) return false;
+            if (precomputedSet) return precomputedSet.has(targetUrl);
             try {
               const activeEls = document.querySelectorAll('img[src^="blob:"], img[data-vault-hydrated-src], [style*="blob:"]');
               for (let i = 0; i < activeEls.length; i++) {
@@ -128835,8 +128894,9 @@ ${specificRules}`;
           function releaseUnusedBrowserBlobCache() {
             let released = 0;
             try {
+              const mountedSet = collectMountedDomBlobUrlsSet();
               for (const [k, bUrl] of Array.from(blobUrlMemoryCache.entries())) {
-                if (!bUrl || !isBlobUrlMountedInDom(bUrl)) {
+                if (!bUrl || !mountedSet.has(bUrl)) {
                   blobUrlMemoryCache.delete(k);
                   if (bUrl) {
                     try { URL.revokeObjectURL(bUrl); } catch (_) {}
@@ -128870,10 +128930,11 @@ ${specificRules}`;
             blobUrlToVaultRefMap.set(objUrl, "vault://" + cleanName);
             liveSessionBlobUrls.add(objUrl);
             if (blobUrlMemoryCache.size > MAX_BLOB_CACHE_ITEMS) {
+              const mountedSet = collectMountedDomBlobUrlsSet();
               for (const [oldestKey, oldUrl] of Array.from(blobUrlMemoryCache.entries())) {
                 if (blobUrlMemoryCache.size <= MAX_BLOB_CACHE_ITEMS) break;
                 if (oldestKey === cleanName) continue;
-                if (!oldUrl || !isBlobUrlMountedInDom(oldUrl)) {
+                if (!oldUrl || !mountedSet.has(oldUrl)) {
                   blobUrlMemoryCache.delete(oldestKey);
                   if (oldUrl) {
                     try {
@@ -128915,18 +128976,40 @@ ${specificRules}`;
             const val = String(newSrc || "");
             if (val.startsWith("vault://")) {
               imgEl.setAttribute("data-vault-ref", val);
-              imgEl.removeAttribute("data-vault-hydrated-src");
-              imgEl.setAttribute("src", val);
+              imgEl.removeAttribute("data-vault-dead");
+              const cachedBlob = window.getCachedVaultBlobUrl ? window.getCachedVaultBlobUrl(val) : null;
+              if (cachedBlob) {
+                imgEl.removeAttribute("data-vault-pending");
+                imgEl.setAttribute("data-vault-hydrated-src", cachedBlob);
+                imgEl.setAttribute("src", cachedBlob);
+              } else {
+                imgEl.removeAttribute("data-vault-hydrated-src");
+                imgEl.setAttribute("data-vault-pending", "1");
+                imgEl.setAttribute("src", VAULT_TRANSPARENT_PIXEL);
+                if (typeof resolveVaultRefToUrl === "function") {
+                  resolveVaultRefToUrl(val).then((resolved) => {
+                    if (imgEl.getAttribute("data-vault-ref") !== val) return;
+                    if (resolved && resolved !== val && !resolved.startsWith("vault://")) {
+                      imgEl.removeAttribute("data-vault-pending");
+                      imgEl.setAttribute("data-vault-hydrated-src", resolved);
+                      imgEl.setAttribute("src", resolved);
+                    }
+                  }).catch(() => {});
+                }
+              }
             } else {
               const mappedRef = blobUrlToVaultRefMap.get(val);
               if (mappedRef && mappedRef.startsWith("vault://")) {
                 imgEl.setAttribute("data-vault-ref", mappedRef);
+                imgEl.removeAttribute("data-vault-pending");
+                imgEl.removeAttribute("data-vault-dead");
                 imgEl.setAttribute("data-vault-hydrated-src", val);
                 imgEl.setAttribute("src", val);
               } else {
                 imgEl.removeAttribute("data-vault-ref");
                 imgEl.removeAttribute("data-vault-hydrated-src");
                 imgEl.removeAttribute("data-vault-pending");
+                imgEl.removeAttribute("data-vault-dead");
                 imgEl._vaultResolvingRef = null;
                 imgEl.setAttribute("src", val);
               }
@@ -128942,7 +129025,13 @@ ${specificRules}`;
             if (mappedFromBlob && mappedFromBlob.startsWith("vault://")) return mappedFromBlob;
             const vRef = imgEl.getAttribute("data-vault-ref");
             const hydratedSrc = imgEl.getAttribute("data-vault-hydrated-src");
-            if (vRef && vRef.startsWith("vault://") && hydratedSrc && (rawAttr === hydratedSrc || propSrc === hydratedSrc)) {
+            if (
+              vRef &&
+              vRef.startsWith("vault://") &&
+              ((hydratedSrc && (rawAttr === hydratedSrc || propSrc === hydratedSrc)) ||
+                rawAttr === VAULT_TRANSPARENT_PIXEL ||
+                rawAttr.startsWith("data:image/gif;base64,R0lGODlhAQAB"))
+            ) {
               return vRef;
             }
             return propSrc;
@@ -131509,6 +131598,18 @@ ${specificRules}`;
 
             writer.appendRaw(',"tables":{');
             let wroteTable = false;
+            const sharedDomVaultMap = new Map();
+            try {
+              const domImgs = document.querySelectorAll("img[data-vault-ref]");
+              domImgs.forEach((el) => {
+                const vRef = el.getAttribute("data-vault-ref");
+                const curSrc = el.src || el.getAttribute("src");
+                if (vRef && vRef.startsWith("vault://") && curSrc && curSrc.startsWith("blob:")) {
+                  blobUrlToVaultRefMap.set(curSrc, vRef);
+                  sharedDomVaultMap.set(curSrc, vRef);
+                }
+              });
+            } catch (_) {}
             if (typeof db !== "undefined" && db.tables) {
               for (const table of db.tables) {
                 if (!table || !table.name) continue;
@@ -131524,7 +131625,7 @@ ${specificRules}`;
                 for (let r = 0; r < rows.length; r++) {
                   if (r > 0) writer.appendRaw(",");
                   if (rows[r] && typeof rows[r] === "object") {
-                    restoreVaultRefsInObjectDeep(rows[r]);
+                    restoreVaultRefsInObjectDeep(rows[r], new WeakSet(), sharedDomVaultMap);
                   }
                   writer.appendValue(rows[r], 1);
                   rows[r] = null;
@@ -132517,6 +132618,11 @@ ${specificRules}`;
               if (img.getAttribute("data-vault-ref") !== ref) {
                 img.setAttribute("data-vault-ref", ref);
               }
+              if (attrSrc.startsWith("vault://")) {
+                // 立即将非法的 vault:// src 替换为透明占位像素，绝不让浏览器渲染出哪怕0.1秒的裂图图标
+                img.setAttribute("data-vault-pending", "1");
+                img.setAttribute("src", VAULT_TRANSPARENT_PIXEL);
+              }
               if (
                 !attrSrc.startsWith("vault://") &&
                 !img.hasAttribute("data-vault-pending") &&
@@ -132532,6 +132638,7 @@ ${specificRules}`;
               const cachedFast = window.getCachedVaultBlobUrl ? window.getCachedVaultBlobUrl(ref) : null;
               if (cachedFast) {
                 img.removeAttribute("data-vault-pending");
+                img.removeAttribute("data-vault-dead");
                 if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                   img.className = "realimag-image";
                 }
@@ -132543,6 +132650,7 @@ ${specificRules}`;
                 }
                 return;
               }
+              if (img.getAttribute("data-vault-dead") === "1") return;
               if (img._vaultResolvingRef === ref) return;
               img._vaultResolvingRef = ref;
               resolveVaultRefToUrl(ref)
@@ -132552,6 +132660,7 @@ ${specificRules}`;
                   if (resolved && resolved !== ref && !resolved.startsWith("vault://")) {
                     img._vaultRetryCount = 0;
                     img.removeAttribute("data-vault-pending");
+                    img.removeAttribute("data-vault-dead");
                     if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                       img.className = "realimag-image";
                     }
@@ -132571,6 +132680,7 @@ ${specificRules}`;
                           if (retryResolved && retryResolved !== ref && !retryResolved.startsWith("vault://")) {
                             img._vaultRetryCount = 0;
                             img.removeAttribute("data-vault-pending");
+                            img.removeAttribute("data-vault-dead");
                             if (img.classList.contains("cleared-image-placeholder") && img.closest(".message-bubble.is-realimag")) {
                               img.className = "realimag-image";
                             }
@@ -132578,9 +132688,15 @@ ${specificRules}`;
                             if (img.getAttribute("src") !== retryResolved) {
                               img.setAttribute("src", retryResolved);
                             }
+                          } else if ((img._vaultRetryCount || 0) >= 3) {
+                            img.removeAttribute("data-vault-pending");
+                            img.setAttribute("data-vault-dead", "1");
                           }
                         });
                       }, 1500 * (retries + 1));
+                    } else if (retries >= 3) {
+                      img.removeAttribute("data-vault-pending");
+                      img.setAttribute("data-vault-dead", "1");
                     }
                   }
                 })
@@ -133444,6 +133560,7 @@ ${specificRules}`;
                 img._vaultRetryCount = 0;
                 img._vaultRetryScheduled = false;
                 img._vaultResolvingRef = null;
+                img.removeAttribute("data-vault-dead");
               });
               const bgEls = document.querySelectorAll('[style*="vault://"], [data-vault-bg-ref]');
               bgEls.forEach((el) => {
@@ -133921,6 +134038,9 @@ ${specificRules}`;
                   }
                 } catch (_) {}
                 const res = await origPut(rowObj, ...rest);
+                if (!_suspendVaultAutoOffload && rowObj && typeof rowObj === "object") {
+                  syncSingleRecordToTermuxIncrementally(table.name, rowObj);
+                }
                 return res;
               };
               if (typeof table.add === "function") {
@@ -133943,6 +134063,9 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   const res = await origAdd(rowObj, ...rest);
+                  if (!_suspendVaultAutoOffload && rowObj && typeof rowObj === "object") {
+                    syncSingleRecordToTermuxIncrementally(table.name, rowObj);
+                  }
                   return res;
                 };
               }
@@ -134045,45 +134168,37 @@ ${specificRules}`;
             }
           }
 
-          let _autoTermuxBackupTimer = null;
-          function scheduleAutoTermuxBackupSave() {
-            const cfg = loadVaultConfig();
-            if (!cfg || !cfg.auto) return;
-            if (_autoTermuxBackupTimer) clearTimeout(_autoTermuxBackupTimer);
-            _autoTermuxBackupTimer = setTimeout(async () => {
-              _autoTermuxBackupTimer = null;
-              // 若当前正处于 AI 回复生成或生图队列执行中，延后全量快照打包，防止大对象序列化阻塞浏览器主线程导致卡顿
-              const isBusyGen = Boolean(
-                (window.activeGeneratingChats && Object.keys(window.activeGeneratingChats).length > 0) ||
-                (window.activeGeneratingKeeperDraw && Object.keys(window.activeGeneratingKeeperDraw).length > 0)
-              );
-              if (isBusyGen) {
-                scheduleAutoTermuxBackupSave();
-                return;
+          // 单条增量同步队列（酒馆式按条保存：改哪一条记录就只把那一条记录发给 Termux，彻底废弃每30秒把全库20多MB数据重新打包一次的古法逻辑）
+          const _incrementalRecordTimers = new Map();
+          function syncSingleRecordToTermuxIncrementally(tableName, rowObj) {
+            try {
+              if (!tableName || !rowObj || typeof rowObj !== "object") return;
+              const cfg = loadVaultConfig();
+              if (!cfg || !cfg.auto || !cachedTermuxOk) return;
+              const rawId = rowObj.id !== undefined ? rowObj.id : (rowObj.key !== undefined ? rowObj.key : "main");
+              const safeId = String(rawId).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "record";
+              const mapKey = `${tableName}::${safeId}`;
+              if (_incrementalRecordTimers.has(mapKey)) {
+                clearTimeout(_incrementalRecordTimers.get(mapKey));
               }
-              try {
-                if (typeof db === "undefined" || !db.chats) return;
-                const allChats = await db.chats.toArray();
-                const realChats = allChats.filter((c) => {
-                  if (!c || typeof c !== "object") return false;
-                  if (String(c.id || "").startsWith("qqgroup_")) return false;
-                  const isDefaultMashu =
-                    (c.name === "玛修" || c.id === "chat_default" || c.id === 1) &&
-                    (!Array.isArray(c.history) || c.history.length <= 2);
-                  return !isDefaultMashu;
-                });
-                // 严禁在空白初始状态下覆盖 Termux 里的 backup.json
-                if (realChats.length === 0) return;
-                const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                if (!(await checkTermuxEndpointReachable(baseUrl))) return;
-                const snapBlob = await buildFullDatabaseSnapshotBlobLowMemory();
-                await fetch(baseUrl + "/backup.json", {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json; charset=utf-8" },
-                  body: snapBlob,
-                });
-              } catch (_) {}
-            }, 30000);
+              const timer = setTimeout(async () => {
+                _incrementalRecordTimers.delete(mapKey);
+                if (!cachedTermuxOk) return;
+                try {
+                  const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                  await fetch(`${baseUrl}/records/${encodeURIComponent(tableName)}_${encodeURIComponent(safeId)}.json`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json; charset=utf-8" },
+                    body: JSON.stringify(rowObj)
+                  });
+                } catch (_) {}
+              }, 800);
+              _incrementalRecordTimers.set(mapKey, timer);
+            } catch (_) {}
+          }
+
+          function scheduleAutoTermuxBackupSave() {
+            // 已改为按单条记录增量写入 Termux，不再执行30秒全量打包
           }
 
           window.getGlmTranslateConfig = function () {
@@ -134543,7 +134658,7 @@ ${specificRules}`;
             setInterval(async () => {
               if (document.visibilityState && document.visibilityState !== "visible") return;
               const hasUnresolvedDomImg = Boolean(
-                document.querySelector('img[src^="vault://"], img[data-vault-pending], img[data-vault-ref]:not([data-vault-hydrated-src])')
+                document.querySelector('img[src^="vault://"], img[data-vault-pending]:not([data-vault-dead]), img[data-vault-ref]:not([data-vault-hydrated-src]):not([data-vault-dead])')
               );
               if (hasUnresolvedDomImg && cachedTermuxOk) {
                 hydrateDomVaultImages();
