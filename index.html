@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -74846,11 +74846,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const linkedChat = state.chats[link.chatId];
                 if (!linkedChat) return "";
 
-                const freshLinkedChat = await db.chats.get(link.chatId);
+                const freshLinkedChat = state.chats[link.chatId] || (await db.chats.get(link.chatId));
                 if (!freshLinkedChat) return "";
 
-                const recentHistory = freshLinkedChat.history
-                  .filter((msg) => !msg.isHidden)
+                const linkedDelSet = new Set(
+                  Array.isArray(freshLinkedChat.settings?.deletedMessageTimestamps)
+                    ? freshLinkedChat.settings.deletedMessageTimestamps.map((t) => String(t))
+                    : []
+                );
+                const linkedClearedAt = Number(freshLinkedChat.settings?.historyClearedAt) || 0;
+                const recentHistory = (freshLinkedChat.history || [])
+                  .filter((msg) => msg && !msg.isHidden && !linkedDelSet.has(String(msg.timestamp)) && (!linkedClearedAt || (Number(msg.timestamp) || 0) > linkedClearedAt))
                   .slice(-link.depth);
 
                 if (recentHistory.length === 0) return "";
@@ -75179,10 +75185,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 renderChatList();
               }
               if (action.type === "text" && action.content) {
+                const lastTs = Array.isArray(chat.history) && chat.history.length > 0
+                  ? (Number(chat.history[chat.history.length - 1].timestamp) || 0)
+                  : 0;
+                const nextBgTs = Math.max(Date.now(), (window.lastAssignedMessageTimestamp || 0) + 1, lastTs + 1);
+                window.lastAssignedMessageTimestamp = nextBgTs;
                 const aiMessage = {
                   role: "assistant",
                   content: String(action.content),
-                  timestamp: Date.now(),
+                  timestamp: nextBgTs,
                 };
                 const isViewingInactiveChat =
                   document.getElementById("chat-interface-screen")?.classList.contains("active") &&
@@ -76878,7 +76889,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               const allDbChats = await dbInstance.chats.toArray();
               allDbChats.forEach((c) => {
-                if (c && c.id) state.chats[c.id] = c;
+                if (c && c.id && !state.chats[c.id]) state.chats[c.id] = c;
               });
             } catch (e) {}
           }
@@ -77759,7 +77770,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               const allDbChats = await dbInstance.chats.toArray();
               allDbChats.forEach((c) => {
-                if (c && c.id) state.chats[c.id] = c;
+                if (c && c.id && !state.chats[c.id]) state.chats[c.id] = c;
               });
             } catch (e) {}
           }
@@ -79564,7 +79575,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          */
         async function handlePacketClick(timestamp) {
           const currentChatId = state.activeChatId;
-          const freshChat = await db.chats.get(currentChatId);
+          const freshChat = (state.chats && state.chats[currentChatId]) || (await db.chats.get(currentChatId));
           if (!freshChat) return;
 
           state.chats[currentChatId] = freshChat;
@@ -80348,11 +80359,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const linkedChat = state.chats[link.chatId];
                 if (!linkedChat) return "";
 
-                const freshLinkedChat = await db.chats.get(link.chatId);
+                const freshLinkedChat = state.chats[link.chatId] || (await db.chats.get(link.chatId));
                 if (!freshLinkedChat) return "";
 
-                const recentHistory = freshLinkedChat.history
-                  .filter((msg) => !msg.isHidden)
+                const linkedDelSet = new Set(
+                  Array.isArray(freshLinkedChat.settings?.deletedMessageTimestamps)
+                    ? freshLinkedChat.settings.deletedMessageTimestamps.map((t) => String(t))
+                    : []
+                );
+                const linkedClearedAt = Number(freshLinkedChat.settings?.historyClearedAt) || 0;
+                const recentHistory = (freshLinkedChat.history || [])
+                  .filter((msg) => msg && !msg.isHidden && !linkedDelSet.has(String(msg.timestamp)) && (!linkedClearedAt || (Number(msg.timestamp) || 0) > linkedClearedAt))
                   .slice(-link.depth);
 
                 if (recentHistory.length === 0) return "";
@@ -84324,11 +84341,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const linkedChat = state.chats[link.chatId];
                   if (!linkedChat) return "";
 
-                  const freshLinkedChat = await db.chats.get(link.chatId);
+                  const freshLinkedChat = state.chats[link.chatId] || (await db.chats.get(link.chatId));
                   if (!freshLinkedChat) return "";
 
-                  const recentHistory = freshLinkedChat.history
-                    .filter((msg) => !msg.isHidden)
+                  const linkedDelSet = new Set(
+                    Array.isArray(freshLinkedChat.settings?.deletedMessageTimestamps)
+                      ? freshLinkedChat.settings.deletedMessageTimestamps.map((t) => String(t))
+                      : []
+                  );
+                  const linkedClearedAt = Number(freshLinkedChat.settings?.historyClearedAt) || 0;
+                  const recentHistory = (freshLinkedChat.history || [])
+                    .filter((msg) => msg && !msg.isHidden && !linkedDelSet.has(String(msg.timestamp)) && (!linkedClearedAt || (Number(msg.timestamp) || 0) > linkedClearedAt))
                     .slice(-link.depth);
 
                   if (recentHistory.length === 0) return "";
@@ -84738,11 +84761,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const linkedChat = state.chats[link.chatId];
                   if (!linkedChat) return "";
 
-                  const freshLinkedChat = await db.chats.get(link.chatId);
+                  const freshLinkedChat = state.chats[link.chatId] || (await db.chats.get(link.chatId));
                   if (!freshLinkedChat) return "";
 
-                  const recentHistory = freshLinkedChat.history
-                    .filter((msg) => !msg.isHidden)
+                  const linkedDelSet = new Set(
+                    Array.isArray(freshLinkedChat.settings?.deletedMessageTimestamps)
+                      ? freshLinkedChat.settings.deletedMessageTimestamps.map((t) => String(t))
+                      : []
+                  );
+                  const linkedClearedAt = Number(freshLinkedChat.settings?.historyClearedAt) || 0;
+                  const recentHistory = (freshLinkedChat.history || [])
+                    .filter((msg) => msg && !msg.isHidden && !linkedDelSet.has(String(msg.timestamp)) && (!linkedClearedAt || (Number(msg.timestamp) || 0) > linkedClearedAt))
                     .slice(-link.depth);
 
                   if (recentHistory.length === 0) return "";
@@ -85744,11 +85773,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const linkedChat = state.chats[link.chatId];
                   if (!linkedChat) return "";
 
-                  const freshLinkedChat = await db.chats.get(link.chatId);
+                  const freshLinkedChat = state.chats[link.chatId] || (await db.chats.get(link.chatId));
                   if (!freshLinkedChat) return "";
 
-                  const recentHistory = freshLinkedChat.history
-                    .filter((msg) => !msg.isHidden)
+                  const linkedDelSet = new Set(
+                    Array.isArray(freshLinkedChat.settings?.deletedMessageTimestamps)
+                      ? freshLinkedChat.settings.deletedMessageTimestamps.map((t) => String(t))
+                      : []
+                  );
+                  const linkedClearedAt = Number(freshLinkedChat.settings?.historyClearedAt) || 0;
+                  const recentHistory = (freshLinkedChat.history || [])
+                    .filter((msg) => msg && !msg.isHidden && !linkedDelSet.has(String(msg.timestamp)) && (!linkedClearedAt || (Number(msg.timestamp) || 0) > linkedClearedAt))
                     .slice(-link.depth);
 
                   if (recentHistory.length === 0) return "";
@@ -89345,9 +89380,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const chat = state.chats[chatId];
           const summarySettings = chat.settings.summary;
 
-          // 精确截取最后N条非私密消息作为总结范围
+          const autoSumDelSet = new Set(
+            Array.isArray(chat.settings?.deletedMessageTimestamps)
+              ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+              : []
+          );
+          const autoSumClearedAt = Number(chat.settings?.historyClearedAt) || 0;
           const eligibleHistoryForAutoSummary = (chat.history || []).filter((msg) => {
             if (!msg || msg.type === "summary") return false;
+            if (autoSumDelSet.has(String(msg.timestamp))) return false;
+            if (autoSumClearedAt && (Number(msg.timestamp) || 0) <= autoSumClearedAt) return false;
             if (Array.isArray(msg.visibleTo) && msg.visibleTo.length > 0) return false;
             if (msg.isPrivateWhisper || msg.secretTarget) return false;
             const txt = typeof msg.content === "string" ? msg.content.trim() : "";
@@ -89435,8 +89477,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (/^(?:#私密|\[私密[:：])/.test(txt)) return true;
             return false;
           };
+          const genSumDelSet = new Set(
+            Array.isArray(chat.settings?.deletedMessageTimestamps)
+              ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+              : []
+          );
+          const genSumClearedAt = Number(chat.settings?.historyClearedAt) || 0;
           const filteredMessagesForSummary = messagesToSummarize.filter(
-            (msg) => msg && msg.type !== "summary" && !isSecretWhisperMessage(msg),
+            (msg) =>
+              msg &&
+              msg.type !== "summary" &&
+              !isSecretWhisperMessage(msg) &&
+              !genSumDelSet.has(String(msg.timestamp)) &&
+              (!genSumClearedAt || (Number(msg.timestamp) || 0) > genSumClearedAt),
           );
 
           if (filteredMessagesForSummary.length === 0) {
@@ -117303,6 +117356,26 @@ ${specificRules}`;
                 (em) => em && !delSet.has(String(em.timestamp))
               );
             }
+            if (chat.settings.summary && typeof chat.settings.summary === "object") {
+              let latestSumIdx = -1;
+              if (Array.isArray(chat.history)) {
+                for (let i = chat.history.length - 1; i >= 0; i--) {
+                  if (chat.history[i] && chat.history[i].type === "summary") {
+                    latestSumIdx = i;
+                    break;
+                  }
+                }
+              }
+              if (latestSumIdx >= 0) {
+                chat.settings.summary.lastSummaryIndex = latestSumIdx;
+              } else if (
+                typeof chat.settings.summary.lastSummaryIndex === "number" &&
+                Array.isArray(chat.history) &&
+                chat.settings.summary.lastSummaryIndex >= chat.history.length
+              ) {
+                chat.settings.summary.lastSummaryIndex = Math.max(-1, chat.history.length - 1);
+              }
+            }
           };
 
           document
@@ -118149,7 +118222,7 @@ ${specificRules}`;
                 if (chat.isGroup && chat.activeLineMode === "solo" && typeof window.syncCurrentSoloThreadHistory === "function") {
                   window.syncCurrentSoloThreadHistory(chat);
                 } else if (chat.isGroup) {
-                  chat.mainLineHistory = [...chat.history];
+                  chat.mainLineHistory = [];
                 }
 
                 // 3. 将更新后的chat对象存回数据库
