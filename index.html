@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -44804,46 +44804,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function syncActiveSelectedPresetsFromDom() {
             if (!_naiHydrationCompleted) return false;
-            const store = loadPresetsStore();
             const st = loadPanelState();
-            let storeChanged = false;
             let stChanged = false;
             const pairs = [
-              { cat: "artist", selectId: "mod-nai-artist-preset-select", inputId: "mod-nai-gen-artist-input", stateKey: "artistPresetSelected" },
-              { cat: "artist", selectId: "mod-nai-artist2-preset-select", inputId: "mod-nai-gen-artist2-input", stateKey: "artist2PresetSelected" },
-              { cat: "positive", selectId: "mod-nai-pos1-preset-select", inputId: "mod-nai-gen-pos1-input", stateKey: "pos1PresetSelected" },
-              { cat: "positive", selectId: "mod-nai-pos2-preset-select", inputId: "mod-nai-gen-pos2-input", stateKey: "pos2PresetSelected" },
-              { cat: "negative", selectId: "mod-nai-neg-preset-select", inputId: "mod-nai-gen-neg-input", stateKey: "negPresetSelected" }
+              { selectId: "mod-nai-artist-preset-select", stateKey: "artistPresetSelected" },
+              { selectId: "mod-nai-artist2-preset-select", stateKey: "artist2PresetSelected" },
+              { selectId: "mod-nai-pos1-preset-select", stateKey: "pos1PresetSelected" },
+              { selectId: "mod-nai-pos2-preset-select", stateKey: "pos2PresetSelected" },
+              { selectId: "mod-nai-neg-preset-select", stateKey: "negPresetSelected" }
             ];
-            pairs.forEach(({ cat, selectId, inputId, stateKey }) => {
+            pairs.forEach(({ selectId, stateKey }) => {
               const sel = document.getElementById(selectId);
-              const inp = document.getElementById(inputId);
-              if (!sel || !inp) return;
+              if (!sel) return;
               const selectedName = String(sel.value || "").trim();
-              if (!selectedName) return;
               if (st[stateKey] !== selectedName) {
                 st[stateKey] = selectedName;
                 stChanged = true;
               }
-              const val = inp.value.trim();
-              // 绝对禁止将空输入框覆盖进预设库，避免清空当前选中预设的提示词
-              if (!val) return;
-              const list = Array.isArray(store[cat]) ? store[cat] : [];
-              const idx = list.findIndex((x) => x && x.name === selectedName);
-              if (idx >= 0) {
-                if (list[idx].value !== val) {
-                  list[idx].value = val;
-                  storeChanged = true;
-                }
-              }
             });
-            if (storeChanged) {
-              savePresetsStore(store);
-            }
             if (stChanged) {
               savePanelState(st);
             }
-            return storeChanged;
+            return stChanged;
           }
 
           function getShortModelLabel(modelVal) {
@@ -44992,6 +44974,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const c2El = document.getElementById("mod-nai-pos2-check");
             const negEl = document.getElementById("mod-nai-gen-neg-input");
 
+            const artistSelEl = document.getElementById("mod-nai-artist-preset-select");
+            const artist2SelEl = document.getElementById("mod-nai-artist2-preset-select");
+            const pos1SelEl = document.getElementById("mod-nai-pos1-preset-select");
+            const pos2SelEl = document.getElementById("mod-nai-pos2-preset-select");
+            const negSelEl = document.getElementById("mod-nai-neg-preset-select");
+
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
             const inspectNegEl = document.getElementById("mod-nai-inspect-neg-input");
@@ -45007,12 +44995,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (negEl) st.negText = negEl.value;
             st.pos1Checked = c1El ? c1El.checked : true;
             st.pos2Checked = c2El ? c2El.checked : false;
+            if (artistSelEl) st.artistPresetSelected = String(artistSelEl.value || "").trim();
+            if (artist2SelEl) st.artist2PresetSelected = String(artist2SelEl.value || "").trim();
+            if (pos1SelEl) st.pos1PresetSelected = String(pos1SelEl.value || "").trim();
+            if (pos2SelEl) st.pos2PresetSelected = String(pos2SelEl.value || "").trim();
+            if (negSelEl) st.negPresetSelected = String(negSelEl.value || "").trim();
             if (inspectArtistEl) st.inspectArtistText = inspectArtistEl.value;
             if (inspectPosEl) st.inspectPosText = inspectPosEl.value;
             if (inspectNegEl) st.inspectNegText = inspectNegEl.value;
             if (inspectStatusEl && inspectStatusEl.textContent) {
               st.inspectStatusText = inspectStatusEl.textContent;
             }
+            st.updatedAt = Date.now();
             memoryPanelState = Object.assign({}, getDefaultPanelState(), st);
             if (shouldPersist === true) {
               savePanelState(st);
@@ -46818,11 +46812,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const inp = document.getElementById(inputId);
               if (sel) {
                 sel.addEventListener("change", () => {
-                  const chosenName = sel.value;
+                  const chosenName = String(sel.value || "").trim();
                   const st = loadPanelState();
                   st[stateKey] = chosenName;
+                  memoryPanelState = Object.assign({}, getDefaultPanelState(), st, { updatedAt: Date.now() });
                   if (!chosenName) {
-                    syncModuleNaiToGlobal(false);
+                    syncModuleNaiToGlobal(true);
                     return;
                   }
                   const store = loadPresetsStore();
@@ -46833,8 +46828,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       const chk = document.getElementById(checkId);
                       if (chk && !chk.checked) chk.checked = true;
                     }
-                    syncModuleNaiToGlobal(false);
                   }
+                  syncModuleNaiToGlobal(true);
                 });
               }
               const overwriteBtn = document.getElementById(overwriteBtnId);
@@ -50853,7 +50848,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const st = loadPanelState();
                 st.mode = "collection";
                 savePanelState(st);
-                loadNaiStoreFromTermux();
+                if (!_naiHydrationCompleted) {
+                  loadNaiStoreFromTermux();
+                }
               });
             }
             if (newBtn) {
@@ -51051,20 +51048,47 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const c1El = document.getElementById("mod-nai-pos1-check");
                 const negEl = document.getElementById("mod-nai-gen-neg-input");
 
+                const artistSel = document.getElementById("mod-nai-artist-preset-select");
+                const pos1Sel = document.getElementById("mod-nai-pos1-preset-select");
+                const negSel = document.getElementById("mod-nai-neg-preset-select");
+
                 if (isLex) {
                   if (pos1El) pos1El.value = posVal;
                   if (c1El) c1El.checked = true;
+                  if (pos1Sel) {
+                    pos1Sel.value = "";
+                    syncPresetCustomDropdown(pos1Sel, "positive");
+                  }
                 } else {
                   if (artistEl) artistEl.value = artistVal;
                   if (ac1El) ac1El.checked = true;
                   if (pos1El) pos1El.value = posVal;
                   if (c1El) c1El.checked = true;
                   if (negEl) negEl.value = negVal;
+                  if (artistSel) {
+                    artistSel.value = "";
+                    syncPresetCustomDropdown(artistSel, "artist");
+                  }
+                  if (pos1Sel) {
+                    pos1Sel.value = "";
+                    syncPresetCustomDropdown(pos1Sel, "positive");
+                  }
+                  if (negSel) {
+                    negSel.value = "";
+                    syncPresetCustomDropdown(negSel, "negative");
+                  }
                 }
 
                 applyModeView("generate");
                 const st = loadPanelState();
                 st.mode = "generate";
+                if (isLex) {
+                  st.pos1PresetSelected = "";
+                } else {
+                  st.artistPresetSelected = "";
+                  st.pos1PresetSelected = "";
+                  st.negPresetSelected = "";
+                }
                 savePanelState(st);
                 syncModuleNaiToGlobal(true);
                 if (typeof window.showDownloadToast === "function") {
@@ -51598,7 +51622,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             computeActivePositivePrompt();
             renderPresetSelectOptions();
             updateHeaderSummary();
-            loadNaiStoreFromTermux();
+            if (!_naiHydrationCompleted) {
+              loadNaiStoreFromTermux();
+            }
           };
 
           window.getModuleNaiLiveStateForMashu = function (scope) {
@@ -52173,13 +52199,34 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 mergedState = mergePanelStatesSafely(mergedState, backupPanelState);
               }
 
-              // 若用户已经在当前会话中操作面板，严格保留当前正在使用的模式（如提取/清洗）、主题与生图自动清洗开关，绝不被后台同步强行切回旧状态
+              // 若用户已经在当前会话中操作过面板，严格保留当前正在使用的预设选择、提示词文本、勾选状态、模式与主题，绝不被后台同步强行切回旧预设
               if (wasHydratedBefore && liveStateBefore) {
-                if (liveStateBefore.mode) mergedState.mode = liveStateBefore.mode;
-                if (liveStateBefore.theme) mergedState.theme = liveStateBefore.theme;
-                if (typeof liveStateBefore.cleanOnGenerate === "boolean") {
-                  mergedState.cleanOnGenerate = liveStateBefore.cleanOnGenerate;
-                }
+                const livePreserveKeys = [
+                  "mode",
+                  "theme",
+                  "cleanOnGenerate",
+                  "artistPresetSelected",
+                  "artist2PresetSelected",
+                  "pos1PresetSelected",
+                  "pos2PresetSelected",
+                  "negPresetSelected",
+                  "artistText",
+                  "artist2Text",
+                  "pos1Text",
+                  "pos2Text",
+                  "negText",
+                  "artist1Checked",
+                  "artist2Checked",
+                  "pos1Checked",
+                  "pos2Checked",
+                  "resolution",
+                  "model"
+                ];
+                livePreserveKeys.forEach((k) => {
+                  if (liveStateBefore[k] !== undefined) {
+                    mergedState[k] = liveStateBefore[k];
+                  }
+                });
               }
 
               memoryPanelState = mergedState;
@@ -90725,8 +90772,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const idx = merged.findIndex((lp) => lp.id === sp.id);
             if (idx === -1) {
               merged.push(sp);
-            } else {
-              merged[idx] = sp;
             }
           });
           return merged;
@@ -90765,13 +90810,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
         window.getKeeperPresets = getKeeperPresets;
 
-        function renderKeeperPresetsUI() {
+        function renderKeeperPresetsUI(preferredPresetId = "") {
           const select = document.getElementById("keeper-prompt-preset-select");
           if (!select) return;
           const activeChat = state && state.activeChatId ? state.chats[state.activeChatId] : null;
           const presets = getKeeperPresets(activeChat);
           const defaultId = getDefaultKeeperPresetId();
-          const currentVal = (activeChat && activeChat.settings && activeChat.settings.keeperActivePresetId) || select.value || defaultId;
+          const currentVal = preferredPresetId || select.value || (activeChat && activeChat.settings && activeChat.settings.keeperActivePresetId) || defaultId;
           let optionsHtml = '<option value="">选择预设</option>';
           optionsHtml += presets
             .map((p) => {
@@ -90810,7 +90855,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             countInput.value = savedCount;
           }
 
-          renderKeeperPresetsUI();
+          renderKeeperPresetsUI(chat.settings.keeperActivePresetId || getDefaultKeeperPresetId());
 
           const promptInput = document.getElementById("keeper-prompt-input");
           if (promptInput) {
