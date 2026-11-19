@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -43984,14 +43984,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (_naiCollectionPreloadRunning) return;
             if (typeof window.resolveVaultRefToUrl !== "function") return;
             const refsToWarm = [];
+            const secondaryRefsToWarm = [];
             const seenRefs = new Set();
-            const addCoverRef = (u) => {
+            const addCoverRef = (u, isSecondary = false) => {
               if (typeof u !== "string") return;
               const s = u.trim();
               if (!s.startsWith("vault://") || seenRefs.has(s)) return;
               seenRefs.add(s);
               if (typeof window.getCachedVaultBlobUrl === "function" && window.getCachedVaultBlobUrl(s)) return;
-              refsToWarm.push(s);
+              if (isSecondary) {
+                secondaryRefsToWarm.push(s);
+              } else {
+                refsToWarm.push(s);
+              }
             };
             const collectListCovers = (arr) => {
               if (!Array.isArray(arr)) return;
@@ -43999,18 +44004,37 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const it = arr[i];
                 if (!it || typeof it !== "object") continue;
                 if (typeof it.coverImage === "string" && it.coverImage.startsWith("vault://")) {
-                  addCoverRef(it.coverImage);
+                  addCoverRef(it.coverImage, false);
                 }
                 if (Array.isArray(it.images) && it.images.length > 0) {
-                  addCoverRef(it.images[0]);
+                  addCoverRef(it.images[0], false);
+                  for (let j = 1; j < it.images.length; j++) {
+                    addCoverRef(it.images[j], true);
+                  }
                 } else if (typeof it.image === "string") {
-                  addCoverRef(it.image);
+                  addCoverRef(it.image, false);
                 }
               }
             };
+            if (memoryPanelState && typeof memoryPanelState === "object") {
+              addCoverRef(memoryPanelState.lastGeneratedImage, false);
+              if (Array.isArray(memoryPanelState.watermarkGallery)) {
+                for (let k = 0; k < memoryPanelState.watermarkGallery.length; k++) {
+                  const g = memoryPanelState.watermarkGallery[k];
+                  if (g && typeof g === "object") {
+                    addCoverRef(g.url, true);
+                  } else if (typeof g === "string") {
+                    addCoverRef(g, true);
+                  }
+                }
+              }
+            }
             collectListCovers(memoryBookmarksList);
             collectListCovers(memoryLexiconList);
             collectListCovers(memoryLexiconFoldersList);
+            for (let sIdx = 0; sIdx < secondaryRefsToWarm.length; sIdx++) {
+              refsToWarm.push(secondaryRefsToWarm[sIdx]);
+            }
             if (refsToWarm.length === 0) return;
             _naiCollectionPreloadRunning = true;
             (async () => {
@@ -46789,8 +46813,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const chosenName = sel.value;
                   const st = loadPanelState();
                   st[stateKey] = chosenName;
-                  savePanelState(st);
-                  if (!chosenName) return;
+                  if (!chosenName) {
+                    syncModuleNaiToGlobal(false);
+                    return;
+                  }
                   const store = loadPresetsStore();
                   const found = (store[category] || []).find((x) => x && x.name === chosenName);
                   if (found) {
@@ -46799,7 +46825,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       const chk = document.getElementById(checkId);
                       if (chk && !chk.checked) chk.checked = true;
                     }
-                    syncModuleNaiToGlobal();
+                    syncModuleNaiToGlobal(false);
                   }
                 });
               }
@@ -49831,22 +49857,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               delBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 if (colScope === "shared") return;
-                const removedUrl = colEditImagesDraft[idx];
                 colEditImagesDraft.splice(idx, 1);
                 colEditImageDraft = colEditImagesDraft[0] || "";
-                if (colCurrentItem) {
-                  colCurrentItem._imageExplicitlyCleared = colEditImagesDraft.length === 0;
-                }
                 renderEditSquarePreview(colEditImagesDraft);
-                persistCurrentBookmarkEditDraft(false);
-                if (
-                  removedUrl &&
-                  typeof removedUrl === "string" &&
-                  removedUrl.startsWith("vault://") &&
-                  typeof window.deleteVaultMediaRefIfUnreferenced === "function"
-                ) {
-                  window.deleteVaultMediaRefIfUnreferenced(removedUrl).catch(() => {});
-                }
               });
               picBox.appendChild(delBtn);
 
@@ -49857,9 +49870,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   colEditImagesDraft.unshift(chosen);
                   colEditImageDraft = colEditImagesDraft[0] || "";
                   renderEditSquarePreview(colEditImagesDraft);
-                  persistCurrentBookmarkEditDraft(false);
                   if (typeof window.showDownloadToast === "function") {
-                    window.showDownloadToast("已设为封面", "success");
+                    window.showDownloadToast("已设为封面，点击右上角保存后生效", "success");
                   }
                 }
               };
@@ -50187,7 +50199,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (curGenSrc && curGenSrc.startsWith("data:")) {
               const targetNewItem = colCurrentItem;
-              const targetNewCat = colCategory;
               offloadSingleNaiImageToTermux(curGenSrc).then((termuxRef) => {
                 if (!termuxRef) return;
                 targetNewItem.image = termuxRef;
@@ -50195,13 +50206,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (colCurrentItem === targetNewItem) {
                   colEditImagesDraft = [termuxRef];
                   colEditImageDraft = termuxRef;
-                }
-                const savedList = loadLocalBookmarksForCategory(targetNewCat).slice();
-                const savedIdx = savedList.findIndex((x) => x && x.id === targetNewItem.id);
-                if (savedIdx >= 0) {
-                  savedList[savedIdx].image = termuxRef;
-                  savedList[savedIdx].images = [termuxRef];
-                  saveLocalBookmarks(savedList, targetNewCat);
                 }
               }).catch(() => {});
             }
@@ -50305,11 +50309,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 populateEditFolderControls(chosenFolder);
               }
             }
+            const prevSavedImages = getBookmarkImagesArray(colCurrentItem);
             colCurrentItem.modelTag = normalizeModelTagValue(colEditModelDraft);
             colCurrentItem.remark = remarkVal;
-            if (colEditImagesDraft.length > 0) {
-              colCurrentItem._imageExplicitlyCleared = false;
-            }
+            colCurrentItem._imageExplicitlyCleared = colEditImagesDraft.length === 0;
             colCurrentItem.images = colEditImagesDraft.slice();
             colCurrentItem.image = colEditImagesDraft[0] || "";
             colCurrentItem.artist = artistVal;
@@ -50328,6 +50331,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               colIsCreatingNew = false;
             }
             saveLocalBookmarks(list, targetCat);
+            if (typeof window.deleteVaultMediaRefIfUnreferenced === "function" && prevSavedImages.length > 0) {
+              const newSet = new Set(colEditImagesDraft);
+              prevSavedImages.forEach((oldUrl) => {
+                if (
+                  oldUrl &&
+                  typeof oldUrl === "string" &&
+                  oldUrl.startsWith("vault://") &&
+                  !newSet.has(oldUrl)
+                ) {
+                  window.deleteVaultMediaRefIfUnreferenced(oldUrl).catch(() => {});
+                }
+              });
+            }
             return true;
           }
 
@@ -50405,7 +50421,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (typedNewName) {
               const existIdx = folders.findIndex((f) => f && f.name === typedNewName);
               if (existIdx >= 0) {
-                folders[existIdx].coverImage = colFolderCoverDraft || folders[existIdx].coverImage || "";
+                folders[existIdx].coverImage = colFolderCoverDraft || "";
                 folders[existIdx].explicitCreated = true;
                 folders[existIdx].updatedAt = Date.now();
               } else {
@@ -51363,13 +51379,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const termuxRef = await offloadSingleNaiImageToTermux(sqUrl);
                 colFolderCoverDraft = termuxRef || sqUrl;
                 renderFolderEditCoverPreview();
-                const curFolders = loadLexiconFolders().slice();
-                const idx = curFolders.findIndex((f) => f && f.name === colEditingFolderOriginalName);
-                if (idx >= 0) {
-                  curFolders[idx].coverImage = colFolderCoverDraft;
-                  curFolders[idx].explicitCreated = true;
-                  curFolders[idx].updatedAt = Date.now();
-                  saveLexiconFolders(curFolders);
+                if (typeof window.showDownloadToast === "function") {
+                  window.showDownloadToast("封面已载入，点击右上角保存分组后生效", "success");
                 }
               });
             }
@@ -51386,16 +51397,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   colFolderCoverDraft = imgRef;
                   renderFolderEditCoverPreview();
-                  const curFolders = loadLexiconFolders().slice();
-                  const idx = curFolders.findIndex((f) => f && f.name === colEditingFolderOriginalName);
-                  if (idx >= 0) {
-                    curFolders[idx].coverImage = colFolderCoverDraft;
-                    curFolders[idx].explicitCreated = true;
-                    curFolders[idx].updatedAt = Date.now();
-                    saveLexiconFolders(curFolders);
-                  }
                   if (typeof window.showDownloadToast === "function") {
-                    window.showDownloadToast("已读取当前生图封面", "success");
+                    window.showDownloadToast("已读取当前生图封面，点击保存分组后生效", "success");
                   }
                 } else if (typeof window.showCustomAlert === "function") {
                   await window.showCustomAlert("提示", "当前生图台暂无画面");
@@ -51406,15 +51409,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               folderClearCoverBtn.addEventListener("click", () => {
                 colFolderCoverDraft = "";
                 renderFolderEditCoverPreview();
-                const curFolders = loadLexiconFolders().slice();
-                const idx = curFolders.findIndex((f) => f && f.name === colEditingFolderOriginalName);
-                if (idx >= 0) {
-                  curFolders[idx].coverImage = "";
-                  curFolders[idx].updatedAt = Date.now();
-                  saveLexiconFolders(curFolders);
-                }
                 if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast("已恢复默认首图封面", "success");
+                  window.showDownloadToast("已恢复默认首图，点击保存分组后生效", "success");
                 }
               });
             }
@@ -132189,6 +132185,43 @@ ${specificRules}`;
                   }
                 }
               } catch (_) {}
+              // 2.0 读取并合并按单条记录实时增量同步到 Termux 的 /records/_index.json 与各单条记录文件
+              if (typeof db !== "undefined") {
+                try {
+                  const idxRes = await fetch(baseUrl + "/records/_index.json", { cache: "no-store" });
+                  if (idxRes && idxRes.ok) {
+                    const idxData = await idxRes.json();
+                    const fileMap = (idxData && typeof idxData.files === "object" && idxData.files) ? idxData.files : {};
+                    const fileKeys = Object.keys(fileMap);
+                    for (let fIdx = 0; fIdx < fileKeys.length; fIdx++) {
+                      const recPath = fileKeys[fIdx];
+                      const meta = fileMap[recPath];
+                      if (!recPath || !meta || meta.deleted) continue;
+                      const tName = meta.table;
+                      if (!tName || !db[tName]) continue;
+                      try {
+                        const rRes = await fetch(baseUrl + "/records/" + encodeURIComponent(recPath), { cache: "no-store" });
+                        if (!rRes || !rRes.ok) continue;
+                        const recObj = await rRes.json();
+                        if (!recObj || typeof recObj !== "object") continue;
+                        if (tName === "chats" && db.chats) {
+                          const existingChat = recObj.id !== undefined ? await db.chats.get(recObj.id) : null;
+                          if (existingChat) {
+                            const mergedC = mergeChatObjectsKeepNewest(existingChat, recObj);
+                            await db.chats.put(mergedC);
+                          } else {
+                            await db.chats.put(recObj);
+                          }
+                          restoredItemsCount++;
+                        } else {
+                          await db[tName].put(recObj);
+                          restoredItemsCount++;
+                        }
+                      } catch (_) {}
+                    }
+                  }
+                } catch (_) {}
+              }
             }
 
             // 2A. 恢复并合并 qqbot_store.json 中的群控配置、人设、思维链、表情包、API 与同名群聊记录
@@ -133088,6 +133121,25 @@ ${specificRules}`;
                       }
                     } catch (_) {}
                   }
+                  try {
+                    const idxRes = await fetch(baseUrl + "/records/_index.json", { cache: "no-store" });
+                    if (idxRes && idxRes.ok) {
+                      const idxData = await idxRes.json();
+                      const fileMap = (idxData && typeof idxData.files === "object" && idxData.files) ? idxData.files : {};
+                      const recFiles = Object.keys(fileMap);
+                      for (let rIdx = 0; rIdx < recFiles.length; rIdx++) {
+                        const rf = recFiles[rIdx];
+                        if (!rf || (fileMap[rf] && fileMap[rf].deleted)) continue;
+                        try {
+                          const rr = await fetch(baseUrl + "/records/" + encodeURIComponent(rf), { cache: "no-store" });
+                          if (rr && rr.ok) {
+                            const rTxt = await rr.text();
+                            if (rTxt) addVaultStr(rTxt);
+                          }
+                        } catch (_) {}
+                      }
+                    }
+                  } catch (_) {}
                 }
               } catch (_) {}
             }
@@ -134155,21 +134207,89 @@ ${specificRules}`;
                     }
                   } catch (_) {}
                   const res = await origUpdate(key, changes, ...rest);
+                  if (!_suspendVaultAutoOffload && key !== undefined) {
+                    try {
+                      const updatedRow = await table.get(key);
+                      if (updatedRow && typeof updatedRow === "object") {
+                        syncSingleRecordToTermuxIncrementally(table.name, updatedRow);
+                      }
+                    } catch (_) {}
+                  }
                   return res;
                 };
               }
               if (typeof table.delete === "function") {
                 const origDelete = table.delete.bind(table);
                 table.delete = async function (...args) {
+                  const key = args[0];
                   const res = await origDelete(...args);
+                  if (!_suspendVaultAutoOffload && key !== undefined) {
+                    markSingleRecordDeletedInTermuxIndex(table.name, key);
+                  }
                   return res;
                 };
               }
             }
           }
 
-          // 单条增量同步队列（酒馆式按条保存：改哪一条记录就只把那一条记录发给 Termux，彻底废弃每30秒把全库20多MB数据重新打包一次的古法逻辑）
+          // 单条增量同步队列与增量索引清单：改哪一条记录就只把那一条记录发给 Termux，并维护轻量索引清单供恢复数据与清理废图扫描使用
           const _incrementalRecordTimers = new Map();
+          let _termuxRecordsIndexCache = null;
+          let _termuxRecordsIndexFlushTimer = null;
+
+          async function ensureTermuxRecordsIndexLoaded(baseUrl) {
+            if (_termuxRecordsIndexCache && typeof _termuxRecordsIndexCache.files === "object") {
+              return _termuxRecordsIndexCache;
+            }
+            try {
+              const r = await fetch(`${baseUrl}/records/_index.json`, { cache: "no-store" });
+              if (r && r.ok) {
+                const d = await r.json();
+                if (d && typeof d === "object" && typeof d.files === "object") {
+                  _termuxRecordsIndexCache = d;
+                  return _termuxRecordsIndexCache;
+                }
+              }
+            } catch (_) {}
+            _termuxRecordsIndexCache = { updatedAt: Date.now(), files: {} };
+            return _termuxRecordsIndexCache;
+          }
+
+          function scheduleFlushTermuxRecordsIndex(baseUrl) {
+            if (_termuxRecordsIndexFlushTimer) {
+              clearTimeout(_termuxRecordsIndexFlushTimer);
+            }
+            _termuxRecordsIndexFlushTimer = setTimeout(async () => {
+              _termuxRecordsIndexFlushTimer = null;
+              if (!cachedTermuxOk || !_termuxRecordsIndexCache) return;
+              try {
+                _termuxRecordsIndexCache.updatedAt = Date.now();
+                await fetch(`${baseUrl}/records/_index.json`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json; charset=utf-8" },
+                  body: JSON.stringify(_termuxRecordsIndexCache)
+                });
+              } catch (_) {}
+            }, 1200);
+          }
+
+          function markSingleRecordDeletedInTermuxIndex(tableName, rawId) {
+            try {
+              const cfg = loadVaultConfig();
+              if (!cfg || !cfg.auto || !cachedTermuxOk || !tableName || rawId === undefined) return;
+              const safeId = String(rawId).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "record";
+              const fileName = `${tableName}_${safeId}.json`;
+              const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+              ensureTermuxRecordsIndexLoaded(baseUrl).then((idxObj) => {
+                if (idxObj && idxObj.files && idxObj.files[fileName]) {
+                  idxObj.files[fileName].deleted = true;
+                  idxObj.files[fileName].updatedAt = Date.now();
+                  scheduleFlushTermuxRecordsIndex(baseUrl);
+                }
+              }).catch(() => {});
+            } catch (_) {}
+          }
+
           function syncSingleRecordToTermuxIncrementally(tableName, rowObj) {
             try {
               if (!tableName || !rowObj || typeof rowObj !== "object") return;
@@ -134177,6 +134297,7 @@ ${specificRules}`;
               if (!cfg || !cfg.auto || !cachedTermuxOk) return;
               const rawId = rowObj.id !== undefined ? rowObj.id : (rowObj.key !== undefined ? rowObj.key : "main");
               const safeId = String(rawId).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "record";
+              const fileName = `${tableName}_${safeId}.json`;
               const mapKey = `${tableName}::${safeId}`;
               if (_incrementalRecordTimers.has(mapKey)) {
                 clearTimeout(_incrementalRecordTimers.get(mapKey));
@@ -134186,11 +134307,21 @@ ${specificRules}`;
                 if (!cachedTermuxOk) return;
                 try {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                  await fetch(`${baseUrl}/records/${encodeURIComponent(tableName)}_${encodeURIComponent(safeId)}.json`, {
+                  const putRes = await fetch(`${baseUrl}/records/${encodeURIComponent(fileName)}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json; charset=utf-8" },
                     body: JSON.stringify(rowObj)
                   });
+                  if (putRes && putRes.ok) {
+                    const idxObj = await ensureTermuxRecordsIndexLoaded(baseUrl);
+                    idxObj.files[fileName] = {
+                      table: tableName,
+                      id: rawId,
+                      updatedAt: Date.now(),
+                      deleted: false
+                    };
+                    scheduleFlushTermuxRecordsIndex(baseUrl);
+                  }
                 } catch (_) {}
               }, 800);
               _incrementalRecordTimers.set(mapKey, timer);
