@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -64333,6 +64333,16 @@ ${recentHistoryText}
               naiExample = `,\n    {\n      "type": "naiimag",\n      "prompt": "1girl, sitting in cafe, holding coffee cup, smile, indoor lighting, cinematic composition"\n    }`;
             }
 
+            const offlineDeletedTsSet = new Set(
+              Array.isArray(chat.settings?.deletedMessageTimestamps)
+                ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+                : []
+            );
+            const offlineClearedAt = Number(chat.settings?.historyClearedAt) || 0;
+            const messagesForOfflineMode = (chat.history || [])
+              .filter((m) => m && !m.isHidden && !m.noAi && !m.isTemporary && !m.isPlayerHidden && !offlineDeletedTsSet.has(String(m.timestamp)) && (!offlineClearedAt || (Number(m.timestamp) || 0) > offlineClearedAt) && !m.isKeeperForcedDraw && !m.isForcedDraw && !m.isSystemDraw)
+              .slice(-chat.settings.maxMemory);
+
             const offlineSystemPrompt = `
             # 核心任务：线下场景角色扮演
 
@@ -64372,9 +64382,7 @@ ${recentHistoryText}
             }
 
             # 对话历史
-            ${chat.history
-              .filter((m) => !m.isKeeperForcedDraw && !m.isForcedDraw && !m.isSystemDraw)
-              .slice(-chat.settings.maxMemory)
+            ${messagesForOfflineMode
               .map(
                 (m) => {
                   const rawLineContent = m.type === "naiimag" ? "[生图]" : String(m.content || "");
@@ -64387,10 +64395,6 @@ ${recentHistoryText}
               .join("\n")}
 
             现在，请根据用户的最后一句话，开始你的表演。`;
-
-            const messagesForOfflineMode = chat.history
-              .filter((m) => !m.isKeeperForcedDraw && !m.isForcedDraw && !m.isSystemDraw)
-              .slice(-chat.settings.maxMemory);
 
             // UI 状态更新
             const chatHeaderTitle =
@@ -64522,7 +64526,10 @@ ${recentHistoryText}
                   .getElementById("chat-interface-screen")
                   .classList.contains("active") &&
                 state.activeChatId === chatId;
-              let messageTimestamp = Date.now();
+              const maxExistingOfflineTs = Array.isArray(chat.history)
+                ? chat.history.reduce((max, m) => (m && typeof m.timestamp === "number" && m.timestamp > max ? m.timestamp : max), 0)
+                : 0;
+              let messageTimestamp = Math.max(Date.now(), (window.lastAssignedMessageTimestamp || 0) + 1, maxExistingOfflineTs + 1);
               let offlineNotifShown = false;
 
               for (const msgData of messagesArray) {
@@ -64581,6 +64588,9 @@ ${recentHistoryText}
                 if (isViewingThisChat) {
                   appendMessage(aiMessage, chat);
                 }
+              }
+              if (messageTimestamp > (window.lastAssignedMessageTimestamp || 0)) {
+                window.lastAssignedMessageTimestamp = messageTimestamp;
               }
 
               // 保存
@@ -67310,11 +67320,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const latestMemChat =
               (state.chats && (state.chats[chatId] || state.chats[String(chatId)] || state.chats[chat.id])) || null;
             if (latestMemChat && latestMemChat !== chat) {
-              if (Array.isArray(latestMemChat.history) && latestMemChat.history.length >= (Array.isArray(chat.history) ? chat.history.length : 0)) {
-                chat = latestMemChat;
-              }
+              chat = latestMemChat;
             }
-            chat.history = chat.history.filter((msg) => !msg.isTemporary);
+            const postFetchDeletedSet = new Set(
+              Array.isArray(chat.settings?.deletedMessageTimestamps)
+                ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+                : []
+            );
+            const postFetchClearedAt = Number(chat.settings?.historyClearedAt) || 0;
+            chat.history = (chat.history || []).filter(
+              (msg) => msg && !msg.isTemporary && !postFetchDeletedSet.has(String(msg.timestamp)) && (!postFetchClearedAt || (Number(msg.timestamp) || 0) > postFetchClearedAt)
+            );
 
             // 智能解析AI回复，确保心声与思维链数据不丢失
             let messagesArray = [];
@@ -72681,7 +72697,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             .classList.remove("selection-mode");
           selectedMessages.forEach((ts) => {
             const bubble = document.querySelector(
-              `.message-bubble[data-timestamp="${ts}"]`,
+              `.message-wrapper:not(.date-stamp-wrapper) .message-bubble[data-timestamp="${ts}"]`,
+            ) || document.querySelector(
+              `.message-bubble:not(.date-stamp-bubble)[data-timestamp="${ts}"]`,
             );
             if (bubble) bubble.classList.remove("selected");
           });
@@ -72690,7 +72708,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
         function toggleMessageSelection(timestamp) {
           const elementToSelect = document.querySelector(
-            `.message-bubble[data-timestamp="${timestamp}"]`,
+            `.message-wrapper:not(.date-stamp-wrapper) .message-bubble[data-timestamp="${timestamp}"]`,
+          ) || document.querySelector(
+            `.message-bubble:not(.date-stamp-bubble)[data-timestamp="${timestamp}"]`,
           );
 
           if (!elementToSelect) return;
@@ -75614,7 +75634,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const chat = state.chats[state.activeChatId];
           const msgIndex = (chat.history || []).findIndex(
-            (m) => m.timestamp === activeMessageTimestamp,
+            (m) => String(m.timestamp) === String(activeMessageTimestamp),
           );
           if (msgIndex === -1) return;
 
@@ -75915,7 +75935,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const chat = state.chats[state.activeChatId];
           const message = (chat.history || []).find(
-            (m) => m.timestamp === activeMessageTimestamp,
+            (m) => String(m.timestamp) === String(activeMessageTimestamp),
           );
           if (!message) return;
 
@@ -76040,7 +76060,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const timestampToEdit = activeMessageTimestamp;
           const chat = state.chats[state.activeChatId];
           const message = (chat.history || []).find(
-            (m) => m.timestamp === timestampToEdit,
+            (m) => String(m.timestamp) === String(timestampToEdit),
           );
           if (!message) return;
 
@@ -76129,7 +76149,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (!activeMessageTimestamp) return;
           const chat = state.chats[state.activeChatId];
           const message = (chat.history || []).find(
-            (m) => m.timestamp === activeMessageTimestamp,
+            (m) => String(m.timestamp) === String(activeMessageTimestamp),
           );
           if (!message) return;
 
@@ -76517,7 +76537,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           const chat = state.chats[state.activeChatId];
           const messageIndex = (chat.history || []).findIndex(
-            (m) => m.timestamp === timestamp,
+            (m) => String(m.timestamp) === String(timestamp),
           );
           if (messageIndex === -1) return;
 
@@ -81596,7 +81616,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           const message = (chat.history || []).find(
-            (m) => m.timestamp === activeMessageTimestamp,
+            (m) => String(m.timestamp) === String(activeMessageTimestamp),
           );
           if (!message) return;
 
@@ -82239,31 +82259,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          * @returns {HTMLElement} - 创建好的 DOM 元素
          */
         function createDateStampElement(timestamp) {
-          // 1. 创建最外层的包裹 div，和真实消息一样
           const wrapper = document.createElement("div");
           wrapper.className = "message-wrapper date-stamp-wrapper";
-          // 把时间戳存起来，这是多选和删除的关键
-          wrapper.dataset.timestamp = timestamp;
 
-          // 2. 创建气泡 div
           const bubble = document.createElement("div");
-          // 同时加上 .message-bubble 类，让多选逻辑能找到它
-          bubble.className = "message-bubble date-stamp-bubble";
-          bubble.dataset.timestamp = timestamp;
+          bubble.className = "date-stamp-bubble";
           bubble.textContent = formatDateStamp(timestamp);
 
           wrapper.appendChild(bubble);
-
-          // 3. 为它绑定和真实消息完全一样的事件监听器
-          addLongPressListener(wrapper, () => {
-            // 日期戳不支持复杂操作，长按直接进入多选
-            enterSelectionMode(timestamp);
-          });
-          wrapper.addEventListener("click", () => {
-            if (isSelectionMode) {
-              toggleMessageSelection(timestamp);
-            }
-          });
 
           return wrapper;
         }
@@ -92175,8 +92178,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
             }
+            const keeperDeletedTsSet = new Set(
+              Array.isArray(chat.settings?.deletedMessageTimestamps)
+                ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+                : []
+            );
+            const keeperClearedAt = Number(chat.settings?.historyClearedAt) || 0;
             const recentMsgs = maxMem > 0
-              ? combinedHistory.filter((m) => m && !m.isHidden && !m.isTemporary && m.type !== "naiimag").slice(-maxMem)
+              ? combinedHistory.filter((m) => m && !m.isHidden && !m.noAi && !m.isPlayerHidden && !m.isTemporary && !keeperDeletedTsSet.has(String(m.timestamp)) && (!keeperClearedAt || !m.timestamp || (Number(m.timestamp) || 0) > keeperClearedAt) && m.type !== "naiimag").slice(-maxMem)
               : [];
 
             let historyText = "";
@@ -95259,14 +95268,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
 
           // 3. 添加所有总结作为长期记忆
-          const summaryContext = chat.history
-            .filter((msg) => msg.type === "summary")
+          const tokenDeletedTsSet = new Set(
+            Array.isArray(settings?.deletedMessageTimestamps)
+              ? settings.deletedMessageTimestamps.map((t) => String(t))
+              : []
+          );
+          const tokenClearedAt = Number(settings?.historyClearedAt) || 0;
+          const summaryContext = (chat.history || [])
+            .filter((msg) => msg && msg.type === "summary" && !tokenDeletedTsSet.has(String(msg.timestamp)) && (!tokenClearedAt || (Number(msg.timestamp) || 0) > tokenClearedAt))
             .map((s) => s.content)
             .join("\n");
           combinedText += summaryContext;
 
           // 4. 添加最近的对话记录 (上下文记忆)
-          const history = chat.history.filter((msg) => !msg.isHidden && !msg.noAi);
+          const history = (chat.history || []).filter((msg) => msg && !msg.isHidden && !msg.noAi && !msg.isPlayerHidden && !msg.isTemporary && !tokenDeletedTsSet.has(String(msg.timestamp)) && (!tokenClearedAt || (Number(msg.timestamp) || 0) > tokenClearedAt));
           const memoryDepth = settings.maxMemory || 10;
           const contextMessages = history.slice(-memoryDepth);
 
