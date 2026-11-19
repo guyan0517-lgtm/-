@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -49241,7 +49241,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const isShared = colScope === "shared";
             const isLex = isLexiconCategory();
-            const isFolderMode = isLex && !isShared && colLexiconViewMode === "folder";
+            const isFolderMode = isLex && colLexiconViewMode === "folder";
             const isInsideFolder = isFolderMode && Boolean(colLexiconActiveFolder);
 
             if (colView) colView.classList.toggle("is-lexicon-mode", isLex);
@@ -49258,7 +49258,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (isLex) {
               if (lexChipEl) {
                 lexChipEl.textContent = isShared
-                  ? "CLOUD / 21G"
+                  ? (isInsideFolder ? ("CLOUD / " + colLexiconActiveFolder) : "CLOUD / 21G")
                   : (isInsideFolder ? ("CH.01 / " + colLexiconActiveFolder) : "CH.01 / 21G");
               }
               if (tabLocalTxt) tabLocalTxt.textContent = "词典";
@@ -49268,7 +49268,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (refreshBtn) refreshBtn.style.display = isShared ? "inline-flex" : "none";
-            if (folderEditBtn) folderEditBtn.style.display = isFolderMode ? "inline-flex" : "none";
+            if (folderEditBtn) folderEditBtn.style.display = (isFolderMode && !isShared) ? "inline-flex" : "none";
             if (folderBackBtn) folderBackBtn.style.display = isInsideFolder ? "inline-flex" : "none";
             if (newBtn) newBtn.style.display = isShared ? "none" : "inline-flex";
             if (tabLocal) tabLocal.classList.toggle("is-active", !isShared);
@@ -49658,11 +49658,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const isShared = colScope === "shared";
             const isLex = isLexiconCategory();
-            const isFolderRoot = isLex && !isShared && colLexiconViewMode === "folder" && !colLexiconActiveFolder;
+            const isFolderRoot = isLex && colLexiconViewMode === "folder" && !colLexiconActiveFolder;
 
             if (isFolderRoot) {
-              const allLexItems = loadLocalBookmarksForCategory("lexicon");
-              const folders = loadLexiconFolders();
+              const allLexItems = isShared
+                ? (Array.isArray(colLexiconSharedList) ? colLexiconSharedList : [])
+                : loadLocalBookmarksForCategory("lexicon");
+              let folders = [];
+              if (isShared) {
+                const seenFolderNames = new Set();
+                allLexItems.forEach((it) => {
+                  const fn = getItemLexiconFolderName(it);
+                  if (fn && !seenFolderNames.has(fn)) {
+                    seenFolderNames.add(fn);
+                    folders.push({ name: fn, coverImage: "" });
+                  }
+                });
+                if (folders.length === 0) {
+                  folders.push({ name: DEFAULT_LEXICON_FOLDER_NAME, coverImage: "" });
+                }
+              } else {
+                folders = loadLexiconFolders();
+              }
               const totalFolders = folders.length;
               const totalPages = Math.max(1, Math.ceil(totalFolders / ITEMS_PER_PAGE));
               if (colLexiconFolderRootPage > totalPages) colLexiconFolderRootPage = totalPages;
@@ -49699,6 +49716,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     }
                     colLexiconActiveFolder = folderName;
                     colLexiconLocalPage = 1;
+                    colLexiconSharedPage = 1;
                     colSortSourceIndex = -1;
                     renderCollectionGrid();
                   });
@@ -49727,7 +49745,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const fullList = isShared
               ? (isLex ? colLexiconSharedList : colSharedList)
               : loadLocalBookmarks();
-            const isInsideFolder = isLex && !isShared && colLexiconViewMode === "folder" && Boolean(colLexiconActiveFolder);
+            const isInsideFolder = isLex && colLexiconViewMode === "folder" && Boolean(colLexiconActiveFolder);
             const indexedList = [];
             fullList.forEach((it, realIdx) => {
               if (!isInsideFolder || getItemLexiconFolderName(it) === colLexiconActiveFolder) {
@@ -50624,20 +50642,71 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
+          async function compressSharedUploadDataUrlIfNeeded(rawUrl) {
+            if (!rawUrl || typeof rawUrl !== "string") return "";
+            let str = rawUrl.trim();
+            if (!str.startsWith("data:")) return str;
+            if (str.startsWith("data:application/octet-stream;base64,")) {
+              const b64Part = str.slice("data:application/octet-stream;base64,".length);
+              let mime = "image/png";
+              if (b64Part.startsWith("/9j/")) mime = "image/jpeg";
+              else if (b64Part.startsWith("UklGR")) mime = "image/webp";
+              str = `data:${mime};base64,${b64Part}`;
+            }
+            if (str.length < 180000 && str.startsWith("data:image/webp")) {
+              return str;
+            }
+            return await new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                try {
+                  const origW = img.naturalWidth || img.width || 600;
+                  const origH = img.naturalHeight || img.height || 600;
+                  const maxEdge = 860;
+                  const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+                  const targetW = Math.max(1, Math.round(origW * scale));
+                  const targetH = Math.max(1, Math.round(origH * scale));
+                  const canvas = document.createElement("canvas");
+                  canvas.width = targetW;
+                  canvas.height = targetH;
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, 0, 0, origW, origH, 0, 0, targetW, targetH);
+                  let out = canvas.toDataURL("image/webp", 0.80);
+                  if (!out || out.length < 32 || !out.startsWith("data:image/webp")) {
+                    out = canvas.toDataURL("image/jpeg", 0.80);
+                  }
+                  canvas.width = 0;
+                  canvas.height = 0;
+                  resolve(out && out.length < str.length ? out : str);
+                } catch (_) {
+                  resolve(str);
+                }
+              };
+              img.onerror = () => resolve(str);
+              img.src = str;
+            });
+          }
+
           async function buildResolvedUploadSummaryEntry(snap) {
             const imgsArr = [];
             for (const rawImg of snap.rawImgsArr) {
+              let resolved = rawImg;
               if (typeof rawImg === "string" && rawImg.startsWith("vault://") && typeof window.resolveVaultRefToDataUrl === "function") {
                 const resolvedDataUrl = await window.resolveVaultRefToDataUrl(rawImg);
-                imgsArr.push(resolvedDataUrl || rawImg);
-              } else if (typeof rawImg === "string" && rawImg.trim()) {
-                imgsArr.push(rawImg.trim());
+                resolved = resolvedDataUrl || rawImg;
+              } else if (typeof rawImg === "string") {
+                resolved = rawImg.trim();
+              }
+              if (resolved) {
+                const optimized = await compressSharedUploadDataUrlIfNeeded(resolved);
+                if (optimized) imgsArr.push(optimized);
               }
             }
             const entry = {
               id: snap.id,
               category: snap.catTag,
               name: snap.name,
+              folder: snap.folder || "",
               modelTag: snap.modelTag,
               remark: snap.remark,
               image: imgsArr[0] || "",
@@ -50944,6 +51013,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             const rawImgsArr = getBookmarkImagesArray(colCurrentItem).slice();
+            const itemFolder = isLex ? getItemLexiconFolderName(colCurrentItem) : "";
             const snapshot = {
               id: itemId,
               isLex: isLex,
@@ -50951,6 +51021,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               ghFolder: ghFolder,
               catTag: catTag,
               name: colCurrentItem.name || (isLex ? "未命名词条" : "未命名书签"),
+              folder: itemFolder,
               modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
               remark: colCurrentItem.remark || "",
               rawImgsArr: rawImgsArr,
@@ -50965,6 +51036,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               id: snapshot.id,
               category: snapshot.catTag,
               name: snapshot.name,
+              folder: itemFolder,
               modelTag: snapshot.modelTag,
               remark: snapshot.remark,
               image: rawImgsArr[0] || "",
@@ -51132,10 +51204,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (lexSealBtn) {
               lexSealBtn.addEventListener("click", () => {
-                if (!isLexiconCategory() || colScope === "shared") return;
+                if (!isLexiconCategory()) return;
                 colLexiconViewMode = colLexiconViewMode === "folder" ? "expand" : "folder";
                 colLexiconActiveFolder = "";
                 colLexiconLocalPage = 1;
+                colLexiconSharedPage = 1;
                 colLexiconFolderRootPage = 1;
                 colSortSourceIndex = -1;
                 switchCollectionSubView("grid");
@@ -51223,10 +51296,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             if (tabSharedBtn) {
               tabSharedBtn.addEventListener("click", () => {
-                if (colScope !== "shared") switchScopeTo("shared");
-                else {
+                if (colScope !== "shared") {
+                  switchScopeTo("shared");
+                } else if (colActiveSubView !== "grid") {
                   switchCollectionSubView("grid");
                   renderCollectionGrid();
+                } else {
+                  colCurrentItem = null;
+                  colCurrentIndex = -1;
+                  colIsCreatingNew = false;
+                  colEditingCategory = "";
+                  colLexiconActiveFolder = "";
+                  colCategory = isLexiconCategory() ? "bookmark" : "lexicon";
+                  switchScopeTo("shared");
                 }
               });
             }
