@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -4141,9 +4141,16 @@
 
                     <div class="mod-nai-edit-group" id="mod-nai-col-edit-pos-group">
                       <div class="mod-nai-edit-group-head">
-                        <label class="mod-nai-edit-field-label">正面</label>
+                        <label class="mod-nai-edit-field-label" id="mod-nai-col-edit-pos-main-label">正面</label>
                       </div>
                       <textarea id="mod-nai-col-edit-pos-input" class="module-prompt-textarea mod-nai-edit-textarea" rows="5" placeholder="输入正面提示词，可自由上下滑动"></textarea>
+                      <div id="mod-nai-col-edit-pos-extra-list" class="mod-nai-pos-extra-list" style="display: none;"></div>
+                      <button type="button" class="mod-nai-pos-add-ver-btn" id="mod-nai-col-edit-pos-add-ver-btn" title="添加正面提示词新版本" aria-label="添加版本">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                      </button>
                     </div>
 
                     <div class="mod-nai-edit-group" id="mod-nai-col-edit-neg-group">
@@ -4559,6 +4566,25 @@
               </div>
             </div>
           </div>
+
+          <!-- 正面提示词多版本填入选择小方框 -->
+          <div class="modal nai-theme-folio" id="mod-nai-pos-version-modal" style="display: none;">
+            <div class="modal-content mod-nai-ver-modal-box">
+              <i class="mod-nai-settings-anchor tl"></i>
+              <i class="mod-nai-settings-anchor tr"></i>
+              <i class="mod-nai-settings-anchor bl"></i>
+              <i class="mod-nai-settings-anchor br"></i>
+              <div class="mod-nai-ver-modal-head">
+                <div class="mod-nai-ver-modal-title-wrap">
+                  <span class="mod-nai-ver-modal-title">版本</span>
+                  <span class="mod-nai-ver-modal-kicker">SELECT · VERSION</span>
+                </div>
+                <button type="button" class="modal-close" id="mod-nai-pos-ver-close-btn" style="cursor: pointer; background: transparent; border: none; font-size: 17px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0;">&times;</button>
+              </div>
+              <div class="mod-nai-ver-pick-list" id="mod-nai-pos-ver-pick-list"></div>
+            </div>
+          </div>
+
           <div id="mod-nai-collection-modal" style="display: none;"></div>
         </div>
 
@@ -44231,6 +44257,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     return s;
                   })
                   .filter((u) => u && (keepDataUrls || !u.startsWith("data:")));
+                const rawPosList = Array.isArray(it.positives) && it.positives.length > 0
+                  ? it.positives.map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean)
+                  : (typeof it.positive === "string" && it.positive.trim() ? [it.positive.trim()] : []);
                 return {
                   id: it.id || "",
                   _category: it._category || "",
@@ -44242,7 +44271,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   images: normImgs,
                   _imageExplicitlyCleared: Boolean(it._imageExplicitlyCleared),
                   artist: it.artist || "",
-                  positive: it.positive || "",
+                  positive: rawPosList[0] || it.positive || "",
+                  positives: rawPosList.length > 1 ? rawPosList : undefined,
                   negative: it.negative || "",
                   _uploadedToShared: Boolean(it._uploadedToShared),
                   updatedAt: it.updatedAt || 0
@@ -48919,6 +48949,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return covers[safeIdx];
           }
 
+          function getBookmarkPositiveVersions(item) {
+            if (!item || typeof item !== "object") return [];
+            if (Array.isArray(item.positives) && item.positives.length > 0) {
+              const cleaned = item.positives
+                .map((v) => (typeof v === "string" ? v.trim() : ""))
+                .filter(Boolean);
+              if (cleaned.length > 0) return cleaned;
+            }
+            const single = typeof item.positive === "string" ? item.positive.trim() : "";
+            return single ? [single] : [];
+          }
+
+          function formatPositiveVersionLabel(zeroBasedIdx) {
+            const cnNums = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+            const n = zeroBasedIdx + 1;
+            if (n >= 1 && n <= 10) return "版本" + cnNums[n - 1];
+            if (n > 10 && n < 20) return "版本十" + cnNums[n - 11];
+            if (n === 20) return "版本二十";
+            return "版本" + n;
+          }
+
           function mergeBookmarkListsById(primaryList, secondaryList) {
             const listA = filterOutDeletedItems(primaryList);
             const listB = filterOutDeletedItems(secondaryList);
@@ -48944,6 +48995,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     nextItem.images = curImgs.slice();
                     nextItem.image = curImgs[0] || "";
                   }
+                  if ((!Array.isArray(nextItem.positives) || nextItem.positives.length <= 1) && Array.isArray(cur.positives) && cur.positives.length > 1 && nextItem.positive === cur.positive) {
+                    nextItem.positives = cur.positives.slice();
+                  }
                   merged[pos] = nextItem;
                 } else {
                   if (curImgs.length === 0 && otherImgs.length > 0 && !cur._imageExplicitlyCleared) {
@@ -48951,6 +49005,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     cur.image = otherImgs[0] || "";
                   }
                   if (!cur.folder && other.folder) cur.folder = other.folder;
+                  if ((!Array.isArray(cur.positives) || cur.positives.length <= 1) && Array.isArray(other.positives) && other.positives.length > 1 && cur.positive === other.positive) {
+                    cur.positives = other.positives.slice();
+                  }
                 }
               } else {
                 merged.push(Object.assign({}, other));
@@ -49184,6 +49241,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const el = document.getElementById(id);
               if (el) el.value = "";
             });
+            const extraList = document.getElementById("mod-nai-col-edit-pos-extra-list");
+            if (extraList) {
+              extraList.innerHTML = "";
+              extraList.style.display = "none";
+            }
+            const mainPosLabel = document.getElementById("mod-nai-col-edit-pos-main-label");
+            if (mainPosLabel) mainPosLabel.textContent = "正面";
           }
 
           function switchCollectionSubView(viewName) {
@@ -49947,6 +50011,117 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             folderInp.value = "";
           }
 
+          function refreshEditPositiveVersionLabels() {
+            const isShared = colScope === "shared";
+            const isLex = isLexiconCategory();
+            const mainPosLabel = document.getElementById("mod-nai-col-edit-pos-main-label");
+            const extraList = document.getElementById("mod-nai-col-edit-pos-extra-list");
+            if (!extraList) return;
+            const items = Array.from(extraList.querySelectorAll(".mod-nai-pos-extra-item"));
+            if (mainPosLabel) {
+              mainPosLabel.textContent = items.length > 0 ? "正面 · 版本一" : "正面";
+            }
+            extraList.style.display = items.length > 0 ? "flex" : "none";
+            items.forEach((itemEl, idx) => {
+              const verLabel = formatPositiveVersionLabel(idx + 1);
+              const lbl = itemEl.querySelector(".mod-nai-edit-field-label");
+              if (lbl) lbl.textContent = `正面 · ${verLabel}`;
+              const ta = itemEl.querySelector(".mod-nai-pos-extra-textarea");
+              if (ta) {
+                ta.readOnly = isShared;
+                ta.placeholder = isLex
+                  ? `输入${verLabel}正面提示词，可自由上下滑动`
+                  : `输入${verLabel}正面提示词，可自由上下滑动`;
+              }
+              const delBtn = itemEl.querySelector(".mod-nai-pos-ver-del-btn");
+              if (delBtn) {
+                delBtn.style.display = isShared ? "none" : "inline-flex";
+              }
+            });
+          }
+
+          function appendEditPositiveExtraVersionRow(initialValue = "", autoFocus = false) {
+            const extraList = document.getElementById("mod-nai-col-edit-pos-extra-list");
+            if (!extraList) return;
+            const isShared = colScope === "shared";
+            const itemWrap = document.createElement("div");
+            itemWrap.className = "mod-nai-pos-extra-item";
+
+            const head = document.createElement("div");
+            head.className = "mod-nai-edit-group-head";
+
+            const labelEl = document.createElement("label");
+            labelEl.className = "mod-nai-edit-field-label";
+            labelEl.textContent = "正面 · 版本二";
+
+            const delBtn = document.createElement("button");
+            delBtn.type = "button";
+            delBtn.className = "mod-nai-pos-ver-del-btn";
+            delBtn.title = "删除该版本";
+            delBtn.setAttribute("aria-label", "删除该版本");
+            delBtn.innerHTML =
+              '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+            delBtn.addEventListener("click", () => {
+              if (colScope === "shared") return;
+              itemWrap.remove();
+              refreshEditPositiveVersionLabels();
+            });
+
+            head.appendChild(labelEl);
+            head.appendChild(delBtn);
+
+            const ta = document.createElement("textarea");
+            ta.className = "module-prompt-textarea mod-nai-edit-textarea mod-nai-pos-extra-textarea";
+            ta.rows = 4;
+            ta.value = typeof initialValue === "string" ? initialValue : "";
+            ta.readOnly = isShared;
+
+            itemWrap.appendChild(head);
+            itemWrap.appendChild(ta);
+            extraList.appendChild(itemWrap);
+            refreshEditPositiveVersionLabels();
+            if (autoFocus && !isShared) {
+              requestAnimationFrame(() => {
+                try {
+                  ta.focus();
+                } catch (_) {}
+              });
+            }
+          }
+
+          function populateEditPositiveVersionInputs(item) {
+            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
+            const extraList = document.getElementById("mod-nai-col-edit-pos-extra-list");
+            const versions = getBookmarkPositiveVersions(item);
+            if (posInp) {
+              posInp.value = versions[0] || (item && item.positive) || "";
+            }
+            if (extraList) {
+              extraList.innerHTML = "";
+              if (versions.length > 1) {
+                for (let i = 1; i < versions.length; i++) {
+                  appendEditPositiveExtraVersionRow(versions[i], false);
+                }
+              }
+            }
+            refreshEditPositiveVersionLabels();
+          }
+
+          function collectEditPositiveVersionsFromDom() {
+            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
+            const extraList = document.getElementById("mod-nai-col-edit-pos-extra-list");
+            const out = [];
+            const firstVal = posInp ? String(posInp.value || "").trim() : "";
+            if (firstVal) out.push(firstVal);
+            if (extraList) {
+              extraList.querySelectorAll(".mod-nai-pos-extra-textarea").forEach((ta) => {
+                const v = String(ta.value || "").trim();
+                if (v) out.push(v);
+              });
+            }
+            return out;
+          }
+
           function syncEditViewModeControls() {
             const isShared = colScope === "shared";
             const isLex = isLexiconCategory();
@@ -49961,6 +50136,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const delBtn = document.getElementById("mod-nai-col-edit-delete-btn");
             const upBtn = document.getElementById("mod-nai-col-edit-upload-btn");
             const saveBtn = document.getElementById("mod-nai-col-edit-save-btn");
+            const addPosVerBtn = document.getElementById("mod-nai-col-edit-pos-add-ver-btn");
 
             [nameInp, remarkInp, artistInp, posInp, negInp].forEach((el) => {
               if (el) el.readOnly = isShared;
@@ -49972,10 +50148,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 ? "输入固定人物或动作正面提示词，可自由上下滑动"
                 : "输入正面提示词，可自由上下滑动";
             }
+            if (addPosVerBtn) addPosVerBtn.style.display = isShared ? "none" : "inline-flex";
             if (grabBtn) grabBtn.style.display = isShared ? "none" : "inline-flex";
             if (delBtn) delBtn.style.display = colIsCreatingNew ? "none" : "inline-flex";
             if (upBtn) upBtn.style.display = isShared ? "none" : "inline-flex";
             if (saveBtn) saveBtn.style.display = isShared ? "none" : "inline-flex";
+            refreshEditPositiveVersionLabels();
             syncEditUploadAndDeleteButtonState();
           }
 
@@ -50045,7 +50223,32 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
 
             if (artistEl) artistEl.textContent = (item && item.artist && item.artist.trim()) ? item.artist : "— 暂无画师串 —";
-            if (posEl) posEl.textContent = (item && item.positive && item.positive.trim()) ? item.positive : "— 暂无正面提示词 —";
+            if (posEl) {
+              const posVersions = getBookmarkPositiveVersions(item);
+              if (posVersions.length <= 1) {
+                posEl.textContent = posVersions[0] || "— 暂无正面提示词 —";
+              } else {
+                posEl.innerHTML = "";
+                const stack = document.createElement("div");
+                stack.className = "mod-nai-specimen-ver-stack";
+                posVersions.forEach((vText, vIdx) => {
+                  const block = document.createElement("div");
+                  block.className = "mod-nai-specimen-ver-block";
+                  const head = document.createElement("div");
+                  head.className = "mod-nai-specimen-ver-head";
+                  const tag = document.createElement("span");
+                  tag.className = "mod-nai-specimen-ver-tag";
+                  tag.textContent = `[ ${String(vIdx + 1).padStart(2, "0")} · ${formatPositiveVersionLabel(vIdx)} ]`;
+                  head.appendChild(tag);
+                  const body = document.createElement("div");
+                  body.textContent = vText;
+                  block.appendChild(head);
+                  block.appendChild(body);
+                  stack.appendChild(block);
+                });
+                posEl.appendChild(stack);
+              }
+            }
             if (negEl) negEl.textContent = (item && item.negative && item.negative.trim()) ? item.negative : "— 暂无负面提示词 —";
 
             if (stageEl) {
@@ -50150,12 +50353,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
-            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
             if (nameInp) nameInp.value = item.name || "";
             if (remarkInp) remarkInp.value = item.remark || "";
             if (artistInp) artistInp.value = item.artist || "";
-            if (posInp) posInp.value = item.positive || "";
+            populateEditPositiveVersionInputs(item);
             if (negInp) negInp.value = item.negative || "";
 
             const isShared = colScope === "shared";
@@ -50175,6 +50377,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       colEditImagesDraft = getBookmarkImagesArray(item);
                       colEditImageDraft = colEditImagesDraft[0] || "";
                       colEditModelDraft = normalizeModelTagValue(item.modelTag);
+                      populateEditPositiveVersionInputs(item);
                       renderSpecimenDetailCard(item, colCurrentIndex);
                     }
                   }
@@ -50199,6 +50402,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const defaultFolder = isLex ? (colLexiconActiveFolder || DEFAULT_LEXICON_FOLDER_NAME) : "";
             const pos1InpEl = document.getElementById("mod-nai-gen-pos1-input");
             const firstPosText = (pos1InpEl && pos1InpEl.value.trim()) ? pos1InpEl.value.trim() : (st.pos1Text || "");
+            const initPosVal = firstPosText || computeActivePositivePrompt() || "";
 
             colCurrentItem = {
               id: (isLex ? "lx_" : "bm_") + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
@@ -50210,7 +50414,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               image: curGenSrc,
               images: curGenSrc ? [curGenSrc] : [],
               artist: isLex ? "" : (computeActiveArtistPrompt() || st.artistText || ""),
-              positive: firstPosText || computeActivePositivePrompt() || "",
+              positive: initPosVal,
+              positives: initPosVal ? [initPosVal] : [],
               negative: isLex ? "" : (st.negText || ""),
               updatedAt: Date.now()
             };
@@ -50235,13 +50440,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
-            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
 
             if (nameInp) nameInp.value = "";
             if (remarkInp) remarkInp.value = "";
             if (artistInp) artistInp.value = colCurrentItem.artist;
-            if (posInp) posInp.value = colCurrentItem.positive;
+            populateEditPositiveVersionInputs(colCurrentItem);
             if (negInp) negInp.value = colCurrentItem.negative;
             populateEditFolderControls(defaultFolder);
             syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
@@ -50262,13 +50466,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
-            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
 
             if (nameInp) nameInp.value = colCurrentItem.name || "";
             if (remarkInp) remarkInp.value = colCurrentItem.remark || "";
             if (artistInp) artistInp.value = colCurrentItem.artist || "";
-            if (posInp) posInp.value = colCurrentItem.positive || "";
+            populateEditPositiveVersionInputs(colCurrentItem);
             if (negInp) negInp.value = colCurrentItem.negative || "";
             populateEditFolderControls(getItemLexiconFolderName(colCurrentItem));
             syncModelSwitchButtons("mod-nai-col-edit-model-switch", colEditModelDraft);
@@ -50290,7 +50493,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const nameInp = document.getElementById("mod-nai-col-edit-name-input");
             const remarkInp = document.getElementById("mod-nai-col-edit-remark-input");
             const artistInp = document.getElementById("mod-nai-col-edit-artist-input");
-            const posInp = document.getElementById("mod-nai-col-edit-pos-input");
             const negInp = document.getElementById("mod-nai-col-edit-neg-input");
             const folderSel = document.getElementById("mod-nai-col-edit-folder-select");
             const folderInp = document.getElementById("mod-nai-col-edit-folder-input");
@@ -50298,7 +50500,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const nameVal = (nameInp ? nameInp.value : "").trim();
             const remarkVal = (remarkInp ? remarkInp.value : "").trim();
             const artistVal = isLex ? "" : (artistInp ? artistInp.value : "").trim();
-            const posVal = (posInp ? posInp.value : "").trim();
+            const allPosVersions = collectEditPositiveVersionsFromDom();
+            const posVal = allPosVersions[0] || "";
             const negVal = isLex ? "" : (negInp ? negInp.value : "").trim();
             const customFolderVal = (isLex && commitCustomFolder && folderInp) ? folderInp.value.trim() : "";
             const selectedFolderVal = isLex && folderSel ? folderSel.value.trim() : "";
@@ -50339,6 +50542,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             colCurrentItem.image = colEditImagesDraft[0] || "";
             colCurrentItem.artist = artistVal;
             colCurrentItem.positive = posVal;
+            if (allPosVersions.length > 1) {
+              colCurrentItem.positives = allPosVersions;
+            } else {
+              delete colCurrentItem.positives;
+            }
             colCurrentItem.negative = negVal;
             colCurrentItem.updatedAt = Date.now();
 
@@ -50712,6 +50920,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               image: imgsArr[0] || "",
               artist: snap.artist,
               positive: snap.positive,
+              positives: Array.isArray(snap.positives) && snap.positives.length > 1 ? snap.positives.slice() : undefined,
               negative: snap.negative,
               updatedAt: snap.updatedAt,
               _detailLoaded: true
@@ -51014,6 +51223,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const rawImgsArr = getBookmarkImagesArray(colCurrentItem).slice();
             const itemFolder = isLex ? getItemLexiconFolderName(colCurrentItem) : "";
+            const snapPosVersions = getBookmarkPositiveVersions(colCurrentItem);
             const snapshot = {
               id: itemId,
               isLex: isLex,
@@ -51026,7 +51236,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               remark: colCurrentItem.remark || "",
               rawImgsArr: rawImgsArr,
               artist: isLex ? "" : (colCurrentItem.artist || ""),
-              positive: colCurrentItem.positive || "",
+              positive: snapPosVersions[0] || colCurrentItem.positive || "",
+              positives: snapPosVersions.length > 1 ? snapPosVersions : undefined,
               negative: isLex ? "" : (colCurrentItem.negative || ""),
               updatedAt: Date.now(),
               itemRef: colCurrentItem
@@ -51043,6 +51254,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               images: rawImgsArr.length > 1 ? rawImgsArr.slice() : undefined,
               artist: snapshot.artist,
               positive: snapshot.positive,
+              positives: snapshot.positives ? snapshot.positives.slice() : undefined,
               negative: snapshot.negative,
               updatedAt: snapshot.updatedAt,
               _detailLoaded: true
@@ -51432,6 +51644,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const isLex = isLexiconCategory();
                 const list = loadLocalBookmarks();
                 const imgsArr = getBookmarkImagesArray(colCurrentItem);
+                const importPosVersions = getBookmarkPositiveVersions(colCurrentItem);
                 const cloned = {
                   id: (isLex ? "lx_" : "bm_") + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                   name: colCurrentItem.name || (isLex ? "收录词条" : "收录书签"),
@@ -51441,7 +51654,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   image: imgsArr[0] || "",
                   images: imgsArr,
                   artist: isLex ? "" : (colCurrentItem.artist || ""),
-                  positive: colCurrentItem.positive || "",
+                  positive: importPosVersions[0] || colCurrentItem.positive || "",
+                  positives: importPosVersions.length > 1 ? importPosVersions.slice() : undefined,
                   negative: isLex ? "" : (colCurrentItem.negative || ""),
                   updatedAt: Date.now()
                 };
@@ -51457,65 +51671,155 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               });
             }
+
+            const posVerModal = document.getElementById("mod-nai-pos-version-modal");
+            const posVerCloseBtn = document.getElementById("mod-nai-pos-ver-close-btn");
+            const posVerPickList = document.getElementById("mod-nai-pos-ver-pick-list");
+
+            const closePositiveVersionModal = () => {
+              if (posVerModal) posVerModal.style.display = "none";
+            };
+            if (posVerCloseBtn) {
+              posVerCloseBtn.addEventListener("click", closePositiveVersionModal);
+            }
+            if (posVerModal) {
+              posVerModal.addEventListener("click", (e) => {
+                if (e.target === posVerModal) closePositiveVersionModal();
+              });
+            }
+
+            const applyPositiveVersionToGeneratePanel = (targetItem, chosenPosVal, verLabel = "") => {
+              if (!targetItem) return;
+              const isLex = isLexiconCategory();
+              const artistVal = (targetItem.artist || "").trim();
+              const posVal = String(chosenPosVal !== undefined ? chosenPosVal : (targetItem.positive || "")).trim();
+              const negVal = (targetItem.negative || "").trim();
+
+              const artistEl = document.getElementById("mod-nai-gen-artist-input");
+              const ac1El = document.getElementById("mod-nai-artist1-check");
+              const pos1El = document.getElementById("mod-nai-gen-pos1-input");
+              const c1El = document.getElementById("mod-nai-pos1-check");
+              const negEl = document.getElementById("mod-nai-gen-neg-input");
+
+              const artistSel = document.getElementById("mod-nai-artist-preset-select");
+              const pos1Sel = document.getElementById("mod-nai-pos1-preset-select");
+              const negSel = document.getElementById("mod-nai-neg-preset-select");
+
+              if (isLex) {
+                if (pos1El) pos1El.value = posVal;
+                if (c1El) c1El.checked = true;
+                if (pos1Sel) {
+                  pos1Sel.value = "";
+                  syncPresetCustomDropdown(pos1Sel, "positive");
+                }
+              } else {
+                if (artistEl) artistEl.value = artistVal;
+                if (ac1El) ac1El.checked = true;
+                if (pos1El) pos1El.value = posVal;
+                if (c1El) c1El.checked = true;
+                if (negEl) negEl.value = negVal;
+                if (artistSel) {
+                  artistSel.value = "";
+                  syncPresetCustomDropdown(artistSel, "artist");
+                }
+                if (pos1Sel) {
+                  pos1Sel.value = "";
+                  syncPresetCustomDropdown(pos1Sel, "positive");
+                }
+                if (negSel) {
+                  negSel.value = "";
+                  syncPresetCustomDropdown(negSel, "negative");
+                }
+              }
+
+              applyModeView("generate");
+              const st = loadPanelState();
+              st.mode = "generate";
+              if (isLex) {
+                st.pos1PresetSelected = "";
+              } else {
+                st.artistPresetSelected = "";
+                st.pos1PresetSelected = "";
+                st.negPresetSelected = "";
+              }
+              savePanelState(st);
+              syncModuleNaiToGlobal(true);
+              if (typeof window.showDownloadToast === "function") {
+                const msg = verLabel
+                  ? `已填入${verLabel}`
+                  : (isLex ? "已填入正面提示词" : "已填入生图面板");
+                window.showDownloadToast(msg, "success");
+              }
+            };
+
+            const openPositiveVersionPickerModal = (versions, onPickVersion) => {
+              if (!posVerModal || !posVerPickList) return;
+              const isLex = isLexiconCategory();
+              posVerModal.classList.toggle("is-lexicon-mode", isLex);
+              posVerPickList.innerHTML = "";
+              versions.forEach((vText, idx) => {
+                const verLabel = formatPositiveVersionLabel(idx);
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "mod-nai-ver-pick-btn";
+
+                const topRow = document.createElement("div");
+                topRow.className = "mod-nai-ver-pick-top";
+
+                const leftWrap = document.createElement("div");
+                leftWrap.className = "mod-nai-ver-pick-left";
+
+                const badge = document.createElement("span");
+                badge.className = "mod-nai-ver-pick-badge";
+                badge.textContent = String(idx + 1).padStart(2, "0");
+
+                const nameSpan = document.createElement("span");
+                nameSpan.className = "mod-nai-ver-pick-name";
+                nameSpan.textContent = verLabel;
+
+                leftWrap.appendChild(badge);
+                leftWrap.appendChild(nameSpan);
+
+                const arrowWrap = document.createElement("span");
+                arrowWrap.className = "mod-nai-ver-pick-arrow";
+                arrowWrap.innerHTML =
+                  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+
+                topRow.appendChild(leftWrap);
+                topRow.appendChild(arrowWrap);
+
+                const previewRow = document.createElement("div");
+                previewRow.className = "mod-nai-ver-pick-preview";
+                previewRow.textContent = String(vText || "").replace(/\s+/g, " ").trim() || "—";
+
+                btn.appendChild(topRow);
+                btn.appendChild(previewRow);
+                btn.addEventListener("click", () => {
+                  closePositiveVersionModal();
+                  if (typeof onPickVersion === "function") {
+                    onPickVersion(vText, verLabel, idx);
+                  }
+                });
+                posVerPickList.appendChild(btn);
+              });
+              posVerModal.style.display = "flex";
+            };
+
             if (detailApplyBtn) {
               detailApplyBtn.addEventListener("click", () => {
                 if (!colCurrentItem) return;
-                const isLex = isLexiconCategory();
-                const artistVal = (colCurrentItem.artist || "").trim();
-                const posVal = (colCurrentItem.positive || "").trim();
-                const negVal = (colCurrentItem.negative || "").trim();
-
-                const artistEl = document.getElementById("mod-nai-gen-artist-input");
-                const ac1El = document.getElementById("mod-nai-artist1-check");
-                const pos1El = document.getElementById("mod-nai-gen-pos1-input");
-                const c1El = document.getElementById("mod-nai-pos1-check");
-                const negEl = document.getElementById("mod-nai-gen-neg-input");
-
-                const artistSel = document.getElementById("mod-nai-artist-preset-select");
-                const pos1Sel = document.getElementById("mod-nai-pos1-preset-select");
-                const negSel = document.getElementById("mod-nai-neg-preset-select");
-
-                if (isLex) {
-                  if (pos1El) pos1El.value = posVal;
-                  if (c1El) c1El.checked = true;
-                  if (pos1Sel) {
-                    pos1Sel.value = "";
-                    syncPresetCustomDropdown(pos1Sel, "positive");
-                  }
+                const posVersions = getBookmarkPositiveVersions(colCurrentItem);
+                if (posVersions.length <= 1) {
+                  applyPositiveVersionToGeneratePanel(
+                    colCurrentItem,
+                    posVersions[0] || colCurrentItem.positive || "",
+                    ""
+                  );
                 } else {
-                  if (artistEl) artistEl.value = artistVal;
-                  if (ac1El) ac1El.checked = true;
-                  if (pos1El) pos1El.value = posVal;
-                  if (c1El) c1El.checked = true;
-                  if (negEl) negEl.value = negVal;
-                  if (artistSel) {
-                    artistSel.value = "";
-                    syncPresetCustomDropdown(artistSel, "artist");
-                  }
-                  if (pos1Sel) {
-                    pos1Sel.value = "";
-                    syncPresetCustomDropdown(pos1Sel, "positive");
-                  }
-                  if (negSel) {
-                    negSel.value = "";
-                    syncPresetCustomDropdown(negSel, "negative");
-                  }
-                }
-
-                applyModeView("generate");
-                const st = loadPanelState();
-                st.mode = "generate";
-                if (isLex) {
-                  st.pos1PresetSelected = "";
-                } else {
-                  st.artistPresetSelected = "";
-                  st.pos1PresetSelected = "";
-                  st.negPresetSelected = "";
-                }
-                savePanelState(st);
-                syncModuleNaiToGlobal(true);
-                if (typeof window.showDownloadToast === "function") {
-                  window.showDownloadToast(isLex ? "已填入正面提示词" : "已填入生图面板", "success");
+                  const targetItem = colCurrentItem;
+                  openPositiveVersionPickerModal(posVersions, (chosenText, verLabel) => {
+                    applyPositiveVersionToGeneratePanel(targetItem, chosenText, verLabel);
+                  });
                 }
               });
             }
@@ -51525,9 +51829,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               );
             }
             if (detailCopyPosBtn) {
-              detailCopyPosBtn.addEventListener("click", () =>
-                copyRawTextWithFeedback(colCurrentItem ? colCurrentItem.positive : "", detailCopyPosBtn)
-              );
+              detailCopyPosBtn.addEventListener("click", () => {
+                if (!colCurrentItem) return;
+                const posVersions = getBookmarkPositiveVersions(colCurrentItem);
+                if (posVersions.length <= 1) {
+                  copyRawTextWithFeedback(posVersions[0] || colCurrentItem.positive || "", detailCopyPosBtn);
+                } else {
+                  openPositiveVersionPickerModal(posVersions, (chosenText) => {
+                    copyRawTextWithFeedback(chosenText, detailCopyPosBtn);
+                  });
+                }
+              });
             }
             if (detailCopyNegBtn) {
               detailCopyNegBtn.addEventListener("click", () =>
@@ -51542,6 +51854,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const editFileInput = document.getElementById("mod-nai-col-edit-file-input");
             const editModelSwitch = document.getElementById("mod-nai-col-edit-model-switch");
             const editDeleteBtn = document.getElementById("mod-nai-col-edit-delete-btn");
+            const editPosAddVerBtn = document.getElementById("mod-nai-col-edit-pos-add-ver-btn");
+            if (editPosAddVerBtn) {
+              editPosAddVerBtn.addEventListener("click", () => {
+                if (colScope === "shared") return;
+                appendEditPositiveExtraVersionRow("", true);
+              });
+            }
             const editUploadBtn = document.getElementById("mod-nai-col-edit-upload-btn");
             const editSaveBtn = document.getElementById("mod-nai-col-edit-save-btn");
 

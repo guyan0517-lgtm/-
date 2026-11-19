@@ -38262,6 +38262,296 @@ select,
   padding-top: 6px;
 }
 
+/* 正面提示词多版本叠加列表与加号按键 */
+#module-nai-panel .mod-nai-pos-extra-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+#module-nai-panel .mod-nai-pos-extra-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--trace-border-soft);
+}
+
+#module-nai-panel .mod-nai-pos-ver-del-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 7px;
+  border: 1px solid var(--trace-border-soft);
+  background-color: color-mix(in srgb, var(--trace-soft) 70%, var(--card-bg));
+  color: var(--trace-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+#module-nai-panel .mod-nai-pos-ver-del-btn:hover,
+#module-nai-panel .mod-nai-pos-ver-del-btn:active {
+  color: var(--trace-ink);
+  border-color: var(--trace-line);
+  background-color: var(--trace-soft);
+}
+
+#module-nai-panel .mod-nai-pos-add-ver-btn {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  margin-top: 2px;
+  border-radius: 9px;
+  border: 1px dashed var(--trace-line);
+  background-color: color-mix(in srgb, var(--trace-soft) 65%, var(--card-bg));
+  color: var(--trace-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+}
+
+#module-nai-panel .mod-nai-pos-add-ver-btn:hover,
+#module-nai-panel .mod-nai-pos-add-ver-btn:active {
+  background-color: var(--trace-soft);
+  border-color: var(--trace-ink);
+}
+
+#module-nai-panel .mod-nai-pos-add-ver-btn:active {
+  transform: scale(0.99);
+}
+
+#module-nai-panel #mod-nai-collection-view.is-lexicon-mode .mod-nai-pos-add-ver-btn {
+  border-color: color-mix(in srgb, var(--trace-klein) 58%, var(--trace-line));
+  color: var(--trace-klein-deep);
+  background-color: color-mix(in srgb, var(--trace-klein) 8%, var(--card-bg));
+}
+
+/* 详情页多版本正面词分段展示 */
+#module-nai-panel .mod-nai-specimen-ver-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#module-nai-panel .mod-nai-specimen-ver-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  border: 1px dashed var(--trace-border-soft);
+  background-color: color-mix(in srgb, var(--trace-soft) 45%, var(--card-bg));
+}
+
+#module-nai-panel .mod-nai-specimen-ver-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+#module-nai-panel .mod-nai-specimen-ver-tag {
+  font-family: "Cinzel", var(--trace-cn-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--trace-muted);
+}
+
+/* 点击填入时居中小巧精美的版本选择方框 */
+#mod-nai-pos-version-modal {
+  z-index: 2260 !important;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-modal-box {
+  --nai-panel-bg: color-mix(in srgb, var(--tukey-text-light) 12%, var(--card-bg));
+  --nai-card-bg: color-mix(in srgb, var(--card-bg) 92%, var(--secondary-bg));
+  --nai-border: color-mix(in srgb, var(--border-color) 85%, transparent);
+  --nai-border-strong: color-mix(in srgb, var(--text-primary) 34%, var(--border-color));
+  --nai-text: color-mix(in srgb, var(--text-primary) 88%, var(--text-secondary));
+  --nai-muted: color-mix(in srgb, var(--text-secondary) 88%, var(--text-primary));
+  --nai-accent: color-mix(in srgb, var(--accent-color) 84%, var(--tukey-accent));
+  width: calc(100% - 56px);
+  max-width: 276px;
+  max-height: 72vh;
+  padding: 13px 14px !important;
+  border-radius: 12px !important;
+  border: 1px dashed var(--nai-border-strong) !important;
+  background-color: var(--nai-panel-bg) !important;
+  color: var(--nai-text) !important;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--text-primary) 16%, transparent) !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+#mod-nai-pos-version-modal .mod-nai-settings-anchor {
+  display: block;
+  position: absolute;
+  width: 4.5px;
+  height: 4.5px;
+  border-radius: 50%;
+  background-color: var(--nai-text);
+  pointer-events: none;
+  z-index: 4;
+}
+
+#mod-nai-pos-version-modal .mod-nai-settings-anchor.tl { top: 4px; left: 4px; }
+#mod-nai-pos-version-modal .mod-nai-settings-anchor.tr { top: 4px; right: 4px; }
+#mod-nai-pos-version-modal .mod-nai-settings-anchor.bl { bottom: 4px; left: 4px; }
+#mod-nai-pos-version-modal .mod-nai-settings-anchor.br { bottom: 4px; right: 4px; }
+
+#mod-nai-pos-version-modal .mod-nai-ver-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--nai-border-strong);
+  flex-shrink: 0;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-modal-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-modal-title {
+  font-family: "Cormorant Garamond", "Noto Serif SC", "Songti SC", serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  color: var(--nai-text);
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-modal-kicker {
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+  color: var(--nai-muted);
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 1px 0;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-btn {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--nai-border-strong);
+  background-color: var(--card-bg);
+  color: var(--nai-text);
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  transition: transform 0.12s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-btn:hover,
+#mod-nai-pos-version-modal .mod-nai-ver-pick-btn:active {
+  border-color: var(--nai-text);
+  background-color: color-mix(in srgb, var(--secondary-bg) 55%, var(--card-bg));
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-btn:active {
+  transform: scale(0.985);
+}
+
+#mod-nai-pos-version-modal.is-lexicon-mode .mod-nai-ver-pick-btn:hover,
+#mod-nai-pos-version-modal.is-lexicon-mode .mod-nai-ver-pick-btn:active {
+  border-color: var(--nai-accent);
+  background-color: color-mix(in srgb, var(--nai-accent) 10%, var(--card-bg));
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background-color: var(--nai-text);
+  color: var(--card-bg);
+  font-family: "Cinzel", "Playfair Display", serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+#mod-nai-pos-version-modal.is-lexicon-mode .mod-nai-ver-pick-badge {
+  background-color: var(--nai-accent);
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-name {
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--nai-text);
+  white-space: nowrap;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-arrow {
+  width: 13px;
+  height: 13px;
+  color: var(--nai-muted);
+  flex-shrink: 0;
+}
+
+#mod-nai-pos-version-modal .mod-nai-ver-pick-preview {
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--nai-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
 /* 编辑模式下多图封面切换与单图管理栏 */
 #module-nai-panel .mod-nai-edit-thumbs-strip {
   display: flex;
