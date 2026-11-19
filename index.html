@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -44022,7 +44022,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 for (let k = 0; k < memoryPanelState.watermarkGallery.length; k++) {
                   const g = memoryPanelState.watermarkGallery[k];
                   if (g && typeof g === "object") {
-                    addCoverRef(g.url, true);
+                    addCoverRef(g.image || g.url, true);
                   } else if (typeof g === "string") {
                     addCoverRef(g, true);
                   }
@@ -44303,41 +44303,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             writeKeyToNaiIDB("deletedIds", Array.from(getDeletedIdsSet()));
             writeKeyToNaiIDB("deletedPresetKeys", Array.from(getDeletedPresetKeysSet()));
 
+            // 已经存入独立生图库与 Termux nai_collection_store.json，绝不再往主数据库 globalSettings 里重复塞第二份冗余副本，彻底消灭主数据库膨胀
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
-              if (slimBm) window.state.globalSettings.naiBookmarksCollection = slimBm;
-              if (slimLex) window.state.globalSettings.naiLexiconCollection = slimLex;
-              if (slimFolders) window.state.globalSettings.naiLexiconFolders = slimFolders;
-              if (clonedPresets) window.state.globalSettings.naiPresetsStore = clonedPresets;
-              if (slimPanelSt) window.state.globalSettings.naiPanelState = slimPanelSt;
-            }
-            if (window.db && window.db.globalSettings && typeof window.db.globalSettings.get === "function") {
-              window.db.globalSettings.get("main").then((gs) => {
-                if (!gs || typeof gs !== "object") return;
-                let touched = false;
-                if (slimBm) {
-                  gs.naiBookmarksCollection = slimBm;
-                  touched = true;
-                }
-                if (slimLex) {
-                  gs.naiLexiconCollection = slimLex;
-                  touched = true;
-                }
-                if (slimFolders) {
-                  gs.naiLexiconFolders = slimFolders;
-                  touched = true;
-                }
-                if (clonedPresets) {
-                  gs.naiPresetsStore = clonedPresets;
-                  touched = true;
-                }
-                if (slimPanelSt) {
-                  gs.naiPanelState = slimPanelSt;
-                  touched = true;
-                }
-                if (touched) {
-                  window.db.globalSettings.put(gs).catch(() => {});
-                }
-              }).catch(() => {});
+              delete window.state.globalSettings.naiBookmarksCollection;
+              delete window.state.globalSettings.naiLexiconCollection;
+              delete window.state.globalSettings.naiLexiconFolders;
+              delete window.state.globalSettings.naiPresetsStore;
+              delete window.state.globalSettings.naiPanelState;
             }
           }
 
@@ -128864,6 +128836,20 @@ ${specificRules}`;
                   if (m) m.forEach((u) => set.add(u));
                 }
               }
+              // 保护生图收藏夹与词典已预热到内存中的图片不被误清理，确保随时切到收藏夹翻到第20页都是0毫秒秒开
+              if (typeof window.getNaiVaultMediaReferences === "function") {
+                const naiRefs = window.getNaiVaultMediaReferences();
+                if (Array.isArray(naiRefs)) {
+                  for (let j = 0; j < naiRefs.length; j++) {
+                    const ref = naiRefs[j];
+                    if (typeof ref === "string" && ref.startsWith("vault://")) {
+                      const cleanName = ref.slice("vault://".length);
+                      const cachedUrl = blobUrlMemoryCache.get(cleanName);
+                      if (cachedUrl) set.add(cachedUrl);
+                    }
+                  }
+                }
+              }
             } catch (_) {}
             return set;
           }
@@ -131128,6 +131114,7 @@ ${specificRules}`;
                         } finally {
                           _suspendVaultAutoOffload = prevSuspend;
                         }
+                        syncSingleRecordToTermuxIncrementally(table.name, latestRowToSave);
                         if (table.name === "globalSettings" && typeof state !== "undefined" && state.globalSettings) {
                           Object.assign(state.globalSettings, latestRowToSave);
                         }
@@ -131740,32 +131727,40 @@ ${specificRules}`;
             const listB = Array.isArray(newHist) ? newHist.filter(Boolean) : [];
             if (listA.length === 0) return listB;
             if (listB.length === 0) return listA;
+            const buildMsgFingerprints = (m) => {
+              const txt = String(m.content || m.text || "").trim();
+              const sender = String(m.senderName || m.sender || m.role || "").trim();
+              const media = String(m.imageUrl || m.stickerUrl || m.audioUrl || "").trim();
+              const tsSec = m.timestamp ? Math.floor(Number(m.timestamp) / 1000) : "";
+              const payloadKey = txt || media;
+              if (!payloadKey) return null;
+              return {
+                exactKey: `${sender}::${payloadKey}::${tsSec}`,
+                looseKey: `${sender}::${payloadKey}`,
+                tsKey: tsSec ? `${sender}::TS::${tsSec}` : ""
+              };
+            };
             const merged = listA.slice();
             const seenExact = new Set();
             const seenLoose = new Set();
+            const seenTs = new Set();
             for (const m of listA) {
-              const txt = String(m.content || m.text || "").trim();
-              const sender = String(m.senderName || m.sender || m.role || "").trim();
-              const tsSec = m.timestamp ? Math.floor(Number(m.timestamp) / 1000) : "";
-              if (txt) {
-                seenExact.add(sender + "::" + txt + "::" + tsSec);
-                seenLoose.add(sender + "::" + txt);
+              const fp = buildMsgFingerprints(m);
+              if (fp) {
+                seenExact.add(fp.exactKey);
+                seenLoose.add(fp.looseKey);
+                if (fp.tsKey) seenTs.add(fp.tsKey);
               }
             }
             for (const m of listB) {
-              const txt = String(m.content || m.text || "").trim();
-              const sender = String(m.senderName || m.sender || m.role || "").trim();
-              const tsSec = m.timestamp ? Math.floor(Number(m.timestamp) / 1000) : "";
-              if (!txt && !m.imageUrl && !m.stickerUrl) continue;
-              const exactKey = sender + "::" + txt + "::" + tsSec;
-              const looseKey = sender + "::" + txt;
-              if (txt && (seenExact.has(exactKey) || seenLoose.has(looseKey))) {
+              const fp = buildMsgFingerprints(m);
+              if (!fp) continue;
+              if (seenExact.has(fp.exactKey) || seenLoose.has(fp.looseKey) || (fp.tsKey && seenTs.has(fp.tsKey))) {
                 continue;
               }
-              if (txt) {
-                seenExact.add(exactKey);
-                seenLoose.add(looseKey);
-              }
+              seenExact.add(fp.exactKey);
+              seenLoose.add(fp.looseKey);
+              if (fp.tsKey) seenTs.add(fp.tsKey);
               merged.push(m);
             }
             merged.sort((a, b) => {
@@ -132208,6 +132203,13 @@ ${specificRules}`;
                           const existingChat = recObj.id !== undefined ? await db.chats.get(recObj.id) : null;
                           if (existingChat) {
                             const mergedC = mergeChatObjectsKeepNewest(existingChat, recObj);
+                            // Termux 单条增量记录是用户最后一次实时操作的完整会话状态（含删除消息、重ロール或回退记录），保留其最新消息列表而不把已删旧消息复活回去
+                            if (Array.isArray(recObj.history)) {
+                              mergedC.history = recObj.history;
+                            }
+                            if (Array.isArray(recObj.mainLineHistory)) {
+                              mergedC.mainLineHistory = recObj.mainLineHistory;
+                            }
                             await db.chats.put(mergedC);
                           } else {
                             await db.chats.put(recObj);
