@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -49958,6 +49958,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (delBtn) delBtn.style.display = colIsCreatingNew ? "none" : "inline-flex";
             if (upBtn) upBtn.style.display = isShared ? "none" : "inline-flex";
             if (saveBtn) saveBtn.style.display = isShared ? "none" : "inline-flex";
+            syncEditUploadAndDeleteButtonState();
           }
 
           function applyHeroFrameOrientation(heroFrame, orient) {
@@ -50510,6 +50511,86 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             });
           }
 
+          const colUploadingItemIds = new Set();
+          const colDeletingItemIds = new Set();
+          const colJustUploadedItemIds = new Set();
+          const colSharedSyncQueue = [];
+          let colSharedSyncWorkerRunning = false;
+
+          function syncEditUploadAndDeleteButtonState() {
+            const upBtn = document.getElementById("mod-nai-col-edit-upload-btn");
+            const delBtn = document.getElementById("mod-nai-col-edit-delete-btn");
+            const curId = (colCurrentItem && colCurrentItem.id) ? String(colCurrentItem.id) : "";
+
+            if (upBtn) {
+              const upSpan = upBtn.querySelector("span");
+              if (curId && colUploadingItemIds.has(curId)) {
+                upBtn.disabled = true;
+                if (upSpan) upSpan.textContent = "上传中";
+              } else if (curId && colJustUploadedItemIds.has(curId)) {
+                upBtn.disabled = false;
+                if (upSpan) upSpan.textContent = "已传";
+              } else {
+                upBtn.disabled = false;
+                if (upSpan) upSpan.textContent = "上传";
+              }
+            }
+
+            if (delBtn) {
+              const delSpan = delBtn.querySelector("span");
+              if (curId && colDeletingItemIds.has(curId)) {
+                delBtn.disabled = true;
+                if (delSpan) delSpan.textContent = "删除中";
+              } else {
+                delBtn.disabled = false;
+                if (delSpan) delSpan.textContent = "删除";
+              }
+            }
+          }
+
+          function compactSharedIndexEntries(list) {
+            if (!Array.isArray(list)) return [];
+            return list
+              .filter((x) => x && typeof x === "object" && x.id)
+              .map((entry) => {
+                const clone = Object.assign({}, entry);
+                if (Array.isArray(clone.images)) {
+                  const cleanImgs = clone.images.filter((u) => typeof u === "string" && u.trim());
+                  if (!clone.image && cleanImgs.length > 0) {
+                    clone.image = cleanImgs[0];
+                  }
+                  if (cleanImgs.length <= 1) {
+                    delete clone.images;
+                    clone._detailLoaded = true;
+                  } else {
+                    clone.images = cleanImgs;
+                  }
+                } else {
+                  clone._detailLoaded = true;
+                }
+                return clone;
+              });
+          }
+
+          function applyPendingQueueOverlayToSharedList(rawList, isLex) {
+            const targetFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
+            let result = compactSharedIndexEntries(rawList);
+            for (const task of colSharedSyncQueue) {
+              if (!task || task.ghFolder !== targetFolder) continue;
+              if (task.type === "delete" && task.itemId) {
+                result = result.filter((x) => x && x.id !== task.itemId);
+              } else if (task.type === "upload" && task.optimisticEntry) {
+                const pos = result.findIndex((x) => x && x.id === task.optimisticEntry.id);
+                if (pos >= 0) {
+                  result[pos] = Object.assign({}, task.optimisticEntry);
+                } else {
+                  result.unshift(Object.assign({}, task.optimisticEntry));
+                }
+              }
+            }
+            return result;
+          }
+
           async function refreshSharedBookmarksFromGitHub() {
             if (typeof ModuleManager === "undefined" || typeof ModuleManager.fetchWorkshopGithubJson !== "function") {
               setColStatus("共享服务正在初始化，请稍候");
@@ -50526,6 +50607,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } else if (Array.isArray(indexData)) {
                 parsedItems = indexData;
               }
+              parsedItems = applyPendingQueueOverlayToSharedList(parsedItems, isLex);
               if (isLex) {
                 colLexiconSharedList = parsedItems;
                 colLexiconSharedLoadedOnce = true;
@@ -50542,6 +50624,290 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
+          async function buildResolvedUploadSummaryEntry(snap) {
+            const imgsArr = [];
+            for (const rawImg of snap.rawImgsArr) {
+              if (typeof rawImg === "string" && rawImg.startsWith("vault://") && typeof window.resolveVaultRefToDataUrl === "function") {
+                const resolvedDataUrl = await window.resolveVaultRefToDataUrl(rawImg);
+                imgsArr.push(resolvedDataUrl || rawImg);
+              } else if (typeof rawImg === "string" && rawImg.trim()) {
+                imgsArr.push(rawImg.trim());
+              }
+            }
+            const entry = {
+              id: snap.id,
+              category: snap.catTag,
+              name: snap.name,
+              modelTag: snap.modelTag,
+              remark: snap.remark,
+              image: imgsArr[0] || "",
+              artist: snap.artist,
+              positive: snap.positive,
+              negative: snap.negative,
+              updatedAt: snap.updatedAt,
+              _detailLoaded: true
+            };
+            if (imgsArr.length > 1) {
+              entry.images = imgsArr;
+            }
+            return entry;
+          }
+
+          function applyBatchTasksToIndexArray(baseList, batchTasks, resolvedUploadEntriesMap) {
+            let working = compactSharedIndexEntries(baseList);
+            for (const task of batchTasks) {
+              if (!task) continue;
+              if (task.type === "delete") {
+                working = working.filter((x) => x && x.id !== task.itemId);
+              } else if (task.type === "upload" && task.snapshot) {
+                const entry = resolvedUploadEntriesMap.get(task.snapshot.id);
+                if (!entry) continue;
+                const pos = working.findIndex((x) => x && x.id === entry.id);
+                if (pos >= 0) {
+                  working[pos] = Object.assign({}, entry);
+                } else {
+                  working.unshift(Object.assign({}, entry));
+                }
+              }
+            }
+            return working;
+          }
+
+          function isBatchAlreadySatisfiedInRemoteIndex(remoteList, batchTasks) {
+            if (!Array.isArray(remoteList)) return false;
+            for (const task of batchTasks) {
+              if (!task) continue;
+              if (task.type === "delete") {
+                if (remoteList.some((x) => x && x.id === task.itemId)) {
+                  return false;
+                }
+              } else if (task.type === "upload" && task.snapshot) {
+                const found = remoteList.find((x) => x && x.id === task.snapshot.id);
+                if (!found) return false;
+                if (Number(found.updatedAt || 0) < Number(task.snapshot.updatedAt || 0)) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          }
+
+          async function processColSharedSyncQueue() {
+            if (colSharedSyncWorkerRunning) return;
+            colSharedSyncWorkerRunning = true;
+            try {
+              while (colSharedSyncQueue.length > 0) {
+                const firstTask = colSharedSyncQueue[0];
+                const targetFolder = firstTask.ghFolder;
+                const isLex = firstTask.isLex;
+                const catTag = firstTask.catTag;
+                const targetCat = firstTask.targetCat;
+
+                const rawBatch = [];
+                for (let i = 0; i < colSharedSyncQueue.length; ) {
+                  if (colSharedSyncQueue[i].ghFolder === targetFolder) {
+                    rawBatch.push(colSharedSyncQueue.splice(i, 1)[0]);
+                  } else {
+                    i++;
+                  }
+                }
+
+                const dedupedById = new Map();
+                for (const t of rawBatch) {
+                  const key = t.type === "upload" ? t.snapshot.id : t.itemId;
+                  dedupedById.set(key, t);
+                }
+                const batchTasks = Array.from(dedupedById.values());
+
+                try {
+                  const resolvedUploadEntriesMap = new Map();
+                  for (const task of batchTasks) {
+                    if (task.type === "upload" && task.snapshot) {
+                      const entry = await buildResolvedUploadSummaryEntry(task.snapshot);
+                      resolvedUploadEntriesMap.set(task.snapshot.id, entry);
+                    }
+                  }
+
+                  const indexRelPath = `${targetFolder}/index.json`;
+                  const hasCachedSha = Boolean(
+                    ModuleManager._workshopFileShaCache &&
+                    ModuleManager._workshopFileShaCache.has(indexRelPath)
+                  );
+                  const memLoadedOnce = isLex ? colLexiconSharedLoadedOnce : colSharedLoadedOnce;
+
+                  let baseIndex = [];
+                  if (hasCachedSha && memLoadedOnce) {
+                    baseIndex = (isLex ? colLexiconSharedList : colSharedList).slice();
+                  } else {
+                    try {
+                      const remoteIdx = await ModuleManager.fetchWorkshopGithubJson(indexRelPath, { apiOnly: true });
+                      if (remoteIdx && Array.isArray(remoteIdx.items)) {
+                        baseIndex = remoteIdx.items;
+                      } else if (Array.isArray(remoteIdx)) {
+                        baseIndex = remoteIdx;
+                      } else {
+                        const fallbackIdx = await ModuleManager.fetchWorkshopGithubJson(indexRelPath);
+                        if (fallbackIdx && Array.isArray(fallbackIdx.items)) {
+                          baseIndex = fallbackIdx.items;
+                        } else if (Array.isArray(fallbackIdx)) {
+                          baseIndex = fallbackIdx;
+                        }
+                      }
+                    } catch (_) {
+                      const fallbackArr = isLex ? colLexiconSharedList : colSharedList;
+                      baseIndex = Array.isArray(fallbackArr) ? fallbackArr.slice() : [];
+                    }
+                  }
+
+                  let committedIndex = null;
+                  let lastCommitErr = null;
+
+                  for (let attempt = 0; attempt < 4; attempt++) {
+                    if (attempt > 0) {
+                      await new Promise((r) => setTimeout(r, 350 * attempt));
+                      try {
+                        const freshRemote = await ModuleManager.fetchWorkshopGithubJson(indexRelPath, { apiOnly: true });
+                        let freshItems = null;
+                        if (freshRemote && Array.isArray(freshRemote.items)) {
+                          freshItems = freshRemote.items;
+                        } else if (Array.isArray(freshRemote)) {
+                          freshItems = freshRemote;
+                        }
+                        if (freshItems) {
+                          if (isBatchAlreadySatisfiedInRemoteIndex(freshItems, batchTasks)) {
+                            committedIndex = compactSharedIndexEntries(freshItems);
+                            lastCommitErr = null;
+                            break;
+                          }
+                          baseIndex = freshItems;
+                        }
+                      } catch (_) {}
+                    }
+
+                    const nextIndex = applyBatchTasksToIndexArray(baseIndex, batchTasks, resolvedUploadEntriesMap);
+                    try {
+                      await ModuleManager.putWorkshopGithubFile(
+                        indexRelPath,
+                        JSON.stringify({
+                          version: 1,
+                          type: `${catTag}_isolated_store`,
+                          updatedAt: Date.now(),
+                          items: nextIndex
+                        }),
+                        `Update NAI ${catTag} index`,
+                        { singleAttempt: true, forceRefreshSha: attempt > 0 }
+                      );
+                      committedIndex = nextIndex;
+                      lastCommitErr = null;
+                      break;
+                    } catch (putErr) {
+                      lastCommitErr = putErr;
+                    }
+                  }
+
+                  if (!committedIndex && lastCommitErr) {
+                    try {
+                      const verifyRemote = await ModuleManager.fetchWorkshopGithubJson(indexRelPath, { apiOnly: true });
+                      const verifyItems = (verifyRemote && Array.isArray(verifyRemote.items))
+                        ? verifyRemote.items
+                        : (Array.isArray(verifyRemote) ? verifyRemote : null);
+                      if (verifyItems && isBatchAlreadySatisfiedInRemoteIndex(verifyItems, batchTasks)) {
+                        committedIndex = compactSharedIndexEntries(verifyItems);
+                        lastCommitErr = null;
+                      }
+                    } catch (_) {}
+                  }
+
+                  if (!committedIndex && lastCommitErr) {
+                    throw lastCommitErr;
+                  }
+
+                  const finalList = applyPendingQueueOverlayToSharedList(committedIndex, isLex);
+                  if (isLex) {
+                    colLexiconSharedList = finalList;
+                    colLexiconSharedLoadedOnce = true;
+                  } else {
+                    colSharedList = finalList;
+                    colSharedLoadedOnce = true;
+                  }
+
+                  const localList = loadLocalBookmarksForCategory(targetCat).slice();
+                  let localChanged = false;
+                  let uploadedCount = 0;
+
+                  for (const task of batchTasks) {
+                    if (task.type === "upload" && task.snapshot) {
+                      const itemId = task.snapshot.id;
+                      uploadedCount++;
+                      colUploadingItemIds.delete(itemId);
+                      colJustUploadedItemIds.add(itemId);
+                      setTimeout(() => {
+                        colJustUploadedItemIds.delete(itemId);
+                        syncEditUploadAndDeleteButtonState();
+                      }, 1400);
+
+                      if (task.snapshot.itemRef) {
+                        task.snapshot.itemRef._uploadedToShared = true;
+                      }
+                      if (colCurrentItem && colCurrentItem.id === itemId) {
+                        colCurrentItem._uploadedToShared = true;
+                      }
+                      const lPos = localList.findIndex((x) => x && x.id === itemId);
+                      if (lPos >= 0 && !localList[lPos]._uploadedToShared) {
+                        localList[lPos]._uploadedToShared = true;
+                        localChanged = true;
+                      }
+                    } else if (task.type === "delete" && task.itemId) {
+                      const itemId = task.itemId;
+                      colDeletingItemIds.delete(itemId);
+                      if (typeof ModuleManager.deleteWorkshopGithubFile === "function") {
+                        ModuleManager.deleteWorkshopGithubFile(
+                          `${targetFolder}/items/${itemId}.json`,
+                          `Delete NAI ${catTag} file ${itemId}`
+                        ).catch(() => {});
+                      }
+                    }
+                  }
+
+                  if (localChanged) {
+                    saveLocalBookmarks(localList, targetCat);
+                  }
+
+                  syncEditUploadAndDeleteButtonState();
+                  if (colScope === "shared" && colActiveSubView === "grid") {
+                    renderCollectionGrid(true);
+                  }
+
+                  if (uploadedCount > 0 && typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast(
+                      uploadedCount > 1 ? `已完成 ${uploadedCount} 项共享集上传` : "已上传至共享集",
+                      "success"
+                    );
+                  }
+                } catch (batchErr) {
+                  for (const task of batchTasks) {
+                    if (task.type === "upload" && task.snapshot) {
+                      colUploadingItemIds.delete(task.snapshot.id);
+                    } else if (task.type === "delete" && task.itemId) {
+                      colDeletingItemIds.delete(task.itemId);
+                    }
+                  }
+                  syncEditUploadAndDeleteButtonState();
+                  const hasUploadTask = batchTasks.some((t) => t.type === "upload");
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert(
+                      hasUploadTask ? "上传未成功" : "删除未成功",
+                      batchErr && batchErr.message ? batchErr.message : "请检查GitHub令牌配置"
+                    );
+                  }
+                }
+              }
+            } finally {
+              colSharedSyncWorkerRunning = false;
+              syncEditUploadAndDeleteButtonState();
+            }
+          }
+
           async function uploadCurrentBookmarkToShared(btnEl) {
             if (!colCurrentItem) return;
             persistCurrentBookmarkEditDraft(false);
@@ -50552,120 +50918,103 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               return;
             }
 
-            const cfg = ModuleManager.getWorkshopConfig();
-            if (!cfg.githubToken && window.state && window.state.apiConfig && window.state.apiConfig.githubToken) {
-              localStorage.setItem("ephone_workshop_gh_token", window.state.apiConfig.githubToken.trim());
+            if (window.state && window.state.apiConfig && window.state.apiConfig.githubToken) {
+              const curCfg = ModuleManager.getWorkshopConfig();
+              if (!curCfg.githubToken) {
+                localStorage.setItem("ephone_workshop_gh_token", window.state.apiConfig.githubToken.trim());
+              }
             }
-
-            const spanEl = btnEl ? btnEl.querySelector("span") : null;
-            const prevTxt = spanEl ? spanEl.textContent : "上传";
-            if (btnEl) btnEl.disabled = true;
-            if (spanEl) spanEl.textContent = "上传中";
+            const cfg = ModuleManager.getWorkshopConfig();
+            if (!cfg.githubRepo || !cfg.githubRepo.includes("/") || !cfg.githubToken) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("上传未成功", "请先在配置中填写有效的GitHub仓库链接与令牌");
+              }
+              return;
+            }
 
             const isLex = isLexiconCategory();
+            const targetCat = isLex ? "lexicon" : "bookmark";
             const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
             const catTag = isLex ? "nai_lexicon" : "nai_bookmark";
+            const itemId = colCurrentItem.id || ((isLex ? "lx_" : "bm_") + Date.now());
+            colCurrentItem.id = itemId;
 
-            try {
-              const itemId = colCurrentItem.id || ((isLex ? "lx_" : "bm_") + Date.now());
-              const rawImgsArr = getBookmarkImagesArray(colCurrentItem);
-              const imgsArr = [];
-              for (const rawImg of rawImgsArr) {
-                if (typeof rawImg === "string" && rawImg.startsWith("vault://") && typeof window.resolveVaultRefToDataUrl === "function") {
-                  const resolvedDataUrl = await window.resolveVaultRefToDataUrl(rawImg);
-                  imgsArr.push(resolvedDataUrl || rawImg);
-                } else {
-                  imgsArr.push(rawImg);
-                }
-              }
-              const sharedItemPayload = {
-                id: itemId,
-                category: catTag,
-                name: colCurrentItem.name || (isLex ? "未命名词条" : "未命名书签"),
-                modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
-                remark: colCurrentItem.remark || "",
-                image: imgsArr[0] || "",
-                images: imgsArr,
-                artist: isLex ? "" : (colCurrentItem.artist || ""),
-                positive: colCurrentItem.positive || "",
-                negative: isLex ? "" : (colCurrentItem.negative || ""),
-                updatedAt: Date.now()
-              };
-
-              await ModuleManager.putWorkshopGithubFile(
-                `${ghFolder}/items/${itemId}.json`,
-                JSON.stringify(sharedItemPayload),
-                `Share NAI ${catTag} ${sharedItemPayload.name}`
-              );
-
-              let currentIndex = [];
-              try {
-                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson(`${ghFolder}/index.json`);
-                if (remoteIdx && Array.isArray(remoteIdx.items)) {
-                  currentIndex = remoteIdx.items;
-                } else if (Array.isArray(remoteIdx)) {
-                  currentIndex = remoteIdx;
-                }
-              } catch (_) {}
-
-              const summaryEntry = {
-                id: itemId,
-                category: catTag,
-                name: sharedItemPayload.name,
-                modelTag: sharedItemPayload.modelTag,
-                remark: sharedItemPayload.remark,
-                image: sharedItemPayload.image,
-                images: sharedItemPayload.images,
-                artist: sharedItemPayload.artist,
-                positive: sharedItemPayload.positive,
-                negative: sharedItemPayload.negative,
-                updatedAt: sharedItemPayload.updatedAt,
-                _detailLoaded: true
-              };
-
-              const existPos = currentIndex.findIndex((x) => x && x.id === itemId);
-              if (existPos >= 0) {
-                currentIndex[existPos] = summaryEntry;
-              } else {
-                currentIndex.unshift(summaryEntry);
-              }
-
-              await ModuleManager.putWorkshopGithubFile(
-                `${ghFolder}/index.json`,
-                JSON.stringify({ version: 1, type: `${catTag}_isolated_store`, updatedAt: Date.now(), items: currentIndex }),
-                `Update NAI ${catTag} index`
-              );
-
-              if (isLex) {
-                colLexiconSharedList = currentIndex;
-                colLexiconSharedLoadedOnce = true;
-              } else {
-                colSharedList = currentIndex;
-                colSharedLoadedOnce = true;
-              }
-              colCurrentItem._uploadedToShared = true;
-              const localListAfterUp = loadLocalBookmarks();
-              const localPosAfterUp = localListAfterUp.findIndex((x) => x && x.id === itemId);
-              if (localPosAfterUp >= 0) {
-                localListAfterUp[localPosAfterUp]._uploadedToShared = true;
-                saveLocalBookmarks(localListAfterUp);
-              }
-
-              if (spanEl) spanEl.textContent = "已传";
-              if (typeof window.showDownloadToast === "function") {
-                window.showDownloadToast("已上传至共享集", "success");
-              }
-              setTimeout(() => {
-                if (spanEl) spanEl.textContent = prevTxt;
-              }, 1400);
-            } catch (err) {
-              if (spanEl) spanEl.textContent = prevTxt;
-              if (typeof window.showCustomAlert === "function") {
-                await window.showCustomAlert("上传未成功", err && err.message ? err.message : "请检查GitHub令牌配置");
-              }
-            } finally {
-              if (btnEl) btnEl.disabled = false;
+            if (colUploadingItemIds.has(itemId)) {
+              return;
             }
+
+            const rawImgsArr = getBookmarkImagesArray(colCurrentItem).slice();
+            const snapshot = {
+              id: itemId,
+              isLex: isLex,
+              targetCat: targetCat,
+              ghFolder: ghFolder,
+              catTag: catTag,
+              name: colCurrentItem.name || (isLex ? "未命名词条" : "未命名书签"),
+              modelTag: normalizeModelTagValue(colCurrentItem.modelTag),
+              remark: colCurrentItem.remark || "",
+              rawImgsArr: rawImgsArr,
+              artist: isLex ? "" : (colCurrentItem.artist || ""),
+              positive: colCurrentItem.positive || "",
+              negative: isLex ? "" : (colCurrentItem.negative || ""),
+              updatedAt: Date.now(),
+              itemRef: colCurrentItem
+            };
+
+            const optimisticEntry = {
+              id: snapshot.id,
+              category: snapshot.catTag,
+              name: snapshot.name,
+              modelTag: snapshot.modelTag,
+              remark: snapshot.remark,
+              image: rawImgsArr[0] || "",
+              images: rawImgsArr.length > 1 ? rawImgsArr.slice() : undefined,
+              artist: snapshot.artist,
+              positive: snapshot.positive,
+              negative: snapshot.negative,
+              updatedAt: snapshot.updatedAt,
+              _detailLoaded: true
+            };
+
+            const targetSharedArr = isLex ? colLexiconSharedList : colSharedList;
+            if (Array.isArray(targetSharedArr)) {
+              const existIdx = targetSharedArr.findIndex((x) => x && x.id === itemId);
+              if (existIdx >= 0) {
+                targetSharedArr[existIdx] = optimisticEntry;
+              } else {
+                targetSharedArr.unshift(optimisticEntry);
+              }
+            }
+
+            const wasAlreadyRunning = colSharedSyncWorkerRunning || colSharedSyncQueue.length > 0;
+            colDeletingItemIds.delete(itemId);
+            colJustUploadedItemIds.delete(itemId);
+            colUploadingItemIds.add(itemId);
+            syncEditUploadAndDeleteButtonState();
+
+            for (let i = colSharedSyncQueue.length - 1; i >= 0; i--) {
+              const q = colSharedSyncQueue[i];
+              const qId = q.type === "upload" ? q.snapshot.id : q.itemId;
+              if (q.ghFolder === ghFolder && qId === itemId) {
+                colSharedSyncQueue.splice(i, 1);
+              }
+            }
+
+            colSharedSyncQueue.push({
+              type: "upload",
+              ghFolder: ghFolder,
+              isLex: isLex,
+              targetCat: targetCat,
+              catTag: catTag,
+              snapshot: snapshot,
+              optimisticEntry: optimisticEntry
+            });
+
+            if (wasAlreadyRunning && typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("已加入上传队列，可继续操作其他卡片", "success");
+            }
+
+            processColSharedSyncQueue();
           }
 
           async function deleteSharedBookmarkFromGitHub(itemId, btnEl) {
@@ -50677,82 +51026,74 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               return false;
             }
 
+            if (window.state && window.state.apiConfig && window.state.apiConfig.githubToken) {
+              const curCfg = ModuleManager.getWorkshopConfig();
+              if (!curCfg.githubToken) {
+                localStorage.setItem("ephone_workshop_gh_token", window.state.apiConfig.githubToken.trim());
+              }
+            }
             const cfg = ModuleManager.getWorkshopConfig();
-            if (!cfg.githubToken && window.state && window.state.apiConfig && window.state.apiConfig.githubToken) {
-              localStorage.setItem("ephone_workshop_gh_token", window.state.apiConfig.githubToken.trim());
+            if (!cfg.githubRepo || !cfg.githubRepo.includes("/") || !cfg.githubToken) {
+              if (typeof window.showCustomAlert === "function") {
+                await window.showCustomAlert("删除未成功", "请先在配置中填写有效的GitHub仓库链接与令牌");
+              }
+              return false;
             }
 
-            const spanEl = btnEl ? btnEl.querySelector("span") : null;
-            const prevTxt = spanEl ? spanEl.textContent : "删除";
-            if (btnEl) btnEl.disabled = true;
-            if (spanEl) spanEl.textContent = "删除中";
-
             const isLex = isLexiconCategory();
+            const targetCat = isLex ? "lexicon" : "bookmark";
             const ghFolder = isLex ? "nai-lexicon" : "nai-bookmarks";
             const catTag = isLex ? "nai_lexicon" : "nai_bookmark";
 
-            try {
-              let currentIndex = [];
-              try {
-                const remoteIdx = await ModuleManager.fetchWorkshopGithubJson(`${ghFolder}/index.json`);
-                if (remoteIdx && Array.isArray(remoteIdx.items)) {
-                  currentIndex = remoteIdx.items;
-                } else if (Array.isArray(remoteIdx)) {
-                  currentIndex = remoteIdx;
-                }
-              } catch (_) {
-                const fallbackArr = isLex ? colLexiconSharedList : colSharedList;
-                currentIndex = Array.isArray(fallbackArr) ? fallbackArr.slice() : [];
-              }
+            colUploadingItemIds.delete(itemId);
+            colJustUploadedItemIds.delete(itemId);
 
-              const filteredIndex = currentIndex.filter((x) => x && x.id !== itemId);
-
-              await ModuleManager.putWorkshopGithubFile(
-                `${ghFolder}/index.json`,
-                JSON.stringify({ version: 1, type: `${catTag}_isolated_store`, updatedAt: Date.now(), items: filteredIndex }),
-                `Delete NAI ${catTag} ${itemId} from index`
-              );
-
-              if (typeof ModuleManager.deleteWorkshopGithubFile === "function") {
-                try {
-                  await ModuleManager.deleteWorkshopGithubFile(
-                    `${ghFolder}/items/${itemId}.json`,
-                    `Delete NAI ${catTag} file ${itemId}`
-                  );
-                } catch (_) {}
+            for (let i = colSharedSyncQueue.length - 1; i >= 0; i--) {
+              const q = colSharedSyncQueue[i];
+              const qId = q.type === "upload" ? q.snapshot.id : q.itemId;
+              if (q.ghFolder === ghFolder && qId === itemId) {
+                colSharedSyncQueue.splice(i, 1);
               }
-
-              if (isLex) {
-                colLexiconSharedList = filteredIndex;
-                colLexiconSharedLoadedOnce = true;
-              } else {
-                colSharedList = filteredIndex;
-                colSharedLoadedOnce = true;
-              }
-
-              const localList = loadLocalBookmarks();
-              const localPos = localList.findIndex((x) => x && x.id === itemId);
-              if (localPos >= 0) {
-                localList[localPos]._uploadedToShared = false;
-                saveLocalBookmarks(localList);
-              }
-              if (colCurrentItem && colCurrentItem.id === itemId) {
-                colCurrentItem._uploadedToShared = false;
-              }
-
-              if (typeof window.showDownloadToast === "function") {
-                window.showDownloadToast("已从共享集删除", "success");
-              }
-              return true;
-            } catch (err) {
-              if (typeof window.showCustomAlert === "function") {
-                await window.showCustomAlert("删除未成功", err && err.message ? err.message : "请检查GitHub令牌配置");
-              }
-              return false;
-            } finally {
-              if (spanEl) spanEl.textContent = prevTxt;
-              if (btnEl) btnEl.disabled = false;
             }
+
+            if (isLex) {
+              colLexiconSharedList = (Array.isArray(colLexiconSharedList) ? colLexiconSharedList : []).filter(
+                (x) => x && x.id !== itemId
+              );
+            } else {
+              colSharedList = (Array.isArray(colSharedList) ? colSharedList : []).filter(
+                (x) => x && x.id !== itemId
+              );
+            }
+
+            const localList = loadLocalBookmarksForCategory(targetCat).slice();
+            const localPos = localList.findIndex((x) => x && x.id === itemId);
+            if (localPos >= 0) {
+              localList[localPos]._uploadedToShared = false;
+              saveLocalBookmarks(localList, targetCat);
+            }
+            if (colCurrentItem && colCurrentItem.id === itemId) {
+              colCurrentItem._uploadedToShared = false;
+            }
+
+            colDeletingItemIds.add(itemId);
+            syncEditUploadAndDeleteButtonState();
+
+            colSharedSyncQueue.push({
+              type: "delete",
+              ghFolder: ghFolder,
+              isLex: isLex,
+              targetCat: targetCat,
+              catTag: catTag,
+              itemId: itemId
+            });
+
+            if (typeof window.showDownloadToast === "function") {
+              window.showDownloadToast("已从共享集删除", "success");
+            }
+
+            processColSharedSyncQueue();
+            return true;
           }
 
           function bindCollectionFolioEvents() {

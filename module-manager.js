@@ -1917,6 +1917,8 @@
       return JSON.parse(decoded);
     },
 
+    _workshopFileShaCache: new Map(),
+
     async getRemoteWorkshopFileSha(relPath) {
       const cleanRel = String(relPath || '').replace(/^\/+/, '');
       const { githubRepo, githubToken } = this.getWorkshopConfig();
@@ -1925,32 +1927,70 @@
       const headers = { Accept: 'application/vnd.github.v3+json' };
       if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
 
-      try {
-        const directRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' });
-        if (directRes.ok) {
-          const directJson = await directRes.json();
-          if (directJson && directJson.sha) return directJson.sha;
-        }
-      } catch (_) {}
+      const isIndexFile = cleanRel.endsWith('index.json');
+      if (isIndexFile) {
+        try {
+          const parts = cleanRel.split('/').filter(Boolean);
+          const fileName = parts.pop();
+          const parentDir = parts.length > 0 ? `workshop-store/${parts.join('/')}` : 'workshop-store';
+          const dirRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/${parentDir}?t=${Date.now()}`, { headers, cache: 'no-store' });
+          if (dirRes.status === 404) {
+            this._workshopFileShaCache.delete(cleanRel);
+            return '';
+          }
+          if (dirRes.ok) {
+            const dirList = await dirRes.json();
+            if (Array.isArray(dirList)) {
+              const found = dirList.find(f => f && f.name === fileName);
+              if (found && found.sha) {
+                this._workshopFileShaCache.set(cleanRel, found.sha);
+                return found.sha;
+              }
+              this._workshopFileShaCache.delete(cleanRel);
+              return '';
+            }
+          }
+        } catch (_) {}
+      }
 
       try {
-        const parts = cleanRel.split('/').filter(Boolean);
-        const fileName = parts.pop();
-        const parentDir = parts.length > 0 ? `workshop-store/${parts.join('/')}` : 'workshop-store';
-        const dirRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/${parentDir}?t=${Date.now()}`, { headers, cache: 'no-store' });
-        if (dirRes.ok) {
-          const dirList = await dirRes.json();
-          if (Array.isArray(dirList)) {
-            const found = dirList.find(f => f && f.name === fileName);
-            if (found && found.sha) return found.sha;
+        const directRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' });
+        if (directRes.status === 404) {
+          this._workshopFileShaCache.delete(cleanRel);
+          return '';
+        }
+        if (directRes.ok) {
+          const directJson = await directRes.json();
+          if (directJson && directJson.sha) {
+            this._workshopFileShaCache.set(cleanRel, directJson.sha);
+            return directJson.sha;
           }
         }
       } catch (_) {}
 
+      if (!isIndexFile) {
+        try {
+          const parts = cleanRel.split('/').filter(Boolean);
+          const fileName = parts.pop();
+          const parentDir = parts.length > 0 ? `workshop-store/${parts.join('/')}` : 'workshop-store';
+          const dirRes = await rawFetch(`https://api.github.com/repos/${githubRepo}/contents/${parentDir}?t=${Date.now()}`, { headers, cache: 'no-store' });
+          if (dirRes.ok) {
+            const dirList = await dirRes.json();
+            if (Array.isArray(dirList)) {
+              const found = dirList.find(f => f && f.name === fileName);
+              if (found && found.sha) {
+                this._workshopFileShaCache.set(cleanRel, found.sha);
+                return found.sha;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       return '';
     },
 
-    async fetchWorkshopGithubJson(relPath) {
+    async fetchWorkshopGithubJson(relPath, options = {}) {
       const cleanRel = String(relPath || '').replace(/^\/+/, '');
       const { githubRepo, githubToken } = this.getWorkshopConfig();
       if (!githubRepo || !githubRepo.includes('/')) return null;
@@ -1982,6 +2022,9 @@
 
       const decodeGithubApiContent = async (apiRes, headers) => {
         const meta = await apiRes.json();
+        if (meta && meta.sha) {
+          this._workshopFileShaCache.set(cleanRel, meta.sha);
+        }
         if (meta && meta.content) {
           return this.decodeBase64Utf8Json(meta.content);
         }
@@ -2003,6 +2046,10 @@
             Authorization: `Bearer ${githubToken}`
           };
           const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 20000);
+          if (apiRes.status === 404) {
+            this._workshopFileShaCache.delete(cleanRel);
+            return null;
+          }
           if (apiRes.ok) {
             const parsed = await decodeGithubApiContent(apiRes, headers);
             if (parsed) return parsed;
@@ -2014,6 +2061,10 @@
             }
           }
         } catch (_) {}
+      }
+
+      if (options && options.apiOnly) {
+        return null;
       }
 
       const rawUrls = [
@@ -2038,6 +2089,10 @@
         try {
           const headers = { Accept: 'application/vnd.github.v3+json' };
           const apiRes = await fetchWithTimeout(`https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}?t=${Date.now()}`, { headers, cache: 'no-store' }, 20000);
+          if (apiRes.status === 404) {
+            this._workshopFileShaCache.delete(cleanRel);
+            return null;
+          }
           if (apiRes.ok) {
             const parsed = await decodeGithubApiContent(apiRes, headers);
             if (parsed) return parsed;
@@ -2054,7 +2109,7 @@
       return null;
     },
 
-    async putWorkshopGithubFile(relPath, contentString, commitMsg) {
+    async putWorkshopGithubFile(relPath, contentString, commitMsg, options = {}) {
       const { githubRepo, githubToken } = this.getWorkshopConfig();
       if (!githubRepo || !githubRepo.includes('/') || !githubToken) {
         throw new Error('请先在配置中填写有效的GitHub仓库链接与令牌');
@@ -2078,9 +2133,14 @@
       const b64Content = btoa(binary);
 
       let lastErrMsg = '';
-      for (let attempt = 0; attempt < 3; attempt++) {
+      const maxAttempts = (options && options.singleAttempt) ? 1 : 3;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         let existingSha = '';
-        if (!isImmutablePack || attempt > 0) {
+        if (attempt === 0 && options && typeof options.knownSha === 'string' && options.knownSha) {
+          existingSha = options.knownSha;
+        } else if (attempt === 0 && !isImmutablePack && !(options && options.forceRefreshSha) && this._workshopFileShaCache.has(cleanRel)) {
+          existingSha = this._workshopFileShaCache.get(cleanRel) || '';
+        } else if (!isImmutablePack || attempt > 0) {
           existingSha = await this.getRemoteWorkshopFileSha(cleanRel);
           if (existingSha && isImmutablePack) {
             return true;
@@ -2099,18 +2159,30 @@
             headers,
             body: JSON.stringify(bodyObj)
           });
-          if (putRes.ok) return true;
+          if (putRes.ok) {
+            try {
+              const putJson = await putRes.json();
+              if (putJson && putJson.content && putJson.content.sha) {
+                this._workshopFileShaCache.set(cleanRel, putJson.content.sha);
+              }
+            } catch (_) {}
+            return true;
+          }
           let errJson = null;
           try { errJson = await putRes.json(); } catch (_) {}
           lastErrMsg = (errJson && errJson.message) ? errJson.message : `HTTP ${putRes.status}`;
           if (putRes.status === 409 || putRes.status === 422 || putRes.status >= 500) {
-            await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
-            continue;
+            this._workshopFileShaCache.delete(cleanRel);
+            if (attempt + 1 < maxAttempts) {
+              await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
+              continue;
+            }
           }
           throw new Error(lastErrMsg);
         } catch (err) {
           lastErrMsg = err.message || String(err);
-          if (attempt === 2) throw new Error(lastErrMsg);
+          this._workshopFileShaCache.delete(cleanRel);
+          if (attempt + 1 >= maxAttempts) throw new Error(lastErrMsg);
           await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
         }
       }
@@ -2123,7 +2195,7 @@
         throw new Error('请先在配置中填写有效的GitHub仓库链接与令牌');
       }
       const cleanRel = String(relPath || '').replace(/^\/+/, '');
-      const existingSha = await this.getRemoteWorkshopFileSha(cleanRel);
+      const existingSha = this._workshopFileShaCache.get(cleanRel) || (await this.getRemoteWorkshopFileSha(cleanRel));
       if (!existingSha) return true;
       const apiUrl = `https://api.github.com/repos/${githubRepo}/contents/workshop-store/${cleanRel}`;
       const headers = {
@@ -2140,6 +2212,7 @@
           sha: existingSha
         })
       });
+      this._workshopFileShaCache.delete(cleanRel);
       if (delRes.ok || delRes.status === 404) return true;
       let errJson = null;
       try { errJson = await delRes.json(); } catch (_) {}
