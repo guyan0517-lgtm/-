@@ -2570,7 +2570,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v26.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -41368,6 +41368,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               console.log(
                 `为旧角色 "${chat.name}" 补全了情侣头像库(coupleAvatarLibrary)属性。`,
               );
+            }
+            const startupDelSet = new Set(
+              Array.isArray(chat.settings?.deletedMessageTimestamps)
+                ? chat.settings.deletedMessageTimestamps.map((t) => String(t))
+                : [],
+            );
+            const startupClearedAt = Number(chat.settings?.historyClearedAt) || 0;
+            const filterStartupHist = (arr) => {
+              if (!Array.isArray(arr)) return [];
+              return arr.filter((m) => {
+                if (!m) return false;
+                if (m.timestamp != null && startupDelSet.has(String(m.timestamp))) return false;
+                if (startupClearedAt > 0 && Number(m.timestamp) > 0 && Number(m.timestamp) <= startupClearedAt) return false;
+                if (m.isHidden && typeof m.content === "string" && m.content.includes("已被用户删除")) return false;
+                return true;
+              });
+            };
+            if (Array.isArray(chat.history)) {
+              chat.history = filterStartupHist(chat.history);
+            }
+            if (Array.isArray(chat.mainLineHistory)) {
+              chat.mainLineHistory = filterStartupHist(chat.mainLineHistory);
+              if (chat.activeLineMode !== "solo") {
+                if ((!Array.isArray(chat.history) || chat.history.length === 0) && chat.mainLineHistory.length > 0) {
+                  chat.history = chat.mainLineHistory;
+                }
+                chat.mainLineHistory = [];
+              }
+            }
+            if (Array.isArray(chat.history)) {
+              for (let i = 0; i < chat.history.length; i++) {
+                const mTs = Number(chat.history[i]?.timestamp) || 0;
+                if (mTs > (window.lastAssignedMessageTimestamp || 0)) {
+                  window.lastAssignedMessageTimestamp = mTs;
+                }
+              }
             }
             acc[chat.id] = chat;
             return acc;
@@ -107760,8 +107796,14 @@ ${specificRules}`;
           if (confirmed) {
             // 1. 恢复聊天历史
             chat.history = JSON.parse(JSON.stringify(checkpoint.history));
-            if (chat.isGroup && Array.isArray(chat.mainLineHistory)) {
-              chat.mainLineHistory = JSON.parse(JSON.stringify(checkpoint.history));
+            if (chat.isGroup) {
+              if (chat.activeLineMode === "solo") {
+                if (typeof window.syncCurrentSoloThreadHistory === "function") {
+                  window.syncCurrentSoloThreadHistory(chat);
+                }
+              } else {
+                chat.mainLineHistory = [];
+              }
             }
 
             // 恢复该时间线对应的删除标记与清空标记，确保存档里的消息不会被误当成已删除
@@ -109072,7 +109114,7 @@ ${specificRules}`;
                 for (let i = 0; i < rows.length; i++) {
                   const c = rows[i];
                   if (c && typeof c === "object" && c._syncMainLineFromHistory) {
-                    c.mainLineHistory = Array.isArray(c.history) ? c.history.slice() : [];
+                    c.mainLineHistory = c.activeLineMode === "solo" && Array.isArray(c.history) ? c.history.slice() : [];
                     delete c._syncMainLineFromHistory;
                   }
                 }
@@ -125908,11 +125950,12 @@ ${specificRules}`;
           if (!chat || !chat.isGroup || !timestamp) return;
           const updateArr = (arr) => {
             if (!Array.isArray(arr)) return arr;
+            const targetTsStr = String(timestamp);
             if (updatedSummaryOrNull === null) {
-              return arr.filter((m) => !m || m.timestamp !== timestamp);
+              return arr.filter((m) => !m || String(m.timestamp) !== targetTsStr);
             }
             const next = arr.map((m) => {
-              if (m && m.timestamp === timestamp && m.type === "summary") {
+              if (m && String(m.timestamp) === targetTsStr && m.type === "summary") {
                 return { ...m, header: updatedSummaryOrNull.header, content: updatedSummaryOrNull.content };
               }
               return m;
@@ -126278,10 +126321,9 @@ ${specificRules}`;
           const myNick = chat.settings?.myNickname || chat.settings?.myName || "我";
           const prevCommittedLine = getPlayerCommittedLineKey(chat, myCode);
 
-          if (chat.activeLineMode === "solo") {
+          const wasInSolo = chat.activeLineMode === "solo";
+          if (wasInSolo) {
             syncCurrentSoloThreadHistory(chat);
-          } else {
-            chat.mainLineHistory = Array.isArray(chat.history) ? [...chat.history] : [];
           }
 
           if (targetMode === "main") {
@@ -126292,7 +126334,9 @@ ${specificRules}`;
             if (chat.mainGroupName) {
               chat.name = chat.mainGroupName;
             }
-            if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+            if (wasInSolo) {
+              chat.history = Array.isArray(chat.mainLineHistory) ? [...chat.mainLineHistory] : [];
+            } else if (Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
               chat.history = [...chat.mainLineHistory];
             }
             chat.mainLineHistory = [];
@@ -126322,6 +126366,9 @@ ${specificRules}`;
             if (isWatchOnly && !canCurrentUserAccessSoloThread(targetThread, chat) && !isCheckedParticipant) {
               await showAlertMsg("提示", "该小群为私密小群，未公开时仅参与玩家可观看");
               return false;
+            }
+            if (!wasInSolo) {
+              chat.mainLineHistory = Array.isArray(chat.history) ? [...chat.history] : [];
             }
             if (!chat.mainGroupName) {
               chat.mainGroupName = chat.name || "群聊";
@@ -131810,45 +131857,61 @@ ${specificRules}`;
             }
           }
 
-          function mergeChatHistoriesChronologically(oldHist, newHist) {
-            const listA = Array.isArray(oldHist) ? oldHist.filter(Boolean) : [];
-            const listB = Array.isArray(newHist) ? newHist.filter(Boolean) : [];
+          function mergeChatHistoriesChronologically(oldHist, newHist, deletedTsSet = null, clearedAtTs = 0) {
+            const isMsgAllowed = (m) => {
+              if (!m || typeof m !== "object") return false;
+              if (deletedTsSet && m.timestamp != null && deletedTsSet.has(String(m.timestamp))) return false;
+              if (clearedAtTs > 0 && Number(m.timestamp) > 0 && Number(m.timestamp) <= clearedAtTs) return false;
+              if (m.isHidden && typeof m.content === "string" && m.content.includes("已被用户删除")) return false;
+              return true;
+            };
+            const listA = Array.isArray(oldHist) ? oldHist.filter(isMsgAllowed) : [];
+            const listB = Array.isArray(newHist) ? newHist.filter(isMsgAllowed) : [];
             if (listA.length === 0) return listB;
             if (listB.length === 0) return listA;
             const buildMsgFingerprints = (m) => {
-              const txt = String(m.content || m.text || "").trim();
+              const txt = String(m.content || m.text || m.header || "").trim();
               const sender = String(m.senderName || m.sender || m.role || "").trim();
               const media = String(m.imageUrl || m.stickerUrl || m.audioUrl || "").trim();
+              const tsRaw = m.timestamp != null ? String(m.timestamp).trim() : "";
               const tsSec = m.timestamp ? Math.floor(Number(m.timestamp) / 1000) : "";
-              const payloadKey = txt || media;
-              if (!payloadKey) return null;
+              const idKey = m.eventId ? `id::${String(m.eventId)}` : (m.id != null ? `id::${String(m.id)}` : "");
+              const payloadKey = txt || media || String(m.type || "");
+              if (!payloadKey && !tsRaw && !idKey) return null;
               return {
-                exactKey: `${sender}::${payloadKey}::${tsSec}`,
-                looseKey: `${sender}::${payloadKey}`,
-                tsKey: tsSec ? `${sender}::TS::${tsSec}` : ""
+                idKey,
+                tsExactKey: tsRaw ? `${sender}::TS_EXACT::${tsRaw}` : "",
+                exactKey: `${sender}::${payloadKey}::${tsSec}`
               };
             };
-            const merged = listA.slice();
+            // 先收录 listB (较新的历史记录)，确保同一条消息被编辑或重生成后保留最新版本，同时绝不跨时间误删相同短句或同一秒内的多气泡回复
+            const seenId = new Set();
+            const seenTsExact = new Set();
             const seenExact = new Set();
-            const seenLoose = new Set();
-            const seenTs = new Set();
-            for (const m of listA) {
-              const fp = buildMsgFingerprints(m);
-              if (fp) {
-                seenExact.add(fp.exactKey);
-                seenLoose.add(fp.looseKey);
-                if (fp.tsKey) seenTs.add(fp.tsKey);
-              }
-            }
+            const registerFp = (fp) => {
+              if (!fp) return;
+              if (fp.idKey) seenId.add(fp.idKey);
+              if (fp.tsExactKey) seenTsExact.add(fp.tsExactKey);
+              if (fp.exactKey) seenExact.add(fp.exactKey);
+            };
+            const isDuplicateFp = (fp) => {
+              if (!fp) return true;
+              if (fp.idKey && seenId.has(fp.idKey)) return true;
+              if (fp.tsExactKey && seenTsExact.has(fp.tsExactKey)) return true;
+              if (fp.exactKey && seenExact.has(fp.exactKey)) return true;
+              return false;
+            };
+            const merged = [];
             for (const m of listB) {
               const fp = buildMsgFingerprints(m);
-              if (!fp) continue;
-              if (seenExact.has(fp.exactKey) || seenLoose.has(fp.looseKey) || (fp.tsKey && seenTs.has(fp.tsKey))) {
-                continue;
-              }
-              seenExact.add(fp.exactKey);
-              seenLoose.add(fp.looseKey);
-              if (fp.tsKey) seenTs.add(fp.tsKey);
+              if (isDuplicateFp(fp)) continue;
+              registerFp(fp);
+              merged.push(m);
+            }
+            for (const m of listA) {
+              const fp = buildMsgFingerprints(m);
+              if (isDuplicateFp(fp)) continue;
+              registerFp(fp);
               merged.push(m);
             }
             merged.sort((a, b) => {
@@ -132081,6 +132144,20 @@ ${specificRules}`;
                 out.npcLibrary = newNpcs.length > 0 ? newNpcs : oldNpcs;
               }
             }
+            const mergedDelSet = new Set([
+              ...(Array.isArray(oldSet.deletedMessageTimestamps) ? oldSet.deletedMessageTimestamps.map((t) => String(t)) : []),
+              ...(Array.isArray(newSet.deletedMessageTimestamps) ? newSet.deletedMessageTimestamps.map((t) => String(t)) : []),
+            ]);
+            const mergedClearedAt = Math.max(
+              Number(oldSet.historyClearedAt) || 0,
+              Number(newSet.historyClearedAt) || 0,
+            );
+            if (mergedDelSet.size > 0) {
+              out.settings.deletedMessageTimestamps = Array.from(mergedDelSet).slice(-2000);
+            }
+            if (mergedClearedAt > 0) {
+              out.settings.historyClearedAt = mergedClearedAt;
+            }
             if (out.isGroup) {
               const extractEffectiveMainLine = (c) => {
                 if (!c || typeof c !== "object") return [];
@@ -132094,19 +132171,26 @@ ${specificRules}`;
               };
               const mergedMain = mergeChatHistoriesChronologically(
                 extractEffectiveMainLine(olderChat),
-                extractEffectiveMainLine(newerChat)
+                extractEffectiveMainLine(newerChat),
+                mergedDelSet,
+                mergedClearedAt,
               );
               if (out.activeLineMode === "solo") {
                 out.mainLineHistory = mergedMain;
                 const oldSolo = olderChat.activeLineMode === "solo" && Array.isArray(olderChat.history) ? olderChat.history : [];
                 const newSolo = newerChat.activeLineMode === "solo" && Array.isArray(newerChat.history) ? newerChat.history : [];
-                out.history = mergeChatHistoriesChronologically(oldSolo, newSolo);
+                out.history = mergeChatHistoriesChronologically(oldSolo, newSolo, mergedDelSet, mergedClearedAt);
               } else {
                 out.history = mergedMain;
                 out.mainLineHistory = [];
               }
             } else {
-              out.history = mergeChatHistoriesChronologically(olderChat.history, newerChat.history);
+              out.history = mergeChatHistoriesChronologically(
+                olderChat.history,
+                newerChat.history,
+                mergedDelSet,
+                mergedClearedAt,
+              );
             }
 
             // 若合并后单聊或群成员头像仍缺失，从合并后的历史消息气泡 senderAvatar 中自动找回并同步修复
