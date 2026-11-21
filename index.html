@@ -1243,7 +1243,7 @@
               <div class="form-group">
                 <label>密钥 (Key)</label>
                 <input
-                  type="password"
+                  type="text"
                   id="api-key"
                   placeholder="sk-..."
                   class="moe-input"
@@ -1382,7 +1382,7 @@
               <div class="form-group">
                 <label>密钥</label>
                 <input
-                  type="password"
+                  type="text"
                   id="sub-api-key"
                   placeholder="sk-..."
                   class="moe-input"
@@ -1635,7 +1635,7 @@
                 </div>
                 <div class="form-group">
                   <label>API Key</label>
-                  <input type="password" id="minimax-api-key" class="moe-input" />
+                  <input type="text" id="minimax-api-key" class="moe-input" />
                 </div>
                 <div class="form-group">
                   <label>服务区域</label>
@@ -1684,7 +1684,7 @@
                 </div>
                 <div class="form-group">
                   <label>密钥</label>
-                  <input type="password" id="voicevox-api-key" class="moe-input" placeholder="填入鱼音频或硅基流动密钥以启用克隆" />
+                  <input type="text" id="voicevox-api-key" class="moe-input" placeholder="填入鱼音频或硅基流动密钥以启用克隆" />
                 </div>
                 <div class="form-group">
                   <label>声优</label>
@@ -1972,20 +1972,10 @@
                   <label>API Key</label>
                   <div style="position: relative">
                     <input
-                      type="password"
+                      type="text"
                       id="novelai-api-key"
                       class="moe-input"
                     />
-                    <span
-                      id="novelai-key-toggle"
-                      style="
-                        position: absolute;
-                        right: 10px;
-                        top: 10px;
-                        cursor: pointer;
-                      "
-                      >👀</span
-                    >
                   </div>
                 </div>
                 <div class="moe-btn-group">
@@ -2020,7 +2010,7 @@
               <div class="form-group">
                 <label>API Key (可选，用于高级功能/去水印)</label>
                 <input
-                  type="password"
+                  type="text"
                   id="pollinations-api-key"
                   placeholder="Bearer ..."
                   class="moe-input"
@@ -2085,7 +2075,7 @@
               </div>
               <div class="form-group">
                 <input
-                  type="password"
+                  type="text"
                   id="github-token"
                   placeholder="Token"
                   class="moe-input"
@@ -2280,7 +2270,7 @@
                   </div>
                   <div style="display: flex; gap: 6px; align-items: center;">
                     <label style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; width: 36px;">密码</label>
-                    <input type="password" id="local-vault-pass-input" class="moe-input" placeholder="应用密码" style="flex: 1; height: 32px; font-size: 12px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);" />
+                    <input type="text" id="local-vault-pass-input" class="moe-input" placeholder="应用密码" style="flex: 1; height: 32px; font-size: 12px; border-radius: 6px; background: var(--card-bg); color: var(--text-primary);" />
                   </div>
                 </div>
 
@@ -2546,7 +2536,7 @@
               </div>
               <div class="form-group">
                 <label>密钥</label>
-                <input type="password" id="glm-translate-key" class="moe-input" value="builtin-glm4-auto" />
+                <input type="text" id="glm-translate-key" class="moe-input" value="builtin-glm4-auto" />
               </div>
               <div class="form-group">
                 <label>模型</label>
@@ -2570,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3427,7 +3417,7 @@
                   </div>
                   <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">令牌</label>
-                    <input type="password" id="module-workshop-token-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" value="" placeholder="上传时填写GitHub令牌，仅下载可留空" />
+                    <input type="text" id="module-workshop-token-input" class="moe-input" style="height: 32px; font-size: 12px; padding: 0 8px; border-radius: 6px; width: 100%; box-sizing: border-box;" value="" placeholder="上传时填写GitHub令牌，仅下载可留空" />
                   </div>
                 </div>
 
@@ -4284,7 +4274,7 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                   <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">密钥</label>
-                  <input type="password" id="mod-nai-setting-api-key" class="moe-input" placeholder="留空默认使用系统设置密钥" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
+                  <input type="text" id="mod-nai-setting-api-key" class="moe-input" placeholder="留空默认使用系统设置密钥" autocomplete="off" style="height: 32px; font-size: 12px; padding: 0 10px; box-sizing: border-box;" />
                 </div>
                 <label for="mod-nai-setting-clean-gen" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--nai-sub-bg, var(--secondary-bg)); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
                   <span style="font-size: 12px; font-weight: 600; color: var(--nai-text, var(--text-primary)); flex-shrink: 0;">清洗</span>
@@ -4292,8 +4282,70 @@
                   <input type="checkbox" id="mod-nai-setting-clean-gen" class="mod-nai-check" style="width: 17px; height: 17px; min-width: 17px; max-width: 17px; flex: 0 0 17px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
                 </label>
 
-                <!-- 底部预设与词典分组总折叠分类：预设（默认折叠） -->
+                <!-- 底部参数与预设折叠分类（默认折叠） -->
                 <div class="mod-nai-preset-drawers-wrap" id="mod-nai-settings-preset-drawers">
+                  <div class="mod-nai-preset-drawer" data-preset-cat="params" id="mod-nai-drawer-params">
+                    <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="params">
+                      <span class="mod-nai-preset-drawer-head-left">
+                        <i class="mod-nai-preset-drawer-dot"></i>
+                        <span class="mod-nai-preset-drawer-title">参数</span>
+                      </span>
+                      <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-params">28 · 5</span>
+                      <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-params" style="display: none; flex-direction: column; gap: 8px; padding: 8px 10px 10px;">
+                      <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">采样</label>
+                        <select id="mod-nai-setting-sampler" class="moe-input mod-nai-select">
+                          <option value="k_euler_ancestral">Euler Ancestral</option>
+                          <option value="k_euler">Euler</option>
+                          <option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option>
+                          <option value="k_dpmpp_2m">DPM++ 2M</option>
+                          <option value="k_dpmpp_sde">DPM++ SDE</option>
+                          <option value="ddim">DDIM</option>
+                        </select>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">步数</label>
+                          <input type="number" id="mod-nai-setting-steps" class="moe-input" min="1" max="50" step="1" value="28" autocomplete="off" style="height: 30px; font-size: 12px; padding: 0 9px; box-sizing: border-box;" />
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">引导</label>
+                          <input type="number" id="mod-nai-setting-scale" class="moe-input" min="1" max="20" step="0.5" value="5" autocomplete="off" style="height: 30px; font-size: 12px; padding: 0 9px; box-sizing: border-box;" />
+                        </div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">种子</label>
+                          <input type="number" id="mod-nai-setting-seed" class="moe-input" min="-1" max="9999999999" step="1" value="-1" placeholder="-1 为随机" autocomplete="off" style="height: 30px; font-size: 12px; padding: 0 9px; box-sizing: border-box;" />
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                          <label style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; display: block;">反词</label>
+                          <select id="mod-nai-setting-uc-preset" class="moe-input mod-nai-select">
+                            <option value="0">重度预设</option>
+                            <option value="1">轻度预设</option>
+                            <option value="2">人像优化</option>
+                            <option value="3">无预设</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-top: 2px;">
+                        <label for="mod-nai-setting-quality" style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--card-bg); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
+                          <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text, var(--text-primary));">质量</span>
+                          <input type="checkbox" id="mod-nai-setting-quality" class="mod-nai-check" checked style="width: 15px; height: 15px; min-width: 15px; max-width: 15px; flex: 0 0 15px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+                        </label>
+                        <label for="mod-nai-setting-smea" style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--card-bg); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
+                          <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text, var(--text-primary));">细节</span>
+                          <input type="checkbox" id="mod-nai-setting-smea" class="mod-nai-check" checked style="width: 15px; height: 15px; min-width: 15px; max-width: 15px; flex: 0 0 15px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+                        </label>
+                        <label for="mod-nai-setting-smea-dyn" style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--nai-border, var(--border-color)); background: var(--card-bg); cursor: pointer; margin: 0; box-sizing: border-box; user-select: none;">
+                          <span style="font-size: 11.5px; font-weight: 600; color: var(--nai-text, var(--text-primary));">动态</span>
+                          <input type="checkbox" id="mod-nai-setting-smea-dyn" class="mod-nai-check" style="width: 15px; height: 15px; min-width: 15px; max-width: 15px; flex: 0 0 15px; flex-shrink: 0; margin: 0; padding: 0; cursor: pointer;" />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                   <div class="mod-nai-preset-drawer" data-preset-cat="master" id="mod-nai-drawer-master-preset">
                     <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="master">
                       <span class="mod-nai-preset-drawer-head-left">
@@ -19644,7 +19696,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">主钥</label>
-                <input type="password" id="qqbot-main-api-key" list="qqbot-api-key-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onApiFieldChange();}" class="moe-input" placeholder="群控主API密钥，留空复用全局主API" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+                <input type="text" id="qqbot-main-api-key" list="qqbot-api-key-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onApiFieldChange();}" class="moe-input" placeholder="群控主API密钥，留空复用全局主API" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">主模</label>
@@ -19671,7 +19723,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">副钥</label>
-                <input type="password" id="qqbot-sub-api-key" list="qqbot-api-key-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onApiFieldChange();}" class="moe-input" placeholder="群控专用副API密钥" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
+                <input type="text" id="qqbot-sub-api-key" list="qqbot-api-key-datalist" onchange="if(window.QQBotConsole){window.QQBotConsole.onApiFieldChange();}" class="moe-input" placeholder="群控专用副API密钥" style="flex: 1; min-width: 0; height: 34px; line-height: 20px; font-size: 12px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); box-sizing: border-box;" />
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; width: 32px;">副模</label>
@@ -43582,18 +43634,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             finalPrompt = promptPieces.filter(Boolean).join(", ");
           }
 
-          const seedToUse = options.seed !== undefined ? options.seed : (settings.seed !== -1 && settings.seed !== undefined ? settings.seed : Math.floor(Math.random() * 4294967295));
+          const rawSeedOpt = options.seed !== undefined ? Number(options.seed) : undefined;
+          const seedToUse = (rawSeedOpt !== undefined && !Number.isNaN(rawSeedOpt) && rawSeedOpt >= 0)
+            ? Math.floor(rawSeedOpt)
+            : (settings.seed !== -1 && settings.seed !== undefined ? settings.seed : Math.floor(Math.random() * 4294967295));
 
           const commonParams = {
             width: width || 1024,
             height: height || 1024,
-            scale: options.scale || (settings.cfg_scale !== undefined ? settings.cfg_scale : 5.0),
+            scale: options.scale !== undefined ? Number(options.scale) : (settings.cfg_scale !== undefined ? settings.cfg_scale : 5.0),
             sampler: options.sampler || settings.sampler || "k_euler_ancestral",
-            steps: options.steps || (settings.steps !== undefined ? settings.steps : 28),
+            steps: options.steps !== undefined ? Number(options.steps) : (settings.steps !== undefined ? settings.steps : 28),
             seed: seedToUse,
             n_samples: 1,
-            ucPreset: options.ucPreset !== undefined ? options.ucPreset : (settings.uc_preset !== undefined ? settings.uc_preset : 1),
-            qualityToggle: settings.quality_toggle !== false,
+            ucPreset: options.ucPreset !== undefined ? Number(options.ucPreset) : (settings.uc_preset !== undefined ? settings.uc_preset : 1),
+            qualityToggle: options.qualityToggle !== undefined ? Boolean(options.qualityToggle) : (settings.quality_toggle !== false),
           };
 
           let requestBody;
@@ -43636,8 +43691,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               parameters: {
                 ...commonParams,
                 negative_prompt: negativePrompt,
-                sm: settings.smea,
-                sm_dyn: settings.smea_dyn,
+                sm: options.smea !== undefined ? Boolean(options.smea) : settings.smea,
+                sm_dyn: options.smeaDyn !== undefined ? Boolean(options.smeaDyn) : settings.smea_dyn,
                 noise_schedule: "native",
                 add_original_image: false,
                 cfg_rescale: 0
@@ -44675,6 +44730,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               pos2Checked: false,
               resolution: "1024x1024",
               model: "nai-diffusion-4-5-full",
+              sampler: "k_euler_ancestral",
+              steps: 28,
+              scale: 5,
+              seed: -1,
+              ucPreset: 1,
+              qualityToggle: true,
+              smea: true,
+              smeaDyn: false,
               inspectArtistText: "",
               inspectPosText: "",
               inspectNegText: "",
@@ -45082,11 +45145,117 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           const openPresetGroupMemory = new Map();
 
           function closeAllPresetDropdowns(exceptWrap) {
-            document.querySelectorAll("#module-nai-panel .mod-nai-preset-dropdown.is-open").forEach((wrap) => {
+            document.querySelectorAll(".mod-nai-preset-dropdown.is-open").forEach((wrap) => {
               if (exceptWrap && wrap === exceptWrap) return;
               wrap.classList.remove("is-open");
-              const parentCard = wrap.closest(".mod-nai-card");
+              const parentCard = wrap.closest(".mod-nai-card, .mod-nai-edit-clean-card, .mod-nai-drawer-preset-row");
               if (parentCard) parentCard.classList.remove("is-dropdown-open");
+            });
+          }
+
+          function syncSimpleCustomSelectDropdown(sel, fallbackLabel, extraWrapClass) {
+            if (!sel || !sel.parentNode) return;
+            if (!presetDropdownOutsideBound) {
+              presetDropdownOutsideBound = true;
+              document.addEventListener("click", (e) => {
+                if (!e.target || !e.target.closest || !e.target.closest(".mod-nai-preset-dropdown")) {
+                  closeAllPresetDropdowns(null);
+                }
+              });
+            }
+
+            let wrap = sel.parentNode.classList && sel.parentNode.classList.contains("mod-nai-preset-dropdown")
+              ? sel.parentNode
+              : null;
+
+            if (!wrap) {
+              wrap = document.createElement("div");
+              wrap.className = "mod-nai-preset-dropdown" + (extraWrapClass ? " " + extraWrapClass : "");
+              sel.parentNode.insertBefore(wrap, sel);
+              wrap.appendChild(sel);
+              sel.style.setProperty("display", "none", "important");
+
+              const triggerBtn = document.createElement("button");
+              triggerBtn.type = "button";
+              triggerBtn.className = "mod-nai-preset-trigger";
+              triggerBtn.innerHTML =
+                '<span class="mod-nai-preset-trigger-text"></span>' +
+                '<svg class="mod-nai-preset-trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+              const menuEl = document.createElement("div");
+              menuEl.className = "mod-nai-preset-menu";
+
+              triggerBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (sel.disabled) return;
+                const willOpen = !wrap.classList.contains("is-open");
+                closeAllPresetDropdowns(wrap);
+                wrap.classList.toggle("is-open", willOpen);
+                const parentCard = wrap.closest(".mod-nai-card, .mod-nai-edit-clean-card, .mod-nai-drawer-preset-row");
+                if (parentCard) parentCard.classList.toggle("is-dropdown-open", willOpen);
+              });
+
+              menuEl.addEventListener("click", (e) => {
+                e.stopPropagation();
+              });
+
+              wrap.appendChild(triggerBtn);
+              wrap.appendChild(menuEl);
+            } else if (extraWrapClass && !wrap.classList.contains(extraWrapClass)) {
+              wrap.classList.add(extraWrapClass);
+            }
+
+            const triggerBtn = wrap.querySelector(".mod-nai-preset-trigger");
+            const triggerTxt = wrap.querySelector(".mod-nai-preset-trigger-text");
+            const menuEl = wrap.querySelector(".mod-nai-preset-menu");
+            if (!triggerTxt || !menuEl) return;
+
+            if (triggerBtn) {
+              triggerBtn.disabled = Boolean(sel.disabled);
+              triggerBtn.style.opacity = sel.disabled ? "0.6" : "";
+              triggerBtn.style.cursor = sel.disabled ? "default" : "pointer";
+            }
+
+            const options = Array.from(sel.options || []);
+            const curVal = sel.value || "";
+            const matchedOpt = options.find((o) => o.value === curVal) || options[0] || null;
+            const activeLabel = matchedOpt ? (matchedOpt.textContent || matchedOpt.value) : (fallbackLabel || "分组");
+            triggerTxt.textContent = activeLabel;
+            menuEl.innerHTML = "";
+
+            options.forEach((opt) => {
+              const itemValue = opt.value;
+              const itemLabel = opt.textContent || opt.value || fallbackLabel || "分组";
+              const isSelected = itemValue === curVal;
+              const itemBtn = document.createElement("button");
+              itemBtn.type = "button";
+              itemBtn.className = "mod-nai-preset-item" + (isSelected ? " is-selected" : "");
+
+              const dot = document.createElement("i");
+              dot.className = "mod-nai-preset-item-dot";
+
+              const labelSpan = document.createElement("span");
+              labelSpan.className = "mod-nai-preset-item-label";
+              labelSpan.textContent = itemLabel;
+
+              const checkSpan = document.createElement("span");
+              checkSpan.className = "mod-nai-preset-item-check";
+              checkSpan.innerHTML = ACTION_CHECK_SVG;
+
+              itemBtn.appendChild(dot);
+              itemBtn.appendChild(labelSpan);
+              itemBtn.appendChild(checkSpan);
+
+              itemBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                sel.value = itemValue;
+                triggerTxt.textContent = itemLabel;
+                closeAllPresetDropdowns(null);
+                syncSimpleCustomSelectDropdown(sel, fallbackLabel, extraWrapClass);
+                sel.dispatchEvent(new Event("change", { bubbles: true }));
+              });
+
+              menuEl.appendChild(itemBtn);
             });
           }
 
@@ -45445,6 +45614,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 row.appendChild(nameSpan);
                 row.appendChild(renameBtn);
                 row.appendChild(groupSel);
+                syncSimpleCustomSelectDropdown(groupSel, "未分组", "is-drawer-group-dropdown");
                 listContainer.appendChild(row);
               });
             });
@@ -45652,6 +45822,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               row.appendChild(nameSpan);
               row.appendChild(renameBtn);
               row.appendChild(groupSel);
+              syncSimpleCustomSelectDropdown(groupSel, DEFAULT_LEXICON_FOLDER_NAME, "is-drawer-group-dropdown");
               listContainer.appendChild(row);
             });
           }
@@ -46314,9 +46485,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function autoAdjustInspectTextareaHeight(el, minHeightPx) {
             if (!el) return;
-            el.style.height = "auto";
-            const target = Math.min(320, Math.max(minHeightPx || 80, el.scrollHeight + 4));
-            el.style.height = target + "px";
+            el.scrollTop = 0;
           }
 
           async function handleInspectFile(file) {
@@ -46464,7 +46633,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
-            // 2. 顶部设置弹窗开关、预设分组抽屉与实时保存
+            // 2. 顶部设置弹窗开关、参数与预设分组抽屉与实时保存
             const settingsModal = document.getElementById("mod-nai-settings-modal");
             const openSettingsBtn = document.getElementById("mod-nai-settings-open-btn");
             const closeSettingsBtn = document.getElementById("mod-nai-settings-close-btn");
@@ -46475,16 +46644,72 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const apiUrlInput = document.getElementById("mod-nai-setting-api-url");
             const apiKeyInput = document.getElementById("mod-nai-setting-api-key");
             const cleanGenCheck = document.getElementById("mod-nai-setting-clean-gen");
+            const samplerSelect = document.getElementById("mod-nai-setting-sampler");
+            const stepsInput = document.getElementById("mod-nai-setting-steps");
+            const scaleInput = document.getElementById("mod-nai-setting-scale");
+            const seedInput = document.getElementById("mod-nai-setting-seed");
+            const ucPresetSelect = document.getElementById("mod-nai-setting-uc-preset");
+            const qualityCheck = document.getElementById("mod-nai-setting-quality");
+            const smeaCheck = document.getElementById("mod-nai-setting-smea");
+            const smeaDynCheck = document.getElementById("mod-nai-setting-smea-dyn");
+            const paramsCountEl = document.getElementById("mod-nai-drawer-count-params");
+
+            const syncParamsDrawerCountBadge = (stepsVal, scaleVal) => {
+              if (!paramsCountEl) return;
+              const s = Number(stepsVal !== undefined ? stepsVal : (stepsInput ? stepsInput.value : 28)) || 28;
+              const c = Number(scaleVal !== undefined ? scaleVal : (scaleInput ? scaleInput.value : 5)) || 5;
+              paramsCountEl.textContent = `${s} · ${c}`;
+            };
+
+            const populateParamsControlsFromState = (st) => {
+              const curSampler = st.sampler || "k_euler_ancestral";
+              const curSteps = st.steps !== undefined ? Number(st.steps) : 28;
+              const curScale = st.scale !== undefined ? Number(st.scale) : 5;
+              const curSeed = st.seed !== undefined ? Number(st.seed) : -1;
+              const curUc = st.ucPreset !== undefined ? String(st.ucPreset) : "1";
+              if (samplerSelect) {
+                samplerSelect.value = curSampler;
+                syncSimpleCustomSelectDropdown(samplerSelect, "采样");
+              }
+              if (stepsInput) stepsInput.value = String(curSteps);
+              if (scaleInput) scaleInput.value = String(curScale);
+              if (seedInput) seedInput.value = String(curSeed);
+              if (ucPresetSelect) {
+                ucPresetSelect.value = curUc;
+                syncSimpleCustomSelectDropdown(ucPresetSelect, "反词");
+              }
+              if (qualityCheck) qualityCheck.checked = st.qualityToggle !== false;
+              if (smeaCheck) smeaCheck.checked = st.smea !== false;
+              if (smeaDynCheck) smeaDynCheck.checked = Boolean(st.smeaDyn);
+              syncParamsDrawerCountBadge(curSteps, curScale);
+            };
+
+            if (stepsInput) {
+              stepsInput.addEventListener("input", () => syncParamsDrawerCountBadge());
+            }
+            if (scaleInput) {
+              scaleInput.addEventListener("input", () => syncParamsDrawerCountBadge());
+            }
 
             if (openSettingsBtn && settingsModal) {
               openSettingsBtn.addEventListener("click", () => {
                 const st = loadPanelState();
-                if (resSelect) resSelect.value = st.resolution || "1024x1024";
-                if (modelSelect) modelSelect.value = st.model || "nai-diffusion-4-5-full";
-                if (themeSelect) themeSelect.value = st.theme || "folio";
+                if (resSelect) {
+                  resSelect.value = st.resolution || "1024x1024";
+                  syncSimpleCustomSelectDropdown(resSelect, "尺寸");
+                }
+                if (modelSelect) {
+                  modelSelect.value = st.model || "nai-diffusion-4-5-full";
+                  syncSimpleCustomSelectDropdown(modelSelect, "版本");
+                }
+                if (themeSelect) {
+                  themeSelect.value = st.theme || "folio";
+                  syncSimpleCustomSelectDropdown(themeSelect, "外观");
+                }
                 if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
                 if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
                 if (cleanGenCheck) cleanGenCheck.checked = Boolean(st.cleanOnGenerate);
+                populateParamsControlsFromState(st);
                 applyThemeToPanel(st.theme || "folio");
                 settingsModal.querySelectorAll(".mod-nai-preset-drawer").forEach((drawerEl) => {
                   drawerEl.classList.remove("is-open");
@@ -46513,7 +46738,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   if (!drawer) return;
                   const body = Array.from(drawer.children).find((el) => el.classList && el.classList.contains("mod-nai-preset-drawer-body"));
                   const willOpen = !drawer.classList.contains("is-open");
-                  if (willOpen) {
+                  const drawerCat = drawer.getAttribute("data-preset-cat");
+                  if (willOpen && drawerCat !== "params") {
                     renderSettingsPresetDrawers();
                   }
                   drawer.classList.toggle("is-open", willOpen);
@@ -46760,6 +46986,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (apiUrlInput) apiUrlInput.value = st.customApiUrl || "";
               if (apiKeyInput) apiKeyInput.value = st.customApiKey || "";
               if (cleanGenCheck) cleanGenCheck.checked = Boolean(st.cleanOnGenerate);
+              populateParamsControlsFromState(st);
               applyThemeToPanel(st.theme || "folio");
               updateHeaderSummary();
               if (settingsModal) settingsModal.style.display = "none";
@@ -46776,6 +47003,27 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (apiUrlInput) st.customApiUrl = apiUrlInput.value.trim();
               if (apiKeyInput) st.customApiKey = apiKeyInput.value.trim();
               if (cleanGenCheck) st.cleanOnGenerate = Boolean(cleanGenCheck.checked);
+              if (samplerSelect && samplerSelect.value) st.sampler = samplerSelect.value;
+              if (stepsInput) {
+                const parsedSteps = parseInt(stepsInput.value, 10);
+                st.steps = !Number.isNaN(parsedSteps) ? Math.min(50, Math.max(1, parsedSteps)) : 28;
+              }
+              if (scaleInput) {
+                const parsedScale = parseFloat(scaleInput.value);
+                st.scale = !Number.isNaN(parsedScale) ? Math.min(20, Math.max(1, parsedScale)) : 5;
+              }
+              if (seedInput) {
+                const parsedSeed = parseInt(seedInput.value, 10);
+                st.seed = (!Number.isNaN(parsedSeed) && parsedSeed >= -1) ? parsedSeed : -1;
+              }
+              if (ucPresetSelect && ucPresetSelect.value !== "") {
+                const parsedUc = parseInt(ucPresetSelect.value, 10);
+                st.ucPreset = !Number.isNaN(parsedUc) ? parsedUc : 1;
+              }
+              if (qualityCheck) st.qualityToggle = Boolean(qualityCheck.checked);
+              if (smeaCheck) st.smea = Boolean(smeaCheck.checked);
+              if (smeaDynCheck) st.smeaDyn = Boolean(smeaDynCheck.checked);
+              syncParamsDrawerCountBadge(st.steps, st.scale);
               savePanelState(st);
               updateHeaderSummary();
               if (settingsModal) settingsModal.style.display = "none";
@@ -47023,6 +47271,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     negativePrompt: negVal,
                     resolution: resVal,
                     model: modelVal,
+                    sampler: stForGen.sampler || "k_euler_ancestral",
+                    steps: stForGen.steps !== undefined ? Number(stForGen.steps) : 28,
+                    scale: stForGen.scale !== undefined ? Number(stForGen.scale) : 5,
+                    seed: stForGen.seed !== undefined ? Number(stForGen.seed) : -1,
+                    ucPreset: stForGen.ucPreset !== undefined ? Number(stForGen.ucPreset) : 1,
+                    qualityToggle: stForGen.qualityToggle !== false,
+                    smea: stForGen.smea !== false,
+                    smeaDyn: Boolean(stForGen.smeaDyn),
                     customApiUrl: stForGen.customApiUrl || "",
                     customApiKey: stForGen.customApiKey || ""
                   });
@@ -48513,8 +48769,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const wmConfirmBtn = document.getElementById("mod-nai-wm-confirm-btn");
 
             const syncWmSlidersUi = () => {
-              if (wmBlendSelect) wmBlendSelect.value = wmDraftBlendMode || "screen";
-              if (wmFitSelect) wmFitSelect.value = wmDraftFitMode || "contain";
+              if (wmBlendSelect) {
+                wmBlendSelect.value = wmDraftBlendMode || "screen";
+                syncSimpleCustomSelectDropdown(wmBlendSelect, "图层");
+              }
+              if (wmFitSelect) {
+                wmFitSelect.value = wmDraftFitMode || "contain";
+                syncSimpleCustomSelectDropdown(wmFitSelect, "排版");
+              }
               if (wmOpacityRange) wmOpacityRange.value = String(wmDraftOpacity);
               if (wmOpacityVal) wmOpacityVal.textContent = `${wmDraftOpacity}%`;
               if (wmHueRange) wmHueRange.value = String(wmDraftHue);
@@ -50008,6 +50270,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (fn === targetFolder) opt.selected = true;
               folderSel.appendChild(opt);
             });
+            folderSel.value = targetFolder;
+            syncSimpleCustomSelectDropdown(folderSel, DEFAULT_LEXICON_FOLDER_NAME);
             folderInp.value = "";
           }
 
@@ -50619,6 +50883,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 targetSel.appendChild(opt);
               });
               targetSel.value = colEditingFolderOriginalName;
+              syncSimpleCustomSelectDropdown(targetSel, DEFAULT_LEXICON_FOLDER_NAME);
             }
 
             const delBtn = document.getElementById("mod-nai-folder-edit-delete-btn");
@@ -114199,10 +114464,11 @@ ${specificRules}`;
             });
 
           // NovelAI API Key显示/隐藏切换
-          document
-            .getElementById("novelai-key-toggle")
-            .addEventListener("click", function () {
+          const novelaiKeyToggleBtn = document.getElementById("novelai-key-toggle");
+          if (novelaiKeyToggleBtn) {
+            novelaiKeyToggleBtn.addEventListener("click", function () {
               const input = document.getElementById("novelai-api-key");
+              if (!input) return;
               if (input.type === "password") {
                 input.type = "text";
                 this.textContent = "😌";
@@ -114211,6 +114477,7 @@ ${specificRules}`;
                 this.textContent = "🧐";
               }
             });
+          }
 
           // 打开NovelAI设置弹窗
           document

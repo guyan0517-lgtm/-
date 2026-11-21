@@ -36908,16 +36908,22 @@ select,
 /* ============================================================
    生图预设小巧可滑动下拉框（告别全屏原生弹窗，原位精致展开）
    ============================================================ */
-#module-nai-panel .mod-nai-card.is-dropdown-open {
+#module-nai-panel .mod-nai-card.is-dropdown-open,
+#module-nai-panel .mod-nai-edit-clean-card.is-dropdown-open,
+#module-nai-panel .mod-nai-drawer-preset-row.is-dropdown-open,
+#mod-nai-settings-modal .mod-nai-drawer-preset-row.is-dropdown-open {
   overflow: visible !important;
   z-index: 45 !important;
+  position: relative;
 }
 
 #module-nai-panel .mod-nai-card.is-dropdown-open .mod-nai-card-row {
   z-index: 50 !important;
 }
 
-#module-nai-panel .mod-nai-preset-dropdown {
+#module-nai-panel .mod-nai-preset-dropdown,
+#mod-nai-settings-modal .mod-nai-preset-dropdown,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown {
   position: relative;
   flex: 1 1 0%;
   width: 100%;
@@ -36927,9 +36933,23 @@ select,
   z-index: 10;
 }
 
+#module-nai-panel .mod-nai-preset-dropdown.is-drawer-group-dropdown,
+#mod-nai-settings-modal .mod-nai-preset-dropdown.is-drawer-group-dropdown {
+  flex: 0 0 98px !important;
+  width: 98px !important;
+  min-width: 98px !important;
+  max-width: 98px !important;
+}
+
 #module-nai-panel .mod-nai-preset-dropdown > select,
 #module-nai-panel .mod-nai-preset-dropdown > select.moe-input,
-#module-nai-panel .mod-nai-preset-dropdown > select.mod-nai-select {
+#module-nai-panel .mod-nai-preset-dropdown > select.mod-nai-select,
+#mod-nai-settings-modal .mod-nai-preset-dropdown > select,
+#mod-nai-settings-modal .mod-nai-preset-dropdown > select.moe-input,
+#mod-nai-settings-modal .mod-nai-preset-dropdown > select.mod-nai-select,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown > select,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown > select.moe-input,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown > select.mod-nai-select {
   display: none !important;
   visibility: hidden !important;
   width: 0 !important;
@@ -36943,11 +36963,15 @@ select,
   opacity: 0 !important;
 }
 
-#module-nai-panel .mod-nai-preset-dropdown.is-open {
-  z-index: 60;
+#module-nai-panel .mod-nai-preset-dropdown.is-open,
+#mod-nai-settings-modal .mod-nai-preset-dropdown.is-open,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown.is-open {
+  z-index: 80;
 }
 
-#module-nai-panel .mod-nai-preset-trigger {
+#module-nai-panel .mod-nai-preset-trigger,
+#mod-nai-settings-modal .mod-nai-preset-trigger,
+#mod-nai-watermark-modal .mod-nai-preset-trigger {
   width: 100%;
   height: 30px;
   min-height: 30px;
@@ -36968,8 +36992,20 @@ select,
   transition: border-color 0.16s ease, background-color 0.16s ease;
 }
 
+#module-nai-panel .mod-nai-preset-dropdown.is-drawer-group-dropdown .mod-nai-preset-trigger,
+#mod-nai-settings-modal .mod-nai-preset-dropdown.is-drawer-group-dropdown .mod-nai-preset-trigger {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 7px 0 9px;
+  font-size: 11px;
+}
+
 #module-nai-panel.nai-theme-tavern .mod-nai-preset-trigger,
-#module-nai-panel.nai-theme-folio .mod-nai-preset-trigger {
+#module-nai-panel.nai-theme-folio .mod-nai-preset-trigger,
+#mod-nai-settings-modal.nai-theme-tavern .mod-nai-preset-trigger,
+#mod-nai-settings-modal.nai-theme-folio .mod-nai-preset-trigger,
+#mod-nai-watermark-modal.nai-theme-tavern .mod-nai-preset-trigger,
+#mod-nai-watermark-modal.nai-theme-folio .mod-nai-preset-trigger {
   border-radius: 999px;
   border: 1px solid var(--nai-text);
   background-color: var(--card-bg);
@@ -36977,7 +37013,9 @@ select,
   font-weight: 600;
 }
 
-#module-nai-panel .mod-nai-preset-trigger-text {
+#module-nai-panel .mod-nai-preset-trigger-text,
+#mod-nai-settings-modal .mod-nai-preset-trigger-text,
+#mod-nai-watermark-modal .mod-nai-preset-trigger-text {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -36986,7 +37024,9 @@ select,
   line-height: 1.25;
 }
 
-#module-nai-panel .mod-nai-preset-trigger-arrow {
+#module-nai-panel .mod-nai-preset-trigger-arrow,
+#mod-nai-settings-modal .mod-nai-preset-trigger-arrow,
+#mod-nai-watermark-modal .mod-nai-preset-trigger-arrow {
   width: 11px;
   height: 11px;
   flex: 0 0 11px;
@@ -36995,18 +37035,22 @@ select,
   transition: transform 0.18s ease;
 }
 
-#module-nai-panel .mod-nai-preset-dropdown.is-open .mod-nai-preset-trigger-arrow {
+#module-nai-panel .mod-nai-preset-dropdown.is-open .mod-nai-preset-trigger-arrow,
+#mod-nai-settings-modal .mod-nai-preset-dropdown.is-open .mod-nai-preset-trigger-arrow,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown.is-open .mod-nai-preset-trigger-arrow {
   transform: rotate(180deg);
 }
 
-#module-nai-panel .mod-nai-preset-menu {
+#module-nai-panel .mod-nai-preset-menu,
+#mod-nai-settings-modal .mod-nai-preset-menu,
+#mod-nai-watermark-modal .mod-nai-preset-menu {
   position: absolute;
   top: calc(100% + 5px);
   left: 0;
   width: 100%;
-  min-width: 148px;
-  max-width: 100%;
-  max-height: 156px;
+  min-width: 132px;
+  max-width: 240px;
+  max-height: 168px;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -37023,23 +37067,38 @@ select,
   flex-direction: column;
   gap: 2px;
   box-sizing: border-box;
-  z-index: 99;
+  z-index: 120;
 }
 
-#module-nai-panel .mod-nai-preset-dropdown.is-open .mod-nai-preset-menu {
+#module-nai-panel .mod-nai-preset-dropdown.is-drawer-group-dropdown .mod-nai-preset-menu,
+#mod-nai-settings-modal .mod-nai-preset-dropdown.is-drawer-group-dropdown .mod-nai-preset-menu {
+  left: auto;
+  right: 0;
+  min-width: 116px;
+}
+
+#module-nai-panel .mod-nai-preset-dropdown.is-open .mod-nai-preset-menu,
+#mod-nai-settings-modal .mod-nai-preset-dropdown.is-open .mod-nai-preset-menu,
+#mod-nai-watermark-modal .mod-nai-preset-dropdown.is-open .mod-nai-preset-menu {
   display: flex;
 }
 
-#module-nai-panel .mod-nai-preset-menu::-webkit-scrollbar {
+#module-nai-panel .mod-nai-preset-menu::-webkit-scrollbar,
+#mod-nai-settings-modal .mod-nai-preset-menu::-webkit-scrollbar,
+#mod-nai-watermark-modal .mod-nai-preset-menu::-webkit-scrollbar {
   width: 3.5px;
 }
 
-#module-nai-panel .mod-nai-preset-menu::-webkit-scrollbar-thumb {
+#module-nai-panel .mod-nai-preset-menu::-webkit-scrollbar-thumb,
+#mod-nai-settings-modal .mod-nai-preset-menu::-webkit-scrollbar-thumb,
+#mod-nai-watermark-modal .mod-nai-preset-menu::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--nai-muted, var(--text-secondary)) 45%, transparent);
   border-radius: 999px;
 }
 
-#module-nai-panel .mod-nai-preset-item {
+#module-nai-panel .mod-nai-preset-item,
+#mod-nai-settings-modal .mod-nai-preset-item,
+#mod-nai-watermark-modal .mod-nai-preset-item {
   width: 100%;
   min-height: 28px;
   padding: 4px 8px;
@@ -37061,16 +37120,24 @@ select,
 }
 
 #module-nai-panel .mod-nai-preset-item:hover,
-#module-nai-panel .mod-nai-preset-item:active {
+#module-nai-panel .mod-nai-preset-item:active,
+#mod-nai-settings-modal .mod-nai-preset-item:hover,
+#mod-nai-settings-modal .mod-nai-preset-item:active,
+#mod-nai-watermark-modal .mod-nai-preset-item:hover,
+#mod-nai-watermark-modal .mod-nai-preset-item:active {
   background-color: color-mix(in srgb, var(--nai-sub-bg, var(--secondary-bg)) 70%, transparent);
 }
 
-#module-nai-panel .mod-nai-preset-item.is-selected {
+#module-nai-panel .mod-nai-preset-item.is-selected,
+#mod-nai-settings-modal .mod-nai-preset-item.is-selected,
+#mod-nai-watermark-modal .mod-nai-preset-item.is-selected {
   background-color: color-mix(in srgb, var(--nai-sub-bg, var(--secondary-bg)) 92%, transparent);
   font-weight: 600;
 }
 
-#module-nai-panel .mod-nai-preset-item-dot {
+#module-nai-panel .mod-nai-preset-item-dot,
+#mod-nai-settings-modal .mod-nai-preset-item-dot,
+#mod-nai-watermark-modal .mod-nai-preset-item-dot {
   width: 5px;
   height: 5px;
   flex: 0 0 5px;
@@ -37079,11 +37146,15 @@ select,
   background-color: color-mix(in srgb, var(--nai-muted, var(--text-secondary)) 45%, transparent);
 }
 
-#module-nai-panel .mod-nai-preset-item.is-selected .mod-nai-preset-item-dot {
+#module-nai-panel .mod-nai-preset-item.is-selected .mod-nai-preset-item-dot,
+#mod-nai-settings-modal .mod-nai-preset-item.is-selected .mod-nai-preset-item-dot,
+#mod-nai-watermark-modal .mod-nai-preset-item.is-selected .mod-nai-preset-item-dot {
   background-color: var(--nai-seal, var(--accent-color));
 }
 
-#module-nai-panel .mod-nai-preset-item-label {
+#module-nai-panel .mod-nai-preset-item-label,
+#mod-nai-settings-modal .mod-nai-preset-item-label,
+#mod-nai-watermark-modal .mod-nai-preset-item-label {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -37092,7 +37163,9 @@ select,
   line-height: 1.3;
 }
 
-#module-nai-panel .mod-nai-preset-item-check {
+#module-nai-panel .mod-nai-preset-item-check,
+#mod-nai-settings-modal .mod-nai-preset-item-check,
+#mod-nai-watermark-modal .mod-nai-preset-item-check {
   width: 11px;
   height: 11px;
   flex: 0 0 11px;
@@ -37101,7 +37174,9 @@ select,
   opacity: 0;
 }
 
-#module-nai-panel .mod-nai-preset-item.is-selected .mod-nai-preset-item-check {
+#module-nai-panel .mod-nai-preset-item.is-selected .mod-nai-preset-item-check,
+#mod-nai-settings-modal .mod-nai-preset-item.is-selected .mod-nai-preset-item-check,
+#mod-nai-watermark-modal .mod-nai-preset-item.is-selected .mod-nai-preset-item-check {
   opacity: 1;
 }
 
@@ -37196,7 +37271,12 @@ select,
 
 #module-nai-panel .mod-nai-textarea {
   width: 100%;
-  min-height: 58px;
+  height: 76px;
+  min-height: 54px !important;
+  field-sizing: fixed !important;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.5;
@@ -37209,6 +37289,17 @@ select,
   font-family: inherit;
   position: relative;
   z-index: 1;
+}
+
+#module-nai-panel #mod-nai-gen-artist-input,
+#module-nai-panel #mod-nai-gen-artist2-input,
+#module-nai-panel #mod-nai-inspect-artist-input {
+  height: 58px;
+}
+
+#module-nai-panel #mod-nai-inspect-pos-input,
+#module-nai-panel #mod-nai-inspect-neg-input {
+  height: 92px;
 }
 
 #module-nai-panel.nai-theme-tavern .mod-nai-textarea,
@@ -38230,8 +38321,9 @@ select,
 
 #module-nai-panel .mod-nai-edit-textarea {
   width: 100%;
-  min-height: 104px !important;
-  max-height: 240px !important;
+  height: 92px;
+  min-height: 68px !important;
+  field-sizing: fixed !important;
   padding: 9px 11px !important;
   border-radius: 10px !important;
   border: 1px solid var(--trace-border-soft) !important;
