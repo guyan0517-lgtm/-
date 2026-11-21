@@ -2300,9 +2300,10 @@ code, pre {
             ? window.getVariables({ type: 'message', message_id: sess.messages.length - 1 })
             : getChatVariablesStore();
           const clonedVars = prevFloorVars ? JSON.parse(JSON.stringify(prevFloorVars)) : {};
-          if (!isSys && !msg.includes('<StatusPlaceHolderImpl/>') && cardUsesStatusPlaceHolderImpl(getActiveCard())) {
+          if (!isSys && senderName !== '柏宝书' && !msg.includes('【柏宝书】') && !msg.includes('<StatusPlaceHolderImpl/>') && cardUsesStatusPlaceHolderImpl(getActiveCard())) {
             msg = msg + '\n<StatusPlaceHolderImpl/>';
           }
+          const isBbsBacklogNotice = senderName === '柏宝书' && msg.includes('本次生成已拦截');
           const nowTs = Date.now();
           sess.messages.push({
             mesid: sess.messages.length,
@@ -2317,6 +2318,7 @@ code, pre {
             reasoning: '',
             gen_time: '',
             token_count: estimateTokens(msg),
+            extra: isBbsBacklogNotice ? { bbs_internal_notice: 'backlog', bbs_omit: true } : {},
             data: { variables: clonedVars },
             variables: [clonedVars]
           });
@@ -2400,6 +2402,7 @@ code, pre {
           sess.messages.splice(Math.max(1, sess.messages.length - delCount));
           sess.messages.forEach((m, i) => { m.mesid = i; });
           renderTavernChatFloors(false);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_DELETED, sess.messages.length);
         }
       } else if (/^\/(?:swipes-go|swipe)\b/i.test(line)) {
         const argStr = line.replace(/^\/(?:swipes-go|swipe)\b\s*/i, '').trim();
@@ -2453,8 +2456,13 @@ code, pre {
           if (startIdx >= 0 && endIdx >= startIdx) {
             for (let i = startIdx; i <= Math.min(endIdx, sess.messages.length - 1); i++) {
               if (sess.messages[i]) {
+                sess.messages[i].is_system = isHide;
                 if (!sess.messages[i].extra || typeof sess.messages[i].extra !== 'object') sess.messages[i].extra = {};
-                sess.messages[i].extra.bbs_hidden = isHide;
+                if (isHide) {
+                  sess.messages[i].extra.bbs_hidden = true;
+                } else {
+                  delete sess.messages[i].extra.bbs_hidden;
+                }
               }
             }
           }
@@ -4070,7 +4078,7 @@ code, pre {
                 key: extApi.apiKey,
                 model: extApi.model || 'gpt-4o-mini',
                 models: extApi.model ? [extApi.model] : ['gpt-4o-mini'],
-                maxTokens: 100000,
+                maxTokens: 8192,
                 temperature: 0.7,
                 timeoutSec: 180
               }
@@ -4087,16 +4095,19 @@ code, pre {
               key: extApi.apiKey,
               model: extApi.model || 'gpt-4o-mini',
               models: extApi.model ? [extApi.model] : ['gpt-4o-mini'],
-              maxTokens: 100000,
+              maxTokens: 8192,
               temperature: 0.7,
               timeoutSec: 180
             });
-          } else if (chs[0] && !chs[0].url && !chs[0].key) {
+          } else if (chs[0] && (chs[0].id === 'default_phone_api' || (!chs[0].url && !chs[0].key))) {
             chs[0].url = cleanUrlWithV1;
             chs[0].key = extApi.apiKey;
+            if (!chs[0].maxTokens || chs[0].maxTokens > 16384) {
+              chs[0].maxTokens = 8192;
+            }
             if (extApi.model) {
               chs[0].model = extApi.model;
-              if (!Array.isArray(chs[0].models) || chs[0].models.length === 0) {
+              if (!Array.isArray(chs[0].models) || chs[0].models.length === 0 || chs[0].id === 'default_phone_api') {
                 chs[0].models = [extApi.model];
               }
             }
@@ -4217,7 +4228,7 @@ code, pre {
       Generate: () => triggerCharacterReplyGeneration({ isContinue: false, isSwipeRegen: false }),
       generateQuietPrompt: async (quietPrompt) => {
         const res = await callTavernAiCompletion([{ role: 'user', content: String(quietPrompt || '') }], null, { isBackground: true });
-        return res.content || res.rawContent || res.reasoning || '';
+        return res.rawContent || res.content || res.reasoning || '';
       },
       generateRaw: async (opts = {}) => {
         let promptArr = [];
@@ -4237,8 +4248,9 @@ code, pre {
             if (opts.prompt !== undefined) promptArr.push({ role: 'user', content: String(opts.prompt || '') });
           }
         }
-        const res = await callTavernAiCompletion(promptArr, null, { isBackground: true });
-        return res.content || res.rawContent || res.reasoning || '';
+        const reqMax = (opts && typeof opts === 'object') ? Number(opts.responseLength || opts.max_tokens || 8192) : 8192;
+        const res = await callTavernAiCompletion(promptArr, null, { isBackground: true, maxTokens: reqMax });
+        return res.rawContent || res.content || res.reasoning || '';
       },
       getTokenCount: (text) => estimateTokens(String(text || '')),
       getTokenCountAsync: async (text) => estimateTokens(String(text || '')),
@@ -4953,10 +4965,10 @@ code, pre {
               }
               const wantStream = Boolean(bodyObj.stream);
               const reqMaxTokens = (typeof bodyObj.max_tokens === 'number' && bodyObj.max_tokens > 0)
-                ? bodyObj.max_tokens
+                ? Math.min(8192, Math.max(256, bodyObj.max_tokens))
                 : 4096;
               const normalizedBackendMsgs = typeof postProcessTavernWireMessages === 'function'
-                ? postProcessTavernWireMessages(Array.isArray(bodyObj.messages) ? bodyObj.messages : [], { strict: true, placeholders: true })
+                ? await postProcessTavernWireMessages(Array.isArray(bodyObj.messages) ? bodyObj.messages : [], { strict: true, placeholders: true })
                 : (Array.isArray(bodyObj.messages) ? bodyObj.messages : []);
               const openAiPayload = {
                 model: bodyObj.model || fallbackCreds.model || 'gpt-4o-mini',
@@ -4975,6 +4987,9 @@ code, pre {
                   }
                 } catch (_) {}
               }
+              if (typeof openAiPayload.max_tokens === 'number' && openAiPayload.max_tokens > 8192) {
+                openAiPayload.max_tokens = 8192;
+              }
               const cleanBaseForEp = base.replace(/\/+$/, '');
               const endpoints = cleanBaseForEp.endsWith('/v1')
                 ? [cleanBaseForEp + '/chat/completions', cleanBaseForEp.replace(/\/v1$/i, '') + '/chat/completions']
@@ -4984,7 +4999,6 @@ code, pre {
                 ...(key ? { 'Authorization': 'Bearer ' + key } : {}),
                 ...(wantStream ? { 'Accept': 'text/event-stream' } : { 'Accept': 'application/json' })
               };
-              const ep = endpoints[0];
               const releaseSubKeepAlive = typeof window.acquireBackgroundTaskKeepAlive === 'function'
                 ? window.acquireBackgroundTaskKeepAlive()
                 : null;
@@ -4998,31 +5012,38 @@ code, pre {
               }, 2000);
               let upstreamRes = null;
               let lastErr = null;
-              try {
-                if (!wantStream && typeof window.requestLlmapiWithFallback === 'function') {
-                  upstreamRes = await window.requestLlmapiWithFallback(ep, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(openAiPayload),
-                    signal: init?.signal,
-                    _preserveCallerStream: true,
-                    _preserveCallerMaxTokens: true
-                  });
-                } else {
-                  upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(openAiPayload),
-                    signal: init?.signal
-                  });
+              for (let epIdx = 0; epIdx < endpoints.length; epIdx++) {
+                const ep = endpoints[epIdx];
+                try {
+                  if (!wantStream && typeof window.requestLlmapiWithFallback === 'function') {
+                    upstreamRes = await window.requestLlmapiWithFallback(ep, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify(openAiPayload),
+                      signal: init?.signal,
+                      _preserveCallerStream: true,
+                      _preserveCallerMaxTokens: true
+                    });
+                  } else {
+                    upstreamRes = await executeTavernRawFetchWithProxyFallback(ep, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify(openAiPayload),
+                      signal: init?.signal
+                    });
+                  }
+                  if (upstreamRes && (upstreamRes.status === 404 || upstreamRes.status === 405) && epIdx + 1 < endpoints.length) {
+                    continue;
+                  }
+                  break;
+                } catch (err) {
+                  if (err && err.name === 'AbortError') {
+                    clearInterval(subPulseTimer);
+                    if (typeof releaseSubKeepAlive === 'function') releaseSubKeepAlive();
+                    throw err;
+                  }
+                  lastErr = err;
                 }
-              } catch (err) {
-                if (err && err.name === 'AbortError') {
-                  clearInterval(subPulseTimer);
-                  if (typeof releaseSubKeepAlive === 'function') releaseSubKeepAlive();
-                  throw err;
-                }
-                lastErr = err;
               }
               try {
                 if (!upstreamRes) {
@@ -5031,7 +5052,7 @@ code, pre {
                 if (!wantStream && upstreamRes.ok) {
                   const rawBodyText = await readTavernNonStreamBodySafely(upstreamRes).catch(() => '');
                   const trimmedBody = rawBodyText.replace(/^\s*:[^\r\n]*$/gm, '').trim();
-                  if (trimmedBody.startsWith('data:')) {
+                  if (/^\s*data:\s*/m.test(trimmedBody)) {
                     let aggContent = '';
                     let aggReasoning = '';
                     const lines = trimmedBody.split(/\r?\n/);
@@ -5045,17 +5066,33 @@ code, pre {
                         const choice = chunk.choices && chunk.choices[0];
                         const delta = choice ? (choice.delta || choice.message || {}) : {};
                         if (typeof delta.content === 'string') aggContent += delta.content;
+                        else if (Array.isArray(delta.content)) {
+                          delta.content.forEach(p => {
+                            if (typeof p === 'string') aggContent += p;
+                            else if (p && (p.type === 'thinking' || p.thinking)) aggReasoning += (p.thinking || p.text || '');
+                            else if (p && p.text) aggContent += p.text;
+                          });
+                        } else if (choice && typeof choice.text === 'string') {
+                          aggContent += choice.text;
+                        } else if (Array.isArray(chunk.candidates) && chunk.candidates[0]?.content?.parts) {
+                          chunk.candidates[0].content.parts.forEach(p => {
+                            if (!p || typeof p.text !== 'string') return;
+                            if (p.thought) aggReasoning += p.text;
+                            else aggContent += p.text;
+                          });
+                        }
                         if (typeof delta.reasoning_content === 'string') aggReasoning += delta.reasoning_content;
                         else if (typeof delta.reasoning === 'string') aggReasoning += delta.reasoning;
                       } catch (_) {}
                     }
+                    const finalSseContent = aggContent || aggReasoning;
                     const synthJson = {
                       choices: [
                         {
                           index: 0,
                           message: {
                             role: 'assistant',
-                            content: aggContent,
+                            content: finalSseContent,
                             ...(aggReasoning ? { reasoning_content: aggReasoning } : {})
                           },
                           finish_reason: 'stop'
@@ -5067,6 +5104,71 @@ code, pre {
                       headers: { 'Content-Type': 'application/json' }
                     });
                   }
+                  try {
+                    let parsedJson = null;
+                    try {
+                      parsedJson = JSON.parse(trimmedBody);
+                    } catch (_) {
+                      const fb = trimmedBody.indexOf('{');
+                      const lb = trimmedBody.lastIndexOf('}');
+                      if (fb !== -1 && lb > fb) {
+                        parsedJson = JSON.parse(trimmedBody.slice(fb, lb + 1));
+                      }
+                    }
+                    if (parsedJson && typeof parsedJson === 'object' && !parsedJson.error) {
+                      let normText = '';
+                      let normReasoning = '';
+                      if (Array.isArray(parsedJson.choices) && parsedJson.choices[0]) {
+                        const ch0 = parsedJson.choices[0];
+                        const msg0 = ch0.message || ch0.delta || {};
+                        if (typeof msg0.content === 'string') {
+                          normText = msg0.content;
+                        } else if (Array.isArray(msg0.content)) {
+                          msg0.content.forEach(p => {
+                            if (typeof p === 'string') normText += p;
+                            else if (p && (p.type === 'thinking' || p.thinking)) normReasoning += (p.thinking || p.text || '');
+                            else if (p && p.text) normText += p.text;
+                          });
+                        } else if (typeof ch0.text === 'string') {
+                          normText = ch0.text;
+                        }
+                        normReasoning += (msg0.reasoning_content || msg0.reasoning || msg0.thinking || '');
+                      } else if (Array.isArray(parsedJson.content)) {
+                        parsedJson.content.forEach(b => {
+                          if (!b) return;
+                          if (b.type === 'thinking' && (b.thinking || b.text)) normReasoning += (b.thinking || b.text);
+                          else if (typeof b.text === 'string') normText += b.text;
+                          else if (typeof b === 'string') normText += b;
+                        });
+                      } else if (Array.isArray(parsedJson.candidates) && parsedJson.candidates[0]?.content?.parts) {
+                        parsedJson.candidates[0].content.parts.forEach(p => {
+                          if (!p || typeof p.text !== 'string') return;
+                          if (p.thought) normReasoning += p.text;
+                          else normText += p.text;
+                        });
+                      } else if (typeof parsedJson.content === 'string') {
+                        normText = parsedJson.content;
+                      }
+                      const finalNormContent = normText || normReasoning;
+                      if (finalNormContent && typeof parsedJson.choices?.[0]?.message?.content !== 'string') {
+                        parsedJson.choices = [
+                          {
+                            index: 0,
+                            message: {
+                              role: 'assistant',
+                              content: finalNormContent,
+                              ...(normReasoning ? { reasoning_content: normReasoning } : {})
+                            },
+                            finish_reason: 'stop'
+                          }
+                        ];
+                        return new Response(JSON.stringify(parsedJson), {
+                          status: 200,
+                          headers: { 'Content-Type': 'application/json' }
+                        });
+                      }
+                    }
+                  } catch (_) {}
                   return new Response(rawBodyText, {
                     status: upstreamRes.status,
                     headers: { 'Content-Type': 'application/json' }
@@ -7019,8 +7121,9 @@ code, pre {
             if (opts.prompt !== undefined) promptArr.push({ role: 'user', content: String(opts.prompt || '') });
           }
         }
-        const res = await callTavernAiCompletion(promptArr, null, { isBackground: true });
-        return res.content || res.rawContent || res.reasoning || '';
+        const reqMax = (opts && typeof opts === 'object') ? Number(opts.responseLength || opts.max_tokens || 8192) : 8192;
+        const res = await callTavernAiCompletion(promptArr, null, { isBackground: true, maxTokens: reqMax });
+        return res.rawContent || res.content || res.reasoning || '';
       },
       getVariables: window.getVariables,
       insertOrAssignVariables: window.insertOrAssignVariables,
@@ -8364,11 +8467,6 @@ code, pre {
       .replace(
         /if\s*\(\s*!target\s*\)\s*\{\s*if\s*\(\s*!audio\.paused\s*\)\s*audio\.pause\(\)\s*;\s*statusMusicUrl\s*=\s*['"]['"]\s*;\s*statusMusicMessageId\s*=\s*null\s*;\s*statusMusicInitialized\s*=\s*true\s*;\s*return\s*;\s*\}/g,
         'if (!target) { statusMusicInitialized = true; updateMusicSettingsUI(); return; }'
-      )
-      // Allow ST-BaiBai-Book auto-summarization to summarize the latest floor even if earlier history has unsummarized gaps
-      .replace(
-        'if(o.length>1){console.log("[柏宝书] 多个摘要缺口,停止自动补摘,交由用户手动处理:",o);return}const i=Ox(s,e);if(i<0)return;const a=ni(s).find(c=>c<=i);',
-        'const i=Ox(s,e);if(i<0)return;const _uns=ni(s).filter(c=>c<=i);const a=_uns.length?_uns[_uns.length-1]:void 0;'
       );
     return relaxTopLevelConstLetDeclarations(transpiled);
   }
@@ -13499,9 +13597,15 @@ function buildFallbackCodeFromItem(drinkObj) {
       }
     });
 
-    // Build chat history slice and strip any residual reasoning blocks from historical floors (excluding floors hidden by ST-BaiBai-Book /hide)
+    // Build chat history slice and strip any residual reasoning blocks from historical floors (excluding floors hidden by SillyTavern /hide or ST-BaiBai-Book)
     const maxFloors = Math.max(4, Number(tavernState.memory?.contextFloors || 40));
-    const visibleRawChat = rawChat.filter(m => !(m && m.extra && m.extra.bbs_hidden));
+    const visibleRawChat = rawChat.filter(m => {
+      if (!m) return false;
+      if (m.is_system) return false;
+      if (m.extra && (m.extra.bbs_hidden || m.extra.bbs_omit || m.extra.bbs_internal_notice === 'backlog')) return false;
+      if (!m.is_user && m.name === '柏宝书' && typeof m.mes === 'string' && m.mes.includes('本次生成已拦截')) return false;
+      return true;
+    });
     const slicedChat = visibleRawChat.slice(-maxFloors);
     let lastUserSliceIdx = -1;
     for (let i = slicedChat.length - 1; i >= 0; i--) {
@@ -14088,18 +14192,29 @@ function buildFallbackCodeFromItem(drinkObj) {
     }
 
     // Official SillyTavern prompt-converters.js mergeMessages(messages, names, { strict, placeholders }):
-    // 1. In strict mode, convert any non-leading system messages to 'user' role
+    // 1. First squash consecutive messages of the same role so leading system prompts merge into index 0
+    const initialSquashed = [];
+    for (const msg of resolvedItems) {
+      const prev = initialSquashed[initialSquashed.length - 1];
+      if (prev && prev.role === msg.role && typeof prev.content === 'string' && typeof msg.content === 'string') {
+        prev.content += '\n\n' + msg.content;
+      } else {
+        initialSquashed.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    // 2. In strict mode, convert any non-leading system messages (after user/assistant) to 'user' role
     if (strict) {
-      for (let i = 0; i < resolvedItems.length; i++) {
-        if (resolvedItems[i].role === 'system' && i > 0) {
-          resolvedItems[i].role = 'user';
+      for (let i = 1; i < initialSquashed.length; i++) {
+        if (initialSquashed[i].role === 'system') {
+          initialSquashed[i].role = 'user';
         }
       }
     }
 
-    // 2. Squash consecutive messages of the same role
+    // 3. Squash consecutive messages of the same role again after strict conversion
     const squashed = [];
-    for (const msg of resolvedItems) {
+    for (const msg of initialSquashed) {
       const prev = squashed[squashed.length - 1];
       if (prev && prev.role === msg.role && typeof prev.content === 'string' && typeof msg.content === 'string') {
         prev.content += '\n\n' + msg.content;
@@ -14152,7 +14267,9 @@ function buildFallbackCodeFromItem(drinkObj) {
       ? (cleanBase + '/chat/completions')
       : (cleanBase + '/v1/chat/completions');
 
-    const requestedMaxTokens = Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
+    const requestedMaxTokens = isBackground
+      ? Math.min(8192, Math.max(4096, Number(options?.maxTokens || preset.openai_max_tokens || 8192)))
+      : Math.min(8192, Math.max(1024, Number(preset.openai_max_tokens || 4096)));
     const cleanWireMessages = await postProcessTavernWireMessages(messages, { strict: true, placeholders: true });
 
     const isClaudeModel = /claude/i.test(creds.model || '');
@@ -14264,6 +14381,7 @@ function buildFallbackCodeFromItem(drinkObj) {
             body: JSON.stringify(payload),
             signal: abortCtrl.signal,
             _preserveCallerStream: true,
+            _preserveCallerMaxTokens: true,
             _noAutoRetry: true,
             _forceLocalProxy: transportMode === 'local',
             _forceDirectFetch: transportMode === 'direct',
@@ -14484,13 +14602,13 @@ function buildFallbackCodeFromItem(drinkObj) {
           }
           throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
         }
-        const finalCleanReply = parsed.cleanReply || (refusalReason ? ('【' + refusalReason + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
+        const finalCleanReply = parsed.cleanReply || (isBackground ? (rawContent || combinedReasoning || '') : (refusalReason ? ('【' + refusalReason + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】'));
         const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
         markApiCallSuccess(elapsedSec);
         return {
           content: finalCleanReply,
           reasoning: combinedReasoning,
-          rawContent,
+          rawContent: rawContent || combinedReasoning,
           genTime: elapsedSec
         };
       }
@@ -14630,11 +14748,12 @@ function buildFallbackCodeFromItem(drinkObj) {
       if (!finalParsed.cleanReply && !finalReasoning) {
         throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
       }
-      const finalCleanStreamReply = finalParsed.cleanReply || '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】';
+      const finalCleanStreamReply = finalParsed.cleanReply || (isBackground ? (networkContent || finalReasoning || '') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
       markApiCallSuccess(elapsedSec);
       return {
         content: finalCleanStreamReply,
         reasoning: finalReasoning,
+        rawContent: networkContent || finalReasoning,
         genTime: elapsedSec
       };
     }
@@ -14657,7 +14776,7 @@ function buildFallbackCodeFromItem(drinkObj) {
       if (refErr) throw new Error(refErr);
       throw new Error('AI返回了空内容或拒绝生成，请检查模型额度、预设提示词或反代状态');
     }
-    const finalCleanFallbackReply = parsed.cleanReply || (refErr ? ('【' + refErr + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】');
+    const finalCleanFallbackReply = parsed.cleanReply || (isBackground ? (rawContent || combinedReasoning || '') : (refErr ? ('【' + refErr + '】') : '【模型仅输出了思考过程，未输出正文或被截断，请展开上方思考过程查看或点击重新生成】'));
 
     const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1) + 's';
     markApiCallSuccess(elapsedSec);
@@ -14673,6 +14792,7 @@ function buildFallbackCodeFromItem(drinkObj) {
     return {
       content: finalCleanFallbackReply,
       reasoning: combinedReasoning,
+      rawContent: rawContent || combinedReasoning,
       genTime: elapsedSec
     };
     } catch (callErr) {
@@ -16204,8 +16324,6 @@ function buildFallbackCodeFromItem(drinkObj) {
           const lastIdx = msgs.length - 1;
           if (!msgs[lastIdx].is_user) {
             tavernEventSource.emit(TAVERN_EVENT_TYPES.CHARACTER_MESSAGE_RENDERED, lastIdx, 'normal');
-          } else {
-            tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, lastIdx);
           }
         }
       } catch (_) {}
@@ -17338,7 +17456,7 @@ function buildFallbackCodeFromItem(drinkObj) {
     })();
 
     return `
-      <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${m.is_system ? 'true' : 'false'}">
+      <div class="mes ${isLast ? 'last_mes' : ''}" mesid="${idx}" is_user="${isUser ? 'true' : 'false'}" is_system="${(m.is_system && !(m.extra && m.extra.bbs_hidden)) ? 'true' : 'false'}">
         <div class="mesAvatarWrapper">
           <div class="avatar">
             <img src="${avatarSrc}" ${String(isUser ? userRawAvatar : (card ? card.avatar : '')).startsWith('vault://') ? `data-vault-ref="${escapeHtmlSimple(isUser ? userRawAvatar : card.avatar)}"` : ''} alt="avatar" onerror="this.onerror=null;this.src='${fallbackSrc}';" />
@@ -19631,10 +19749,16 @@ function buildFallbackCodeFromItem(drinkObj) {
     };
     const chatElBeforeSend = document.getElementById('chat');
     const wasNearBottomBeforeSend = isTavernChatNearBottom(chatElBeforeSend, 85);
+    const hadStaleBbsNotice = removeStaleBaiBaiBacklogNotices(sess);
+    userMsg.mesid = sess.messages.length;
     sess.messages.push(userMsg);
     uiRuntime.userScrolledUpDuringStream = !wasNearBottomBeforeSend;
     await saveTavernStore();
-    appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: wasNearBottomBeforeSend });
+    if (hadStaleBbsNotice) {
+      renderTavernChatFloors(false, { scrollToBottom: wasNearBottomBeforeSend });
+    } else {
+      appendOrUpdateSingleFloorDom(sess.messages.length - 1, { scrollToBottom: wasNearBottomBeforeSend });
+    }
     await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SENT, sess.messages.length - 1);
     await tavernEventSource.emit(TAVERN_EVENT_TYPES.USER_MESSAGE_RENDERED, sess.messages.length - 1);
 
@@ -20020,6 +20144,50 @@ function buildFallbackCodeFromItem(drinkObj) {
     }
   }
 
+  function isBaiBaiBacklogNoticeMessage(m) {
+    if (!m || m.is_user) return false;
+    if (m.extra && m.extra.bbs_internal_notice === 'backlog') return true;
+    return m.name === '柏宝书' && typeof m.mes === 'string' && m.mes.includes('本次生成已拦截');
+  }
+
+  function removeStaleBaiBaiBacklogNotices(sess) {
+    if (!sess || !Array.isArray(sess.messages) || sess.messages.length <= 1) return false;
+    let removed = false;
+    for (let i = sess.messages.length - 1; i >= 1; i--) {
+      if (isBaiBaiBacklogNoticeMessage(sess.messages[i])) {
+        sess.messages.splice(i, 1);
+        removed = true;
+      }
+    }
+    if (removed) {
+      sess.messages.forEach((m, idx) => {
+        if (m) m.mesid = idx;
+      });
+    }
+    return removed;
+  }
+
+  async function startNewChatForActiveCard() {
+    const card = getActiveCard();
+    if (!card) return;
+    const newSess = buildInitialSessionForCard(card);
+    if (!Array.isArray(tavernState.chatArchivesByCardId[card.id])) {
+      tavernState.chatArchivesByCardId[card.id] = [];
+    }
+    tavernState.chatArchivesByCardId[card.id].unshift(newSess);
+    tavernState.chatsByCardId[card.id] = newSess;
+    if (uiRuntime.abortController) {
+      try { uiRuntime.abortController.abort(); } catch (_) {}
+      uiRuntime.abortController = null;
+    }
+    uiRuntime.isGenerating = false;
+    uiRuntime.editingFloorMesId = null;
+    uiRuntime.editingFloorReasoning = false;
+    await saveTavernStore();
+    renderTavernShell();
+    await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_CHANGED, newSess.chatId || 'chat_default');
+  }
+
   async function triggerCharacterReplyGeneration(options = {}) {
     if (uiRuntime.isGenerating) return;
     let {
@@ -20032,6 +20200,15 @@ function buildFallbackCodeFromItem(drinkObj) {
     const card = getActiveCard();
     const sess = getActiveChatSession();
     const preset = getActivePreset();
+
+    if (sess && removeStaleBaiBaiBacklogNotices(sess)) {
+      await saveTavernStore();
+      renderTavernChatFloors(false);
+      await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_DELETED, sess.messages.length);
+      if (targetMesIndex !== null && targetMesIndex >= sess.messages.length) {
+        targetMesIndex = sess.messages.length - 1;
+      }
+    }
 
     const chatElAtGenStart = document.getElementById('chat');
     const wasNearBottomAtGenStart = isTavernChatNearBottom(chatElAtGenStart, 85);
@@ -20079,12 +20256,27 @@ function buildFallbackCodeFromItem(drinkObj) {
     let nonStreamWaitTimer = null;
     try {
       await tavernEventSource.emit(TAVERN_EVENT_TYPES.GENERATION_STARTED, genType, {}, false);
+      let bbsAborted = false;
       if (typeof window.bbs_generateInterceptor === 'function') {
         try {
-          await window.bbs_generateInterceptor(sess.messages || [], Number(preset.openai_max_context || 32000), () => {}, genType);
+          await window.bbs_generateInterceptor(
+            sess.messages || [],
+            Number(preset.openai_max_context || 32000),
+            (shouldAbort) => {
+              if (shouldAbort !== false) {
+                bbsAborted = true;
+              }
+            },
+            genType
+          );
         } catch (bbsErr) {
           console.warn('bbs_generateInterceptor warning:', bbsErr);
         }
+      }
+      if (bbsAborted) {
+        await saveTavernStore();
+        renderTavernChatFloors(false, { scrollToBottom: true });
+        return;
       }
       const apiMessages = buildTavernApiMessages({ isImpersonate, isContinue, isSwipeRegen, targetMesIndex });
       const activeCredsForHook = resolveTavernApiCredentials();
@@ -21534,6 +21726,7 @@ function buildFallbackCodeFromItem(drinkObj) {
             appendOrUpdateSingleFloorDom(0);
             const chatEl = document.getElementById('chat');
             if (chatEl && sess.messages.length === 1) chatEl.scrollTop = 0;
+            await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_SWIPED, 0);
           }
         }
         return;
@@ -21739,6 +21932,7 @@ function buildFallbackCodeFromItem(drinkObj) {
           uiRuntime.editingFloorReasoning = false;
           await saveTavernStore();
           renderTavernChatFloors(false);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_CHANGED, newSess.chatId);
           showTavernToast('已从第' + idx + '层创建新分支存档');
         }
         return;
@@ -21779,6 +21973,7 @@ function buildFallbackCodeFromItem(drinkObj) {
           uiRuntime.openExtraMenuMesId = null;
           await saveTavernStore();
           renderTavernChatFloors(sess.messages.length <= 1);
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.MESSAGE_DELETED, sess.messages.length);
           showTavernToast('已删除楼层');
         }
         return;
@@ -23502,6 +23697,10 @@ function buildFallbackCodeFromItem(drinkObj) {
         await saveTavernStore();
         refreshOpenDrawerOnly();
         renderTavernChatFloors(false);
+        const curSessAfterDel = getActiveChatSession();
+        if (curSessAfterDel) {
+          await tavernEventSource.emit(TAVERN_EVENT_TYPES.CHAT_CHANGED, curSessAfterDel.chatId || curSessAfterDel.id || 'chat_default');
+        }
         return;
       }
       if (action === 'export-current-chat') {
