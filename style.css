@@ -37459,11 +37459,24 @@ select,
 }
 
 #module-nai-panel .mod-nai-char-body {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 8px;
   width: 100%;
   min-width: 0;
+}
+
+#module-nai-panel .mod-nai-char-card.is-expanded .mod-nai-char-body {
+  display: flex !important;
+}
+
+#module-nai-panel .mod-nai-char-lib-row {
+  position: relative;
+  z-index: 20;
+}
+
+#module-nai-panel .mod-nai-char-card.is-dropdown-open .mod-nai-char-lib-row {
+  z-index: 60 !important;
 }
 
 #module-nai-panel .mod-nai-char-stage-list {
@@ -37472,16 +37485,28 @@ select,
   gap: 6px;
   width: 100%;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
+#module-nai-panel .mod-nai-char-empty,
 #module-nai-panel .mod-nai-char-empty-tip {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--nai-muted);
   text-align: center;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 8px;
-  border: 1px dashed var(--nai-border);
+  border: 1px dashed var(--nai-border-strong, var(--nai-border));
   background-color: color-mix(in srgb, var(--nai-sub-bg) 55%, transparent);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+#module-nai-panel .mod-nai-char-empty:active,
+#module-nai-panel .mod-nai-char-empty-tip:active {
+  border-color: var(--nai-text);
+  color: var(--nai-text);
 }
 
 #module-nai-panel .mod-nai-char-slot {
@@ -37493,7 +37518,11 @@ select,
   border: 1px solid var(--nai-border);
   background-color: color-mix(in srgb, var(--nai-sub-bg) 68%, var(--card-bg));
   box-sizing: border-box;
-  transition: border-color 0.16s ease;
+  transition: border-color 0.16s ease, opacity 0.16s ease;
+}
+
+#module-nai-panel .mod-nai-char-slot.is-disabled {
+  opacity: 0.64;
 }
 
 #module-nai-panel.nai-theme-tavern .mod-nai-char-slot,
@@ -37513,6 +37542,7 @@ select,
   border-color: var(--nai-text);
 }
 
+#module-nai-panel .mod-nai-char-slot-main,
 #module-nai-panel .mod-nai-char-slot-bar {
   display: flex;
   align-items: center;
@@ -37520,19 +37550,29 @@ select,
   gap: 6px;
   min-width: 0;
   width: 100%;
+  cursor: pointer;
+  user-select: none;
 }
 
+#module-nai-panel .mod-nai-char-slot-name-btn,
 #module-nai-panel .mod-nai-char-slot-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex: 1 1 auto;
   min-width: 0;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 2px 2px;
+  margin: 0;
+  text-align: left;
+  color: var(--nai-text);
+  font-family: inherit;
 }
 
 #module-nai-panel .mod-nai-char-slot-name {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -37542,6 +37582,28 @@ select,
   color: var(--nai-text);
 }
 
+#module-nai-panel .mod-nai-char-slot-fold-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  color: var(--nai-muted);
+  transition: transform 0.18s ease;
+}
+
+#module-nai-panel .mod-nai-char-slot-fold-icon svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+}
+
+#module-nai-panel .mod-nai-char-slot.is-slot-expanded .mod-nai-char-slot-fold-icon {
+  transform: rotate(180deg);
+}
+
+#module-nai-panel .mod-nai-char-slot-actions,
 #module-nai-panel .mod-nai-char-slot-right {
   display: flex;
   align-items: center;
@@ -37550,17 +37612,28 @@ select,
 }
 
 #module-nai-panel .mod-nai-char-pos-btn {
+  width: auto !important;
+  min-width: 58px !important;
+  max-width: 82px !important;
   height: 26px !important;
-  padding: 0 8px !important;
-  font-size: 11px !important;
-  min-width: 44px;
+  min-height: 26px !important;
+  padding: 0 8px 0 10px !important;
+  font-size: 11.5px !important;
+  flex: 0 0 auto !important;
+  gap: 4px !important;
 }
 
+#module-nai-panel .mod-nai-char-pos-btn.is-open .mod-nai-preset-trigger-arrow {
+  transform: rotate(180deg);
+}
+
+#module-nai-panel .mod-nai-char-pos-btn.is-custom-pos,
 #module-nai-panel .mod-nai-char-pos-btn.has-manual-coord {
-  border-color: var(--nai-seal, var(--nai-accent));
-  color: var(--nai-seal, var(--nai-accent));
+  border-color: var(--nai-seal, var(--nai-accent)) !important;
+  color: var(--nai-seal, var(--nai-accent)) !important;
 }
 
+#module-nai-panel .mod-nai-char-slot-actions .mod-nai-icon-btn,
 #module-nai-panel .mod-nai-char-slot-right .mod-nai-icon-btn {
   width: 26px !important;
   height: 26px !important;
@@ -37569,14 +37642,18 @@ select,
 }
 
 #module-nai-panel .mod-nai-char-grid-panel {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 6px;
-  padding: 7px 8px;
-  border-radius: 8px;
+  padding: 8px 9px;
+  border-radius: 9px;
   border: 1px dashed var(--nai-border-strong);
   background-color: var(--card-bg);
   box-sizing: border-box;
+}
+
+#module-nai-panel .mod-nai-char-grid-panel.is-open {
+  display: flex;
 }
 
 #module-nai-panel .mod-nai-char-grid-top {
@@ -37587,17 +37664,19 @@ select,
 }
 
 #module-nai-panel .mod-nai-char-grid-hint {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--nai-muted);
-  font-weight: 500;
+  font-weight: 600;
 }
 
+#module-nai-panel .mod-nai-char-auto-pos-btn,
 #module-nai-panel .mod-nai-char-grid-auto-btn {
   height: 24px !important;
-  padding: 0 8px !important;
+  padding: 0 10px !important;
   font-size: 11px !important;
 }
 
+#module-nai-panel .mod-nai-char-auto-pos-btn.is-selected,
 #module-nai-panel .mod-nai-char-grid-auto-btn.is-selected {
   background-color: var(--nai-text);
   color: var(--card-bg);
@@ -37607,18 +37686,18 @@ select,
 #module-nai-panel .mod-nai-char-5x5-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
+  gap: 5px;
   width: 100%;
 }
 
 #module-nai-panel .mod-nai-char-grid-cell {
   height: 26px;
   padding: 0 2px;
-  border-radius: 5px;
+  border-radius: 999px;
   border: 1px solid var(--nai-border);
   background-color: var(--nai-sub-bg);
   color: var(--nai-text);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -37630,21 +37709,33 @@ select,
   transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
 }
 
+#module-nai-panel.nai-theme-tavern .mod-nai-char-grid-cell,
+#module-nai-panel.nai-theme-folio .mod-nai-char-grid-cell {
+  background-color: var(--card-bg);
+  border: 1px solid var(--nai-border-strong);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+}
+
 #module-nai-panel .mod-nai-char-grid-cell.is-selected {
-  background-color: var(--nai-seal, var(--nai-accent));
-  border-color: var(--nai-seal, var(--nai-accent));
-  color: var(--card-bg);
+  background-color: var(--nai-text) !important;
+  border-color: var(--nai-text) !important;
+  color: var(--card-bg) !important;
   font-weight: 600;
 }
 
 #module-nai-panel .mod-nai-char-slot-editor {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 6px;
   padding-top: 6px;
   border-top: 1px dashed var(--nai-border);
 }
 
+#module-nai-panel .mod-nai-char-slot-editor.is-open {
+  display: flex;
+}
+
+#module-nai-panel .mod-nai-char-editor-bar,
 #module-nai-panel .mod-nai-char-editor-head {
   display: flex;
   align-items: center;
