@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.3</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -45386,6 +45386,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   e.target &&
                   (e.target.tagName === "INPUT" ||
                     e.target.closest(".mod-nai-char-pos-btn") ||
+                    e.target.closest(".mod-nai-char-move-btn") ||
                     e.target.closest(".mod-nai-char-remove-btn"))
                 ) {
                   return;
@@ -45451,6 +45452,56 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const actionsWrap = document.createElement("div");
               actionsWrap.className = "mod-nai-char-slot-actions";
 
+              const moveUpBtn = document.createElement("button");
+              moveUpBtn.type = "button";
+              moveUpBtn.className =
+                "mod-nai-btn mod-nai-icon-btn mod-nai-char-move-btn" +
+                (idx === 0 ? " is-disabled-move" : "");
+              moveUpBtn.disabled = idx === 0;
+              moveUpBtn.title = "上移该角色顺序";
+              moveUpBtn.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"></path><polyline points="6 11 12 5 18 11"></polyline></svg>';
+              moveUpBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (idx <= 0) return;
+                const curSt = loadPanelState();
+                const curList = normalizeActiveCharactersList(curSt.activeCharacters);
+                const curIdx = curList.findIndex((x) => x.id === slot.id);
+                if (curIdx > 0) {
+                  const temp = curList[curIdx - 1];
+                  curList[curIdx - 1] = curList[curIdx];
+                  curList[curIdx] = temp;
+                  curSt.activeCharacters = curList;
+                  savePanelState(curSt);
+                  renderCharStageList();
+                }
+              });
+
+              const moveDownBtn = document.createElement("button");
+              moveDownBtn.type = "button";
+              moveDownBtn.className =
+                "mod-nai-btn mod-nai-icon-btn mod-nai-char-move-btn" +
+                (idx === list.length - 1 ? " is-disabled-move" : "");
+              moveDownBtn.disabled = idx === list.length - 1;
+              moveDownBtn.title = "下移该角色顺序";
+              moveDownBtn.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><polyline points="18 13 12 19 6 13"></polyline></svg>';
+              moveDownBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (idx >= list.length - 1) return;
+                const curSt = loadPanelState();
+                const curList = normalizeActiveCharactersList(curSt.activeCharacters);
+                const curIdx = curList.findIndex((x) => x.id === slot.id);
+                if (curIdx >= 0 && curIdx < curList.length - 1) {
+                  const temp = curList[curIdx + 1];
+                  curList[curIdx + 1] = curList[curIdx];
+                  curList[curIdx] = temp;
+                  curSt.activeCharacters = curList;
+                  savePanelState(curSt);
+                  renderCharStageList();
+                }
+              });
+
               const removeStageBtn = document.createElement("button");
               removeStageBtn.type = "button";
               removeStageBtn.className = "mod-nai-btn mod-nai-icon-btn is-muted-icon mod-nai-char-remove-btn";
@@ -45468,6 +45519,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 renderCharStageList();
               });
 
+              actionsWrap.appendChild(moveUpBtn);
+              actionsWrap.appendChild(moveDownBtn);
               actionsWrap.appendChild(removeStageBtn);
 
               mainRow.appendChild(chk);
@@ -45516,7 +45569,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     const cellBtn = document.createElement("button");
                     cellBtn.type = "button";
                     cellBtn.className = "mod-nai-char-grid-cell" + (posInfo.key === cellKey ? " is-selected" : "");
-                    cellBtn.textContent = CHAR_POS_5X5_LABELS[r][c];
+                    cellBtn.title = CHAR_POS_5X5_LABELS[r][c] || "站位";
+                    cellBtn.setAttribute("aria-label", CHAR_POS_5X5_LABELS[r][c] || "站位");
+                    cellBtn.innerHTML = '<span class="mod-nai-char-grid-dot"></span>';
                     cellBtn.addEventListener("click", () => {
                       const curSt = loadPanelState();
                       const curList = normalizeActiveCharactersList(curSt.activeCharacters);

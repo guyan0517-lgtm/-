@@ -37635,17 +37635,30 @@ select,
 
 #module-nai-panel .mod-nai-char-slot-actions .mod-nai-icon-btn,
 #module-nai-panel .mod-nai-char-slot-right .mod-nai-icon-btn {
-  width: 26px !important;
-  height: 26px !important;
-  min-width: 26px !important;
-  flex: 0 0 26px !important;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  flex: 0 0 24px !important;
+  padding: 0 !important;
+}
+
+#module-nai-panel .mod-nai-char-move-btn svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+#module-nai-panel .mod-nai-char-move-btn.is-disabled-move {
+  opacity: 0.32;
+  cursor: default;
+  pointer-events: none;
 }
 
 #module-nai-panel .mod-nai-char-grid-panel {
   display: none;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 9px;
+  gap: 7px;
+  padding: 9px 10px;
   border-radius: 9px;
   border: 1px dashed var(--nai-border-strong);
   background-color: var(--card-bg);
@@ -37688,39 +37701,52 @@ select,
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
   width: 100%;
+  max-width: 185px;
+  margin: 0 auto;
 }
 
 #module-nai-panel .mod-nai-char-grid-cell {
-  height: 26px;
-  padding: 0 2px;
-  border-radius: 999px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
   border: 1px solid var(--nai-border);
   background-color: var(--nai-sub-bg);
   color: var(--nai-text);
-  font-size: 11px;
-  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   box-sizing: border-box;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.12s ease;
+}
+
+#module-nai-panel .mod-nai-char-grid-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--nai-muted);
+  opacity: 0.45;
+  transition: transform 0.14s ease, background-color 0.14s ease, opacity 0.14s ease;
 }
 
 #module-nai-panel.nai-theme-tavern .mod-nai-char-grid-cell,
 #module-nai-panel.nai-theme-folio .mod-nai-char-grid-cell {
+  border-radius: 3px;
   background-color: var(--card-bg);
   border: 1px solid var(--nai-border-strong);
-  font-family: "Noto Serif SC", "Songti SC", serif;
 }
 
 #module-nai-panel .mod-nai-char-grid-cell.is-selected {
   background-color: var(--nai-text) !important;
   border-color: var(--nai-text) !important;
   color: var(--card-bg) !important;
-  font-weight: 600;
+}
+
+#module-nai-panel .mod-nai-char-grid-cell.is-selected .mod-nai-char-grid-dot {
+  width: 7px;
+  height: 7px;
+  background-color: var(--card-bg);
+  opacity: 1;
 }
 
 #module-nai-panel .mod-nai-char-slot-editor {
