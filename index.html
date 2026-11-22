@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -29716,6 +29716,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             content: String(e.content || ""),
           }));
 
+          // 立即关闭弹窗并刷新预设列表，确保点击保存零延迟反馈，不阻塞界面关闭
+          const editorModalEl = document.getElementById("thought-chain-editor-modal");
+          if (editorModalEl) {
+            editorModalEl.classList.remove("visible");
+          }
+
           if (editingThoughtChainId) {
             const preset = await db.thoughtChainPresets.get(editingThoughtChainId);
             if (preset) {
@@ -29730,7 +29736,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               preset.entries = entries;
               preset.updatedAt = Date.now();
               await db.thoughtChainPresets.put(preset);
-              await syncPresetToAllGroupSharedThoughtChains(preset);
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
+              }
+              renderThoughtChainPresets();
+              syncPresetToAllGroupSharedThoughtChains(preset).catch(() => {});
             }
           } else {
             const allPresets = (await db.thoughtChainPresets.toArray()) || [];
@@ -29746,7 +29756,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               existing.entries = entries;
               existing.updatedAt = Date.now();
               await db.thoughtChainPresets.put(existing);
-              await syncPresetToAllGroupSharedThoughtChains(existing);
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
+              }
+              renderThoughtChainPresets();
+              syncPresetToAllGroupSharedThoughtChains(existing).catch(() => {});
             } else {
               const newId = await db.thoughtChainPresets.add({
                 name,
@@ -29761,15 +29775,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               });
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
+              }
+              renderThoughtChainPresets();
               const createdPreset = await db.thoughtChainPresets.get(newId);
               if (createdPreset) {
-                await syncPresetToAllGroupSharedThoughtChains(createdPreset);
+                syncPresetToAllGroupSharedThoughtChains(createdPreset).catch(() => {});
               }
             }
           }
-
-          document.getElementById("thought-chain-editor-modal").classList.remove("visible");
-          await renderThoughtChainPresets();
         }
         window.saveThoughtChainPreset = saveThoughtChainPreset;
 
@@ -29777,7 +29792,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!updatedPreset || !state.chats) return;
           const targetIdStr = String(updatedPreset.id || "");
           const targetName = String(updatedPreset.name || "").trim();
+          const activeIdStr = state.activeChatId !== null && state.activeChatId !== undefined ? String(state.activeChatId) : "";
           const seenChatIds = new Set();
+          const backgroundPersistQueue = [];
           for (const cid of Object.keys(state.chats)) {
             const c = state.chats[cid];
             if (!c || !c.settings) continue;
@@ -29823,11 +29840,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 return stc;
               });
             }
-            if (changed && typeof db !== "undefined" && db.chats) {
-              try {
-                await db.chats.put(c);
-              } catch (_) {}
+            if (changed) {
+              if (realIdStr === activeIdStr && typeof db !== "undefined" && db.chats) {
+                db.chats.put(c).catch(() => {});
+              } else {
+                backgroundPersistQueue.push(c);
+              }
             }
+          }
+          if (backgroundPersistQueue.length > 0 && typeof db !== "undefined" && db.chats) {
+            setTimeout(async () => {
+              for (const chatToSave of backgroundPersistQueue) {
+                try {
+                  await db.chats.put(chatToSave);
+                } catch (_) {}
+              }
+            }, 60);
           }
         }
 
@@ -29836,10 +29864,70 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!preset) return;
           const confirmed = await showCustomConfirm("确认删除", `确定要删除思维链预设 "${preset.name}" 吗？`, { confirmButtonClass: "btn-danger" });
           if (confirmed) {
+            const targetIdStr = String(presetId);
+            const targetName = String(preset.name || "").trim();
             await db.thoughtChainPresets.delete(presetId);
-            if (state.globalSettings && state.globalSettings.defaultThoughtChainId === presetId) {
+            if (state.globalSettings && String(state.globalSettings.defaultThoughtChainId || "") === targetIdStr) {
               state.globalSettings.defaultThoughtChainId = null;
               await db.globalSettings.put(state.globalSettings);
+            }
+            if (state.chats) {
+              const seenChatIds = new Set();
+              const chatsToPersist = [];
+              for (const cid of Object.keys(state.chats)) {
+                const c = state.chats[cid];
+                if (!c) continue;
+                const realIdStr = String(c.id || cid);
+                if (seenChatIds.has(realIdStr)) continue;
+                seenChatIds.add(realIdStr);
+                let changed = false;
+                if (String(c.thoughtChainId || "") === targetIdStr) {
+                  c.thoughtChainId = null;
+                  changed = true;
+                }
+                if (c.settings) {
+                  if (String(c.settings.thinkingPresetId || "") === targetIdStr) {
+                    c.settings.thinkingPresetId = null;
+                    changed = true;
+                  }
+                  const boundSnap = c.settings.boundThoughtChainPreset;
+                  if (
+                    boundSnap &&
+                    (String(boundSnap.id || "") === targetIdStr ||
+                      (targetName && String(boundSnap.name || "").trim() === targetName))
+                  ) {
+                    c.settings.boundThoughtChainPreset = null;
+                    changed = true;
+                  }
+                  if (Array.isArray(c.settings.sharedThoughtChains)) {
+                    const beforeLen = c.settings.sharedThoughtChains.length;
+                    c.settings.sharedThoughtChains = c.settings.sharedThoughtChains.filter((stc) => {
+                      if (!stc) return false;
+                      const matchId = String(stc.id || "") === targetIdStr;
+                      const matchName = targetName && String(stc.name || "").trim() === targetName;
+                      return !matchId && !matchName;
+                    });
+                    if (c.settings.sharedThoughtChains.length !== beforeLen) {
+                      changed = true;
+                    }
+                  }
+                }
+                if (changed) {
+                  chatsToPersist.push(c);
+                }
+              }
+              if (chatsToPersist.length > 0 && typeof db !== "undefined" && db.chats) {
+                setTimeout(async () => {
+                  for (const chatToSave of chatsToPersist) {
+                    try {
+                      await db.chats.put(chatToSave);
+                    } catch (_) {}
+                  }
+                }, 40);
+              }
+            }
+            if (typeof window.refreshMashuThoughtChainsCache === "function") {
+              window.refreshMashuThoughtChainsCache();
             }
             await renderThoughtChainPresets();
           }
@@ -30261,7 +30349,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const text = await file.text();
               const parsed = parseThoughtChainFromText(text, fallbackName);
               if (parsed) {
-                await db.thoughtChainPresets.add({
+                const now = Date.now();
+                const newId = await db.thoughtChainPresets.add({
                   name: parsed.name,
                   headerContent: parsed.headerContent || "",
                   generalContent: parsed.generalContent || "",
@@ -30271,8 +30360,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   groupsCollapsed: Boolean(parsed.groupsCollapsed),
                   groups: Array.isArray(parsed.groups) ? parsed.groups : [],
                   entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-                  createdAt: Date.now(),
+                  createdAt: now,
+                  updatedAt: now,
                 });
+                const addedPreset = await db.thoughtChainPresets.get(newId);
+                if (addedPreset) {
+                  syncPresetToAllGroupSharedThoughtChains(addedPreset).catch(() => {});
+                }
                 importedCount++;
               }
             } catch (e) {
@@ -30282,6 +30376,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           event.target.value = "";
           if (importedCount > 0) {
+            if (typeof window.refreshMashuThoughtChainsCache === "function") {
+              window.refreshMashuThoughtChainsCache();
+            }
             await renderThoughtChainPresets();
             if (typeof showCustomAlert === "function") {
               await showCustomAlert("导入成功", `成功导入 ${importedCount} 个思维链预设`);
@@ -30370,47 +30467,26 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
         let currentBindModalActivePreset = null;
 
-        async function syncModifiedPresetFromBindModal(preset, chat, isPeerGrp) {
+        let _tcBindSyncDebounceTimer = null;
+        async function syncModifiedPresetFromBindModal(preset, chat, isPeerGrp, immediateFlush = false) {
           if (!preset) return;
           preset.updatedAt = Date.now();
           const clonedGroups = JSON.parse(JSON.stringify(preset.groups || []));
           const clonedEntries = JSON.parse(JSON.stringify(preset.entries || []));
           const targetName = String(preset.name || "").trim();
-          try {
-            if (typeof db !== "undefined" && db.thoughtChainPresets) {
-              const allLocal = (await db.thoughtChainPresets.toArray()) || [];
-              const matchingLocals = allLocal.filter(p =>
-                p && (
-                  (preset.id && String(p.id) === String(preset.id)) ||
-                  (targetName && String(p.name || "").trim() === targetName)
-                )
-              );
-              for (const localPreset of matchingLocals) {
-                localPreset.groups = JSON.parse(JSON.stringify(clonedGroups));
-                localPreset.entries = JSON.parse(JSON.stringify(clonedEntries));
-                localPreset.updatedAt = preset.updatedAt;
-                if (!preset.headerContent && localPreset.headerContent) preset.headerContent = localPreset.headerContent;
-                if (!preset.generalContent && localPreset.generalContent) preset.generalContent = localPreset.generalContent;
-                if (!preset.cocContent && localPreset.cocContent) preset.cocContent = localPreset.cocContent;
-                await db.thoughtChainPresets.put(localPreset);
-              }
-              if (typeof window.refreshMashuThoughtChainsCache === "function") {
-                window.refreshMashuThoughtChainsCache();
-              }
-            }
-          } catch (e) {}
+
           if (chat) {
             const masterSwitch = document.getElementById("tc-enable-master-switch");
             chat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : (chat.thoughtChainEnabled !== false);
             chat.thoughtChainId = preset.id;
             if (!chat.settings) chat.settings = {};
             chat.settings.thinkingPresetId = preset.id;
-            chat.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify({
+            chat.settings.boundThoughtChainPreset = {
               ...preset,
               groups: clonedGroups,
               entries: clonedEntries,
               updatedAt: preset.updatedAt,
-            }));
+            };
             if (state.globalSettings) state.globalSettings.defaultThoughtChainId = preset.id;
             if (Array.isArray(chat.settings.sharedThoughtChains)) {
               let matchedInShared = false;
@@ -30426,8 +30502,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     headerContent: preset.headerContent !== undefined ? preset.headerContent : t.headerContent,
                     generalContent: preset.generalContent !== undefined ? preset.generalContent : t.generalContent,
                     cocContent: preset.cocContent !== undefined ? preset.cocContent : t.cocContent,
-                    groups: JSON.parse(JSON.stringify(clonedGroups)),
-                    entries: JSON.parse(JSON.stringify(clonedEntries)),
+                    groups: clonedGroups,
+                    entries: clonedEntries,
                     updatedAt: preset.updatedAt,
                   };
                 }
@@ -30436,31 +30512,69 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               if (!matchedInShared && isPeerGrp) {
                 chat.settings.sharedThoughtChains.push({
                   ...preset,
-                  groups: JSON.parse(JSON.stringify(clonedGroups)),
-                  entries: JSON.parse(JSON.stringify(clonedEntries)),
+                  groups: clonedGroups,
+                  entries: clonedEntries,
                   updatedAt: preset.updatedAt,
                 });
               }
             } else if (isPeerGrp) {
               chat.settings.sharedThoughtChains = [{
                 ...preset,
-                groups: JSON.parse(JSON.stringify(clonedGroups)),
-                entries: JSON.parse(JSON.stringify(clonedEntries)),
+                groups: clonedGroups,
+                entries: clonedEntries,
                 updatedAt: preset.updatedAt,
               }];
-            }
-            if (typeof db !== "undefined" && db.chats) {
-              try {
-                await db.chats.put(chat);
-              } catch (e) {}
             }
             if (state.chats) {
               state.chats[chat.id] = chat;
               state.chats[String(chat.id)] = chat;
             }
           }
-          await syncPresetToAllGroupSharedThoughtChains(preset);
-          await refreshChatSettingsTokenDisplay(chat ? chat.id : state.activeChatId);
+
+          const performBgPersist = async () => {
+            try {
+              if (typeof db !== "undefined" && db.thoughtChainPresets) {
+                const allLocal = (await db.thoughtChainPresets.toArray()) || [];
+                const matchingLocals = allLocal.filter(p =>
+                  p && (
+                    (preset.id && String(p.id) === String(preset.id)) ||
+                    (targetName && String(p.name || "").trim() === targetName)
+                  )
+                );
+                for (const localPreset of matchingLocals) {
+                  localPreset.groups = clonedGroups;
+                  localPreset.entries = clonedEntries;
+                  localPreset.updatedAt = preset.updatedAt;
+                  if (!preset.headerContent && localPreset.headerContent) preset.headerContent = localPreset.headerContent;
+                  if (!preset.generalContent && localPreset.generalContent) preset.generalContent = localPreset.generalContent;
+                  if (!preset.cocContent && localPreset.cocContent) preset.cocContent = localPreset.cocContent;
+                  await db.thoughtChainPresets.put(localPreset);
+                }
+                if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                  window.refreshMashuThoughtChainsCache();
+                }
+              }
+              if (chat && typeof db !== "undefined" && db.chats) {
+                await db.chats.put(chat).catch(() => {});
+              }
+              await syncPresetToAllGroupSharedThoughtChains(preset);
+              refreshChatSettingsTokenDisplay(chat ? chat.id : state.activeChatId);
+            } catch (_) {}
+          };
+
+          if (immediateFlush) {
+            if (_tcBindSyncDebounceTimer) {
+              clearTimeout(_tcBindSyncDebounceTimer);
+              _tcBindSyncDebounceTimer = null;
+            }
+            performBgPersist();
+          } else {
+            if (_tcBindSyncDebounceTimer) clearTimeout(_tcBindSyncDebounceTimer);
+            _tcBindSyncDebounceTimer = setTimeout(() => {
+              _tcBindSyncDebounceTimer = null;
+              performBgPersist();
+            }, 180);
+          }
         }
 
         async function openThoughtChainBindModal() {
@@ -30510,16 +30624,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const mergedMap = new Map();
           const localPresets = (await db.thoughtChainPresets.toArray()) || [];
-          const boundSnap = chat.settings?.boundThoughtChainPreset || null;
           const applyNewerSnapIfMatch = (targetObj) => {
-            if (!targetObj || !boundSnap) return targetObj;
+            const currentSnap = chat.settings?.boundThoughtChainPreset || null;
+            if (!targetObj || !currentSnap) return targetObj;
             const tName = String(targetObj.name || "").trim();
-            const bName = String(boundSnap.name || "").trim();
-            const isMatch = (targetObj.id && boundSnap.id && String(targetObj.id) === String(boundSnap.id)) || (tName && bName && tName === bName);
-            if (isMatch && (Number(boundSnap.updatedAt) || 0) >= (Number(targetObj.updatedAt) || 0)) {
-              targetObj.groups = JSON.parse(JSON.stringify(boundSnap.groups || targetObj.groups || []));
-              targetObj.entries = JSON.parse(JSON.stringify(boundSnap.entries || targetObj.entries || []));
-              targetObj.updatedAt = boundSnap.updatedAt;
+            const bName = String(currentSnap.name || "").trim();
+            const isMatch = (targetObj.id && currentSnap.id && String(targetObj.id) === String(currentSnap.id)) || (tName && bName && tName === bName);
+            if (isMatch && (Number(currentSnap.updatedAt) || 0) > (Number(targetObj.updatedAt) || 0)) {
+              targetObj.groups = JSON.parse(JSON.stringify(currentSnap.groups || targetObj.groups || []));
+              targetObj.entries = JSON.parse(JSON.stringify(currentSnap.entries || targetObj.entries || []));
+              targetObj.updatedAt = currentSnap.updatedAt;
             }
             return targetObj;
           };
@@ -30736,16 +30850,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ];
               const chosen = await showChoiceModal("选择思维链", choices);
               if (chosen === null) return;
+              let matchedPresetObj = null;
               if (chosen === "none") {
                 selectedThoughtChainBindId = null;
               } else {
-                const matched = presets.find(p => String(p.id) === String(chosen));
-                selectedThoughtChainBindId = matched ? matched.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
+                matchedPresetObj = presets.find(p => String(p.id) === String(chosen)) || null;
+                selectedThoughtChainBindId = matchedPresetObj ? matchedPresetObj.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
               }
               const latestChat = (state.chats && state.chats[chat.id]) || chat;
               latestChat.thoughtChainId = selectedThoughtChainBindId;
               if (!latestChat.settings) latestChat.settings = {};
               latestChat.settings.thinkingPresetId = selectedThoughtChainBindId;
+              if (!selectedThoughtChainBindId) {
+                latestChat.settings.boundThoughtChainPreset = null;
+              } else if (matchedPresetObj) {
+                latestChat.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify(matchedPresetObj));
+              }
               if (state.globalSettings) state.globalSettings.defaultThoughtChainId = selectedThoughtChainBindId;
               latestChat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
               if (typeof db !== "undefined" && db.chats) {
@@ -30782,8 +30902,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             ? window.isPeerGroupChat(chat)
             : Boolean(chat.isGroup && chat.isPeerGroup);
 
-          if (currentBindModalActivePreset && String(currentBindModalActivePreset.id) === String(selectedThoughtChainBindId)) {
-            await syncModifiedPresetFromBindModal(currentBindModalActivePreset, chat, isPeerGrp);
+          // 立即关闭思维链绑定弹窗，保证点击保存零延迟反馈，绝不卡死在界面上
+          const bindModalEl = document.getElementById("thought-chain-bind-modal");
+          if (bindModalEl) {
+            bindModalEl.classList.remove("visible");
+          }
+
+          if (!selectedThoughtChainBindId) {
+            chat.settings.boundThoughtChainPreset = null;
+          } else if (currentBindModalActivePreset && String(currentBindModalActivePreset.id) === String(selectedThoughtChainBindId)) {
+            syncModifiedPresetFromBindModal(currentBindModalActivePreset, chat, isPeerGrp, true);
           } else if (selectedThoughtChainBindId) {
             if (!chat.settings) chat.settings = {};
             let foundTc = null;
@@ -30809,16 +30937,15 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           }
 
-          await db.chats.put(chat);
           if (state.chats) {
             state.chats[chat.id] = chat;
             state.chats[String(chat.id)] = chat;
           }
+          db.chats.put(chat).catch(() => {});
           if (isPeerGrp && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
             window.PeerManager.syncGroupSettingsToPeers(chat);
           }
-          await refreshChatSettingsTokenDisplay(chat.id);
-          document.getElementById("thought-chain-bind-modal").classList.remove("visible");
+          refreshChatSettingsTokenDisplay(chat.id);
         }
         window.openThoughtChainBindModal = openThoughtChainBindModal;
         window.saveThoughtChainBind = saveThoughtChainBind;
@@ -42253,6 +42380,48 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
          * @param {string} content - AI返回的原始字符串
          * @returns {Array} - 一个标准化的消息对象数组
          */
+        function normalizeDoubleEscapedJsonStructure(str) {
+          if (!str || typeof str !== "string") return str || "";
+          let s = str;
+          // 精准特征检测：仅当文本中明显存在被转义的 JSON 协议结构键（如 \"chatResponse\": [ 或 \"type\": \"...\"）时才做反转义，绝不触碰普通正文与 HTML
+          const hasEscapedProtocolKeys =
+            /\\"(?:chatResponse|messages|thinking|innerVoice)\\"\s*:\s*(?:\[|\{|\\")/i.test(s) ||
+            (/\\"type\\"\s*:\s*\\"(?:text|system_status|status_bar|naiimag|sticker|quote_reply|voice_message|transfer)\\"/i.test(s) &&
+              /\\"(?:name|content|fields|prompt|sticker_name)\\"\s*:/i.test(s));
+
+          if (!hasEscapedProtocolKeys) {
+            return s;
+          }
+
+          // 若整段是个被双引号包裹的 JSON 字符串字面量，先尝试原生 JSON.parse 脱壳一层
+          const trimmed = s.trim();
+          if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            try {
+              const parsedStr = JSON.parse(trimmed);
+              if (typeof parsedStr === "string" && parsedStr.trim()) {
+                s = parsedStr.trim();
+              }
+            } catch (_) {}
+          }
+
+          // 如果依然带有 \"chatResponse\" 或 \"type\" 等被转义的协议结构引号，进行结构化脱壳
+          if (
+            /\\"(?:chatResponse|messages|thinking|innerVoice|type|name|content|fields|prompt)\\"\s*:/i.test(s)
+          ) {
+            s = s
+              // 清理AI在行尾输出的反斜杠续行符（如截图中的 "轮廓。\n\\n\n探进..." 或 "开始生图。\",\n\"chatResponse\""）
+              .replace(/\\\r?\n\s*\\\r?\n/g, "\n\n")
+              .replace(/\\\r?\n/g, "\n")
+              .replace(/\\r\\n/g, "\n")
+              .replace(/\\n/g, "\n")
+              .replace(/\\t/g, "\t")
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, "\\");
+          }
+          return s;
+        }
+        window.normalizeDoubleEscapedJsonStructure = normalizeDoubleEscapedJsonStructure;
+
         function unwrapToolCallEnvelope(rawStr) {
           if (!rawStr || typeof rawStr !== "string") return rawStr || "";
           let s = rawStr.trim();
@@ -42260,60 +42429,75 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (fenceMatch && fenceMatch[1]) {
             s = fenceMatch[1].trim();
           }
-          const outerToolRegex = /^\{\s*"(?:call:[^"]+|emit_answer|final_answer|respond|send_answer)"\s*:/i;
-          if (!outerToolRegex.test(s)) {
-            return rawStr;
-          }
-          for (let pass = 0; pass < 2; pass++) {
-            if (!outerToolRegex.test(s)) break;
+
+          const outerToolRegex = /^\{\s*"(?:call:[^"]+|emit_answer|final_answer|respond|send_answer|tool_call|tool_calls|function_call|output|response|result|data)"\s*:/i;
+          for (let pass = 0; pass < 3; pass++) {
             let unwrapped = null;
-            try {
-              const parsedOuter = JSON.parse(s);
-              if (parsedOuter && typeof parsedOuter === "object") {
-                const firstVal = Object.values(parsedOuter)[0];
-                if (typeof firstVal === "string" && firstVal.trim()) {
-                  unwrapped = firstVal.trim();
-                } else if (firstVal && typeof firstVal === "object") {
-                  const innerPayload =
-                    firstVal.content ??
-                    firstVal.answer ??
-                    firstVal.text ??
-                    firstVal.response ??
-                    firstVal.result ??
-                    firstVal.output ??
-                    firstVal.arguments;
-                  if (typeof innerPayload === "string" && innerPayload.trim()) {
-                    unwrapped = innerPayload.trim();
-                  } else if (innerPayload && typeof innerPayload === "object") {
-                    unwrapped = JSON.stringify(innerPayload);
+            if (outerToolRegex.test(s)) {
+              try {
+                const parsedOuter = JSON.parse(s);
+                if (parsedOuter && typeof parsedOuter === "object" && !Array.isArray(parsedOuter)) {
+                  const firstVal = Object.values(parsedOuter)[0];
+                  if (typeof firstVal === "string" && firstVal.trim()) {
+                    unwrapped = firstVal.trim();
+                  } else if (firstVal && typeof firstVal === "object" && !Array.isArray(firstVal)) {
+                    const innerPayload =
+                      firstVal.content ??
+                      firstVal.answer ??
+                      firstVal.text ??
+                      firstVal.response ??
+                      firstVal.result ??
+                      firstVal.output ??
+                      firstVal.arguments;
+                    if (typeof innerPayload === "string" && innerPayload.trim()) {
+                      unwrapped = innerPayload.trim();
+                    } else if (innerPayload && typeof innerPayload === "object") {
+                      unwrapped = JSON.stringify(innerPayload);
+                    }
                   }
                 }
-              }
-            } catch (_) {}
+              } catch (_) {}
 
-            if (unwrapped === null) {
-              const prefixRegex = /^\{\s*"(?:call:[^"]+|emit_answer|final_answer|respond|send_answer)"\s*:\s*\{\s*"(?:content|answer|text|response|result|output|arguments)"\s*:\s*"/i;
-              if (prefixRegex.test(s)) {
-                unwrapped = s.replace(prefixRegex, "").replace(/"\s*\}\s*\}\s*$/, "").trim();
+              if (unwrapped === null) {
+                const prefixRegex = /^\{\s*"(?:call:[^"]+|emit_answer|final_answer|respond|send_answer|tool_call|tool_calls|function_call|output|response|result|data)"\s*:\s*(?:\{\s*"(?:content|answer|text|response|result|output|arguments)"\s*:\s*)?"/i;
+                if (prefixRegex.test(s)) {
+                  unwrapped = s
+                    .replace(prefixRegex, "")
+                    .replace(/"\s*\}\s*\}\s*$/, "")
+                    .replace(/"\s*\}\s*$/, "")
+                    .trim();
+                }
               }
+            } else if (s.startsWith("{") && !/"(?:chatResponse|messages|type|content|innerVoice)"\s*:/i.test(s)) {
+              // 通用单键外壳剥离：无论外层键名叫什么，只要唯一的值里面包含被转义的 chatResponse / thinking，就自动剥开
+              try {
+                const parsedGeneric = JSON.parse(s);
+                if (parsedGeneric && typeof parsedGeneric === "object" && !Array.isArray(parsedGeneric)) {
+                  const keys = Object.keys(parsedGeneric);
+                  if (keys.length === 1) {
+                    const val = parsedGeneric[keys[0]];
+                    if (typeof val === "string" && /(?:chatResponse|messages|thinking|"type"\s*:)/i.test(val)) {
+                      unwrapped = val.trim();
+                    } else if (val && typeof val === "object" && !Array.isArray(val)) {
+                      const subKeys = Object.keys(val);
+                      if (subKeys.length === 1 && typeof val[subKeys[0]] === "string" && /(?:chatResponse|messages|thinking|"type"\s*:)/i.test(val[subKeys[0]])) {
+                        unwrapped = val[subKeys[0]].trim();
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
             }
 
             if (unwrapped !== null && unwrapped !== s) {
-              if (/^\{\s*(?:\\n|\s)*\\"(?:thinking|chatResponse|messages|type|name|content)\\"\s*:/i.test(unwrapped)) {
-                unwrapped = unwrapped
-                  .replace(/\\r\\n/g, "\n")
-                  .replace(/\\n/g, "\n")
-                  .replace(/\\t/g, "\t")
-                  .replace(/\\"/g, '"')
-                  .replace(/\\\\/g, "\\");
-              } else if (/\\n/.test(unwrapped)) {
-                unwrapped = unwrapped.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-              }
-              s = unwrapped.trim();
+              s = normalizeDoubleEscapedJsonStructure(unwrapped).trim();
             } else {
               break;
             }
           }
+
+          // 即使外层没有套 tool_call 或外层头部已经被截断（如截图1开头直接从 thinking 末尾和 \"chatResponse\": [ 开始），也执行一次精准特征脱壳
+          s = normalizeDoubleEscapedJsonStructure(s);
           return s;
         }
         window.unwrapToolCallEnvelope = unwrapToolCallEnvelope;
@@ -42323,6 +42507,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let trimmedContent = (content || "").trim();
           // 移除思维链标签
           trimmedContent = trimmedContent.replace(/<(?:think|thought|thinking)>[\s\S]*?<\/(?:think|thought|thinking)>/gi, "").trim();
+
+          // 内部辅助函数：清理正文或字段中残留的行尾反斜杠续行符
+          function cleanLineContinuationBackslashes(text) {
+            if (!text || typeof text !== "string") return text;
+            return text
+              .replace(/\\\r?\n\s*\\\r?\n/g, "\n\n")
+              .replace(/\\\r?\n/g, "\n")
+              .replace(/\n\\\s*\n/g, "\n\n");
+          }
 
           // 内部辅助函数：仅将双引号字符串内部的真实换行符转义为 \n，保留结构性换行符
           function escapeNewlinesInsideQuotes(str) {
@@ -42337,6 +42530,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 continue;
               }
               if (ch === "\\" && inStr) {
+                // 如果反斜杠后面紧跟真实换行符（AI把多行文本写成了行尾 \ 续行），将其转为标准 \n，不能把换行符吃成普通转义字符
+                if (str[i + 1] === "\n" || str[i + 1] === "\r") {
+                  if (str[i + 1] === "\r" && str[i + 2] === "\n") i += 2;
+                  else i += 1;
+                  out += "\\n";
+                  continue;
+                }
                 out += ch;
                 esc = true;
                 continue;
@@ -42373,6 +42573,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 continue;
               }
               if (ch === "\\" && inStr) {
+                if (str[i + 1] === "\n" || str[i + 1] === "\r") {
+                  if (str[i + 1] === "\r" && str[i + 2] === "\n") i += 2;
+                  else i += 1;
+                  out += "\\n";
+                  continue;
+                }
                 out += ch;
                 esc = true;
                 continue;
@@ -42449,7 +42655,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           // 内部辅助函数：宽容解析单个 JSON 对象（支持未转义换行符、末尾多余逗号、内容中夹杂未转义双引号等）
           function tryParseLooseJsonObject(rawStr) {
             if (!rawStr) return null;
-            let s = rawStr.trim();
+            let s = normalizeDoubleEscapedJsonStructure(rawStr).trim();
             const firstObjBrace = s.indexOf("{");
             if (firstObjBrace > 0 && /^[\[\],\s]+$/.test(s.slice(0, firstObjBrace))) {
               s = s.slice(firstObjBrace).trim();
@@ -42466,21 +42672,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             try {
               const p = JSON.parse(s);
-              if (p && typeof p === "object") return p;
+              if (p && typeof p === "object") {
+                if (typeof p.content === "string") p.content = cleanLineContinuationBackslashes(p.content);
+                return p;
+              }
             } catch (_) {}
 
             // 修复字符串内部真实换行符与末尾逗号后再试
             try {
               const fixedNewlines = escapeNewlinesInsideQuotes(s).replace(/,\s*([}\]])/g, "$1");
               const p2 = JSON.parse(fixedNewlines);
-              if (p2 && typeof p2 === "object") return p2;
+              if (p2 && typeof p2 === "object") {
+                if (typeof p2.content === "string") p2.content = cleanLineContinuationBackslashes(p2.content);
+                return p2;
+              }
             } catch (_) {}
 
             // 修复内部未转义英文双引号后再试
             try {
               const fixedQuotes = repairMalformedJsonQuotes(s);
               const p3 = JSON.parse(fixedQuotes);
-              if (p3 && typeof p3 === "object") return p3;
+              if (p3 && typeof p3 === "object") {
+                if (typeof p3.content === "string") p3.content = cleanLineContinuationBackslashes(p3.content);
+                return p3;
+              }
             } catch (_) {}
 
             // 如果这是个包含 chatResponse 或 messages 数组的外层大对象，绝对不能用单条正则把它拍扁吞掉，返回 null 让上层走数组剥离
@@ -42492,11 +42707,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (/^\{\s*"thinking"\s*:/i.test(s) && !/"(?:content|message|text|reply|reply_content|fields)"\s*:/i.test(s)) {
               const thOnly = s.match(/"thinking"\s*:\s*"([\s\S]*)"\s*\}$/i);
               if (thOnly) {
-                return { type: "thinking", content: thOnly[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim() };
+                return { type: "thinking", content: cleanLineContinuationBackslashes(thOnly[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim()) };
               }
             }
 
-            // 正则兜底提取常见字段（防止 AI 在台词内使用未转义英文双引号导致最后一条消息解析失败被吞）
+            // 正则兜底提取常见字段（防止 AI 在台词内使用未转义英文双引号或生图标签内使用 {{...}} 导致单条消息解析失败）
             const extracted = {};
             const typeMatch = s.match(/"type"\s*:\s*"([^"]+)"/i);
             if (typeMatch) extracted.type = typeMatch[1].trim();
@@ -42508,8 +42723,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (tSenderMatch) extracted.target_sender = tSenderMatch[1].trim();
             const targetMatch = s.match(/"(?:target_content|targetContent|quoted_content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
             if (targetMatch) extracted.target_content = targetMatch[1].trim();
-            const promptMatch = s.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z0-9_]+"|\s*})/i);
-            if (promptMatch) extracted.prompt = promptMatch[1].trim();
+            // 注意：生图 prompt 内部经常包含 {{black long hair}} 等 Danbooru 权重括号，因此闭合匹配必须锚定对象末尾的 }\s*$ 或下一个已知字段，不能遇到内部 } 就提前截断
+            const promptMatch = s.match(/"(?:prompt|imagePrompt|image_prompt|naiPrompt|description|tags)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"(?:type|name|sender|senderName|negative|uc|width|height|seed|model)"\s*:|\}\s*$)/i);
+            if (promptMatch) {
+              extracted.prompt = promptMatch[1].replace(/\\"/g, '"').trim();
+              if (!extracted.type) extracted.type = "naiimag";
+            }
             const stickerMatch = s.match(/"(?:sticker_name|stickerName)"\s*:\s*"([^"]+)"/i);
             if (stickerMatch) extracted.sticker_name = stickerMatch[1].trim();
             const visMatch = s.match(/"(?:visibleTo|visible_to)"\s*:\s*(\[[^\]]*\])/i);
@@ -42539,7 +42758,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             // 如果包含 system_status 的 fields 对象，尝试单独提取 fields
             if (extracted.type === "system_status" || /"fields"\s*:\s*\{/i.test(s)) {
-              const fieldsMatch = s.match(/"fields"\s*:\s*(\{[\s\S]*?\})\s*}/);
+              const fieldsMatch = s.match(/"fields"\s*:\s*(\{[\s\S]*?\})\s*\}?\s*$/);
               if (fieldsMatch) {
                 try {
                   extracted.fields = JSON.parse(repairMalformedJsonQuotes(fieldsMatch[1]));
@@ -42549,14 +42768,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
             }
 
-            const knownKeysPattern = "(?:type|name|sender|senderName|speaker|visibleTo|visible_to|thinking|target_content|targetContent|target_timestamp|targetTimestamp|target_sender|targetSender|quote|quote_reply|quoted_content|status|emotion|avatar)";
+            const knownKeysPattern = "(?:type|name|sender|senderName|speaker|visibleTo|visible_to|thinking|target_content|targetContent|target_timestamp|targetTimestamp|target_sender|targetSender|quote|quote_reply|quoted_content|status|emotion|avatar|prompt)";
             const contentFieldMatch = s.match(new RegExp(`"(?:content|message|text|reply|reply_content)"\\s*:\\s*"([\\s\\S]*)"\\s*(?:,\\s*"${knownKeysPattern}"[\\s\\S]*|\\s*\\}[\\s\\]\\}]*$)`, "i"));
             if (contentFieldMatch) {
               let val = contentFieldMatch[1];
               // 剥离尾随的其他已知键值对与闭合括号
               val = val.replace(new RegExp(`"\\s*,\\s*"${knownKeysPattern}"\\s*:\\s*[\\s\\S]*$`, "i"), "");
               val = val.replace(/"\s*\}\s*\]?\s*\}?\s*$/, "");
-              const cleanVal = val.replace(/\\n/g, "\n").replace(/\\"/g, '"');
+              const cleanVal = cleanLineContinuationBackslashes(val.replace(/\\n/g, "\n").replace(/\\"/g, '"'));
               extracted.content = cleanVal;
               if (extracted.type === "quote_reply" || extracted.target_timestamp || extracted.target_content) {
                 extracted.reply_content = cleanVal;
@@ -42596,7 +42815,38 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           // 方案1：包裹在markdown代码块中时，提取内部内容
           const codeBlockMatch = trimmedContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
           if (codeBlockMatch && codeBlockMatch[1] && (codeBlockMatch[1].includes("{") || codeBlockMatch[1].includes("["))) {
-            trimmedContent = codeBlockMatch[1].trim();
+            trimmedContent = normalizeDoubleEscapedJsonStructure(codeBlockMatch[1].trim());
+          }
+
+          // 如果开头是残缺的 thinking 尾巴（例如开头没了 {"thinking": "，直接从思考文字 + ", "chatResponse": [ 开始），自动补齐或剥离出开头的思考文字与后面的 chatResponse 数组
+          let preExtractedThinking = "";
+          if (!trimmedContent.startsWith("{") && !trimmedContent.startsWith("[") && /"(?:chatResponse|messages)"\s*:\s*\[/i.test(trimmedContent)) {
+            const arrKeyPreMatch = trimmedContent.match(/"(?:chatResponse|messages)"\s*:\s*\[/i);
+            if (arrKeyPreMatch && arrKeyPreMatch.index !== undefined) {
+              const prefixBeforeChatResp = trimmedContent.substring(0, arrKeyPreMatch.index).trim();
+              const firstBraceBefore = prefixBeforeChatResp.indexOf("{");
+              if (firstBraceBefore !== -1) {
+                trimmedContent = trimmedContent.substring(firstBraceBefore).trim();
+              } else {
+                // 开头没有 {，说明是截断在 thinking 中间的残缺头部，把前面的文字收进 preExtractedThinking，然后直接从 [ 开始截取 chatResponse 数组
+                const cleanedLeadingThinking = prefixBeforeChatResp
+                  .replace(/^\s*"?(?:thinking"?\s*:\s*"?)?/i, "")
+                  .replace(/"?\s*,\s*$/i, "")
+                  .trim();
+                if (cleanedLeadingThinking) {
+                  preExtractedThinking = cleanLineContinuationBackslashes(cleanedLeadingThinking);
+                }
+                const bracketOpenPos = trimmedContent.indexOf("[", arrKeyPreMatch.index);
+                const lastBracketPos = trimmedContent.lastIndexOf("]");
+                if (bracketOpenPos !== -1) {
+                  if (lastBracketPos > bracketOpenPos) {
+                    trimmedContent = trimmedContent.substring(bracketOpenPos, lastBracketPos + 1).trim();
+                  } else {
+                    trimmedContent = "[" + trimmedContent.substring(bracketOpenPos + 1).replace(/\}\s*$/, "").trim() + "]";
+                  }
+                }
+              }
+            }
           }
 
           // 如果开头夹杂了诸如 [当前回合计数：...] 等非JSON前缀，但后面紧跟完整的大括号对象，先定位到首个 {
@@ -42616,7 +42866,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           // 方案1.5：如果整体是一个带有 thinking 和 chatResponse/messages 的外层对象，但因为内部换行符或未转义双引号导致外层 JSON.parse 失败，
           // 先尝试把字符串内部真实换行与未转义引号转义后再整体解析一次；若仍失败，则直接剥离出 thinking 和 chatResponse 数组内部的内容进行逐条扫描！
-          let preExtractedThinking = "";
           if (trimmedContent.startsWith("{") && /"(?:chatResponse|messages)"\s*:\s*\[/i.test(trimmedContent)) {
             try {
               const fixedOuter = escapeNewlinesInsideQuotes(trimmedContent).replace(/,\s*([}\]])/g, "$1");
@@ -42628,8 +42877,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   ? parsedOuter.messages
                   : null;
                 if (arr) {
+                  arr.forEach((it) => {
+                    if (it && typeof it.content === "string") it.content = cleanLineContinuationBackslashes(it.content);
+                  });
                   if (parsedOuter.thinking && typeof parsedOuter.thinking === "string") {
-                    arr.unshift({ type: "thinking", content: parsedOuter.thinking.trim() });
+                    arr.unshift({ type: "thinking", content: cleanLineContinuationBackslashes(parsedOuter.thinking.trim()) });
                   }
                   return arr;
                 }
@@ -42645,8 +42897,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     ? parsedOuter2.messages
                     : null;
                   if (arr2) {
+                    arr2.forEach((it) => {
+                      if (it && typeof it.content === "string") it.content = cleanLineContinuationBackslashes(it.content);
+                    });
                     if (parsedOuter2.thinking && typeof parsedOuter2.thinking === "string") {
-                      arr2.unshift({ type: "thinking", content: parsedOuter2.thinking.trim() });
+                      arr2.unshift({ type: "thinking", content: cleanLineContinuationBackslashes(parsedOuter2.thinking.trim()) });
                     }
                     return arr2;
                   }
@@ -42662,7 +42917,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const beforeArrayStr = trimmedContent.substring(0, arrayKeyMatch.index);
               const thMatch = beforeArrayStr.match(/"thinking"\s*:\s*"([\s\S]*?)(?:"\s*,?\s*|\s*,?\s*)$/i);
               if (thMatch && thMatch[1]) {
-                preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+                preExtractedThinking = cleanLineContinuationBackslashes(thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim());
               }
               const lastBracketIdx = trimmedContent.lastIndexOf("]");
               const lastOpenBraceInTrimmed = trimmedContent.lastIndexOf("{");
@@ -42683,7 +42938,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const beforeMsgStr = trimmedContent.substring(0, firstMsgStart);
               const thMatch = beforeMsgStr.match(/"thinking"\s*:\s*"([\s\S]*?)(?:"\s*\}\s*,?\s*|"\s*,?\s*|\s*)$/i);
               if (thMatch && thMatch[1]) {
-                preExtractedThinking = thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+                preExtractedThinking = cleanLineContinuationBackslashes(thMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim());
               }
               trimmedContent = trimmedContent.substring(firstMsgStart).replace(/\]\s*\}\s*$/, "").trim();
             }
@@ -42694,6 +42949,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             try {
               const parsed = JSON.parse(trimmedContent);
               if (Array.isArray(parsed) && parsed.length > 0) {
+                parsed.forEach((it) => {
+                  if (it && typeof it.content === "string") it.content = cleanLineContinuationBackslashes(it.content);
+                });
                 if (preExtractedThinking) {
                   parsed.unshift({ type: "thinking", content: preExtractedThinking });
                 }
@@ -42704,6 +42962,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 const fixedArr = repairMalformedJsonQuotes(trimmedContent);
                 const parsed2 = JSON.parse(fixedArr);
                 if (Array.isArray(parsed2) && parsed2.length > 0) {
+                  parsed2.forEach((it) => {
+                    if (it && typeof it.content === "string") it.content = cleanLineContinuationBackslashes(it.content);
+                  });
                   if (preExtractedThinking) {
                     parsed2.unshift({ type: "thinking", content: preExtractedThinking });
                   }
@@ -42765,6 +43026,38 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (tailParsed && typeof tailParsed === "object") {
                 results.push({ item: tailParsed, start: startIdx, end: scanSource.length });
               }
+            }
+          }
+
+          // 方案3.5：按气泡边界路标（\{\s*"type"\s*:）分段兜底提取！
+          // 当某条消息内部同时出现奇数个坏引号 + 生图 prompt 里的 {{black long hair}} 双层大括号时，上面的括号深度计数与无嵌套正则都会失灵；
+          // 此时直接按每个对象的起始路标 `{\s*"(?:type|name)"\s*:` 切分出每个候选块，逐块送入 tryParseLooseJsonObject 精准提取！
+          if (scanSource.includes('"type"') || scanSource.includes('"prompt"')) {
+            const objStartRegex = /\{\s*"(?:type|name|prompt)"\s*:\s*"/gi;
+            const startIndices = [];
+            let sMatch;
+            while ((sMatch = objStartRegex.exec(scanSource)) !== null) {
+              // 排除掉嵌套在 fields 内部的子对象
+              const preceding = scanSource.substring(Math.max(0, sMatch.index - 25), sMatch.index);
+              if (!/"fields"\s*:\s*$/i.test(preceding.trim())) {
+                startIndices.push(sMatch.index);
+              }
+            }
+            if (startIndices.length > 0) {
+              for (let idx = 0; idx < startIndices.length; idx++) {
+                const segStart = startIndices[idx];
+                const segEnd = idx + 1 < startIndices.length ? startIndices[idx + 1] : scanSource.length;
+                const isOverlapping = results.some(r => !(segEnd <= r.start || segStart >= r.end));
+                if (!isOverlapping) {
+                  let rawSeg = scanSource.substring(segStart, segEnd).trim();
+                  rawSeg = rawSeg.replace(/,\s*$/, "").replace(/\]\s*\}\s*$/, "").replace(/\]\s*$/, "").trim();
+                  const segParsed = tryParseLooseJsonObject(rawSeg);
+                  if (segParsed && typeof segParsed === "object") {
+                    results.push({ item: segParsed, start: segStart, end: segEnd });
+                  }
+                }
+              }
+              results.sort((a, b) => a.start - b.start);
             }
           }
 
@@ -85528,21 +85821,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             window.syncCurrentSoloThreadHistory(chat);
           }
 
-          // 3. 保存更新后的聊天记录到数据库，并清理被重roll替换掉的旧生图文件
-          await db.chats.put(chat);
+          // 3. 立即在内存与界面上移除被重生成的上一轮AI消息节点，并直接触发新一轮AI回复（零等待显示“正在回复中”），数据库落盘与旧媒体清理在后台并行执行
           if (state.chats) {
             state.chats[chat.id] = chat;
             state.chats[String(chat.id)] = chat;
             state.chats[targetId] = chat;
           }
-          if (removedMessages.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
-            for (const rm of removedMessages) {
-              if (!rm || typeof rm !== "object") continue;
-              const candidates = [rm.imageUrl, rm.url, rm.image, rm.audioUrl];
-              for (const ref of candidates) {
-                if (typeof ref === "string" && ref.startsWith("vault://")) {
-                  window.deleteVaultMediaRefIfUnreferenced(ref).catch(() => {});
+
+          if (String(state.activeChatId) === String(targetId)) {
+            const msgContainer = document.getElementById("chat-messages");
+            if (msgContainer && removedMessages.length > 0) {
+              let removedAllFromDom = true;
+              for (const rm of removedMessages) {
+                if (!rm || !rm.timestamp) continue;
+                const nodes = msgContainer.querySelectorAll(`[data-timestamp="${rm.timestamp}"]`);
+                if (nodes && nodes.length > 0) {
+                  nodes.forEach((n) => n.remove());
+                } else {
+                  removedAllFromDom = false;
                 }
+              }
+              if (!removedAllFromDom) {
+                renderChatInterface(targetId);
               }
             }
           }
@@ -85558,13 +85858,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             window.PeerManager.broadcastTypingStatus(chat, true);
           }
 
-          // 4. 刷新聊天界面，消除被删除的消息
-          if (String(state.activeChatId) === String(targetId)) {
-            renderChatInterface(targetId);
-          }
-
-          // 5. 再次请求 API 生成最新回复
+          // 立即发起重新生成请求（第1毫秒显示“群成员正在回复中...”/“对方正在输入...”）
           triggerAiResponse(targetId);
+
+          // 后台异步保存更新后的聊天记录并延迟清理被替换的旧生图文件，绝不阻塞本次重新生成
+          db.chats.put(chat).catch(() => {});
+          if (removedMessages.length > 0 && typeof window.deleteVaultMediaRefIfUnreferenced === "function") {
+            setTimeout(() => {
+              for (const rm of removedMessages) {
+                if (!rm || typeof rm !== "object") continue;
+                const candidates = [rm.imageUrl, rm.url, rm.image, rm.audioUrl];
+                for (const ref of candidates) {
+                  if (typeof ref === "string" && ref.startsWith("vault://")) {
+                    window.deleteVaultMediaRefIfUnreferenced(ref).catch(() => {});
+                  }
+                }
+              }
+            }, 1500);
+          }
         }
 
         function initDraggableLyricsBar() {
@@ -119178,28 +119489,31 @@ ${specificRules}`;
                 if (state && state.globalSettings) {
                   state.globalSettings.mashuUserPersonaBackup = backupObj;
                   if (typeof db !== "undefined" && db.globalSettings) {
-                    await db.globalSettings.put(state.globalSettings).catch(() => {});
+                    db.globalSettings.put(state.globalSettings).catch(() => {});
                   }
                 }
                 try {
                   localStorage.setItem("ephone_mashu_user_persona_backup_v1", JSON.stringify(backupObj));
                 } catch (_) {}
               }
-              await db.chats.put(chat).catch(() => {});
+              // 立即关闭聊天设置弹窗并刷新当前聊天头部与样式，数据库写入与列表刷新在下一帧异步完成，做到点击保存瞬间关闭零卡顿
               chatSettingsModal.classList.remove("visible");
-              renderChatInterface(state.activeChatId);
-              renderChatList();
-              if (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
-                window.PeerManager.syncGroupSettingsToPeers(chat);
-              }
-              if (chat.roleType === "peer" && !chat.isGroup && window.PeerManager) {
-                if (typeof window.PeerManager.saveFriendToBackup === "function") {
-                  window.PeerManager.saveFriendToBackup(chat);
+              db.chats.put(chat).catch(() => {});
+              requestAnimationFrame(() => {
+                renderChatInterface(state.activeChatId);
+                renderChatList();
+                if (typeof window.isPeerGroupChat === "function" && window.isPeerGroupChat(chat) && window.PeerManager && typeof window.PeerManager.syncGroupSettingsToPeers === "function") {
+                  window.PeerManager.syncGroupSettingsToPeers(chat);
                 }
-                if (typeof window.PeerManager.syncSinglePeerChatProfile === "function") {
-                  window.PeerManager.syncSinglePeerChatProfile(chat);
+                if (chat.roleType === "peer" && !chat.isGroup && window.PeerManager) {
+                  if (typeof window.PeerManager.saveFriendToBackup === "function") {
+                    window.PeerManager.saveFriendToBackup(chat);
+                  }
+                  if (typeof window.PeerManager.syncSinglePeerChatProfile === "function") {
+                    window.PeerManager.syncSinglePeerChatProfile(chat);
+                  }
                 }
-              }
+              });
             });
 
           window.purgeDeletedMessagesFromChat = function (chat, deletedTsList) {
