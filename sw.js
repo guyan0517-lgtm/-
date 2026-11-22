@@ -1,5 +1,5 @@
-// Service Worker v27.5 - Push Notifications only (no navigation/fetch interception)
-const CACHE_NAME = "ephone-tuk-cache-v27.5";
+// Service Worker v27.7 - Push Notifications only (no navigation/fetch interception)
+const CACHE_NAME = "ephone-tuk-cache-v27.7";
 
 if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.skipWaiting === "function") {
   self.addEventListener("install", event => {

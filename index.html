@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3662,6 +3662,37 @@
                   <textarea id="mod-nai-gen-pos2-input" class="module-prompt-textarea mod-nai-textarea" rows="3" placeholder="输入第二组正面词，可随时切换勾选进行对比"></textarea>
                 </div>
 
+                <!-- 3.5 人设多角色独立控制 -->
+                <div class="mod-nai-card mod-nai-char-card" id="mod-nai-char-card">
+                  <div class="mod-nai-card-row mod-nai-char-head-row" id="mod-nai-char-head-toggle">
+                    <div class="mod-nai-char-head-left">
+                      <input type="checkbox" id="mod-nai-char-master-check" class="mod-nai-check" />
+                      <span class="mod-nai-label-text" data-trace-idx="[ 05* ]">人设</span>
+                      <span class="mod-nai-char-summary" id="mod-nai-char-summary-text">未上场</span>
+                    </div>
+                    <button type="button" class="mod-nai-btn mod-nai-icon-btn mod-nai-char-fold-btn" id="mod-nai-char-fold-btn" title="展开或收起人设" aria-label="展开">
+                      <svg class="mod-nai-char-fold-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                  </div>
+                  <div class="mod-nai-char-body" id="mod-nai-char-body" style="display: none;">
+                    <div class="mod-nai-controls-group mod-nai-char-lib-row">
+                      <select id="mod-nai-char-preset-select" class="moe-input mod-nai-select">
+                        <option value="">人设</option>
+                      </select>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-accent-icon" id="mod-nai-char-stage-add-btn" title="选入当前登场区" aria-label="上场">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn" id="mod-nai-char-preset-save-btn" title="新建空白人设上场" aria-label="新建">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="mod-nai-btn mod-nai-icon-btn is-muted-icon" id="mod-nai-char-preset-del-btn" title="删除人设库选中项" aria-label="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                    </div>
+                    <div class="mod-nai-char-stage-list" id="mod-nai-char-stage-list"></div>
+                  </div>
+                </div>
+
                 <!-- 4. 负面提示词 -->
                 <div class="mod-nai-card">
                   <div class="mod-nai-card-row">
@@ -3670,7 +3701,7 @@
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
                       </svg>
-                      <span class="mod-nai-label-text" data-trace-idx="[ 05* ]">负面</span>
+                      <span class="mod-nai-label-text" data-trace-idx="[ 06* ]">负面</span>
                     </div>
                     <div class="mod-nai-controls-group">
                       <select id="mod-nai-neg-preset-select" class="moe-input mod-nai-select">
@@ -4410,6 +4441,25 @@
                             <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-negative">新建</button>
                           </div>
                           <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-negative"></div>
+                        </div>
+                      </div>
+
+                      <!-- 3.5 人设预设分组抽屉 -->
+                      <div class="mod-nai-preset-drawer" data-preset-cat="character" id="mod-nai-drawer-character">
+                        <button type="button" class="mod-nai-preset-drawer-head" data-drawer-toggle="character">
+                          <span class="mod-nai-preset-drawer-head-left">
+                            <i class="mod-nai-preset-drawer-dot"></i>
+                            <span class="mod-nai-preset-drawer-title">人设</span>
+                          </span>
+                          <span class="mod-nai-preset-drawer-count" id="mod-nai-drawer-count-character">0</span>
+                          <svg class="mod-nai-preset-drawer-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="mod-nai-preset-drawer-body" id="mod-nai-drawer-body-character">
+                          <div class="mod-nai-group-Quickbar">
+                            <input type="text" class="moe-input mod-nai-group-input" id="mod-nai-group-input-character" placeholder="新建分组名称" autocomplete="off" />
+                            <button type="button" class="mod-nai-group-add-btn" id="mod-nai-group-add-character">新建</button>
+                          </div>
+                          <div class="mod-nai-drawer-preset-list" id="mod-nai-drawer-list-character"></div>
                         </div>
                       </div>
 
@@ -43598,7 +43648,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           if (!apiKey) {
             throw new Error("请先在生图设置或系统设置中填写密钥");
           }
-          if (!prompt || !prompt.trim()) {
+          const rawCharPrompts = Array.isArray(options.characterPrompts) ? options.characterPrompts : [];
+          const validChars = rawCharPrompts
+            .filter((c) => c && c.enabled !== false && typeof c.prompt === "string" && c.prompt.trim())
+            .slice(0, 6)
+            .map((c) => {
+              const cx = typeof c.x === "number" && !Number.isNaN(c.x) ? Math.min(0.9, Math.max(0.1, c.x)) : 0.5;
+              const cy = typeof c.y === "number" && !Number.isNaN(c.y) ? Math.min(0.9, Math.max(0.1, c.y)) : 0.5;
+              return {
+                prompt: String(c.prompt || "").trim(),
+                uc: String(c.uc || "").trim(),
+                x: cx,
+                y: cy,
+                isManualCoord: Boolean(c.isManualCoord)
+              };
+            });
+          const useCharCoords = validChars.some((c) => c.isManualCoord);
+
+          if ((!prompt || !prompt.trim()) && validChars.length === 0) {
             throw new Error("提示词为空");
           }
 
@@ -43671,21 +43738,42 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 legacy_uc: false,
                 inpaintImg2ImgStrength: 1,
                 normalize_reference_strength_multiple: true,
-                characterPrompts: [],
+                use_coords: useCharCoords,
+                characterPrompts: validChars.map((c) => ({
+                  prompt: c.prompt,
+                  uc: c.uc,
+                  center: { x: c.x, y: c.y },
+                  enabled: true
+                })),
                 v4_prompt: {
-                  caption: { base_caption: finalPrompt, char_captions: [] },
-                  use_coords: false,
+                  caption: {
+                    base_caption: finalPrompt,
+                    char_captions: validChars.map((c) => ({
+                      char_caption: c.prompt,
+                      centers: [{ x: c.x, y: c.y }]
+                    }))
+                  },
+                  use_coords: useCharCoords,
                   use_order: true
                 },
                 v4_negative_prompt: {
-                  caption: { base_caption: negativePrompt, char_captions: [] },
+                  caption: {
+                    base_caption: negativePrompt,
+                    char_captions: validChars.map((c) => ({
+                      char_caption: c.uc,
+                      centers: [{ x: c.x, y: c.y }]
+                    }))
+                  },
                   legacy_uc: false
                 }
               }
             };
           } else {
+            const v3PromptOut = validChars.length > 0
+              ? [finalPrompt, ...validChars.map((c) => c.prompt)].filter(Boolean).join(", ")
+              : finalPrompt;
             requestBody = {
-              input: finalPrompt,
+              input: v3PromptOut,
               model: model,
               action: "generate",
               parameters: {
@@ -44462,7 +44550,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const authNorm = normalizePresetsStoreObject(authoritativeRaw);
             if (!fallbackRaw || typeof fallbackRaw !== "object") return authNorm;
             const fbNorm = normalizePresetsStoreObject(fallbackRaw);
-            ["artist", "positive", "negative"].forEach((cat) => {
+            ["artist", "positive", "negative", "character"].forEach((cat) => {
               const fbList = Array.isArray(fbNorm[cat]) ? fbNorm[cat] : [];
               if (fbList.length === 0) return;
               (authNorm[cat] || []).forEach((item) => {
@@ -44489,14 +44577,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (!name || delPresets.has(`${cat}::${name}`)) return;
                 const val = typeof item.value === "string" ? item.value.trim() : "";
                 const grp = typeof item.group === "string" ? item.group.trim() : "";
+                const neg = typeof item.negative === "string" ? item.negative.trim() : "";
+                const posKey = typeof item.posKey === "string" && item.posKey.trim() ? item.posKey.trim() : "auto";
                 const prev = map.get(name);
                 if (!prev) {
-                  map.set(name, { name, value: val, group: grp });
+                  map.set(name, { name, value: val, group: grp, negative: neg, posKey });
                 } else {
                   map.set(name, {
                     name,
                     value: isPrimary ? (val || prev.value) : (prev.value || val),
-                    group: isPrimary ? (grp || prev.group) : (prev.group || grp)
+                    group: isPrimary ? (grp || prev.group) : (prev.group || grp),
+                    negative: isPrimary ? (neg || prev.negative || "") : (prev.negative || neg || ""),
+                    posKey: isPrimary ? (posKey !== "auto" ? posKey : (prev.posKey || "auto")) : (prev.posKey !== "auto" ? prev.posKey : posKey)
                   });
                 }
               };
@@ -44522,14 +44614,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const artistMerged = mergeCatList("artist", pNorm.artist, sNorm.artist);
             const posMerged = mergeCatList("positive", pNorm.positive, sNorm.positive);
             const negMerged = mergeCatList("negative", pNorm.negative, sNorm.negative);
+            const charMerged = mergeCatList("character", pNorm.character, sNorm.character);
             return {
               artist: artistMerged,
               positive: posMerged,
               negative: negMerged,
+              character: charMerged,
               groups: {
                 artist: mergeGroupList(pNorm.groups.artist, sNorm.groups.artist, artistMerged),
                 positive: mergeGroupList(pNorm.groups.positive, sNorm.groups.positive, posMerged),
-                negative: mergeGroupList(pNorm.groups.negative, sNorm.groups.negative, negMerged)
+                negative: mergeGroupList(pNorm.groups.negative, sNorm.groups.negative, negMerged),
+                character: mergeGroupList(pNorm.groups.character, sNorm.groups.character, charMerged)
               },
               updatedAt: Math.max(Number(pNorm.updatedAt || 0), Number(sNorm.updatedAt || 0))
             };
@@ -44747,6 +44842,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               pos1PresetSelected: "",
               pos2PresetSelected: "",
               negPresetSelected: "",
+              charMasterChecked: false,
+              charCardExpanded: false,
+              charPresetSelected: "",
+              activeCharacters: [],
               customApiUrl: "",
               customApiKey: "",
               cleanOnGenerate: false,
@@ -44800,7 +44899,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     .map((x) => ({
                       name: String(x.name).trim(),
                       value: typeof x.value === "string" ? x.value : "",
-                      group: typeof x.group === "string" ? x.group.trim() : ""
+                      group: typeof x.group === "string" ? x.group.trim() : "",
+                      negative: typeof x.negative === "string" ? x.negative : "",
+                      posKey: typeof x.posKey === "string" && x.posKey.trim() ? x.posKey.trim() : "auto"
                     }))
                 : [];
             const rawGroups = obj.groups && typeof obj.groups === "object" ? obj.groups : {};
@@ -44820,14 +44921,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const artistList = normList("artist", obj.artist);
             const posList = normList("positive", obj.positive);
             const negList = normList("negative", obj.negative);
+            const charList = normList("character", obj.character);
             return {
               artist: artistList,
               positive: posList,
               negative: negList,
+              character: charList,
               groups: {
                 artist: normGroups("artist", artistList),
                 positive: normGroups("positive", posList),
-                negative: normGroups("negative", negList)
+                negative: normGroups("negative", negList),
+                character: normGroups("character", charList)
               },
               updatedAt: typeof obj.updatedAt === "number" ? obj.updatedAt : 0
             };
@@ -44839,10 +44943,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               artist: norm.artist.map((x) => Object.assign({}, x)),
               positive: norm.positive.map((x) => Object.assign({}, x)),
               negative: norm.negative.map((x) => Object.assign({}, x)),
+              character: norm.character.map((x) => Object.assign({}, x)),
               groups: {
                 artist: norm.groups.artist.slice(),
                 positive: norm.groups.positive.slice(),
-                negative: norm.groups.negative.slice()
+                negative: norm.groups.negative.slice(),
+                character: norm.groups.character.slice()
               },
               updatedAt: norm.updatedAt
             };
@@ -44867,7 +44973,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const prev = memoryPresetsStore ? clonePresetsStore(memoryPresetsStore) : normalizePresetsStoreObject({});
             const norm = normalizePresetsStoreObject(store);
             // 保护机制：禁止任何预设的提示词内容被空字符串意外清空，除非原本就是空
-            ["artist", "positive", "negative"].forEach((cat) => {
+            ["artist", "positive", "negative", "character"].forEach((cat) => {
               const prevList = Array.isArray(prev[cat]) ? prev[cat] : [];
               (norm[cat] || []).forEach((item) => {
                 if (item && !item.value) {
@@ -44904,7 +45010,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               { selectId: "mod-nai-artist2-preset-select", stateKey: "artist2PresetSelected" },
               { selectId: "mod-nai-pos1-preset-select", stateKey: "pos1PresetSelected" },
               { selectId: "mod-nai-pos2-preset-select", stateKey: "pos2PresetSelected" },
-              { selectId: "mod-nai-neg-preset-select", stateKey: "negPresetSelected" }
+              { selectId: "mod-nai-neg-preset-select", stateKey: "negPresetSelected" },
+              { selectId: "mod-nai-char-preset-select", stateKey: "charPresetSelected" }
             ];
             pairs.forEach(({ selectId, stateKey }) => {
               const sel = document.getElementById(selectId);
@@ -45048,6 +45155,425 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             return parts.join(", ");
           }
 
+          const CHAR_POS_COORDS = [0.1, 0.3, 0.5, 0.7, 0.9];
+          const CHAR_POS_5X5_LABELS = [
+            ["左上", "偏左上", "正上", "偏右上", "右上"],
+            ["左前", "偏左前", "中前", "偏右前", "右前"],
+            ["最左", "偏左", "正中", "偏右", "最右"],
+            ["左后", "偏左后", "中后", "偏右后", "右后"],
+            ["左下", "偏左下", "正下", "偏右下", "右下"]
+          ];
+
+          function getCharPosGridInfo(posKey) {
+            const raw = String(posKey || "auto").trim();
+            if (!raw || raw === "auto") {
+              return { key: "auto", label: "自动", x: 0.5, y: 0.5, isManual: false };
+            }
+            const parts = raw.split(",");
+            if (parts.length === 2) {
+              const col = parseInt(parts[0], 10);
+              const row = parseInt(parts[1], 10);
+              if (col >= 0 && col < 5 && row >= 0 && row < 5) {
+                return {
+                  key: `${col},${row}`,
+                  label: CHAR_POS_5X5_LABELS[row][col] || "定格",
+                  x: CHAR_POS_COORDS[col],
+                  y: CHAR_POS_COORDS[row],
+                  col,
+                  row,
+                  isManual: true
+                };
+              }
+            }
+            return { key: "auto", label: "自动", x: 0.5, y: 0.5, isManual: false };
+          }
+
+          let activeOpenCharPosSlotId = "";
+          let activeOpenCharEditSlotId = "";
+
+          function normalizeActiveCharactersList(rawList) {
+            if (!Array.isArray(rawList)) return [];
+            return rawList
+              .filter((c) => c && typeof c === "object")
+              .slice(0, 6)
+              .map((c, idx) => ({
+                id: typeof c.id === "string" && c.id ? c.id : `char_slot_${Date.now()}_${idx}`,
+                name: typeof c.name === "string" && c.name.trim() ? c.name.trim() : `角色${idx + 1}`,
+                prompt: typeof c.prompt === "string" ? c.prompt : "",
+                negative: typeof c.negative === "string" ? c.negative : "",
+                posKey: typeof c.posKey === "string" && c.posKey ? c.posKey : "auto",
+                enabled: c.enabled !== false
+              }));
+          }
+
+          function computeActiveCharacterPrompts() {
+            const st = loadPanelState();
+            const masterCheck = document.getElementById("mod-nai-char-master-check");
+            const isMasterOn = masterCheck ? Boolean(masterCheck.checked) : Boolean(st.charMasterChecked);
+            const list = normalizeActiveCharactersList(st.activeCharacters);
+            if (!isMasterOn || list.length === 0) return [];
+            return list
+              .filter((c) => c && c.enabled !== false && String(c.prompt || "").trim())
+              .slice(0, 6)
+              .map((c) => {
+                const posInfo = getCharPosGridInfo(c.posKey);
+                return {
+                  name: c.name,
+                  prompt: String(c.prompt || "").trim(),
+                  uc: String(c.negative || "").trim(),
+                  x: posInfo.x,
+                  y: posInfo.y,
+                  isManualCoord: posInfo.isManual,
+                  enabled: true
+                };
+              });
+          }
+
+          function updateCharCardSummaryUI() {
+            const cardEl = document.getElementById("mod-nai-char-card");
+            const masterCheck = document.getElementById("mod-nai-char-master-check");
+            const summaryEl = document.getElementById("mod-nai-char-summary-text");
+            const st = loadPanelState();
+            const list = normalizeActiveCharactersList(st.activeCharacters);
+            const isMasterOn = masterCheck ? Boolean(masterCheck.checked) : Boolean(st.charMasterChecked);
+            const isExpanded = Boolean(st.charCardExpanded);
+            if (cardEl) {
+              cardEl.classList.toggle("pos-active", isMasterOn && list.some((c) => c.enabled !== false));
+              cardEl.classList.toggle("is-expanded", isExpanded);
+            }
+            if (summaryEl) {
+              if (list.length === 0) {
+                summaryEl.textContent = "未上场";
+              } else {
+                const enabledList = list.filter((c) => c.enabled !== false);
+                if (!isMasterOn) {
+                  summaryEl.textContent = `已关 · 共 ${list.length} 人`;
+                } else if (enabledList.length === 0) {
+                  summaryEl.textContent = `未勾选 · 共 ${list.length} 人`;
+                } else {
+                  const namesPreview = enabledList.slice(0, 2).map((c) => c.name).join(" / ");
+                  const suffix = enabledList.length > 2 ? " 等" : "";
+                  summaryEl.textContent = `已启 ${enabledList.length} 人 · ${namesPreview}${suffix}`;
+                }
+              }
+            }
+          }
+
+          function renderCharStageList() {
+            const stageEl = document.getElementById("mod-nai-char-stage-list");
+            if (!stageEl) return;
+            const st = loadPanelState();
+            const list = normalizeActiveCharactersList(st.activeCharacters);
+            st.activeCharacters = list;
+            stageEl.innerHTML = "";
+
+            if (list.length === 0) {
+              const emptyEl = document.createElement("div");
+              emptyEl.className = "mod-nai-char-empty";
+              emptyEl.textContent = "从上方人设库选人点上场，或点加号新建角色";
+              stageEl.appendChild(emptyEl);
+              updateCharCardSummaryUI();
+              return;
+            }
+
+            list.forEach((slot, idx) => {
+              const posInfo = getCharPosGridInfo(slot.posKey);
+              const isPosOpen = activeOpenCharPosSlotId === slot.id;
+              const isEditOpen = activeOpenCharEditSlotId === slot.id;
+
+              const slotEl = document.createElement("div");
+              slotEl.className = "mod-nai-char-slot" + (slot.enabled === false ? " is-disabled" : "");
+
+              const mainRow = document.createElement("div");
+              mainRow.className = "mod-nai-char-slot-main";
+
+              const chk = document.createElement("input");
+              chk.type = "checkbox";
+              chk.className = "mod-nai-check";
+              chk.checked = slot.enabled !== false;
+              chk.title = "勾选后该角色参与生图";
+              chk.addEventListener("change", () => {
+                const curSt = loadPanelState();
+                const curList = normalizeActiveCharactersList(curSt.activeCharacters);
+                const target = curList.find((x) => x.id === slot.id);
+                if (target) {
+                  target.enabled = Boolean(chk.checked);
+                  if (target.enabled && !curSt.charMasterChecked) {
+                    curSt.charMasterChecked = true;
+                    const mChk = document.getElementById("mod-nai-char-master-check");
+                    if (mChk) mChk.checked = true;
+                  }
+                  curSt.activeCharacters = curList;
+                  savePanelState(curSt);
+                  slotEl.classList.toggle("is-disabled", !target.enabled);
+                  updateCharCardSummaryUI();
+                }
+              });
+
+              const nameBtn = document.createElement("button");
+              nameBtn.type = "button";
+              nameBtn.className = "mod-nai-char-slot-name-btn";
+              nameBtn.title = "点击展开或收起人设描述";
+              const nameSpan = document.createElement("span");
+              nameSpan.className = "mod-nai-char-slot-name";
+              nameSpan.textContent = slot.name || `角色${idx + 1}`;
+              nameBtn.appendChild(nameSpan);
+              nameBtn.addEventListener("click", () => {
+                activeOpenCharEditSlotId = activeOpenCharEditSlotId === slot.id ? "" : slot.id;
+                activeOpenCharPosSlotId = "";
+                renderCharStageList();
+              });
+
+              const posBtn = document.createElement("button");
+              posBtn.type = "button";
+              posBtn.className = "mod-nai-char-pos-btn" + (posInfo.isManual ? " is-custom-pos" : "");
+              posBtn.title = "设置角色在画面中的站位";
+              posBtn.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>' +
+                `<span>${posInfo.label}</span>`;
+              posBtn.addEventListener("click", () => {
+                activeOpenCharPosSlotId = activeOpenCharPosSlotId === slot.id ? "" : slot.id;
+                renderCharStageList();
+              });
+
+              const actionsWrap = document.createElement("div");
+              actionsWrap.className = "mod-nai-char-slot-actions";
+
+              const editBtn = document.createElement("button");
+              editBtn.type = "button";
+              editBtn.className = "moe-btn mod-nai-icon-btn" + (isEditOpen ? " is-active" : "");
+              editBtn.title = "展开或收起该角色描述词";
+              editBtn.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
+              editBtn.addEventListener("click", () => {
+                activeOpenCharEditSlotId = activeOpenCharEditSlotId === slot.id ? "" : slot.id;
+                activeOpenCharPosSlotId = "";
+                renderCharStageList();
+              });
+
+              const removeStageBtn = document.createElement("button");
+              removeStageBtn.type = "button";
+              removeStageBtn.className = "moe-btn mod-nai-icon-btn";
+              removeStageBtn.title = "让该角色从当前画面下场";
+              removeStageBtn.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+              removeStageBtn.addEventListener("click", () => {
+                const curSt = loadPanelState();
+                const curList = normalizeActiveCharactersList(curSt.activeCharacters).filter((x) => x.id !== slot.id);
+                curSt.activeCharacters = curList;
+                if (activeOpenCharEditSlotId === slot.id) activeOpenCharEditSlotId = "";
+                if (activeOpenCharPosSlotId === slot.id) activeOpenCharPosSlotId = "";
+                savePanelState(curSt);
+                renderCharStageList();
+              });
+
+              actionsWrap.appendChild(editBtn);
+              actionsWrap.appendChild(removeStageBtn);
+
+              mainRow.appendChild(chk);
+              mainRow.appendChild(nameBtn);
+              mainRow.appendChild(posBtn);
+              mainRow.appendChild(actionsWrap);
+              slotEl.appendChild(mainRow);
+
+              // 5x5 站位网格面板
+              const gridPanel = document.createElement("div");
+              gridPanel.className = "mod-nai-char-grid-panel" + (isPosOpen ? " is-open" : "");
+              if (isPosOpen) {
+                const topRow = document.createElement("div");
+                topRow.className = "mod-nai-char-grid-top";
+
+                const hintSpan = document.createElement("span");
+                hintSpan.className = "mod-nai-char-grid-hint";
+                hintSpan.textContent = "五乘五画面站位 · 防串色定格";
+
+                const autoBtn = document.createElement("button");
+                autoBtn.type = "button";
+                autoBtn.className = "mod-nai-char-auto-pos-btn" + (!posInfo.isManual ? " is-selected" : "");
+                autoBtn.textContent = "自动站位";
+                autoBtn.addEventListener("click", () => {
+                  const curSt = loadPanelState();
+                  const curList = normalizeActiveCharactersList(curSt.activeCharacters);
+                  const target = curList.find((x) => x.id === slot.id);
+                  if (target) {
+                    target.posKey = "auto";
+                    curSt.activeCharacters = curList;
+                    savePanelState(curSt);
+                    activeOpenCharPosSlotId = "";
+                    renderCharStageList();
+                  }
+                });
+
+                topRow.appendChild(hintSpan);
+                topRow.appendChild(autoBtn);
+                gridPanel.appendChild(topRow);
+
+                const gridBox = document.createElement("div");
+                gridBox.className = "mod-nai-char-5x5-grid";
+                for (let r = 0; r < 5; r++) {
+                  for (let c = 0; c < 5; c++) {
+                    const cellKey = `${c},${r}`;
+                    const cellBtn = document.createElement("button");
+                    cellBtn.type = "button";
+                    cellBtn.className = "mod-nai-char-grid-cell" + (posInfo.key === cellKey ? " is-selected" : "");
+                    cellBtn.textContent = CHAR_POS_5X5_LABELS[r][c];
+                    cellBtn.addEventListener("click", () => {
+                      const curSt = loadPanelState();
+                      const curList = normalizeActiveCharactersList(curSt.activeCharacters);
+                      const target = curList.find((x) => x.id === slot.id);
+                      if (target) {
+                        target.posKey = cellKey;
+                        curSt.activeCharacters = curList;
+                        savePanelState(curSt);
+                        activeOpenCharPosSlotId = "";
+                        renderCharStageList();
+                      }
+                    });
+                    gridBox.appendChild(cellBtn);
+                  }
+                }
+                gridPanel.appendChild(gridBox);
+              }
+              slotEl.appendChild(gridPanel);
+
+              // 原地展开的角色提示词编辑区
+              const editorPanel = document.createElement("div");
+              editorPanel.className = "mod-nai-char-slot-editor" + (isEditOpen ? " is-open" : "");
+              if (isEditOpen) {
+                const editBar = document.createElement("div");
+                editBar.className = "mod-nai-char-editor-bar";
+
+                const nameInp = document.createElement("input");
+                nameInp.type = "text";
+                nameInp.className = "moe-input mod-nai-char-name-input";
+                nameInp.placeholder = "角色名称";
+                nameInp.value = slot.name || "";
+
+                const posTextarea = document.createElement("textarea");
+                posTextarea.className = "moe-input mod-nai-textarea mod-nai-char-pos-textarea";
+                posTextarea.rows = 3;
+                posTextarea.placeholder = "填写该角色专属外貌、发色、瞳色、服装提示词...";
+                posTextarea.value = slot.prompt || "";
+
+                const negTextarea = document.createElement("textarea");
+                negTextarea.className = "moe-input mod-nai-textarea mod-nai-char-neg-textarea";
+                negTextarea.rows = 1;
+                negTextarea.placeholder = "该角色专属负面排除词，可留空...";
+                negTextarea.value = slot.negative || "";
+
+                const syncSlotFields = (persistNow) => {
+                  const curSt = loadPanelState();
+                  const curList = normalizeActiveCharactersList(curSt.activeCharacters);
+                  const target = curList.find((x) => x.id === slot.id);
+                  if (!target) return;
+                  const nextName = String(nameInp.value || "").trim() || `角色${idx + 1}`;
+                  target.name = nextName;
+                  target.prompt = posTextarea.value;
+                  target.negative = negTextarea.value;
+                  nameSpan.textContent = nextName;
+                  curSt.activeCharacters = curList;
+                  memoryPanelState = Object.assign({}, getDefaultPanelState(), curSt, { updatedAt: Date.now() });
+                  if (persistNow) {
+                    savePanelState(curSt);
+                  }
+                  updateCharCardSummaryUI();
+                };
+
+                nameInp.addEventListener("input", () => syncSlotFields(false));
+                nameInp.addEventListener("change", () => syncSlotFields(true));
+                posTextarea.addEventListener("input", () => syncSlotFields(false));
+                posTextarea.addEventListener("change", () => syncSlotFields(true));
+                negTextarea.addEventListener("input", () => syncSlotFields(false));
+                negTextarea.addEventListener("change", () => syncSlotFields(true));
+
+                const saveToPresetBtn = document.createElement("button");
+                saveToPresetBtn.type = "button";
+                saveToPresetBtn.className = "moe-btn mod-nai-icon-btn";
+                saveToPresetBtn.title = "将该人设存入上方人设库";
+                saveToPresetBtn.innerHTML =
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>';
+                saveToPresetBtn.addEventListener("click", async () => {
+                  syncSlotFields(true);
+                  const cleanName = String(nameInp.value || "").trim();
+                  const cleanPrompt = String(posTextarea.value || "").trim();
+                  const cleanNeg = String(negTextarea.value || "").trim();
+                  if (!cleanName) {
+                    if (typeof window.showCustomAlert === "function") {
+                      await window.showCustomAlert("提示", "请先填写角色名称");
+                    }
+                    return;
+                  }
+                  if (!cleanPrompt) {
+                    if (typeof window.showCustomAlert === "function") {
+                      await window.showCustomAlert("提示", "请先填写该角色的外貌提示词再存入人设库");
+                    }
+                    return;
+                  }
+                  unmarkNaiPresetDeleted("character", cleanName);
+                  const store = loadPresetsStore();
+                  const charList = Array.isArray(store.character) ? store.character : [];
+                  const existIdx = charList.findIndex((x) => x && x.name === cleanName);
+                  const curSt = loadPanelState();
+                  const curSlot = normalizeActiveCharactersList(curSt.activeCharacters).find((x) => x.id === slot.id);
+                  const curPosKey = curSlot && curSlot.posKey ? curSlot.posKey : "auto";
+                  if (existIdx >= 0) {
+                    charList[existIdx].value = cleanPrompt;
+                    charList[existIdx].negative = cleanNeg;
+                    charList[existIdx].posKey = curPosKey;
+                  } else {
+                    charList.push({
+                      name: cleanName,
+                      value: cleanPrompt,
+                      negative: cleanNeg,
+                      posKey: curPosKey,
+                      group: ""
+                    });
+                  }
+                  store.character = charList;
+                  savePresetsStore(store);
+
+                  curSt.charPresetSelected = cleanName;
+                  savePanelState(curSt);
+                  renderPresetSelectOptions();
+                  flashActionButtonSuccess(saveToPresetBtn);
+                  if (typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast("已存入人设库: " + cleanName, "success");
+                  }
+                });
+
+                const copyCharBtn = document.createElement("button");
+                copyCharBtn.type = "button";
+                copyCharBtn.className = "moe-btn mod-nai-icon-btn";
+                copyCharBtn.title = "复制该角色提示词";
+                copyCharBtn.innerHTML =
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                copyCharBtn.addEventListener("click", async () => {
+                  const text = String(posTextarea.value || "").trim();
+                  if (!text) return;
+                  try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      await navigator.clipboard.writeText(text);
+                    }
+                    flashActionButtonSuccess(copyCharBtn);
+                  } catch (_) {}
+                });
+
+                editBar.appendChild(nameInp);
+                editBar.appendChild(saveToPresetBtn);
+                editBar.appendChild(copyCharBtn);
+
+                editorPanel.appendChild(editBar);
+                editorPanel.appendChild(posTextarea);
+                editorPanel.appendChild(negTextarea);
+              }
+              slotEl.appendChild(editorPanel);
+
+              stageEl.appendChild(slotEl);
+            });
+
+            updateCharCardSummaryUI();
+          }
+
           function syncModuleNaiToGlobal(shouldPersist = false) {
             if (_debouncedSyncTimer) {
               clearTimeout(_debouncedSyncTimer);
@@ -45055,6 +45581,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
             computeActiveArtistPrompt();
             computeActivePositivePrompt();
+            updateCharCardSummaryUI();
             if (!_naiHydrationCompleted) return;
 
             const artistEl = document.getElementById("mod-nai-gen-artist-input");
@@ -45066,12 +45593,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const c1El = document.getElementById("mod-nai-pos1-check");
             const c2El = document.getElementById("mod-nai-pos2-check");
             const negEl = document.getElementById("mod-nai-gen-neg-input");
+            const charMasterEl = document.getElementById("mod-nai-char-master-check");
 
             const artistSelEl = document.getElementById("mod-nai-artist-preset-select");
             const artist2SelEl = document.getElementById("mod-nai-artist2-preset-select");
             const pos1SelEl = document.getElementById("mod-nai-pos1-preset-select");
             const pos2SelEl = document.getElementById("mod-nai-pos2-preset-select");
             const negSelEl = document.getElementById("mod-nai-neg-preset-select");
+            const charSelEl = document.getElementById("mod-nai-char-preset-select");
 
             const inspectArtistEl = document.getElementById("mod-nai-inspect-artist-input");
             const inspectPosEl = document.getElementById("mod-nai-inspect-pos-input");
@@ -45088,11 +45617,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (negEl) st.negText = negEl.value;
             st.pos1Checked = c1El ? c1El.checked : true;
             st.pos2Checked = c2El ? c2El.checked : false;
+            if (charMasterEl) st.charMasterChecked = Boolean(charMasterEl.checked);
             if (artistSelEl) st.artistPresetSelected = String(artistSelEl.value || "").trim();
             if (artist2SelEl) st.artist2PresetSelected = String(artist2SelEl.value || "").trim();
             if (pos1SelEl) st.pos1PresetSelected = String(pos1SelEl.value || "").trim();
             if (pos2SelEl) st.pos2PresetSelected = String(pos2SelEl.value || "").trim();
             if (negSelEl) st.negPresetSelected = String(negSelEl.value || "").trim();
+            if (charSelEl) st.charPresetSelected = String(charSelEl.value || "").trim();
             if (inspectArtistEl) st.inspectArtistText = inspectArtistEl.value;
             if (inspectPosEl) st.inspectPosText = inspectPosEl.value;
             if (inspectNegEl) st.inspectNegText = inspectNegEl.value;
@@ -45110,6 +45641,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function debouncedSyncModuleNaiToGlobal() {
             computeActiveArtistPrompt();
             computeActivePositivePrompt();
+            updateCharCardSummaryUI();
             if (_debouncedSyncTimer) clearTimeout(_debouncedSyncTimer);
             _debouncedSyncTimer = setTimeout(() => {
               _debouncedSyncTimer = null;
@@ -45262,12 +45794,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function inferCategoryFromSelectId(selectId) {
             const idStr = String(selectId || "");
             if (idStr.includes("artist")) return "artist";
+            if (idStr.includes("char")) return "character";
             if (idStr.includes("pos")) return "positive";
             if (idStr.includes("neg")) return "negative";
             return "positive";
           }
 
-          function createPresetMenuItemButton(sel, triggerTxt, itemValue, itemLabel, curVal) {
+          function createPresetMenuItemButton(sel, triggerTxt, itemValue, itemLabel, curVal, fallbackPlaceholder) {
+            const defaultLabel = fallbackPlaceholder || (inferCategoryFromSelectId(sel && sel.id) === "character" ? "人设" : "预设");
             const itemBtn = document.createElement("button");
             itemBtn.type = "button";
             const isSelected = (itemValue || "") === curVal;
@@ -45278,7 +45812,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const labelSpan = document.createElement("span");
             labelSpan.className = "mod-nai-preset-item-label";
-            labelSpan.textContent = itemLabel || "预设";
+            labelSpan.textContent = itemLabel || defaultLabel;
 
             const checkSpan = document.createElement("span");
             checkSpan.className = "mod-nai-preset-item-check";
@@ -45291,7 +45825,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             itemBtn.addEventListener("click", (e) => {
               e.stopPropagation();
               sel.value = itemValue;
-              triggerTxt.textContent = itemValue ? itemValue : "预设";
+              triggerTxt.textContent = itemValue ? itemValue : defaultLabel;
               closeAllPresetDropdowns(null);
               syncPresetCustomDropdown(sel);
               sel.dispatchEvent(new Event("change", { bubbles: true }));
@@ -45311,6 +45845,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               });
             }
 
+            const cat = explicitCategory || inferCategoryFromSelectId(sel.id);
+            const defaultPlaceholder = cat === "character" ? "人设" : "预设";
+
             let wrap = sel.parentNode.classList && sel.parentNode.classList.contains("mod-nai-preset-dropdown")
               ? sel.parentNode
               : null;
@@ -45326,7 +45863,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               triggerBtn.type = "button";
               triggerBtn.className = "mod-nai-preset-trigger";
               triggerBtn.innerHTML =
-                '<span class="mod-nai-preset-trigger-text">预设</span>' +
+                `<span class="mod-nai-preset-trigger-text">${defaultPlaceholder}</span>` +
                 '<svg class="mod-nai-preset-trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
               const menuEl = document.createElement("div");
@@ -45354,15 +45891,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!triggerTxt || !menuEl) return;
 
             const curVal = sel.value || "";
-            triggerTxt.textContent = curVal ? curVal : "预设";
+            triggerTxt.textContent = curVal ? curVal : defaultPlaceholder;
             menuEl.innerHTML = "";
 
-            const cat = explicitCategory || inferCategoryFromSelectId(sel.id);
             const store = loadPresetsStore();
             const list = Array.isArray(store[cat]) ? store[cat] : [];
             const configuredGroups = (store.groups && Array.isArray(store.groups[cat])) ? store.groups[cat] : [];
 
-            menuEl.appendChild(createPresetMenuItemButton(sel, triggerTxt, "", "预设", curVal));
+            menuEl.appendChild(createPresetMenuItemButton(sel, triggerTxt, "", defaultPlaceholder, curVal, defaultPlaceholder));
 
             const groupOrder = [];
             configuredGroups.forEach((g) => {
@@ -45450,7 +45986,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function renderSettingsPresetDrawers() {
             const store = loadPresetsStore();
-            const categories = ["artist", "positive", "negative"];
+            const categories = ["artist", "positive", "negative", "character"];
             const lexListCount = loadLocalBookmarksForCategory("lexicon").length;
             const lexCountEl = document.getElementById("mod-nai-drawer-count-lexicon");
             if (lexCountEl) lexCountEl.textContent = String(lexListCount);
@@ -45460,6 +45996,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 (Array.isArray(store.artist) ? store.artist.length : 0) +
                 (Array.isArray(store.positive) ? store.positive.length : 0) +
                 (Array.isArray(store.negative) ? store.negative.length : 0) +
+                (Array.isArray(store.character) ? store.character.length : 0) +
                 lexListCount;
               masterCountEl.textContent = String(totalPresetsCount);
             }
@@ -45565,14 +46102,23 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                   const st = loadPanelState();
                   let stChanged = false;
-                  ["artistPresetSelected", "artist2PresetSelected", "pos1PresetSelected", "pos2PresetSelected", "negPresetSelected"].forEach((k) => {
+                  ["artistPresetSelected", "artist2PresetSelected", "pos1PresetSelected", "pos2PresetSelected", "negPresetSelected", "charPresetSelected"].forEach((k) => {
                     if (st[k] === oldName) {
                       st[k] = newName;
                       stChanged = true;
                     }
                   });
+                  if (cat === "character" && Array.isArray(st.activeCharacters)) {
+                    st.activeCharacters.forEach((c) => {
+                      if (c && c.name === oldName) {
+                        c.name = newName;
+                        stChanged = true;
+                      }
+                    });
+                  }
                   if (stChanged) {
                     savePanelState(st);
+                    if (cat === "character") renderCharStageList();
                   }
                   renderPresetSelectOptions();
                   renderSettingsPresetDrawers();
@@ -45831,10 +46377,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const store = loadPresetsStore();
             const st = loadPanelState();
 
-            const fillSelect = (selectId, category, list, selectedName) => {
+            const fillSelect = (selectId, category, list, selectedName, placeholderLabel) => {
               const sel = document.getElementById(selectId);
               if (!sel) return;
-              sel.innerHTML = '<option value="">预设</option>';
+              const ph = placeholderLabel || "预设";
+              sel.innerHTML = `<option value="">${ph}</option>`;
               let matchedSelected = "";
               (list || []).forEach((item) => {
                 if (!item || !item.name) return;
@@ -45851,11 +46398,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               syncPresetCustomDropdown(sel, category);
             };
 
-            fillSelect("mod-nai-artist-preset-select", "artist", store.artist, st.artistPresetSelected);
-            fillSelect("mod-nai-artist2-preset-select", "artist", store.artist, st.artist2PresetSelected);
-            fillSelect("mod-nai-pos1-preset-select", "positive", store.positive, st.pos1PresetSelected);
-            fillSelect("mod-nai-pos2-preset-select", "positive", store.positive, st.pos2PresetSelected);
-            fillSelect("mod-nai-neg-preset-select", "negative", store.negative, st.negPresetSelected);
+            fillSelect("mod-nai-artist-preset-select", "artist", store.artist, st.artistPresetSelected, "预设");
+            fillSelect("mod-nai-artist2-preset-select", "artist", store.artist, st.artist2PresetSelected, "预设");
+            fillSelect("mod-nai-pos1-preset-select", "positive", store.positive, st.pos1PresetSelected, "预设");
+            fillSelect("mod-nai-pos2-preset-select", "positive", store.positive, st.pos2PresetSelected, "预设");
+            fillSelect("mod-nai-neg-preset-select", "negative", store.negative, st.negPresetSelected, "预设");
+            fillSelect("mod-nai-char-preset-select", "character", store.character, st.charPresetSelected, "人设");
             renderSettingsPresetDrawers();
           }
 
@@ -46747,14 +47295,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 });
               });
 
-              ["artist", "positive", "negative"].forEach((cat) => {
+              ["artist", "positive", "negative", "character"].forEach((cat) => {
                 const addBtn = document.getElementById(`mod-nai-group-add-${cat}`);
                 const grpInp = document.getElementById(`mod-nai-group-input-${cat}`);
                 const createGroupForCat = () => {
                   const gName = grpInp ? String(grpInp.value || "").trim() : "";
                   if (!gName) return;
                   const curStore = loadPresetsStore();
-                  if (!curStore.groups) curStore.groups = { artist: [], positive: [], negative: [] };
+                  if (!curStore.groups) curStore.groups = { artist: [], positive: [], negative: [], character: [] };
                   if (!Array.isArray(curStore.groups[cat])) curStore.groups[cat] = [];
                   if (!curStore.groups[cat].includes(gName)) {
                     curStore.groups[cat].push(gName);
@@ -46951,7 +47499,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                     if (srcObj.presets && typeof srcObj.presets === "object") {
                       const curP = loadPresetsStore();
-                      ["artist", "positive", "negative"].forEach((cat) => {
+                      ["artist", "positive", "negative", "character"].forEach((cat) => {
                         (Array.isArray(srcObj.presets[cat]) ? srcObj.presets[cat] : []).forEach((it) => {
                           if (it && it.name) unmarkNaiPresetDeleted(cat, it.name);
                         });
@@ -47186,6 +47734,137 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               null
             );
 
+            // 4.5 人设多角色独立控制折叠面板、人设库下拉上场、新建角色、删除人设
+            const charMasterCheck = document.getElementById("mod-nai-char-master-check");
+            const charHeadToggle = document.getElementById("mod-nai-char-head-toggle");
+            const charFoldBtn = document.getElementById("mod-nai-char-fold-btn");
+            const charPresetSelect = document.getElementById("mod-nai-char-preset-select");
+            const charStageAddBtn = document.getElementById("mod-nai-char-stage-add-btn");
+            const charPresetSaveBtn = document.getElementById("mod-nai-char-preset-save-btn");
+            const charPresetDelBtn = document.getElementById("mod-nai-char-preset-del-btn");
+
+            const toggleCharCardExpand = (e) => {
+              if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              const st = loadPanelState();
+              st.charCardExpanded = !st.charCardExpanded;
+              savePanelState(st);
+              updateCharCardSummaryUI();
+            };
+
+            if (charHeadToggle) {
+              charHeadToggle.addEventListener("click", (e) => {
+                if (e.target && (e.target.id === "mod-nai-char-master-check" || e.target.closest("#mod-nai-char-master-check"))) {
+                  return;
+                }
+                toggleCharCardExpand(e);
+              });
+            }
+            if (charFoldBtn) {
+              charFoldBtn.addEventListener("click", toggleCharCardExpand);
+            }
+            if (charMasterCheck) {
+              charMasterCheck.addEventListener("change", () => {
+                const st = loadPanelState();
+                st.charMasterChecked = Boolean(charMasterCheck.checked);
+                if (st.charMasterChecked && !st.charCardExpanded && (!Array.isArray(st.activeCharacters) || st.activeCharacters.length === 0)) {
+                  st.charCardExpanded = true;
+                }
+                savePanelState(st);
+                updateCharCardSummaryUI();
+              });
+            }
+            if (charPresetSelect) {
+              charPresetSelect.addEventListener("change", () => {
+                const chosenName = String(charPresetSelect.value || "").trim();
+                const st = loadPanelState();
+                st.charPresetSelected = chosenName;
+                savePanelState(st);
+              });
+            }
+            if (charStageAddBtn) {
+              charStageAddBtn.addEventListener("click", async () => {
+                const chosenName = charPresetSelect ? String(charPresetSelect.value || "").trim() : "";
+                if (!chosenName) {
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert("提示", "请先在左侧人设下拉框中选择一个要上场的人设，或者点加号新建角色");
+                  }
+                  return;
+                }
+                const store = loadPresetsStore();
+                const found = (Array.isArray(store.character) ? store.character : []).find((x) => x && x.name === chosenName);
+                if (!found) return;
+                const st = loadPanelState();
+                const curList = normalizeActiveCharactersList(st.activeCharacters);
+                if (curList.length >= 6) {
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert("提示", "单张画面最多同时上场六个角色");
+                  }
+                  return;
+                }
+                const newSlotId = `char_slot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                curList.push({
+                  id: newSlotId,
+                  name: found.name,
+                  prompt: found.value || "",
+                  negative: found.negative || "",
+                  posKey: found.posKey || "auto",
+                  enabled: true
+                });
+                st.activeCharacters = curList;
+                st.charMasterChecked = true;
+                st.charCardExpanded = true;
+                if (charMasterCheck) charMasterCheck.checked = true;
+                savePanelState(st);
+                renderCharStageList();
+                flashActionButtonSuccess(charStageAddBtn);
+              });
+            }
+            if (charPresetSaveBtn) {
+              charPresetSaveBtn.addEventListener("click", async () => {
+                const st = loadPanelState();
+                const curList = normalizeActiveCharactersList(st.activeCharacters);
+                if (curList.length >= 6) {
+                  if (typeof window.showCustomAlert === "function") {
+                    await window.showCustomAlert("提示", "单张画面最多同时上场六个角色");
+                  }
+                  return;
+                }
+                const chosenName = charPresetSelect ? String(charPresetSelect.value || "").trim() : "";
+                const store = loadPresetsStore();
+                const found = chosenName
+                  ? (Array.isArray(store.character) ? store.character : []).find((x) => x && x.name === chosenName)
+                  : null;
+                const newSlotId = `char_slot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                const defaultName = found && !curList.some((c) => c.name === found.name)
+                  ? found.name
+                  : `角色${curList.length + 1}`;
+                curList.push({
+                  id: newSlotId,
+                  name: defaultName,
+                  prompt: found && defaultName === found.name ? (found.value || "") : "",
+                  negative: found && defaultName === found.name ? (found.negative || "") : "",
+                  posKey: found && defaultName === found.name ? (found.posKey || "auto") : "auto",
+                  enabled: true
+                });
+                st.activeCharacters = curList;
+                st.charMasterChecked = true;
+                st.charCardExpanded = true;
+                if (charMasterCheck) charMasterCheck.checked = true;
+                activeOpenCharEditSlotId = newSlotId;
+                activeOpenCharPosSlotId = "";
+                savePanelState(st);
+                renderCharStageList();
+              });
+            }
+            if (charPresetDelBtn) {
+              charPresetDelBtn.addEventListener("click", () =>
+                handleDeletePreset("character", "mod-nai-char-preset-select", "charPresetSelected")
+              );
+            }
+
             // 5. 生图执行按钮
             const runGenBtn = document.getElementById("mod-nai-gen-run-btn");
             const genResultImg = document.getElementById("mod-nai-gen-result-img");
@@ -47238,14 +47917,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 syncModuleNaiToGlobal();
                 const activeArtistVal = computeActiveArtistPrompt();
                 const activePosVal = computeActivePositivePrompt();
+                const activeCharList = computeActiveCharacterPrompts();
                 const negVal = (document.getElementById("mod-nai-gen-neg-input")?.value || "").trim();
                 const stNow = loadPanelState();
                 const resVal = stNow.resolution || "1024x1024";
                 const modelVal = stNow.model || "nai-diffusion-4-5-full";
 
-                if (!activePosVal && !activeArtistVal) {
+                if (!activePosVal && !activeArtistVal && activeCharList.length === 0) {
                   if (typeof window.showCustomAlert === "function") {
-                    await window.showCustomAlert("提示", "请至少勾选并填写一组正面词或画师串");
+                    await window.showCustomAlert("提示", "请至少勾选并填写一组正面词、画师串或上场人设");
                   }
                   return;
                 }
@@ -47269,6 +47949,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     artist: activeArtistVal,
                     defaultPositive: "",
                     negativePrompt: negVal,
+                    characterPrompts: activeCharList,
                     resolution: resVal,
                     model: modelVal,
                     sampler: stForGen.sampler || "k_euler_ancestral",
@@ -47288,7 +47969,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       : rawDataUrl;
                     const imgTitle = shouldCleanOnGen
                       ? "NAI_Image"
-                      : (activePosVal || activeArtistVal || "NAI_Image");
+                      : (activePosVal || activeArtistVal || (activeCharList[0] && activeCharList[0].prompt) || "NAI_Image");
                     genResultImg.removeAttribute("data-vault-ref");
                     if (shouldCleanOnGen) {
                       genResultImg.setAttribute("data-cleaned-jpg", "1");
@@ -52558,6 +53239,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (c2El) c2El.checked = Boolean(st.pos2Checked);
             if (negEl && document.activeElement !== negEl) negEl.value = negVal;
 
+            const charMasterEl = document.getElementById("mod-nai-char-master-check");
+            if (charMasterEl) charMasterEl.checked = Boolean(st.charMasterChecked);
+            renderCharStageList();
+
             const settingsModal = document.getElementById("mod-nai-settings-modal");
             const settingsOpen = settingsModal && settingsModal.style.display === "flex";
             if (!settingsOpen) {
@@ -53139,7 +53824,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (!ps || typeof ps !== "object") return 0;
                 return (Array.isArray(ps.artist) ? ps.artist.length : 0) +
                   (Array.isArray(ps.positive) ? ps.positive.length : 0) +
-                  (Array.isArray(ps.negative) ? ps.negative.length : 0);
+                  (Array.isArray(ps.negative) ? ps.negative.length : 0) +
+                  (Array.isArray(ps.character) ? ps.character.length : 0);
               };
 
               const presetCandidates = [
@@ -53177,7 +53863,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 window.state.globalSettings.naiPresetsStore = clonePresetsStore(memoryPresetsStore);
               }
 
-              // 6. 安全合并面板与设置状态（模型 V5、尺寸、主题、生图地址、密钥、选中预设及提示词）
+              // 6. 安全合并面板与设置状态
               const wasHydratedBefore = _naiHydrationCompleted;
               const liveStateBefore = memoryPanelState ? Object.assign({}, memoryPanelState) : null;
               let mergedState = loadPanelState();
@@ -53217,6 +53903,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   "pos1PresetSelected",
                   "pos2PresetSelected",
                   "negPresetSelected",
+                  "charPresetSelected",
+                  "charMasterChecked",
+                  "charCardExpanded",
+                  "activeCharacters",
                   "artistText",
                   "artist2Text",
                   "pos1Text",

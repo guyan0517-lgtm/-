@@ -4115,15 +4115,24 @@ code, pre {
         }
         for (const extKeyName of ['baibai_image', 'baibai_book', 'st-baibai-image', 'st-baibai-book']) {
           const extCfg = tavernState.extensionSettings[extKeyName];
-          if (extCfg && extCfg.api && Array.isArray(extCfg.api.channels) && extCfg.api.channels.length > 0) {
-            const firstCh = extCfg.api.channels[0];
-            if (firstCh && !firstCh.url && !firstCh.key) {
-              firstCh.url = cleanUrlWithV1;
-              firstCh.key = extApi.apiKey;
-              if (extApi.model) {
-                firstCh.model = extApi.model;
-                if (!Array.isArray(firstCh.models) || firstCh.models.length === 0) {
-                  firstCh.models = [extApi.model];
+          const chLists = [
+            extCfg && extCfg.api && Array.isArray(extCfg.api.channels) ? extCfg.api.channels : null,
+            extCfg && Array.isArray(extCfg.channels) ? extCfg.channels : null
+          ].filter(Boolean);
+          for (const chList of chLists) {
+            if (chList.length > 0) {
+              const firstCh = chList[0];
+              if (firstCh && (firstCh.id === 'default_phone_api' || (!firstCh.url && !firstCh.key))) {
+                firstCh.url = cleanUrlWithV1;
+                firstCh.key = extApi.apiKey;
+                if (!firstCh.maxTokens || firstCh.maxTokens > 16384) {
+                  firstCh.maxTokens = 8192;
+                }
+                if (extApi.model) {
+                  firstCh.model = extApi.model;
+                  if (!Array.isArray(firstCh.models) || firstCh.models.length === 0 || firstCh.id === 'default_phone_api') {
+                    firstCh.models = [extApi.model];
+                  }
                 }
               }
             }
@@ -4136,6 +4145,18 @@ code, pre {
       if (!sess.metadata || typeof sess.metadata !== 'object') sess.metadata = {};
       if (!sess.metadata.integrity || typeof sess.metadata.integrity !== 'string') {
         sess.metadata.integrity = 'chat_uuid_' + String(sess.chatId || 'default');
+      }
+      if (Array.isArray(sess.messages)) {
+        for (let i = 0; i < sess.messages.length; i++) {
+          const m = sess.messages[i];
+          if (m && m.extra && typeof m.extra === 'object') {
+            if (m.extra.bbs_hidden === true && !m.is_system) {
+              m.is_system = true;
+            } else if (m.extra.bbs_hidden === false) {
+              delete m.extra.bbs_hidden;
+            }
+          }
+        }
       }
     }
     const resolvedCreds = resolveTavernApiCredentials();
