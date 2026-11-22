@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -23708,7 +23708,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           }
           const isAudioPaused = !audio || audio.paused || audio.ended;
           const isCtxSuspended = !_keepAliveAudioCtx || _keepAliveAudioCtx.state !== "running";
-          if (!force && !isAudioPaused && !isCtxSuspended && now - _lastKeepAliveCheckTs < 1500 && _keepAliveSrcConfigured) {
+          if (!isAudioPaused && !isCtxSuspended && _keepAliveSrcConfigured && (!force || (_bgTaskKeepAliveCount === 0 && now - _lastKeepAliveCheckTs < 2500))) {
             return;
           }
           _lastKeepAliveCheckTs = now;
@@ -23821,11 +23821,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }
           } catch (_) {}
         }
-        ["pointerdown", "pointerup", "touchstart", "touchend", "mouseup", "click"].forEach((evtName) => {
+        ["pointerdown", "touchend", "click"].forEach((evtName) => {
           document.addEventListener(
             evtName,
             () => {
-              ensureBackgroundKeepAlive(null, true);
+              ensureBackgroundKeepAlive(null, false);
               tryRequestNotificationPermissionOnGesture();
             },
             { passive: true }
@@ -33939,10 +33939,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             logisticsUpdateTimers = [];
           }
 
-          if (screenId === "chat-list-screen") {
-            renderChatList();
-            switchToChatListView("messages-view");
-          }
           if (screenId === "api-settings-screen") {
             renderApiSettings();
           }
@@ -33959,6 +33955,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const screenToShow = document.getElementById(screenId);
           if (screenToShow) {
             screenToShow.classList.add("active");
+          }
+
+          if (screenId === "chat-list-screen") {
+            renderChatList();
+            switchToChatListView("messages-view");
           }
 
           ensureAllBackButtonsSvg();
@@ -55776,6 +55777,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
         window.updateGlobalChatUnreadBadge = updateGlobalChatUnreadBadge;
 
         async function renderChatList() {
+          const chatInterfaceScreenEl = document.getElementById("chat-interface-screen");
+          const chatListScreenEl = document.getElementById("chat-list-screen");
+          if (
+            chatInterfaceScreenEl &&
+            chatInterfaceScreenEl.classList.contains("active") &&
+            (!chatListScreenEl || !chatListScreenEl.classList.contains("active"))
+          ) {
+            window._chatListNeedsRender = true;
+            updateGlobalChatUnreadBadge();
+            return;
+          }
+          window._chatListNeedsRender = false;
           const chatListEl = document.getElementById("chat-list");
           chatListEl.innerHTML = "";
 
@@ -56234,6 +56247,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           } catch (_) {}
         })();
 
+        let _draftLsFlushTimer = null;
         window.saveChatDraftRealtime = function (chatId, text, immediateDb = false) {
           if (chatId === null || chatId === undefined || chatId === "") return;
           const key = String(chatId);
@@ -56244,29 +56258,25 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           } else {
             delete window.chatDrafts[key];
           }
-          try {
-            localStorage.setItem(CHAT_DRAFTS_LS_KEY, JSON.stringify(window.chatDrafts));
-          } catch (_) {}
+          const flushDraftsToLs = () => {
+            if (_draftLsFlushTimer) {
+              clearTimeout(_draftLsFlushTimer);
+              _draftLsFlushTimer = null;
+            }
+            try {
+              localStorage.setItem(CHAT_DRAFTS_LS_KEY, JSON.stringify(window.chatDrafts));
+            } catch (_) {}
+          };
+          if (immediateDb) {
+            flushDraftsToLs();
+          } else if (!_draftLsFlushTimer) {
+            _draftLsFlushTimer = setTimeout(flushDraftsToLs, 200);
+          }
 
           const chatObj =
             (state && state.chats && (state.chats[chatId] || state.chats[key] || state.chats[Number(chatId)])) || null;
           if (chatObj) {
             chatObj.draftText = val;
-            const persistFn = () => {
-              const dbInst = typeof db !== "undefined" ? db : (window.database || null);
-              if (dbInst && dbInst.chats) {
-                dbInst.chats.put(chatObj).catch(() => {});
-              }
-            };
-            if (draftDbTimers[key]) {
-              clearTimeout(draftDbTimers[key]);
-              delete draftDbTimers[key];
-            }
-            if (immediateDb) {
-              persistFn();
-            } else {
-              draftDbTimers[key] = setTimeout(persistFn, 350);
-            }
           }
         };
 
@@ -59896,7 +59906,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           if (!isInitialLoad) {
             if (typeof window.hydrateDomVaultImages === "function") {
-              window.hydrateDomVaultImages();
+              window.hydrateDomVaultImages(messageEl);
             }
             if (wasNearBottom) {
               messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -65987,11 +65997,8 @@ ${recentHistoryText}
                 if (!chat) {
                   try { chat = await db.chats.get(String(chatId)); } catch (e) {}
                 }
-              } else {
-                if (chat.isGroup && chat.activeLineMode !== "solo") {
-                  chat.mainLineHistory = [];
-                }
-                try { await db.chats.put(chat); } catch (_) {}
+              } else if (chat.isGroup && chat.activeLineMode !== "solo" && Array.isArray(chat.mainLineHistory) && chat.mainLineHistory.length > 0) {
+                chat.mainLineHistory = [];
               }
             } catch (e) {}
           }
@@ -66029,16 +66036,27 @@ ${recentHistoryText}
           const initialHeaderTitle = document.getElementById("chat-header-title");
           const initialTypingInd = document.getElementById("typing-indicator");
           const chatScreenEl = document.getElementById("chat-interface-screen");
+          const initialMsgsBox = document.getElementById("chat-messages");
           if (String(state.activeChatId) === String(chat.id) && chatScreenEl && chatScreenEl.classList.contains("active")) {
             if (chat.isGroup) {
               if (initialTypingInd) {
                 initialTypingInd.textContent = "群成员正在回复中...";
                 initialTypingInd.style.display = "block";
               }
+              if (initialMsgsBox && isChatScrolledNearBottom(initialMsgsBox)) {
+                initialMsgsBox.scrollTop = initialMsgsBox.scrollHeight;
+              }
             } else if (initialHeaderTitle) {
               initialHeaderTitle.textContent = chat.roleType === "system_status" ? "系统正在输入..." : (chat.settings?.offlineMode?.enabled ? "对方正在赴约中..." : "对方正在输入...");
               initialHeaderTitle.classList.add("typing-status");
             }
+            await new Promise((resolve) => {
+              if (typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(() => setTimeout(resolve, 0));
+              } else {
+                setTimeout(resolve, 0);
+              }
+            });
           }
 
           // 系统状态栏角色（单聊）：合并为同一条消息，同一个气泡内，AI 禁止生成其他任何消息
@@ -66756,46 +66774,6 @@ ${recentHistoryText}
           }
 
           let weiboContextForActiveChat = "";
-          try {
-            // 1. 从数据库里找出最新的5条微博
-            const recentWeiboPosts = await db.weiboPosts
-              .orderBy("timestamp")
-              .reverse()
-              .limit(5)
-              .toArray();
-
-            if (recentWeiboPosts.length > 0) {
-              weiboContextForActiveChat =
-                "\n\n# 最近的微博广场动态 (供你参考和评论)\n";
-
-              recentWeiboPosts.forEach((post) => {
-                const authorName =
-                  post.authorId === "user"
-                    ? state.qzoneSettings.weiboNickname || "我"
-                    : post.authorNickname;
-                const contentPreview = (
-                  post.content ||
-                  post.hiddenContent ||
-                  "(图片微博)"
-                );
-
-                // 只有当 post.comments 确实是一个数组时，我们才去调用 .some() 方法
-                const hasCommented =
-                  post.comments &&
-                  Array.isArray(post.comments) &&
-                  post.comments.some((c) => c.authorNickname === chat.name);
-                const interactionStatus = hasCommented
-                  ? "[你已评论]"
-                  : "[你未互动]";
-
-                weiboContextForActiveChat += `- (ID: ${post.id}) 作者: ${authorName}, 内容: "${contentPreview}" ${interactionStatus}\n`;
-              });
-              weiboContextForActiveChat +=
-                " - 【重要提示】请优先与你【未互动】的微博进行评论。如果都互动过了，可以考虑自己发一条新微博。";
-            }
-          } catch (e) {
-            console.error("生成微博主动聊天上下文时出错:", e);
-          }
 
           const chatHeaderTitle = document.getElementById("chat-header-title");
 
@@ -66808,7 +66786,7 @@ ${recentHistoryText}
             window.PeerManager.broadcastTypingStatus(chat, true);
           }
           const chatScreenElForTyping = document.getElementById("chat-interface-screen");
-          if (state.activeChatId === chatId && chatScreenElForTyping && chatScreenElForTyping.classList.contains("active")) {
+          if (String(state.activeChatId) === String(chat.id) && chatScreenElForTyping && chatScreenElForTyping.classList.contains("active")) {
             if (chat.isGroup) {
               if (typingIndicator) {
                 const wasAtBottom = isChatScrolledNearBottom(messagesContainer);
@@ -68568,111 +68546,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 messagesPayload.push(friendRequestInstruction);
               }
             }
-            const allRecentPosts = await db.qzonePosts
-              .orderBy("timestamp")
-              .reverse()
-              .limit(5)
-              .toArray();
+            const allRecentPosts = !chat.isGroup
+              ? await db.qzonePosts
+                  .orderBy("timestamp")
+                  .reverse()
+                  .limit(5)
+                  .toArray()
+              : [];
 
-            // 为AI准备微博互动的上下文
-            let weiboContext = "";
-
-            // 1. 获取用户最新发布的3条微博
-            const userLatestPosts = await db.weiboPosts
-              .where("authorId")
-              .equals("user");
-
-            if (userLatestPosts.length > 0) {
-              if (weiboContext === "") {
-                weiboContext =
-                  "\n\n# 最近的微博互动 (这是你和用户在微博上的最新动态，请优先回应)\n";
-              }
-              weiboContext += "\n## 用户最新发布的微博:\n";
-              userLatestPosts.forEach((post) => {
-                const likes =
-                  (post.baseLikesCount || 0) + (post.likes || []).length;
-                const comments =
-                  (post.baseCommentsCount || 0) + (post.comments || []).length;
-                const contentPreview = (
-                  post.content ||
-                  post.hiddenContent ||
-                  "(图片微博)"
-                );
-                weiboContext += `- (ID: ${post.id}) [${formatPostTimestamp(
-                  post.timestamp,
-                )}] 内容: "${contentPreview}" [👍${likes} 💬${comments}]\n`;
-              });
-            }
-
-            // 2. 查找用户在当前AI角色微博下的最新评论
-            const charLatestPosts = await db.weiboPosts
-              .where("authorId")
-              .equals(chatId) // 只查找这个AI角色的微博
-              .reverse()
-              .limit(5) // 检查最近的5条
-              .toArray();
-
-            let userCommentsOnMyPosts = "";
-            const myNickname =
-              state.qzoneSettings.weiboNickname ||
-              state.qzoneSettings.nickname ||
-              "我";
-
-            charLatestPosts.forEach((post) => {
-              if (
-                post.comments &&
-                Array.isArray(post.comments) &&
-                post.comments.length > 0
-              ) {
-                // 筛选出是“我”发的评论
-                const userComments = Array.isArray(post.comments)
-                  ? post.comments
-                      .filter((c) => c.authorNickname === myNickname)
-                      .slice(-3)
-                  : [];
-                if (userComments.length > 0) {
-                  const postContentPreview = (
-                    post.content || "(图片微博)"
-                  );
-                  userCommentsOnMyPosts += `- 在你的微博 (ID: ${post.id}) "${postContentPreview}" 下:\n`;
-
-                  userComments.forEach((comment) => {
-                    // 1. 检查AI是否已经回复过这条评论
-                    //    逻辑：在帖子的所有评论中，查找是否存在一条评论，
-                    //    它的作者是AI自己，并且它的replyToId指向当前这条用户的评论ID。
-                    const hasReplied = post.comments.some(
-                      (reply) =>
-                        reply.authorNickname === chat.name && // 回复者是AI
-                        reply.replyToId === comment.commentId, // 回复的目标是这条评论
-                    );
-
-                    // 2. 根据检查结果，生成状态标签
-                    const replyStatus = hasReplied
-                      ? "[你已回复]"
-                      : "[你未回复]";
-
-                    // 3. 将带有状态标签的提示信息添加到上下文中
-                    userCommentsOnMyPosts += `  └ (评论ID: ${comment.commentId}) 用户: "${comment.commentText}" ${replyStatus}\n`;
-                  });
-                }
-              }
-            });
-
-            if (userCommentsOnMyPosts) {
-              if (weiboContext === "") {
-                weiboContext =
-                  "\n\n# 最近的微博互动 (这是你和用户在微博上的最新动态，请优先回应)\n";
-              }
-              weiboContext += "\n## 用户在你微博下的新评论:\n";
-              weiboContext += userCommentsOnMyPosts;
-            }
-
-            // 3. 如果有任何微博互动，就把它加到给AI的“参考资料”里
-            if (weiboContext) {
-              messagesPayload.push({ role: "system", content: window.formatPromptSection("微博", weiboContext).trim() });
-            }
-
-            const visiblePosts = filterVisiblePostsForAI(allRecentPosts, chat);
+            const visiblePosts = !chat.isGroup ? filterVisiblePostsForAI(allRecentPosts, chat) : [];
 
             if (visiblePosts.length > 0 && !chat.isGroup) {
               let postsContext = "\n\n# 最近的动态列表 (供你参考和评论):\n";
@@ -68693,8 +68575,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 )
                   interactionStatus += " [你已评论]";
 
-                // 在每一条动态前面，都加上了由 formatPostTimestamp() 函数生成的时间差提示
-                const timeAgo = formatPostTimestamp(post.timestamp); // 例如："3天前" 或 "刚刚"
+                const timeAgo = formatPostTimestamp(post.timestamp);
                 postsContext += `- (ID: ${post.id}) [${timeAgo}] 作者: ${authorName}, 内容: "${(
                   post.publicText ||
                   post.content ||
@@ -68706,101 +68587,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                 postsContext += ` ${visibilityFlag}\n`;
                 postsContext += commentsContext;
-              }
-
-              // 为AI准备微博互动的上下文
-              let weiboContext = "";
-
-              // 1. 获取用户最新发布的3条微博
-              const userLatestPosts = await db.weiboPosts
-                .where("authorId")
-                .equals("user")
-                .reverse() // 按时间倒序
-                .limit(3) // 只取最近3条
-                .toArray();
-
-              if (userLatestPosts.length > 0) {
-                if (weiboContext === "") {
-                  weiboContext =
-                    "\n\n# 最近的微博互动 (这是你和用户在微博上的最新动态，请优先回应)\n";
-                }
-                weiboContext += "\n## 用户最新发布的微博:\n";
-                // ✅ 这是修复后的新代码
-                userLatestPosts.forEach((post) => {
-                  const likes =
-                    (post.baseLikesCount || 0) + (post.likes || []).length;
-                  const comments =
-                    (post.baseCommentsCount || 0) +
-                    (post.comments || []).length;
-                  const contentPreview = (
-                    post.content ||
-                    post.hiddenContent ||
-                    "(图片微博)"
-                  );
-
-                  // 1. 检查AI（char.name）是否已经评论过这条用户的微博
-                  const hasCommented = (post.comments || []).some(
-                    (comment) => comment.authorNickname === chat.name,
-                  );
-
-                  // 2. 根据检查结果生成状态标签
-                  const interactionStatus = hasCommented
-                    ? "[你已评论]"
-                    : "[你未评论]";
-
-                  // 3. 将带有状态标签的完整信息添加到上下文中
-                  weiboContext += `- (ID: ${post.id}) [${formatPostTimestamp(
-                    post.timestamp,
-                  )}] 内容: "${contentPreview}" [👍${likes} 💬${comments}] ${interactionStatus}\n`;
-                });
-              }
-
-              // 2. 查找用户在当前AI角色微博下的最新评论
-              const charLatestPosts = await db.weiboPosts
-                .where("authorId")
-                .equals(chatId) // 只查找这个AI角色的微博
-                .reverse()
-                .limit(5) // 检查最近的5条
-                .toArray();
-
-              let userCommentsOnMyPosts = "";
-              const myNickname =
-                state.qzoneSettings.weiboNickname ||
-                state.qzoneSettings.nickname ||
-                "我";
-
-              charLatestPosts.forEach((post) => {
-                if (post.comments && post.comments.length > 0) {
-                  // 筛选出是“我”发的评论
-                  const userComments = Array.isArray(post.comments)
-                    ? post.comments
-                        .filter((c) => c.authorNickname === myNickname)
-                        .slice(-3)
-                    : []; // 只看最新的3条
-                  if (userComments.length > 0) {
-                    const postContentPreview = (
-                      post.content || "(图片微博)"
-                    );
-                    userCommentsOnMyPosts += `- 在你的微博 (ID: ${post.id}) "${postContentPreview}" 下:\n`;
-                    userComments.forEach((comment) => {
-                      userCommentsOnMyPosts += `  └ (评论ID: ${comment.commentId}) 用户: "${comment.commentText}"\n`;
-                    });
-                  }
-                }
-              });
-
-              if (userCommentsOnMyPosts) {
-                if (weiboContext === "") {
-                  weiboContext =
-                    "\n\n# 最近的微博互动 (这是你和用户在微博上的最新动态，请优先回应)\n";
-                }
-                weiboContext += "\n## 用户在你微博下的新评论:\n";
-                weiboContext += userCommentsOnMyPosts;
-              }
-
-              // 3. 如果有任何微博互动，就把它加到给AI的“参考资料”里
-              if (weiboContext) {
-                messagesPayload.push({ role: "system", content: window.formatPromptSection("微博", weiboContext).trim() });
               }
 
               if (postsContext) {
@@ -112323,9 +112109,10 @@ ${specificRules}`;
           // ▲▲▲▲▲▲▲▲▲▲▲▲ 修改结束 ▲▲▲▲▲▲▲▲▲▲▲▲
 
           const suppressBrowserAutofillBarOnField = (el) => {
-            if (!el || !el.tagName) return;
+            if (!el || !el.tagName || el._autofillSuppressed) return;
             const tag = el.tagName.toUpperCase();
             if (tag !== "INPUT" && tag !== "TEXTAREA") return;
+            el._autofillSuppressed = true;
             if (tag === "INPUT") {
               const rawType = String(el.getAttribute("type") || "text").toLowerCase();
               const nonTextTypes = [
@@ -112407,34 +112194,16 @@ ${specificRules}`;
 
           suppressAllAutofillInputsInRoot(document.body);
 
-          if (typeof MutationObserver === "function" && document.body) {
-            const autofillSuppressObserver = new MutationObserver((mutations) => {
-              for (let i = 0; i < mutations.length; i++) {
-                const added = mutations[i].addedNodes;
-                if (!added || added.length === 0) continue;
-                for (let j = 0; j < added.length; j++) {
-                  const node = added[j];
-                  if (node && node.nodeType === 1) {
-                    suppressAllAutofillInputsInRoot(node);
-                  }
-                }
+          document.addEventListener(
+            "focusin",
+            (e) => {
+              const t = e.target;
+              if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) {
+                suppressBrowserAutofillBarOnField(t);
               }
-            });
-            autofillSuppressObserver.observe(document.body, { childList: true, subtree: true });
-          }
-
-          ["touchstart", "pointerdown", "focusin"].forEach((evtName) => {
-            document.addEventListener(
-              evtName,
-              (e) => {
-                const t = e.target;
-                if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) {
-                  suppressBrowserAutofillBarOnField(t);
-                }
-              },
-              true
-            );
-          });
+            },
+            true
+          );
 
           document.addEventListener(
             "keydown",
@@ -131331,10 +131100,22 @@ ${specificRules}`;
             return avatarSrc;
           };
 
+          function getFastVaultMsgSig(m) {
+            if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+            if (m.timestamp === undefined && m.role === undefined && m.sender === undefined) return null;
+            const cLen = typeof m.content === "string" ? m.content.length : (Array.isArray(m.content) ? m.content.length : 0);
+            return `${cLen}|${m.url || ""}|${m.imageUrl || ""}|${m.audioUrl || ""}|${m.senderAvatar || ""}|${m.avatar || ""}|${m.audioHex ? m.audioHex.length : 0}|${m.quote ? 1 : 0}`;
+          }
+
           function restoreVaultRefsInObjectDeep(obj, visited = new WeakSet(), domVaultMap = null) {
             if (!obj || typeof obj !== "object" || visited.has(obj)) return false;
+            const msgSig = getFastVaultMsgSig(obj);
+            if (msgSig !== null && obj._vaultNoBlobSig === msgSig) {
+              return false;
+            }
             visited.add(obj);
             let changed = false;
+            let hasAnyBlob = false;
             if (!domVaultMap) {
               domVaultMap = new Map();
               try {
@@ -131358,6 +131139,8 @@ ${specificRules}`;
                   if (mapped) {
                     obj[i] = mapped;
                     changed = true;
+                  } else {
+                    hasAnyBlob = true;
                   }
                 } else if (val && typeof val === "object") {
                   if (restoreVaultRefsInObjectDeep(val, visited, domVaultMap)) changed = true;
@@ -131372,10 +131155,22 @@ ${specificRules}`;
                 if (mapped) {
                   obj[key] = mapped;
                   changed = true;
+                } else {
+                  hasAnyBlob = true;
                 }
               } else if (val && typeof val === "object") {
                 if (restoreVaultRefsInObjectDeep(val, visited, domVaultMap)) changed = true;
               }
+            }
+            if (msgSig !== null && !hasAnyBlob) {
+              try {
+                Object.defineProperty(obj, "_vaultNoBlobSig", {
+                  value: getFastVaultMsgSig(obj),
+                  writable: true,
+                  configurable: true,
+                  enumerable: false,
+                });
+              } catch (_) {}
             }
             return changed;
           }
@@ -133447,7 +133242,12 @@ ${specificRules}`;
 
           function collectImageTasksFromObject(obj, tasks, visited = new WeakSet()) {
             if (!obj || typeof obj !== "object" || visited.has(obj)) return;
+            const msgSig = getFastVaultMsgSig(obj);
+            if (msgSig !== null && obj._vaultCleanImgSig === msgSig) {
+              return;
+            }
             visited.add(obj);
+            const tasksBefore = tasks.length;
             if (Array.isArray(obj)) {
               for (let i = 0; i < obj.length; i++) {
                 const val = obj[i];
@@ -133470,6 +133270,16 @@ ${specificRules}`;
               } else if (val && typeof val === "object") {
                 collectImageTasksFromObject(val, tasks, visited);
               }
+            }
+            if (msgSig !== null && tasks.length === tasksBefore) {
+              try {
+                Object.defineProperty(obj, "_vaultCleanImgSig", {
+                  value: msgSig,
+                  writable: true,
+                  configurable: true,
+                  enumerable: false,
+                });
+              } catch (_) {}
             }
           }
 
@@ -133535,6 +133345,10 @@ ${specificRules}`;
                   } catch (_) {}
                 }),
               );
+            }
+            if (modified && obj && Array.isArray(obj.history)) {
+              const checkTasks = [];
+              collectImageTasksFromObject(obj.history, checkTasks);
             }
             return modified;
           }
@@ -134420,7 +134234,7 @@ ${specificRules}`;
                   }
                 }
               } catch (_) {}
-              // 2.0 读取并合并按单条记录实时增量同步到 Termux 的 /records/_index.json 与各单条记录文件
+              // 2.0 读取并合并按单条记录或酒馆式聊天室独立文件夹增量同步到 Termux 的 /records/_index.json
               if (typeof db !== "undefined") {
                 try {
                   const idxRes = await fetch(baseUrl + "/records/_index.json", { cache: "no-store" });
@@ -134435,15 +134249,12 @@ ${specificRules}`;
                       const tName = meta.table;
                       if (!tName || !db[tName]) continue;
                       try {
-                        const rRes = await fetch(baseUrl + "/records/" + encodeURIComponent(recPath), { cache: "no-store" });
-                        if (!rRes || !rRes.ok) continue;
-                        const recObj = await rRes.json();
+                        const recObj = await fetchTermuxRecordOrChatFolder(baseUrl, recPath, meta);
                         if (!recObj || typeof recObj !== "object") continue;
                         if (tName === "chats" && db.chats) {
                           const existingChat = recObj.id !== undefined ? await db.chats.get(recObj.id) : null;
                           if (existingChat) {
                             const mergedC = mergeChatObjectsKeepNewest(existingChat, recObj);
-                            // Termux 单条增量记录是用户最后一次实时操作的完整会话状态（含删除消息、重ロール或回退记录），保留其最新消息列表而不把已删旧消息复活回去
                             if (Array.isArray(recObj.history)) {
                               mergedC.history = recObj.history;
                             }
@@ -134826,11 +134637,10 @@ ${specificRules}`;
             }
           }
 
-          function hydrateDomVaultImages() {
-            const allVaultImgs = document.querySelectorAll('img[src^="vault://"], img[data-vault-ref], img[data-vault-pending]');
-            if (!allVaultImgs || allVaultImgs.length === 0) {
-              // 无需处理图片时继续检查下面的 audio / 背景图
-            }
+          function hydrateDomVaultImages(rootNode) {
+            const isScopedNode = Boolean(rootNode && rootNode.nodeType === 1 && typeof rootNode.querySelectorAll === "function");
+            const queryRoot = isScopedNode ? rootNode : document;
+            const allVaultImgs = queryRoot.querySelectorAll('img[src^="vault://"], img[data-vault-ref], img[data-vault-pending]');
             const rawImgs = [];
             for (let i = 0; i < allVaultImgs.length; i++) {
               const img = allVaultImgs[i];
@@ -134853,7 +134663,7 @@ ${specificRules}`;
               }
               rawImgs.push(img);
             }
-            if (rawImgs.length > 1) {
+            if (!isScopedNode && rawImgs.length > 6) {
               const vh = window.innerHeight || 800;
               const visMap = new Map();
               for (let i = 0; i < rawImgs.length; i++) {
@@ -134979,7 +134789,7 @@ ${specificRules}`;
                   img._vaultResolvingRef = null;
                 });
             });
-            const audios = document.querySelectorAll('audio[src^="vault://"]');
+            const audios = queryRoot.querySelectorAll('audio[src^="vault://"]');
             audios.forEach((aud) => {
               const ref = aud.getAttribute("src");
               if (!ref) return;
@@ -134989,7 +134799,7 @@ ${specificRules}`;
                 }
               });
             });
-            const bgEls = document.querySelectorAll('[style*="vault://"], [data-vault-bg-ref]');
+            const bgEls = queryRoot.querySelectorAll('[style*="vault://"], [data-vault-bg-ref]');
             bgEls.forEach((el) => {
               const st = el.getAttribute("style") || "";
               const m = /vault:\/\/[a-zA-Z0-9._-]+/.exec(st);
@@ -135023,28 +134833,30 @@ ${specificRules}`;
                 el._vaultBgResolvingRef = null;
               });
             });
-            const styleTags = document.querySelectorAll("style");
-            styleTags.forEach((stEl) => {
-              const cssText = stEl.textContent || "";
-              if (!cssText || stEl._vaultCheckedLen === cssText.length) return;
-              if (!cssText.includes("vault://")) {
-                stEl._vaultCheckedLen = cssText.length;
-                return;
-              }
-              const matches = cssText.match(/vault:\/\/[a-zA-Z0-9._-]+/g);
-              if (!matches) {
-                stEl._vaultCheckedLen = cssText.length;
-                return;
-              }
-              matches.forEach((ref) => {
-                resolveVaultRefToUrl(ref).then((resolved) => {
-                  if (resolved && resolved !== ref && stEl.textContent && stEl.textContent.includes(ref)) {
-                    stEl.textContent = stEl.textContent.split(ref).join(resolved);
-                    stEl._vaultCheckedLen = stEl.textContent.length;
-                  }
+            if (!isScopedNode) {
+              const styleTags = document.querySelectorAll("style");
+              styleTags.forEach((stEl) => {
+                const cssText = stEl.textContent || "";
+                if (!cssText || stEl._vaultCheckedLen === cssText.length) return;
+                if (!cssText.includes("vault://")) {
+                  stEl._vaultCheckedLen = cssText.length;
+                  return;
+                }
+                const matches = cssText.match(/vault:\/\/[a-zA-Z0-9._-]+/g);
+                if (!matches) {
+                  stEl._vaultCheckedLen = cssText.length;
+                  return;
+                }
+                matches.forEach((ref) => {
+                  resolveVaultRefToUrl(ref).then((resolved) => {
+                    if (resolved && resolved !== ref && stEl.textContent && stEl.textContent.includes(ref)) {
+                      stEl.textContent = stEl.textContent.split(ref).join(resolved);
+                      stEl._vaultCheckedLen = stEl.textContent.length;
+                    }
+                  });
                 });
               });
-            });
+            }
           }
           window.hydrateDomVaultImages = hydrateDomVaultImages;
 
@@ -135371,8 +135183,17 @@ ${specificRules}`;
                       const recFiles = Object.keys(fileMap);
                       for (let rIdx = 0; rIdx < recFiles.length; rIdx++) {
                         const rf = recFiles[rIdx];
-                        if (!rf || (fileMap[rf] && fileMap[rf].deleted)) continue;
+                        const fMeta = fileMap[rf];
+                        if (!rf || (fMeta && fMeta.deleted)) continue;
                         try {
+                          if (fMeta && fMeta.isIncrementalFolder && fMeta.chatFolder) {
+                            const mr = await fetch(baseUrl + "/" + fMeta.chatFolder + "/meta.json", { cache: "no-store" });
+                            if (mr && mr.ok) {
+                              const mTxt = await mr.text();
+                              if (mTxt) addVaultStr(mTxt);
+                              continue;
+                            }
+                          }
                           const rr = await fetch(baseUrl + "/records/" + encodeURIComponent(rf), { cache: "no-store" });
                           if (rr && rr.ok) {
                             const rTxt = await rr.text();
@@ -136474,10 +136295,92 @@ ${specificRules}`;
             }
           }
 
-          // 单条增量同步队列与增量索引清单：改哪一条记录就只把那一条记录发给 Termux，并维护轻量索引清单供恢复数据与清理废图扫描使用
+          // 酒馆式聊天室独立文件夹单条消息增量同步队列与索引清单：每个聊天室独立文件夹，发一条只存一条新消息，删一条只删对应消息
           const _incrementalRecordTimers = new Map();
+          const _termuxChatFolderSyncMap = new Map();
           let _termuxRecordsIndexCache = null;
           let _termuxRecordsIndexFlushTimer = null;
+
+          function getIncrementalChatMsgKey(m, idx) {
+            if (!m || typeof m !== "object") return "idx_" + idx;
+            if (m.id !== undefined && m.id !== null && String(m.id).trim() !== "") {
+              return "id_" + String(m.id).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64);
+            }
+            if (m.timestamp !== undefined && m.timestamp !== null && String(m.timestamp).trim() !== "") {
+              return "ts_" + String(m.timestamp).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64);
+            }
+            return "idx_" + idx;
+          }
+
+          function getIncrementalChatMsgSig(m) {
+            if (!m || typeof m !== "object") return "";
+            const cLen = typeof m.content === "string" ? m.content.length : (Array.isArray(m.content) ? m.content.length : 0);
+            const cHead = typeof m.content === "string" ? m.content.slice(0, 20) : "";
+            const cTail = typeof m.content === "string" ? m.content.slice(-20) : "";
+            return `${m.timestamp || 0}|${m.type || ""}|${cLen}|${cHead}|${cTail}|${m.url || ""}|${m.imageUrl || ""}|${m.audioUrl || ""}|${m.isHidden ? 1 : 0}|${m.isExecuted ? 1 : 0}`;
+          }
+
+          function extractVaultRefsFromMessageList(historyArr) {
+            const refs = new Set();
+            if (!Array.isArray(historyArr)) return [];
+            const vaultRx = /vault:\/\/[a-zA-Z0-9._-]+/g;
+            for (let i = 0; i < historyArr.length; i++) {
+              const m = historyArr[i];
+              if (!m || typeof m !== "object") continue;
+              const fields = [m.url, m.imageUrl, m.audioUrl, m.senderAvatar, m.avatar, typeof m.content === "string" ? m.content : ""];
+              for (let j = 0; j < fields.length; j++) {
+                const f = fields[j];
+                if (typeof f === "string" && f.includes("vault://")) {
+                  const matches = f.match(vaultRx);
+                  if (matches) {
+                    for (let k = 0; k < matches.length; k++) refs.add(matches[k]);
+                  }
+                }
+              }
+            }
+            return Array.from(refs);
+          }
+
+          async function fetchTermuxRecordOrChatFolder(baseUrl, recPath, idxMeta) {
+            if (idxMeta && idxMeta.isIncrementalFolder && idxMeta.chatFolder) {
+              try {
+                const metaRes = await fetch(`${baseUrl}/${idxMeta.chatFolder}/meta.json`, { cache: "no-store" });
+                if (metaRes && metaRes.ok) {
+                  const metaObj = await metaRes.json();
+                  if (metaObj && typeof metaObj === "object" && metaObj.chatData && typeof metaObj.chatData === "object") {
+                    const chatObj = metaObj.chatData;
+                    const order = Array.isArray(metaObj.messageOrder) ? metaObj.messageOrder : [];
+                    const loadedHistory = [];
+                    const BATCH = 16;
+                    for (let i = 0; i < order.length; i += BATCH) {
+                      const slice = order.slice(i, i + BATCH);
+                      const batchMsgs = await Promise.all(
+                        slice.map(async (mKey) => {
+                          try {
+                            const mr = await fetch(`${baseUrl}/${idxMeta.chatFolder}/msg_${encodeURIComponent(mKey)}.json`, { cache: "no-store" });
+                            if (!mr || !mr.ok) return null;
+                            const mObj = await mr.json();
+                            if (!mObj || typeof mObj !== "object" || mObj._deleted) return null;
+                            return mObj;
+                          } catch (_) {
+                            return null;
+                          }
+                        })
+                      );
+                      for (let j = 0; j < batchMsgs.length; j++) {
+                        if (batchMsgs[j]) loadedHistory.push(batchMsgs[j]);
+                      }
+                    }
+                    chatObj.history = loadedHistory;
+                    return chatObj;
+                  }
+                }
+              } catch (_) {}
+            }
+            const rRes = await fetch(`${baseUrl}/records/${encodeURIComponent(recPath)}`, { cache: "no-store" });
+            if (!rRes || !rRes.ok) return null;
+            return await rRes.json();
+          }
 
           async function ensureTermuxRecordsIndexLoaded(baseUrl) {
             if (_termuxRecordsIndexCache && typeof _termuxRecordsIndexCache.files === "object") {
@@ -136521,6 +136424,7 @@ ${specificRules}`;
               if (!cfg || !cfg.auto || !cachedTermuxOk || !tableName || rawId === undefined) return;
               const safeId = String(rawId).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "record";
               const fileName = `${tableName}_${safeId}.json`;
+              _termuxChatFolderSyncMap.delete(safeId);
               const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
               ensureTermuxRecordsIndexLoaded(baseUrl).then((idxObj) => {
                 if (idxObj && idxObj.files && idxObj.files[fileName]) {
@@ -136530,6 +136434,119 @@ ${specificRules}`;
                 }
               }).catch(() => {});
             } catch (_) {}
+          }
+
+          async function syncChatToTermuxFolderIncrementally(baseUrl, safeId, rawId, fileName, chatObj) {
+            const chatFolder = `chats/${safeId}`;
+            let folderState = _termuxChatFolderSyncMap.get(safeId);
+            if (!folderState) {
+              folderState = { syncedMsgs: new Map() };
+              try {
+                const existingMetaRes = await fetch(`${baseUrl}/${chatFolder}/meta.json`, { cache: "no-store" });
+                if (existingMetaRes && existingMetaRes.ok) {
+                  const existingMeta = await existingMetaRes.json();
+                  if (existingMeta && existingMeta.messageSigs && typeof existingMeta.messageSigs === "object") {
+                    for (const [k, v] of Object.entries(existingMeta.messageSigs)) {
+                      folderState.syncedMsgs.set(k, v);
+                    }
+                  }
+                }
+              } catch (_) {}
+              _termuxChatFolderSyncMap.set(safeId, folderState);
+            }
+
+            const historyArr = Array.isArray(chatObj.history) ? chatObj.history : [];
+            const currentOrder = [];
+            const currentSigs = {};
+            const usedKeys = new Set();
+            const pendingUploads = [];
+
+            for (let i = 0; i < historyArr.length; i++) {
+              const m = historyArr[i];
+              if (!m || typeof m !== "object" || m.isTemporary) continue;
+              let mKey = getIncrementalChatMsgKey(m, i);
+              if (usedKeys.has(mKey)) {
+                mKey = `${mKey}_${i}`;
+              }
+              usedKeys.add(mKey);
+              const sig = getIncrementalChatMsgSig(m);
+              currentOrder.push(mKey);
+              currentSigs[mKey] = sig;
+              if (folderState.syncedMsgs.get(mKey) !== sig) {
+                pendingUploads.push({ mKey, sig, msg: m });
+              }
+            }
+
+            const deletedKeys = [];
+            for (const oldKey of folderState.syncedMsgs.keys()) {
+              if (!usedKeys.has(oldKey)) {
+                deletedKeys.push(oldKey);
+              }
+            }
+
+            const UPLOAD_BATCH = 12;
+            for (let i = 0; i < pendingUploads.length; i += UPLOAD_BATCH) {
+              const slice = pendingUploads.slice(i, i + UPLOAD_BATCH);
+              await Promise.all(
+                slice.map(async (item) => {
+                  try {
+                    const pr = await fetch(`${baseUrl}/${chatFolder}/msg_${encodeURIComponent(item.mKey)}.json`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json; charset=utf-8" },
+                      body: JSON.stringify(item.msg),
+                    });
+                    if (pr && pr.ok) {
+                      folderState.syncedMsgs.set(item.mKey, item.sig);
+                    }
+                  } catch (_) {}
+                })
+              );
+            }
+
+            for (let i = 0; i < deletedKeys.length; i++) {
+              const dKey = deletedKeys[i];
+              folderState.syncedMsgs.delete(dKey);
+              try {
+                await fetch(`${baseUrl}/${chatFolder}/msg_${encodeURIComponent(dKey)}.json`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json; charset=utf-8" },
+                  body: JSON.stringify({ _deleted: true }),
+                });
+              } catch (_) {}
+            }
+
+            const chatDataWithoutHistory = {};
+            for (const k of Object.keys(chatObj)) {
+              if (k === "history") continue;
+              chatDataWithoutHistory[k] = chatObj[k];
+            }
+
+            const metaPayload = {
+              updatedAt: Date.now(),
+              chatData: chatDataWithoutHistory,
+              messageOrder: currentOrder,
+              messageSigs: currentSigs,
+              vaultRefsInHistory: extractVaultRefsFromMessageList(historyArr),
+            };
+
+            const metaPutRes = await fetch(`${baseUrl}/${chatFolder}/meta.json`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify(metaPayload),
+            });
+
+            if (metaPutRes && metaPutRes.ok) {
+              const idxObj = await ensureTermuxRecordsIndexLoaded(baseUrl);
+              idxObj.files[fileName] = {
+                table: "chats",
+                id: rawId,
+                updatedAt: Date.now(),
+                deleted: false,
+                isIncrementalFolder: true,
+                chatFolder,
+              };
+              scheduleFlushTermuxRecordsIndex(baseUrl);
+            }
           }
 
           function syncSingleRecordToTermuxIncrementally(tableName, rowObj) {
@@ -136549,6 +136566,10 @@ ${specificRules}`;
                 if (!cachedTermuxOk) return;
                 try {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
+                  if (tableName === "chats") {
+                    await syncChatToTermuxFolderIncrementally(baseUrl, safeId, rawId, fileName, rowObj);
+                    return;
+                  }
                   const putRes = await fetch(`${baseUrl}/records/${encodeURIComponent(fileName)}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -136565,7 +136586,7 @@ ${specificRules}`;
                     scheduleFlushTermuxRecordsIndex(baseUrl);
                   }
                 } catch (_) {}
-              }, 800);
+              }, 450);
               _incrementalRecordTimers.set(mapKey, timer);
             } catch (_) {}
           }
@@ -137027,24 +137048,25 @@ ${specificRules}`;
             document.addEventListener("visibilitychange", handlePageWakeReconnect);
             window.addEventListener("focus", handlePageWakeReconnect);
 
-            // 自动侦测重连定时器：无论用户用悬浮小窗还是后台启动 Termux，只要尚未连接或页面仍有未加载出的 vault 图片，自动秒级探测并刷新图片
+            // 低开销自动侦测重连定时器：不再每2.2秒强制扫描全页与重排，仅在有未加载出的 vault:// 节点时按需水合
             setInterval(async () => {
               if (document.visibilityState && document.visibilityState !== "visible") return;
               const hasUnresolvedDomImg = Boolean(
-                document.querySelector('img[src^="vault://"], img[data-vault-pending]:not([data-vault-dead]), img[data-vault-ref]:not([data-vault-hydrated-src]):not([data-vault-dead])')
+                document.querySelector('img[src^="vault://"], img[data-vault-pending]:not([data-vault-dead])')
               );
               if (hasUnresolvedDomImg && cachedTermuxOk) {
                 hydrateDomVaultImages();
               }
-              if (!cachedTermuxOk || hasUnresolvedDomImg) {
+              if (!cachedTermuxOk) {
                 const curCfg = loadVaultConfig();
+                if (!curCfg.auto && !hasUnresolvedDomImg) return;
                 const baseUrl = (curCfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-                const ok = await checkTermuxEndpointReachable(baseUrl, !cachedTermuxOk);
+                const ok = await checkTermuxEndpointReachable(baseUrl, false);
                 if (ok && hasUnresolvedDomImg) {
                   refreshAllVaultImagesAfterTermuxConnected();
                 }
               }
-            }, 2200);
+            }, 10000);
 
             hydrateDomVaultImages();
             testVaultConnection(true);
@@ -137082,10 +137104,14 @@ ${specificRules}`;
               for (let i = 0; i < mutations.length; i++) {
                 const m = mutations[i];
                 const target = m.target;
-                if (target && target.nodeType === 1 && target.closest && target.closest("#thought-chain-editor-modal")) {
-                  continue;
-                }
+                if (!target || target.nodeType !== 1) continue;
                 if (m.type === "attributes") {
+                  if (m.attributeName === "style") {
+                    const st = target.getAttribute && target.getAttribute("style");
+                    if (!st || !st.includes("vault://")) continue;
+                    mayContainVaultImg = true;
+                    break;
+                  }
                   const curSrc = target.getAttribute && (target.getAttribute("src") || "");
                   const hydSrc = target.getAttribute && (target.getAttribute("data-vault-hydrated-src") || "");
                   if (curSrc && hydSrc && curSrc === hydSrc && !target.hasAttribute("data-vault-pending")) {
@@ -137095,8 +137121,7 @@ ${specificRules}`;
                     mayContainVaultImg = true;
                     break;
                   }
-                  const val = curSrc || (target.getAttribute && target.getAttribute("style")) || "";
-                  if (val && val.includes("vault://")) {
+                  if (curSrc && curSrc.includes("vault://")) {
                     mayContainVaultImg = true;
                     break;
                   }
