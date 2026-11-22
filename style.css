@@ -21801,8 +21801,10 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 }
 /* === 弹窗输入框高级美化 === */
 #forum-group-editor-modal input[type="text"],
+#forum-group-editor-modal input[type="search"],
 #forum-group-editor-modal textarea,
 #create-post-modal input[type="text"],
+#create-post-modal input[type="search"],
 #create-post-modal textarea {
   background-color: #f7f9fc;
   border: 1px solid #eef2f7;
@@ -22317,6 +22319,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 /* 输入框通用样式 */
 #fanfic-preference-bar select,
 #fanfic-preference-bar input[type="text"],
+#fanfic-preference-bar input[type="search"],
 #fanfic-preference-bar textarea {
   width: 100%;
   background: #f7f9fc !important;
@@ -24173,6 +24176,7 @@ button, input, select, textarea, .moe-btn, .moe-btn-mini, .moe-btn-secondary, .d
 }
 
 #dating-game-settings-modal input[type="text"],
+#dating-game-settings-modal input[type="search"],
 #dating-game-settings-modal textarea,
 #dating-game-settings-modal select {
   background-color: #f9f5f6 !important;
@@ -40638,3 +40642,22 @@ select,
   white-space: nowrap;
 }
 
+/* 全局消除搜索类型输入框自带清除叉号与特殊外观，用于彻底屏蔽移动端浏览器键盘上方自动填充横条 */
+input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  display: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+#password-input-field,
+#login-pwd {
+  -webkit-text-security: disc;
+}

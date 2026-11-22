@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v27.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -8573,7 +8573,7 @@
     <div id="password-modal-overlay" class="modal">
       <div class="password-modal-content">
         <p>请输入密码</p>
-        <input type="password" id="password-input-field" maxlength="20" />
+        <input type="search" id="password-input-field" maxlength="20" autocomplete="off" data-form-type="other" data-lpignore="true" enterkeyhint="done" />
         <div class="password-actions">
           <button id="password-cancel-btn">取消</button>
           <button id="password-confirm-btn">进入</button>
@@ -26945,10 +26945,11 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             modalConfirmBtn.textContent = "确定";
             const inputId = "custom-prompt-input";
 
+            const safeInputType = type === "text" || type === "password" ? "search" : type;
             const inputHtml =
               type === "textarea"
-                ? `<textarea id="${inputId}" placeholder="${placeholder}" rows="4" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; resize: vertical;">${initialValue}</textarea>`
-                : `<input type="${type}" id="${inputId}" placeholder="${placeholder}" value="${initialValue}">`;
+                ? `<textarea id="${inputId}" placeholder="${placeholder}" rows="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; resize: vertical;">${initialValue}</textarea>`
+                : `<input type="${safeInputType}" id="${inputId}" placeholder="${placeholder}" value="${initialValue}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" enterkeyhint="done">`;
 
             modalBody.innerHTML = extraHtml + inputHtml;
             const input = document.getElementById(inputId);
@@ -44554,10 +44555,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               const fbList = Array.isArray(fbNorm[cat]) ? fbNorm[cat] : [];
               if (fbList.length === 0) return;
               (authNorm[cat] || []).forEach((item) => {
-                if (item && item.name && !String(item.value || "").trim()) {
-                  const fbMatch = fbList.find((p) => p && p.name === item.name && String(p.value || "").trim());
-                  if (fbMatch) {
-                    item.value = fbMatch.value;
+                if (!item || !item.name) return;
+                const fbMatch = fbList.find((p) => p && p.name === item.name);
+                if (!fbMatch) return;
+                if (!String(item.value || "").trim() && String(fbMatch.value || "").trim()) {
+                  item.value = fbMatch.value;
+                }
+                if (cat === "character") {
+                  if (!String(item.negative || "").trim() && String(fbMatch.negative || "").trim()) {
+                    item.negative = fbMatch.negative;
+                  }
+                  if ((!item.posKey || item.posKey === "auto") && fbMatch.posKey && fbMatch.posKey !== "auto") {
+                    item.posKey = fbMatch.posKey;
                   }
                 }
               });
@@ -44647,6 +44656,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (!merged.artist2Text && older.artist2Text && pTs === 0) merged.artist2Text = older.artist2Text;
             if (!merged.pos2Text && older.pos2Text && pTs === 0) merged.pos2Text = older.pos2Text;
             if (!merged.negText && older.negText && pTs === 0) merged.negText = older.negText;
+            if ((!Array.isArray(merged.activeCharacters) || merged.activeCharacters.length === 0) && Array.isArray(older.activeCharacters) && older.activeCharacters.length > 0 && pTs === 0) {
+              merged.activeCharacters = older.activeCharacters.slice();
+            }
+            if (!merged.charPresetSelected && older.charPresetSelected && pTs === 0) {
+              merged.charPresetSelected = older.charPresetSelected;
+            }
+            if (!merged.charMasterChecked && older.charMasterChecked && pTs === 0) {
+              merged.charMasterChecked = Boolean(older.charMasterChecked);
+            }
+            if (!merged.charCardExpanded && older.charCardExpanded && pTs === 0) {
+              merged.charCardExpanded = Boolean(older.charCardExpanded);
+            }
             if ((!Array.isArray(merged.watermarkGallery) || merged.watermarkGallery.length === 0) && Array.isArray(older.watermarkGallery) && older.watermarkGallery.length > 0 && pTs === 0) {
               merged.watermarkGallery = older.watermarkGallery.slice();
             }
@@ -44976,10 +44997,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             ["artist", "positive", "negative", "character"].forEach((cat) => {
               const prevList = Array.isArray(prev[cat]) ? prev[cat] : [];
               (norm[cat] || []).forEach((item) => {
-                if (item && !item.value) {
-                  const oldItem = prevList.find((p) => p && p.name === item.name && p.value);
-                  if (oldItem && oldItem.value) {
-                    item.value = oldItem.value;
+                if (!item || !item.name) return;
+                const oldItem = prevList.find((p) => p && p.name === item.name);
+                if (!oldItem) return;
+                if (!item.value && oldItem.value) {
+                  item.value = oldItem.value;
+                }
+                if (cat === "character") {
+                  if (!item.negative && oldItem.negative) {
+                    item.negative = oldItem.negative;
+                  }
+                  if ((!item.posKey || item.posKey === "auto") && oldItem.posKey && oldItem.posKey !== "auto") {
+                    item.posKey = oldItem.posKey;
                   }
                 }
               });
@@ -45466,11 +45495,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   const curList = normalizeActiveCharactersList(curSt.activeCharacters);
                   const target = curList.find((x) => x.id === slot.id);
                   if (!target) return;
-                  const nextName = String(nameInp.value || "").trim() || `角色${idx + 1}`;
-                  target.name = nextName;
+                  const rawTypedName = String(nameInp.value || "").trim();
+                  const nextName = persistNow ? (rawTypedName || `角色${idx + 1}`) : rawTypedName;
+                  if (persistNow && !rawTypedName) {
+                    nameInp.value = nextName;
+                  }
+                  target.name = nextName || `角色${idx + 1}`;
                   target.prompt = posTextarea.value;
                   target.negative = negTextarea.value;
-                  nameSpan.textContent = nextName;
+                  nameSpan.textContent = nextName || `角色${idx + 1}`;
                   curSt.activeCharacters = curList;
                   memoryPanelState = Object.assign({}, getDefaultPanelState(), curSt, { updatedAt: Date.now() });
                   if (persistNow) {
@@ -45481,6 +45514,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
                 nameInp.addEventListener("input", () => syncSlotFields(false));
                 nameInp.addEventListener("change", () => syncSlotFields(true));
+                nameInp.addEventListener("blur", () => syncSlotFields(true));
                 posTextarea.addEventListener("input", () => syncSlotFields(false));
                 posTextarea.addEventListener("change", () => syncSlotFields(true));
                 negTextarea.addEventListener("input", () => syncSlotFields(false));
@@ -47832,21 +47866,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   }
                   return;
                 }
-                const chosenName = charPresetSelect ? String(charPresetSelect.value || "").trim() : "";
-                const store = loadPresetsStore();
-                const found = chosenName
-                  ? (Array.isArray(store.character) ? store.character : []).find((x) => x && x.name === chosenName)
-                  : null;
                 const newSlotId = `char_slot_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-                const defaultName = found && !curList.some((c) => c.name === found.name)
-                  ? found.name
-                  : `角色${curList.length + 1}`;
+                let nextIdx = curList.length + 1;
+                let defaultName = `角色${nextIdx}`;
+                while (curList.some((c) => c && c.name === defaultName)) {
+                  nextIdx += 1;
+                  defaultName = `角色${nextIdx}`;
+                }
                 curList.push({
                   id: newSlotId,
                   name: defaultName,
-                  prompt: found && defaultName === found.name ? (found.value || "") : "",
-                  negative: found && defaultName === found.name ? (found.negative || "") : "",
-                  posKey: found && defaultName === found.name ? (found.posKey || "auto") : "auto",
+                  prompt: "",
+                  negative: "",
+                  posKey: "auto",
                   enabled: true
                 });
                 st.activeCharacters = curList;
@@ -53241,7 +53273,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             const charMasterEl = document.getElementById("mod-nai-char-master-check");
             if (charMasterEl) charMasterEl.checked = Boolean(st.charMasterChecked);
-            renderCharStageList();
+            const charStageEl = document.getElementById("mod-nai-char-stage-list");
+            const isTypingInCharStage = Boolean(
+              charStageEl &&
+              document.activeElement &&
+              charStageEl.contains(document.activeElement) &&
+              (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")
+            );
+            if (!isTypingInCharStage) {
+              renderCharStageList();
+            } else {
+              updateCharCardSummaryUI();
+            }
 
             const settingsModal = document.getElementById("mod-nai-settings-modal");
             const settingsOpen = settingsModal && settingsModal.style.display === "flex";
@@ -112118,12 +112161,132 @@ ${specificRules}`;
           }
           // ▲▲▲▲▲▲▲▲▲▲▲▲ 修改结束 ▲▲▲▲▲▲▲▲▲▲▲▲
 
-          document.addEventListener("focusin", (e) => {
-            const t = e.target;
-            if (t && t.tagName === "INPUT" && t.type !== "password" && t.getAttribute("autocomplete") !== "off") {
-              t.setAttribute("autocomplete", "off");
+          const suppressBrowserAutofillBarOnField = (el) => {
+            if (!el || !el.tagName) return;
+            const tag = el.tagName.toUpperCase();
+            if (tag !== "INPUT" && tag !== "TEXTAREA") return;
+            if (tag === "INPUT") {
+              const rawType = String(el.getAttribute("type") || "text").toLowerCase();
+              const nonTextTypes = [
+                "checkbox",
+                "radio",
+                "file",
+                "range",
+                "color",
+                "number",
+                "date",
+                "time",
+                "datetime-local",
+                "month",
+                "week",
+                "hidden",
+                "button",
+                "submit",
+                "reset"
+              ];
+              if (!nonTextTypes.includes(rawType)) {
+                if (rawType !== "search") {
+                  try {
+                    el.setAttribute("type", "search");
+                  } catch (_) {}
+                }
+                if (!el.getAttribute("enterkeyhint")) {
+                  el.setAttribute("enterkeyhint", "done");
+                }
+                if (el.hasAttribute("name")) {
+                  el.removeAttribute("name");
+                }
+              } else if (rawType === "number") {
+                if (el.hasAttribute("name")) {
+                  el.removeAttribute("name");
+                }
+              } else {
+                return;
+              }
+            } else if (tag === "TEXTAREA") {
+              if (el.hasAttribute("name")) {
+                el.removeAttribute("name");
+              }
             }
-          }, true);
+            if (el.getAttribute("autocomplete") !== "off") {
+              el.setAttribute("autocomplete", "off");
+            }
+            if (el.getAttribute("autocorrect") !== "off") {
+              el.setAttribute("autocorrect", "off");
+            }
+            if (el.getAttribute("autocapitalize") !== "off") {
+              el.setAttribute("autocapitalize", "off");
+            }
+            if (el.getAttribute("spellcheck") !== "false") {
+              el.setAttribute("spellcheck", "false");
+            }
+            if (el.getAttribute("data-form-type") !== "other") {
+              el.setAttribute("data-form-type", "other");
+            }
+            if (el.getAttribute("data-lpignore") !== "true") {
+              el.setAttribute("data-lpignore", "true");
+            }
+            if (el.getAttribute("data-1p-ignore") !== "true") {
+              el.setAttribute("data-1p-ignore", "true");
+            }
+            if (el.getAttribute("aria-autocomplete") !== "none") {
+              el.setAttribute("aria-autocomplete", "none");
+            }
+          };
+
+          const suppressAllAutofillInputsInRoot = (rootNode) => {
+            if (!rootNode) return;
+            if (rootNode.nodeType === 1) {
+              suppressBrowserAutofillBarOnField(rootNode);
+              if (typeof rootNode.querySelectorAll === "function") {
+                rootNode.querySelectorAll("input, textarea").forEach(suppressBrowserAutofillBarOnField);
+              }
+            }
+          };
+
+          suppressAllAutofillInputsInRoot(document.body);
+
+          if (typeof MutationObserver === "function" && document.body) {
+            const autofillSuppressObserver = new MutationObserver((mutations) => {
+              for (let i = 0; i < mutations.length; i++) {
+                const added = mutations[i].addedNodes;
+                if (!added || added.length === 0) continue;
+                for (let j = 0; j < added.length; j++) {
+                  const node = added[j];
+                  if (node && node.nodeType === 1) {
+                    suppressAllAutofillInputsInRoot(node);
+                  }
+                }
+              }
+            });
+            autofillSuppressObserver.observe(document.body, { childList: true, subtree: true });
+          }
+
+          ["touchstart", "pointerdown", "focusin"].forEach((evtName) => {
+            document.addEventListener(
+              evtName,
+              (e) => {
+                const t = e.target;
+                if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) {
+                  suppressBrowserAutofillBarOnField(t);
+                }
+              },
+              true
+            );
+          });
+
+          document.addEventListener(
+            "keydown",
+            (e) => {
+              if (e.key === "Escape") {
+                const t = e.target;
+                if (t && t.tagName === "INPUT" && String(t.getAttribute("type") || "").toLowerCase() === "search") {
+                  e.preventDefault();
+                }
+              }
+            },
+            true
+          );
           const savedTheme = localStorage.getItem("ephone-theme") || "light"; // 默认为日间模式
           applyTheme(savedTheme);
 
@@ -126592,13 +126755,13 @@ ${specificRules}`;
                         <!-- 账号输入框组 -->
                         <div class="input-group">
                             <img src="https://i.postimg.cc/bwyK9rVr/1000109644.png" class="walker walker-uid" alt="char1">
-                            <input type="text" id="login-uid" class="pixel-input" placeholder="ACCOUNT ID" spellcheck="false" autocomplete="off">
+                            <input type="search" id="login-uid" class="pixel-input" placeholder="ACCOUNT ID" spellcheck="false" autocomplete="off" data-form-type="other" data-lpignore="true" enterkeyhint="done">
                         </div>
 
                         <!-- 密码输入框组 -->
                         <div class="input-group">
                             <img src="https://i.postimg.cc/NjsWkFCQ/test.png" class="walker walker-pwd" alt="char2">
-                            <input type="password" id="login-pwd" class="pixel-input" placeholder="PASSWORD" autocomplete="off">
+                            <input type="search" id="login-pwd" class="pixel-input" placeholder="PASSWORD" autocomplete="off" data-form-type="other" data-lpignore="true" enterkeyhint="done">
                         </div>
                         
                         <p id="login-msg">WAITING...</p>
