@@ -38221,15 +38221,9 @@ select,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
   padding-top: 10px;
   border-top: 1px dashed var(--trace-line);
-}
-
-#module-nai-panel .mod-nai-trace-footer .mod-nai-trace-pill.compact {
-  padding: 0 10px;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 #module-nai-panel .mod-nai-trace-page-indicator {
@@ -38240,9 +38234,6 @@ select,
   font-weight: 600;
   letter-spacing: 1.8px;
   color: var(--trace-muted);
-  white-space: nowrap;
-  flex-shrink: 0;
-  text-align: center;
 }
 
 /* 视图二：高定典藏展示卡片视图（大图自适应竖图/横图/方图 + 多图右滑翻页 + 折叠词条抽屉） */
