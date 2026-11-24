@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -3967,12 +3967,18 @@
 
                   <!-- 极简画廊分页栏 -->
                   <div class="mod-nai-trace-footer">
+                    <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-first-btn">
+                      <span>首页</span>
+                    </button>
                     <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-prev-btn">
                       <span>上页</span>
                     </button>
                     <div class="mod-nai-trace-page-indicator" id="mod-nai-col-page-indicator">01 / 01</div>
                     <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-next-btn">
                       <span>下页</span>
+                    </button>
+                    <button type="button" class="mod-nai-trace-pill compact" id="mod-nai-col-last-btn">
+                      <span>末页</span>
                     </button>
                   </div>
                 </div>
@@ -29736,6 +29742,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               preset.entries = entries;
               preset.updatedAt = Date.now();
               await db.thoughtChainPresets.put(preset);
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
+              }
               renderThoughtChainPresets();
               syncPresetToAllGroupSharedThoughtChains(preset).catch(() => {});
             }
@@ -29753,6 +29762,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               existing.entries = entries;
               existing.updatedAt = Date.now();
               await db.thoughtChainPresets.put(existing);
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
+              }
               renderThoughtChainPresets();
               syncPresetToAllGroupSharedThoughtChains(existing).catch(() => {});
             } else {
@@ -29769,6 +29781,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               });
+              if (typeof window.refreshMashuThoughtChainsCache === "function") {
+                window.refreshMashuThoughtChainsCache();
+              }
               renderThoughtChainPresets();
               const createdPreset = await db.thoughtChainPresets.get(newId);
               if (createdPreset) {
@@ -29785,6 +29800,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const targetName = String(updatedPreset.name || "").trim();
           const activeIdStr = state.activeChatId !== null && state.activeChatId !== undefined ? String(state.activeChatId) : "";
           const seenChatIds = new Set();
+          const backgroundPersistQueue = [];
           for (const cid of Object.keys(state.chats)) {
             const c = state.chats[cid];
             if (!c || !c.settings) continue;
@@ -29830,10 +29846,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 return stc;
               });
             }
-            // 仅对当前活跃聊天立即落盘，其余未打开的聊天仅同步内存对象，避免点一次开关就遍历全表排队写盘造成卡顿
-            if (changed && realIdStr === activeIdStr && typeof db !== "undefined" && db.chats) {
-              db.chats.put(c).catch(() => {});
+            if (changed) {
+              if (realIdStr === activeIdStr && typeof db !== "undefined" && db.chats) {
+                db.chats.put(c).catch(() => {});
+              } else {
+                backgroundPersistQueue.push(c);
+              }
             }
+          }
+          if (backgroundPersistQueue.length > 0 && typeof db !== "undefined" && db.chats) {
+            setTimeout(async () => {
+              for (const chatToSave of backgroundPersistQueue) {
+                try {
+                  await db.chats.put(chatToSave);
+                } catch (_) {}
+              }
+            }, 60);
           }
         }
 
@@ -29842,10 +29870,70 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           if (!preset) return;
           const confirmed = await showCustomConfirm("确认删除", `确定要删除思维链预设 "${preset.name}" 吗？`, { confirmButtonClass: "btn-danger" });
           if (confirmed) {
+            const targetIdStr = String(presetId);
+            const targetName = String(preset.name || "").trim();
             await db.thoughtChainPresets.delete(presetId);
-            if (state.globalSettings && state.globalSettings.defaultThoughtChainId === presetId) {
+            if (state.globalSettings && String(state.globalSettings.defaultThoughtChainId || "") === targetIdStr) {
               state.globalSettings.defaultThoughtChainId = null;
               await db.globalSettings.put(state.globalSettings);
+            }
+            if (state.chats) {
+              const seenChatIds = new Set();
+              const chatsToPersist = [];
+              for (const cid of Object.keys(state.chats)) {
+                const c = state.chats[cid];
+                if (!c) continue;
+                const realIdStr = String(c.id || cid);
+                if (seenChatIds.has(realIdStr)) continue;
+                seenChatIds.add(realIdStr);
+                let changed = false;
+                if (String(c.thoughtChainId || "") === targetIdStr) {
+                  c.thoughtChainId = null;
+                  changed = true;
+                }
+                if (c.settings) {
+                  if (String(c.settings.thinkingPresetId || "") === targetIdStr) {
+                    c.settings.thinkingPresetId = null;
+                    changed = true;
+                  }
+                  const boundSnap = c.settings.boundThoughtChainPreset;
+                  if (
+                    boundSnap &&
+                    (String(boundSnap.id || "") === targetIdStr ||
+                      (targetName && String(boundSnap.name || "").trim() === targetName))
+                  ) {
+                    c.settings.boundThoughtChainPreset = null;
+                    changed = true;
+                  }
+                  if (Array.isArray(c.settings.sharedThoughtChains)) {
+                    const beforeLen = c.settings.sharedThoughtChains.length;
+                    c.settings.sharedThoughtChains = c.settings.sharedThoughtChains.filter((stc) => {
+                      if (!stc) return false;
+                      const matchId = String(stc.id || "") === targetIdStr;
+                      const matchName = targetName && String(stc.name || "").trim() === targetName;
+                      return !matchId && !matchName;
+                    });
+                    if (c.settings.sharedThoughtChains.length !== beforeLen) {
+                      changed = true;
+                    }
+                  }
+                }
+                if (changed) {
+                  chatsToPersist.push(c);
+                }
+              }
+              if (chatsToPersist.length > 0 && typeof db !== "undefined" && db.chats) {
+                setTimeout(async () => {
+                  for (const chatToSave of chatsToPersist) {
+                    try {
+                      await db.chats.put(chatToSave);
+                    } catch (_) {}
+                  }
+                }, 40);
+              }
+            }
+            if (typeof window.refreshMashuThoughtChainsCache === "function") {
+              window.refreshMashuThoughtChainsCache();
             }
             await renderThoughtChainPresets();
           }
@@ -30267,7 +30355,8 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               const text = await file.text();
               const parsed = parseThoughtChainFromText(text, fallbackName);
               if (parsed) {
-                await db.thoughtChainPresets.add({
+                const now = Date.now();
+                const newId = await db.thoughtChainPresets.add({
                   name: parsed.name,
                   headerContent: parsed.headerContent || "",
                   generalContent: parsed.generalContent || "",
@@ -30277,8 +30366,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   groupsCollapsed: Boolean(parsed.groupsCollapsed),
                   groups: Array.isArray(parsed.groups) ? parsed.groups : [],
                   entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-                  createdAt: Date.now(),
+                  createdAt: now,
+                  updatedAt: now,
                 });
+                const addedPreset = await db.thoughtChainPresets.get(newId);
+                if (addedPreset) {
+                  syncPresetToAllGroupSharedThoughtChains(addedPreset).catch(() => {});
+                }
                 importedCount++;
               }
             } catch (e) {
@@ -30288,6 +30382,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           event.target.value = "";
           if (importedCount > 0) {
+            if (typeof window.refreshMashuThoughtChainsCache === "function") {
+              window.refreshMashuThoughtChainsCache();
+            }
             await renderThoughtChainPresets();
             if (typeof showCustomAlert === "function") {
               await showCustomAlert("导入成功", `成功导入 ${importedCount} 个思维链预设`);
@@ -30533,16 +30630,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
 
           const mergedMap = new Map();
           const localPresets = (await db.thoughtChainPresets.toArray()) || [];
-          const boundSnap = chat.settings?.boundThoughtChainPreset || null;
           const applyNewerSnapIfMatch = (targetObj) => {
-            if (!targetObj || !boundSnap) return targetObj;
+            const currentSnap = chat.settings?.boundThoughtChainPreset || null;
+            if (!targetObj || !currentSnap) return targetObj;
             const tName = String(targetObj.name || "").trim();
-            const bName = String(boundSnap.name || "").trim();
-            const isMatch = (targetObj.id && boundSnap.id && String(targetObj.id) === String(boundSnap.id)) || (tName && bName && tName === bName);
-            if (isMatch && (Number(boundSnap.updatedAt) || 0) >= (Number(targetObj.updatedAt) || 0)) {
-              targetObj.groups = JSON.parse(JSON.stringify(boundSnap.groups || targetObj.groups || []));
-              targetObj.entries = JSON.parse(JSON.stringify(boundSnap.entries || targetObj.entries || []));
-              targetObj.updatedAt = boundSnap.updatedAt;
+            const bName = String(currentSnap.name || "").trim();
+            const isMatch = (targetObj.id && currentSnap.id && String(targetObj.id) === String(currentSnap.id)) || (tName && bName && tName === bName);
+            if (isMatch && (Number(currentSnap.updatedAt) || 0) > (Number(targetObj.updatedAt) || 0)) {
+              targetObj.groups = JSON.parse(JSON.stringify(currentSnap.groups || targetObj.groups || []));
+              targetObj.entries = JSON.parse(JSON.stringify(currentSnap.entries || targetObj.entries || []));
+              targetObj.updatedAt = currentSnap.updatedAt;
             }
             return targetObj;
           };
@@ -30759,16 +30856,22 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
               ];
               const chosen = await showChoiceModal("选择思维链", choices);
               if (chosen === null) return;
+              let matchedPresetObj = null;
               if (chosen === "none") {
                 selectedThoughtChainBindId = null;
               } else {
-                const matched = presets.find(p => String(p.id) === String(chosen));
-                selectedThoughtChainBindId = matched ? matched.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
+                matchedPresetObj = presets.find(p => String(p.id) === String(chosen)) || null;
+                selectedThoughtChainBindId = matchedPresetObj ? matchedPresetObj.id : (isNaN(Number(chosen)) ? chosen : Number(chosen));
               }
               const latestChat = (state.chats && state.chats[chat.id]) || chat;
               latestChat.thoughtChainId = selectedThoughtChainBindId;
               if (!latestChat.settings) latestChat.settings = {};
               latestChat.settings.thinkingPresetId = selectedThoughtChainBindId;
+              if (!selectedThoughtChainBindId) {
+                latestChat.settings.boundThoughtChainPreset = null;
+              } else if (matchedPresetObj) {
+                latestChat.settings.boundThoughtChainPreset = JSON.parse(JSON.stringify(matchedPresetObj));
+              }
               if (state.globalSettings) state.globalSettings.defaultThoughtChainId = selectedThoughtChainBindId;
               latestChat.thoughtChainEnabled = masterSwitch ? masterSwitch.checked : true;
               if (typeof db !== "undefined" && db.chats) {
@@ -30811,7 +30914,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             bindModalEl.classList.remove("visible");
           }
 
-          if (currentBindModalActivePreset && String(currentBindModalActivePreset.id) === String(selectedThoughtChainBindId)) {
+          if (!selectedThoughtChainBindId) {
+            chat.settings.boundThoughtChainPreset = null;
+          } else if (currentBindModalActivePreset && String(currentBindModalActivePreset.id) === String(selectedThoughtChainBindId)) {
             syncModifiedPresetFromBindModal(currentBindModalActivePreset, chat, isPeerGrp, true);
           } else if (selectedThoughtChainBindId) {
             if (!chat.settings) chat.settings = {};
@@ -44039,7 +44144,9 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let inspectObjectUrl = null;
           let isBound = false;
           let _naiHydrationCompleted = false;
-          let currentMode = "generate";
+          let _naiFirstOpenInSessionDone = false;
+          let _naiUserSwitchedModeInSession = false;
+          let currentMode = "collection";
           let memoryPanelState = null;
           let memoryPresetsStore = null;
           let memoryBookmarksList = null;
@@ -44047,7 +44154,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let memoryLexiconFoldersList = null;
           let memoryDeletedIdsSet = null;
           let memoryDeletedPresetKeysSet = null;
-          let colCategory = "bookmark"; // "bookmark" | "lexicon"
+          let colCategory = "lexicon"; // "bookmark" | "lexicon"
 
           const NAI_TERMUX_STORE_FILE = "nai_collection_store.json";
           const NAI_DEDICATED_IDB_NAME = "ephone_nai_dedicated_idb_v1";
@@ -45028,7 +45135,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function getDefaultPanelState() {
             return {
-              mode: "generate",
+              mode: "collection",
               theme: "folio",
               artistText: "",
               artist2Text: "",
@@ -47559,6 +47666,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 e.preventDefault();
                 e.stopPropagation();
               }
+              _naiUserSwitchedModeInSession = true;
               const inspectView = document.getElementById("mod-nai-inspect-view");
               const colView = document.getElementById("mod-nai-collection-view");
               const isNotGenerate =
@@ -47579,6 +47687,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               modeTitleWrap.style.cursor = "pointer";
               modeTitleWrap.addEventListener("click", () => {
                 if (currentMode !== "generate") {
+                  _naiUserSwitchedModeInSession = true;
                   applyModeView("generate");
                   const st = loadPanelState();
                   st.mode = "generate";
@@ -50254,6 +50363,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let colLexiconLocalPage = 1;
           let colLexiconSharedPage = 1;
           let colLexiconFolderRootPage = 1;
+          let colCurrentTotalPages = 1;
           let colLexiconViewMode = "expand"; // "expand" | "folder"
           let colLexiconActiveFolder = ""; // 空字符串表示文件夹模式根目录，非空表示当前进入的分组名
           let colEditingFolderObj = null;
@@ -51084,8 +51194,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const gridEl = document.getElementById("mod-nai-col-grid-container");
             const footerEl = document.querySelector("#mod-nai-col-grid-page .mod-nai-trace-footer");
             const pageTextEl = document.getElementById("mod-nai-col-page-indicator");
+            const firstBtn = document.getElementById("mod-nai-col-first-btn");
             const prevBtn = document.getElementById("mod-nai-col-prev-btn");
             const nextBtn = document.getElementById("mod-nai-col-next-btn");
+            const lastBtn = document.getElementById("mod-nai-col-last-btn");
             if (!gridEl) return;
 
             const scrollContainer = document.querySelector("#module-nai-panel .mod-nai-scroll");
@@ -51163,8 +51275,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (scrollContainer) scrollContainer.scrollTop = prevScrollTop;
 
               if (footerEl) footerEl.style.display = "flex";
+              colCurrentTotalPages = totalPages;
               if (pageTextEl) {
                 pageTextEl.textContent = `${String(curPage).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`;
+              }
+              if (firstBtn) {
+                firstBtn.disabled = curPage <= 1;
+                firstBtn.style.opacity = curPage <= 1 ? "0.38" : "1";
               }
               if (prevBtn) {
                 prevBtn.disabled = curPage <= 1;
@@ -51173,6 +51290,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (nextBtn) {
                 nextBtn.disabled = curPage >= totalPages;
                 nextBtn.style.opacity = curPage >= totalPages ? "0.38" : "1";
+              }
+              if (lastBtn) {
+                lastBtn.disabled = curPage >= totalPages;
+                lastBtn.style.opacity = curPage >= totalPages ? "0.38" : "1";
               }
               return;
             }
@@ -51254,8 +51375,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (footerEl) {
               footerEl.style.display = "flex";
             }
+            colCurrentTotalPages = totalPages;
             if (pageTextEl) {
               pageTextEl.textContent = `${String(curPage).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`;
+            }
+            if (firstBtn) {
+              firstBtn.disabled = curPage <= 1;
+              firstBtn.style.opacity = curPage <= 1 ? "0.38" : "1";
             }
             if (prevBtn) {
               prevBtn.disabled = curPage <= 1;
@@ -51264,6 +51390,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (nextBtn) {
               nextBtn.disabled = curPage >= totalPages;
               nextBtn.style.opacity = curPage >= totalPages ? "0.38" : "1";
+            }
+            if (lastBtn) {
+              lastBtn.disabled = curPage >= totalPages;
+              lastBtn.style.opacity = curPage >= totalPages ? "0.38" : "1";
             }
           }
 
@@ -52764,8 +52894,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const tabLocalBtn = document.getElementById("mod-nai-col-tab-local");
             const tabSharedBtn = document.getElementById("mod-nai-col-tab-shared");
             const refreshSharedBtn = document.getElementById("mod-nai-col-refresh-shared-btn");
+            const firstBtn = document.getElementById("mod-nai-col-first-btn");
             const prevBtn = document.getElementById("mod-nai-col-prev-btn");
             const nextBtn = document.getElementById("mod-nai-col-next-btn");
+            const lastBtn = document.getElementById("mod-nai-col-last-btn");
 
             const switchScopeTo = (targetScope) => {
               colScope = targetScope === "shared" ? "shared" : "local";
@@ -52823,6 +52955,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (closeBtn) {
               closeBtn.addEventListener("click", () => {
+                _naiUserSwitchedModeInSession = true;
                 applyModeView("generate");
                 const st = loadPanelState();
                 st.mode = "generate";
@@ -52833,7 +52966,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (openBtn) {
               openBtn.addEventListener("click", () => {
-                colCategory = "bookmark";
+                _naiUserSwitchedModeInSession = true;
+                colCategory = "lexicon";
                 colScope = "local";
                 colLocalPage = 1;
                 colSharedPage = 1;
@@ -52903,6 +53037,29 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 refreshSharedBookmarksFromGitHub();
               });
             }
+            if (firstBtn) {
+              firstBtn.addEventListener("click", () => {
+                const isLex = isLexiconCategory();
+                if (colScope === "shared") {
+                  if (isLex) {
+                    colLexiconSharedPage = 1;
+                  } else {
+                    colSharedPage = 1;
+                  }
+                } else {
+                  if (isLex) {
+                    if (colLexiconViewMode === "folder" && !colLexiconActiveFolder) {
+                      colLexiconFolderRootPage = 1;
+                    } else {
+                      colLexiconLocalPage = 1;
+                    }
+                  } else {
+                    colLocalPage = 1;
+                  }
+                }
+                renderCollectionGrid();
+              });
+            }
             if (prevBtn) {
               prevBtn.addEventListener("click", () => {
                 const isLex = isLexiconCategory();
@@ -52941,6 +53098,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     }
                   } else {
                     colLocalPage++;
+                  }
+                }
+                renderCollectionGrid();
+              });
+            }
+            if (lastBtn) {
+              lastBtn.addEventListener("click", () => {
+                const isLex = isLexiconCategory();
+                const targetLast = Math.max(1, Number(colCurrentTotalPages) || 1);
+                if (colScope === "shared") {
+                  if (isLex) {
+                    colLexiconSharedPage = targetLast;
+                  } else {
+                    colSharedPage = targetLast;
+                  }
+                } else {
+                  if (isLex) {
+                    if (colLexiconViewMode === "folder" && !colLexiconActiveFolder) {
+                      colLexiconFolderRootPage = targetLast;
+                    } else {
+                      colLexiconLocalPage = targetLast;
+                    }
+                  } else {
+                    colLocalPage = targetLast;
                   }
                 }
                 renderCollectionGrid();
@@ -53106,6 +53287,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
 
+              _naiUserSwitchedModeInSession = true;
               applyModeView("generate");
               const st = loadPanelState();
               st.mode = "generate";
@@ -53598,6 +53780,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           window.openModuleNaiCollectionFromHeader = function () {
             bindModuleNaiPanelEvents();
+            _naiUserSwitchedModeInSession = true;
             const st = loadPanelState();
             if (st.mode === "collection") {
               st.mode = "generate";
@@ -53746,11 +53929,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          window.openModuleNaiPanel = function (forceGenerateMode) {
+          window.openModuleNaiPanel = function (forceGenerateMode, isFirstDirectNaiClick) {
             bindModuleNaiPanelEvents();
             const st = loadPanelState();
             const store = loadPresetsStore();
-            if (forceGenerateMode === true) {
+            if (!_naiFirstOpenInSessionDone || isFirstDirectNaiClick === true) {
+              _naiFirstOpenInSessionDone = true;
+              colCategory = "lexicon";
+              colScope = "local";
+              st.mode = "collection";
+              if (_naiHydrationCompleted) {
+                savePanelState(st);
+              } else {
+                memoryPanelState = Object.assign({}, getDefaultPanelState(), st, { mode: "collection" });
+              }
+            } else if (forceGenerateMode === true) {
+              _naiUserSwitchedModeInSession = true;
               st.mode = "generate";
               if (_naiHydrationCompleted) {
                 savePanelState(st);
@@ -53762,7 +53956,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             if (st.mode === "collection") {
               switchCollectionSubView("grid");
             }
-            applyModeView(st.mode || "generate");
+            applyModeView(st.mode || "collection");
             renderCollectionGrid();
             computeActiveArtistPrompt();
             computeActivePositivePrompt();
@@ -54378,6 +54572,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     mergedState[k] = liveStateBefore[k];
                   }
                 });
+              }
+
+              if (!_naiUserSwitchedModeInSession) {
+                mergedState.mode = "collection";
+                if (currentMode !== "collection") {
+                  applyModeView("collection");
+                }
               }
 
               memoryPanelState = mergedState;

@@ -1715,8 +1715,15 @@
         if (libraryPanel) libraryPanel.style.display = 'none';
         if (workshopPanel) workshopPanel.style.display = 'none';
         if (naiPanel) naiPanel.style.display = 'flex';
+        const isFirstDirectNaiClick = Boolean(isDirectTabClick && !this._hasDirectClickedNaiTabOnce);
+        if (isDirectTabClick) {
+          this._hasDirectClickedNaiTabOnce = true;
+        }
         if (typeof window.openModuleNaiPanel === 'function') {
-          window.openModuleNaiPanel(Boolean(isDirectTabClick && prevSubPanel === 'nai'));
+          window.openModuleNaiPanel(
+            Boolean(isDirectTabClick && !isFirstDirectNaiClick && prevSubPanel === 'nai'),
+            isFirstDirectNaiClick
+          );
         }
       } else {
         if (wizardPanel) wizardPanel.style.display = 'flex';
