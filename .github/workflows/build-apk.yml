@@ -425,7 +425,7 @@ public class MainActivity extends BridgeActivity {
                 if (bytes == null || bytes.length == 0) return false;
                 String safeName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : ("NAI_" + System.currentTimeMillis() + ".png");
                 String safeMime = (mimeType != null && !mimeType.trim().isEmpty()) ? mimeType.trim() : (safeName.toLowerCase().endsWith(".jpg") || safeName.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png");
-                String folderName = (subFolder != null && !subFolder.trim().isEmpty()) ? subFolder.trim() : "四半世紀";
+                String folderName = (subFolder != null && !subFolder.trim().isEmpty()) ? subFolder.trim() : "生图";
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ContentResolver resolver = ctx.getContentResolver();
@@ -433,19 +433,27 @@ public class MainActivity extends BridgeActivity {
                     values.put(MediaStore.MediaColumns.DISPLAY_NAME, safeName);
                     values.put(MediaStore.MediaColumns.MIME_TYPE, safeMime);
                     values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/" + folderName);
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 1);
                     Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
                     if (uri == null) {
-                        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + folderName);
-                        uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + folderName);
+                        uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
                     }
                     if (uri != null) {
                         try (OutputStream os = resolver.openOutputStream(uri)) {
                             if (os != null) {
                                 os.write(bytes);
                                 os.flush();
-                                return true;
                             }
                         }
+                        ContentValues doneValues = new ContentValues();
+                        doneValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                        resolver.update(uri, doneValues, null, null);
+                        try {
+                            File dcimFile = new File(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), folderName), safeName);
+                            MediaScannerConnection.scanFile(ctx, new String[]{dcimFile.getAbsolutePath()}, new String[]{safeMime}, null);
+                        } catch (Exception ignored) {}
+                        return true;
                     }
                 }
 

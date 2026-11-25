@@ -1,5 +1,5 @@
-// Service Worker v29.5 - Push Notifications & In-Place Hot Update Cache
-const CACHE_NAME = "ephone-tuk-cache-v29.5";
+// Service Worker v29.6 - Push Notifications & In-Place Hot Update Cache
+const CACHE_NAME = "ephone-tuk-cache-v29.6";
 const HOT_UPDATE_CACHE = "ephone-hot-update-bundle-v1";
 
 if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.skipWaiting === "function") {
