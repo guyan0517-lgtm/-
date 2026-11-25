@@ -54,15 +54,30 @@ jobs:
             npx cap sync android
           fi
 
-      - name: Configure Android Fullscreen & Cleartext Permissions
+      - name: Configure Android App Name, Custom Icons, Fullscreen & Cleartext Permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             sed -i 's/<application/<application android:usesCleartextTraffic="true" android:largeHeap="true"/g' "$MANIFEST" || true
           fi
-          STYLES="android/app/src/main/res/values/styles.xml"
-          if [ -f "$STYLES" ]; then
-            sed -i 's/Theme.AppCompat.DayNight.NoActionBar/Theme.AppCompat.DayNight.NoActionBar/g' "$STYLES" || true
+          STRINGS="android/app/src/main/res/values/strings.xml"
+          if [ -f "$STRINGS" ]; then
+            sed -i 's/>EPhone</>四半世紀</g' "$STRINGS" || true
+          fi
+          RES_DIR="android/app/src/main/res"
+          ICON_SRC="icon-512.png"
+          if [ ! -f "$ICON_SRC" ]; then
+            ICON_SRC="icon.png"
+          fi
+          if [ -f "$ICON_SRC" ] && [ -d "$RES_DIR" ]; then
+            rm -rf "$RES_DIR"/mipmap-anydpi-v26 2>/dev/null || true
+            for d in "$RES_DIR"/mipmap-*; do
+              if [ -d "$d" ]; then
+                cp -f "$ICON_SRC" "$d/ic_launcher.png"
+                cp -f "$ICON_SRC" "$d/ic_launcher_round.png"
+                cp -f "$ICON_SRC" "$d/ic_launcher_foreground.png"
+              fi
+            done
           fi
 
       - name: Build Debug APK
