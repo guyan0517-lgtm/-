@@ -1,5 +1,6 @@
-// Service Worker v29.4 - Push Notifications only (no navigation/fetch interception)
-const CACHE_NAME = "ephone-tuk-cache-v29.4";
+// Service Worker v29.5 - Push Notifications & In-Place Hot Update Cache
+const CACHE_NAME = "ephone-tuk-cache-v29.5";
+const HOT_UPDATE_CACHE = "ephone-hot-update-bundle-v1";
 
 if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.skipWaiting === "function") {
   self.addEventListener("install", event => {
@@ -10,9 +11,34 @@ if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.
     event.waitUntil(
       caches.keys().then(cacheNames => {
         return Promise.all(
-          cacheNames.map(cache => caches.delete(cache))
+          cacheNames.map(cache => {
+            if (cache === HOT_UPDATE_CACHE) return Promise.resolve();
+            return caches.delete(cache);
+          })
         );
       }).then(() => self.clients.claim())
+    );
+  });
+
+  self.addEventListener("fetch", event => {
+    const req = event.request;
+    if (!req || req.method !== "GET") return;
+    let urlObj = null;
+    try {
+      urlObj = new URL(req.url);
+    } catch (_) {
+      return;
+    }
+    if (urlObj.origin !== self.location.origin) return;
+    if (urlObj.pathname.startsWith("/api/")) return;
+    const normPath = (urlObj.pathname === "/" || urlObj.pathname === "") ? "/index.html" : urlObj.pathname;
+    event.respondWith(
+      caches.open(HOT_UPDATE_CACHE).then(cache => {
+        return cache.match(normPath).then(cachedRes => {
+          if (cachedRes) return cachedRes;
+          return fetch(req);
+        });
+      }).catch(() => fetch(req))
     );
   });
 

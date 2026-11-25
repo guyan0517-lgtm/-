@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-apk:
@@ -42,6 +44,31 @@ jobs:
           if [ -d "public" ]; then
             cp -r public/* dist/ 2>/dev/null || true
           fi
+          touch dist/.nojekyll
+
+      - name: Deploy Web Assets to GitHub Pages (gh-pages)
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          WORK_DIR=$(pwd)
+          TMP_GH=$(mktemp -d)
+          cp -r dist/. "$TMP_GH"/
+          cd "$TMP_GH"
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "Deploy web assets for APK hot update"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages || true
+          curl -s -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages" \
+            -d '{"source":{"branch":"gh-pages","path":"/"}}' || true
+          cd "$WORK_DIR"
+          rm -rf "$TMP_GH"
 
       - name: Install Capacitor & Generate Android Project
         run: |
@@ -53,6 +80,60 @@ jobs:
           else
             npx cap sync android
           fi
+
+      - name: Configure Fixed Deterministic Signing Keystore
+        run: |
+          mkdir -p ~/.android
+          cat << 'KEYSTORE_EOF' | tr -d '\n\r ' | base64 -d > ~/.android/debug.keystore
+          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
+          KEYSTORE_EOF
+          cp -f ~/.android/debug.keystore android/app/debug.keystore || true
 
       - name: Configure Android App Name, Custom Icons, Native Bridge & Permissions
         run: |
@@ -90,6 +171,9 @@ import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.res.AssetManager;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
@@ -101,9 +185,13 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -122,14 +210,178 @@ public class MainActivity extends BridgeActivity {
                 webView.setHapticFeedbackEnabled(true);
                 webView.addJavascriptInterface(new EPhoneNativeBridge(this), "EPhoneNativeBridge");
             }
+            checkAndApplyPersistedHotUpdate();
         } catch (Exception ignored) {}
     }
 
+    private long getCurrentApkUpdateTime() {
+        try {
+            PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pi != null ? pi.lastUpdateTime : 0L;
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private void deleteDirRecursively(File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            File[] children = f.listFiles();
+            if (children != null) {
+                for (File c : children) {
+                    deleteDirRecursively(c);
+                }
+            }
+        }
+        try { f.delete(); } catch (Exception ignored) {}
+    }
+
+    private void copyAssetsRecursively(AssetManager am, String assetPath, File destDir) {
+        try {
+            String[] list = am.list(assetPath);
+            if (list != null && list.length > 0) {
+                if (!destDir.exists()) destDir.mkdirs();
+                for (String child : list) {
+                    String childAssetPath = assetPath.isEmpty() ? child : (assetPath + "/" + child);
+                    copyAssetsRecursively(am, childAssetPath, new File(destDir, child));
+                }
+            } else {
+                if (destDir.exists()) return;
+                File parent = destDir.getParentFile();
+                if (parent != null && !parent.exists()) parent.mkdirs();
+                try (InputStream is = am.open(assetPath);
+                     FileOutputStream fos = new FileOutputStream(destDir)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = is.read(buf)) > 0) {
+                        fos.write(buf, 0, n);
+                    }
+                    fos.flush();
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void checkAndApplyPersistedHotUpdate() {
+        try {
+            File hotDir = new File(getFilesDir(), "hot_update_www");
+            File markerFile = new File(hotDir, ".apk_update_time");
+            File indexFile = new File(hotDir, "index.html");
+            if (!hotDir.exists() || !indexFile.exists()) return;
+            long curApkTime = getCurrentApkUpdateTime();
+            long savedApkTime = 0L;
+            if (markerFile.exists()) {
+                try (FileInputStream fis = new FileInputStream(markerFile);
+                     ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[128];
+                    int r;
+                    while ((r = fis.read(buf)) > 0) bos.write(buf, 0, r);
+                    savedApkTime = Long.parseLong(new String(bos.toByteArray(), StandardCharsets.UTF_8).trim());
+                } catch (Exception ignored) {}
+            }
+            if (curApkTime > 0 && savedApkTime > 0 && curApkTime != savedApkTime) {
+                deleteDirRecursively(hotDir);
+                return;
+            }
+            if (this.bridge != null) {
+                this.bridge.setServerBasePath(hotDir.getAbsolutePath());
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public boolean prepareHotUpdateWorkspace() {
+        try {
+            File hotDir = new File(getFilesDir(), "hot_update_www");
+            if (!hotDir.exists()) hotDir.mkdirs();
+            copyAssetsRecursively(getAssets(), "public", hotDir);
+            long curApkTime = getCurrentApkUpdateTime();
+            File markerFile = new File(hotDir, ".apk_update_time");
+            try (FileOutputStream fos = new FileOutputStream(markerFile)) {
+                fos.write(String.valueOf(curApkTime).getBytes(StandardCharsets.UTF_8));
+                fos.flush();
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean writeHotUpdateFile(String relativePath, String content) {
+        try {
+            if (relativePath == null || relativePath.trim().isEmpty() || content == null) return false;
+            String cleanRel = relativePath.trim().replaceAll("^/+", "");
+            if (cleanRel.contains("..")) return false;
+            File hotDir = new File(getFilesDir(), "hot_update_www");
+            if (!hotDir.exists()) {
+                prepareHotUpdateWorkspace();
+            }
+            File outFile = new File(hotDir, cleanRel);
+            File parent = outFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                fos.write(content.getBytes(StandardCharsets.UTF_8));
+                fos.flush();
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean activateHotUpdateWorkspace() {
+        try {
+            final File hotDir = new File(getFilesDir(), "hot_update_www");
+            final File indexFile = new File(hotDir, "index.html");
+            if (!indexFile.exists() || this.bridge == null) return false;
+            runOnUiThread(() -> {
+                try {
+                    if (MainActivity.this.bridge.getWebView() != null) {
+                        MainActivity.this.bridge.getWebView().clearCache(true);
+                    }
+                    MainActivity.this.bridge.setServerBasePath(hotDir.getAbsolutePath());
+                } catch (Exception ignored) {}
+            });
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static class EPhoneNativeBridge {
+        private final MainActivity activity;
         private final Context ctx;
 
-        public EPhoneNativeBridge(Context context) {
-            this.ctx = context;
+        public EPhoneNativeBridge(MainActivity act) {
+            this.activity = act;
+            this.ctx = act;
+        }
+
+        @JavascriptInterface
+        public boolean prepareHotUpdateDir() {
+            return activity != null && activity.prepareHotUpdateWorkspace();
+        }
+
+        @JavascriptInterface
+        public boolean saveHotUpdateFile(String relativePath, String content) {
+            return activity != null && activity.writeHotUpdateFile(relativePath, content);
+        }
+
+        @JavascriptInterface
+        public boolean applyHotUpdate() {
+            return activity != null && activity.activateHotUpdateWorkspace();
+        }
+
+        @JavascriptInterface
+        public boolean openExternalUrl(String url) {
+            try {
+                if (url == null || url.trim().isEmpty()) return false;
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(intent);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
         }
 
         @JavascriptInterface
