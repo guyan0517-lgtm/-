@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -44144,9 +44144,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let inspectObjectUrl = null;
           let isBound = false;
           let _naiHydrationCompleted = false;
-          let _naiFirstOpenInSessionDone = false;
-          let _naiUserSwitchedModeInSession = false;
-          let currentMode = "collection";
+          let _naiCollectionFirstOpenDone = false;
+          let currentMode = "generate";
           let memoryPanelState = null;
           let memoryPresetsStore = null;
           let memoryBookmarksList = null;
@@ -45135,7 +45134,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           function getDefaultPanelState() {
             return {
-              mode: "collection",
+              mode: "generate",
               theme: "folio",
               artistText: "",
               artist2Text: "",
@@ -47666,7 +47665,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 e.preventDefault();
                 e.stopPropagation();
               }
-              _naiUserSwitchedModeInSession = true;
               const inspectView = document.getElementById("mod-nai-inspect-view");
               const colView = document.getElementById("mod-nai-collection-view");
               const isNotGenerate =
@@ -47687,7 +47685,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               modeTitleWrap.style.cursor = "pointer";
               modeTitleWrap.addEventListener("click", () => {
                 if (currentMode !== "generate") {
-                  _naiUserSwitchedModeInSession = true;
                   applyModeView("generate");
                   const st = loadPanelState();
                   st.mode = "generate";
@@ -52955,7 +52952,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (closeBtn) {
               closeBtn.addEventListener("click", () => {
-                _naiUserSwitchedModeInSession = true;
                 applyModeView("generate");
                 const st = loadPanelState();
                 st.mode = "generate";
@@ -52966,8 +52962,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (openBtn) {
               openBtn.addEventListener("click", () => {
-                _naiUserSwitchedModeInSession = true;
-                colCategory = "lexicon";
+                if (!_naiCollectionFirstOpenDone) {
+                  _naiCollectionFirstOpenDone = true;
+                  colCategory = "lexicon";
+                }
                 colScope = "local";
                 colLocalPage = 1;
                 colSharedPage = 1;
@@ -53287,7 +53285,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               }
 
-              _naiUserSwitchedModeInSession = true;
               applyModeView("generate");
               const st = loadPanelState();
               st.mode = "generate";
@@ -53780,13 +53777,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           window.openModuleNaiCollectionFromHeader = function () {
             bindModuleNaiPanelEvents();
-            _naiUserSwitchedModeInSession = true;
             const st = loadPanelState();
             if (st.mode === "collection") {
               st.mode = "generate";
               savePanelState(st);
               applyModeView("generate");
             } else {
+              if (!_naiCollectionFirstOpenDone) {
+                _naiCollectionFirstOpenDone = true;
+                colCategory = "lexicon";
+              }
               st.mode = "collection";
               savePanelState(st);
               switchCollectionSubView("grid");
@@ -53929,22 +53929,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }
           }
 
-          window.openModuleNaiPanel = function (forceGenerateMode, isFirstDirectNaiClick) {
+          window.openModuleNaiPanel = function (forceGenerateMode) {
             bindModuleNaiPanelEvents();
             const st = loadPanelState();
             const store = loadPresetsStore();
-            if (!_naiFirstOpenInSessionDone || isFirstDirectNaiClick === true) {
-              _naiFirstOpenInSessionDone = true;
-              colCategory = "lexicon";
-              colScope = "local";
-              st.mode = "collection";
-              if (_naiHydrationCompleted) {
-                savePanelState(st);
-              } else {
-                memoryPanelState = Object.assign({}, getDefaultPanelState(), st, { mode: "collection" });
-              }
-            } else if (forceGenerateMode === true) {
-              _naiUserSwitchedModeInSession = true;
+            if (forceGenerateMode === true) {
               st.mode = "generate";
               if (_naiHydrationCompleted) {
                 savePanelState(st);
@@ -53954,9 +53943,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             applyPanelStateAndPresetsToDom(st, store);
 
             if (st.mode === "collection") {
+              if (!_naiCollectionFirstOpenDone) {
+                _naiCollectionFirstOpenDone = true;
+                colCategory = "lexicon";
+              }
               switchCollectionSubView("grid");
             }
-            applyModeView(st.mode || "collection");
+            applyModeView(st.mode || "generate");
             renderCollectionGrid();
             computeActiveArtistPrompt();
             computeActivePositivePrompt();
@@ -54572,13 +54565,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     mergedState[k] = liveStateBefore[k];
                   }
                 });
-              }
-
-              if (!_naiUserSwitchedModeInSession) {
-                mergedState.mode = "collection";
-                if (currentMode !== "collection") {
-                  applyModeView("collection");
-                }
               }
 
               memoryPanelState = mergedState;
