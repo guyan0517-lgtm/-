@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v28.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -44761,19 +44761,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
           let _naiLightweightBackupTimer = null;
           function executeLightweightNaiMetadataBackupNow() {
-            if (_naiHydrationCompleted) {
-              purgeLegacyNaiLocalStorageKeys();
-            }
-            const keepInlineForIdb = !_termuxNaiStoreLoadedOnce;
+            if (!_naiHydrationCompleted) return;
+            purgeLegacyNaiLocalStorageKeys();
             const filteredBm = Array.isArray(memoryBookmarksList) ? filterOutDeletedItems(memoryBookmarksList) : null;
             const filteredLex = Array.isArray(memoryLexiconList) ? filterOutDeletedItems(memoryLexiconList) : null;
-            const slimBm = filteredBm ? buildSlimMetadataList(filteredBm, false) : null;
-            const slimLex = filteredLex ? buildSlimMetadataList(filteredLex, false) : null;
-            const slimFolders = Array.isArray(memoryLexiconFoldersList) ? buildSlimFoldersList(memoryLexiconFoldersList, false) : null;
-            const idbBm = filteredBm ? (keepInlineForIdb ? buildSlimMetadataList(filteredBm, true) : slimBm) : null;
-            const idbLex = filteredLex ? (keepInlineForIdb ? buildSlimMetadataList(filteredLex, true) : slimLex) : null;
+            const idbBm = filteredBm ? buildSlimMetadataList(filteredBm, true) : null;
+            const idbLex = filteredLex ? buildSlimMetadataList(filteredLex, true) : null;
             const idbFolders = Array.isArray(memoryLexiconFoldersList)
-              ? (keepInlineForIdb ? buildSlimFoldersList(memoryLexiconFoldersList, true) : slimFolders)
+              ? buildSlimFoldersList(memoryLexiconFoldersList, true)
               : null;
 
             const buildSlimPanelStateForGlobal = (stObj) => {
@@ -45013,9 +45008,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   });
                 }
 
-                const remoteBm = existingRemote && Array.isArray(existingRemote.bookmarks) ? existingRemote.bookmarks : [];
-                const remoteLex = existingRemote && Array.isArray(existingRemote.lexicon) ? existingRemote.lexicon : [];
-                const remoteFolders = existingRemote && Array.isArray(existingRemote.lexiconFolders) ? existingRemote.lexiconFolders : [];
+                let idbFallback = null;
+                if (!Array.isArray(memoryBookmarksList) || !Array.isArray(memoryLexiconList)) {
+                  try {
+                    idbFallback = await readAllFromNaiIDB();
+                  } catch (_) {}
+                }
+                const idbBmFallback = idbFallback && Array.isArray(idbFallback.bookmarks) ? idbFallback.bookmarks : [];
+                const idbLexFallback = idbFallback && Array.isArray(idbFallback.lexicon) ? idbFallback.lexicon : [];
+                const idbFoldersFallback = idbFallback && Array.isArray(idbFallback.lexiconFolders) ? idbFallback.lexiconFolders : [];
+
+                const remoteBm = mergeBookmarkListsById(
+                  idbBmFallback,
+                  existingRemote && Array.isArray(existingRemote.bookmarks) ? existingRemote.bookmarks : []
+                );
+                const remoteLex = mergeBookmarkListsById(
+                  idbLexFallback,
+                  existingRemote && Array.isArray(existingRemote.lexicon) ? existingRemote.lexicon : []
+                );
+                const remoteFolders = mergeLexiconFoldersLists(
+                  idbFoldersFallback,
+                  existingRemote && Array.isArray(existingRemote.lexiconFolders) ? existingRemote.lexiconFolders : []
+                );
 
                 const outBookmarks = filterOutDeletedItems(
                   Array.isArray(memoryBookmarksList)
@@ -45205,10 +45219,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           function savePanelState(stateObj) {
             const nextState = Object.assign({}, getDefaultPanelState(), stateObj, { updatedAt: Date.now() });
             memoryPanelState = nextState;
+            writeKeyToNaiIDB("panelState", Object.assign({}, nextState));
             if (window.state && window.state.globalSettings && typeof window.state.globalSettings === "object") {
               window.state.globalSettings.naiPanelState = Object.assign({}, nextState);
             }
-            persistNaiStoreToTermux(false);
+            if (_naiHydrationCompleted) {
+              persistNaiStoreToTermux(false);
+            }
           }
 
           function normalizePresetsStoreObject(raw) {
@@ -45951,6 +45968,38 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 negTextarea.addEventListener("input", () => syncSlotFields(false));
                 negTextarea.addEventListener("change", () => syncSlotFields(true));
 
+                const bindCornerTouchResize = (taEl, minH) => {
+                  let isResizing = false;
+                  let startY = 0;
+                  let startH = 0;
+                  taEl.addEventListener("touchstart", (e) => {
+                    if (!e.touches || e.touches.length !== 1) return;
+                    const t = e.touches[0];
+                    const rect = taEl.getBoundingClientRect();
+                    if (rect.right - t.clientX <= 28 && rect.bottom - t.clientY <= 28) {
+                      isResizing = true;
+                      startY = t.clientY;
+                      startH = rect.height;
+                    }
+                  }, { passive: true });
+                  taEl.addEventListener("touchmove", (e) => {
+                    if (!isResizing || !e.touches || e.touches.length !== 1) return;
+                    const dy = e.touches[0].clientY - startY;
+                    if (Math.abs(dy) >= 2) {
+                      if (e.cancelable) e.preventDefault();
+                      e.stopPropagation();
+                      taEl.style.height = Math.max(minH, Math.round(startH + dy)) + "px";
+                    }
+                  }, { passive: false });
+                  const stopTouchResize = () => {
+                    isResizing = false;
+                  };
+                  taEl.addEventListener("touchend", stopTouchResize, { passive: true });
+                  taEl.addEventListener("touchcancel", stopTouchResize, { passive: true });
+                };
+                bindCornerTouchResize(posTextarea, 48);
+                bindCornerTouchResize(negTextarea, 36);
+
                 const saveToPresetBtn = document.createElement("button");
                 saveToPresetBtn.type = "button";
                 saveToPresetBtn.className = "mod-nai-btn mod-nai-icon-btn is-accent-icon";
@@ -46063,12 +46112,12 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 copyCharBtn.addEventListener("click", async () => {
                   const text = String(posTextarea.value || "").trim();
                   if (!text) return;
-                  try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                      await navigator.clipboard.writeText(text);
-                    }
+                  const copied = typeof window.copyTextToClipboard === "function"
+                    ? await window.copyTextToClipboard(text)
+                    : false;
+                  if (copied) {
                     flashActionButtonSuccess(copyCharBtn);
-                  } catch (_) {}
+                  }
                 });
 
                 editBar.appendChild(nameInp);
@@ -47072,18 +47121,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
               return;
             }
-            try {
-              if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(text);
-              } else if (el) {
-                el.select();
-                document.execCommand("copy");
-              }
+            const ok = typeof window.copyTextToClipboard === "function"
+              ? await window.copyTextToClipboard(text)
+              : false;
+            if (ok) {
               flashActionButtonSuccess(btnEl);
-            } catch (_) {
-              if (typeof window.showCustomAlert === "function") {
-                await window.showCustomAlert("提示", "复制未成功，请长按文本框手动复制");
-              }
+            } else if (typeof window.showCustomAlert === "function") {
+              await window.showCustomAlert("提示", "复制未成功，请长按文本框手动复制");
             }
           }
 
@@ -50361,7 +50405,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           let colLexiconSharedPage = 1;
           let colLexiconFolderRootPage = 1;
           let colCurrentTotalPages = 1;
-          let colLexiconViewMode = "expand"; // "expand" | "folder"
+          let colLexiconViewMode = "folder"; // "expand" | "folder"
           let colLexiconActiveFolder = ""; // 空字符串表示文件夹模式根目录，非空表示当前进入的分组名
           let colEditingFolderObj = null;
           let colEditingFolderOriginalName = "";
@@ -51230,7 +51274,15 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (colLexiconFolderRootPage < 1) colLexiconFolderRootPage = 1;
               const curPage = colLexiconFolderRootPage;
 
-              const contextKey = `folder_root|${colScope}|${colSortSourceIndex}|${totalFolders}|${colGridDataRevision}`;
+              const folderItemsSig = folders
+                .map((f, idx) => {
+                  const fn = (f && f.name) || DEFAULT_LEXICON_FOLDER_NAME;
+                  const c = allLexItems.filter((it) => getItemLexiconFolderName(it) === fn).length;
+                  const cov = getLexiconFolderDisplayCover(f, allLexItems, idx);
+                  return `${fn}:${c}:${cov.src}`;
+                })
+                .join("|");
+              const contextKey = `folder_root|${colScope}|${colSortSourceIndex}|${totalFolders}|${allLexItems.length}|${colGridDataRevision}|${folderItemsSig}`;
               if (colLastGridContextKey !== contextKey) {
                 clearMountedCollectionPages(gridEl);
                 colLastGridContextKey = contextKey;
@@ -52964,7 +53016,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               openBtn.addEventListener("click", () => {
                 if (!_naiCollectionFirstOpenDone) {
                   _naiCollectionFirstOpenDone = true;
-                  colCategory = "lexicon";
+                  const hasLexItems = Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0;
+                  const hasBmItems = Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0;
+                  colCategory = (!hasLexItems && hasBmItems) ? "bookmark" : "lexicon";
+                  colLexiconViewMode = "folder";
+                  colLexiconActiveFolder = "";
                 }
                 colScope = "local";
                 colLocalPage = 1;
@@ -52976,7 +53032,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 setColStatus("");
                 switchCollectionSubView("grid");
                 applyModeView("collection");
-                renderCollectionGrid();
+                renderCollectionGrid(true);
+                preloadAllNaiCollectionVaultImages();
                 const st = loadPanelState();
                 st.mode = "collection";
                 savePanelState(st);
@@ -53157,15 +53214,17 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
                 return;
               }
-              try {
-                await navigator.clipboard.writeText(text);
-              } catch (_) {
-                const ta = document.createElement("textarea");
-                ta.value = text;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand("copy");
-                document.body.removeChild(ta);
+              if (typeof window.copyTextToClipboard === "function") {
+                await window.copyTextToClipboard(text);
+              } else {
+                try {
+                  const ta = document.createElement("textarea");
+                  ta.value = text;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(ta);
+                } catch (_) {}
               }
               if (btnEl) {
                 btnEl.classList.add("is-copied");
@@ -53785,14 +53844,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else {
               if (!_naiCollectionFirstOpenDone) {
                 _naiCollectionFirstOpenDone = true;
-                colCategory = "lexicon";
+                const hasLexItems = Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0;
+                const hasBmItems = Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0;
+                colCategory = (!hasLexItems && hasBmItems) ? "bookmark" : "lexicon";
+                colLexiconViewMode = "folder";
+                colLexiconActiveFolder = "";
               }
               st.mode = "collection";
               savePanelState(st);
               switchCollectionSubView("grid");
               applyModeView("collection");
-              renderCollectionGrid();
+              renderCollectionGrid(true);
               preloadAllNaiCollectionVaultImages();
+              if (!_naiHydrationCompleted) {
+                loadNaiStoreFromTermux();
+              }
             }
           };
 
@@ -53934,6 +54000,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const st = loadPanelState();
             const store = loadPresetsStore();
             if (forceGenerateMode === true) {
+              _naiCollectionFirstOpenDone = false;
               st.mode = "generate";
               if (_naiHydrationCompleted) {
                 savePanelState(st);
@@ -53946,6 +54013,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               if (!_naiCollectionFirstOpenDone) {
                 _naiCollectionFirstOpenDone = true;
                 colCategory = "lexicon";
+                colLexiconViewMode = "folder";
+                colLexiconActiveFolder = "";
               }
               switchCollectionSubView("grid");
             }
@@ -54242,18 +54311,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 writeKeyToNaiIDB("deletedPresetKeys", Array.from(delPSet));
               }
 
+              const remoteBmList = (remoteStore && Array.isArray(remoteStore.bookmarks)) ? filterOutDeletedItems(remoteStore.bookmarks) : [];
+              const remoteLexList = (remoteStore && Array.isArray(remoteStore.lexicon)) ? filterOutDeletedItems(remoteStore.lexicon) : [];
+              const idbBmList = (idbData && Array.isArray(idbData.bookmarks)) ? filterOutDeletedItems(idbData.bookmarks) : [];
+              const idbLexList = (idbData && Array.isArray(idbData.lexicon)) ? filterOutDeletedItems(idbData.lexicon) : [];
+              const prelimBm = mergeBookmarkListsById(idbBmList, remoteBmList);
+              const prelimLex = mergeBookmarkListsById(idbLexList, remoteLexList);
+
               const hasEstablishedStore = Boolean(
-                remoteStore ||
-                (idbData && (Array.isArray(idbData.bookmarks) || Array.isArray(idbData.lexicon) || idbData.presets))
+                (prelimBm.length > 0 || prelimLex.length > 0) &&
+                (remoteStore || (idbData && (Array.isArray(idbData.bookmarks) || Array.isArray(idbData.lexicon) || idbData.presets)))
               );
 
-              // 4. 仅当存在被误清空的预设提示词、或者首次尚未建立任何存储时，才去读取 backup.json
-              // 并且当已经存在正式存储时，backup.json 只用来补全现有同名空值预设的文字，绝不把已删掉的预设、已删掉的卡片或已删掉的图片重新加回来！
-              let backupBookmarks = [];
-              let backupLexicon = [];
-              let backupFolders = [];
-              let backupPresets = null;
-              let backupPanelState = null;
+              const hasAnyEmptyBookmarkImage = (arr) =>
+                Array.isArray(arr) &&
+                arr.some((it) => it && it.id && !it._imageExplicitlyCleared && getBookmarkImagesArray(it).length === 0);
 
               const hasAnyEmptyPreset = (storeObj) => {
                 if (!storeObj || typeof storeObj !== "object") return false;
@@ -54262,97 +54334,149 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 );
               };
 
-              if (
+              let backupBookmarks = [];
+              let backupLexicon = [];
+              let backupFolders = [];
+              let backupPresets = null;
+              let backupPanelState = null;
+
+              const parseBackupPayloadForNai = (bJson) => {
+                if (!bJson || typeof bJson !== "object") return;
+                const ls = bJson.localStorageData || bJson.localStorageSnapshot || {};
+                if (typeof ls.mod_nai_bookmarks_v1 === "string") {
+                  try {
+                    const p = JSON.parse(ls.mod_nai_bookmarks_v1);
+                    if (Array.isArray(p)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, p);
+                  } catch (_) {}
+                }
+                if (typeof ls.mod_nai_lexicon_v1 === "string") {
+                  try {
+                    const p = JSON.parse(ls.mod_nai_lexicon_v1);
+                    if (Array.isArray(p)) backupLexicon = mergeBookmarkListsById(backupLexicon, p);
+                  } catch (_) {}
+                }
+                if (typeof ls.mod_nai_lexicon_folders_v1 === "string") {
+                  try {
+                    const p = JSON.parse(ls.mod_nai_lexicon_folders_v1);
+                    if (Array.isArray(p)) backupFolders = mergeLexiconFoldersLists(backupFolders, p);
+                  } catch (_) {}
+                }
+                if (typeof ls.mod_nai_presets_v1 === "string") {
+                  try {
+                    const p = JSON.parse(ls.mod_nai_presets_v1);
+                    if (p && typeof p === "object") backupPresets = p;
+                  } catch (_) {}
+                }
+                if (typeof ls.mod_nai_panel_state_v1 === "string") {
+                  try {
+                    const p = JSON.parse(ls.mod_nai_panel_state_v1);
+                    if (p && typeof p === "object") backupPanelState = p;
+                  } catch (_) {}
+                }
+                if (bJson.naiCollectionStore && typeof bJson.naiCollectionStore === "object") {
+                  const ncs = bJson.naiCollectionStore;
+                  if (Array.isArray(ncs.bookmarks)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, ncs.bookmarks);
+                  if (Array.isArray(ncs.lexicon)) backupLexicon = mergeBookmarkListsById(backupLexicon, ncs.lexicon);
+                  if (Array.isArray(ncs.lexiconFolders)) backupFolders = mergeLexiconFoldersLists(backupFolders, ncs.lexiconFolders);
+                  if (ncs.panelState) backupPanelState = mergePanelStatesSafely(ncs.panelState, backupPanelState);
+                  if (ncs.presets) backupPresets = mergePresetsStoresSafely(ncs.presets, backupPresets);
+                }
+                const gsRows = bJson.tables && Array.isArray(bJson.tables.globalSettings) ? bJson.tables.globalSettings : [];
+                const mainGs = bJson.globalSettings || gsRows.find((r) => r && r.id === "main") || gsRows[0];
+                if (mainGs && typeof mainGs === "object") {
+                  if (Array.isArray(mainGs.naiBookmarksCollection)) {
+                    backupBookmarks = mergeBookmarkListsById(backupBookmarks, mainGs.naiBookmarksCollection);
+                  }
+                  if (Array.isArray(mainGs.naiLexiconCollection)) {
+                    backupLexicon = mergeBookmarkListsById(backupLexicon, mainGs.naiLexiconCollection);
+                  }
+                  if (Array.isArray(mainGs.naiLexiconFolders)) {
+                    backupFolders = mergeLexiconFoldersLists(backupFolders, mainGs.naiLexiconFolders);
+                  }
+                  if (mainGs.naiPanelState) backupPanelState = mergePanelStatesSafely(backupPanelState, mainGs.naiPanelState);
+                  if (mainGs.naiPresetsStore) backupPresets = mergePresetsStoresSafely(backupPresets, mainGs.naiPresetsStore);
+                }
+              };
+
+              const needBackupRecovery =
                 !_termuxNaiStoreLoadedOnce &&
-                (!hasEstablishedStore || hasAnyEmptyPreset(remoteStore && remoteStore.presets) || hasAnyEmptyPreset(idbData && idbData.presets))
-              ) {
-                try {
-                  const bRes = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
-                  if (bRes && bRes.ok) {
-                    const bJson = await bRes.json();
-                    if (bJson && typeof bJson === "object") {
-                      const ls = bJson.localStorageData || bJson.localStorageSnapshot || {};
-                      if (!hasEstablishedStore) {
-                        if (typeof ls.mod_nai_bookmarks_v1 === "string") {
-                          try {
-                            const p = JSON.parse(ls.mod_nai_bookmarks_v1);
-                            if (Array.isArray(p)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, p);
-                          } catch (_) {}
-                        }
-                        if (typeof ls.mod_nai_lexicon_v1 === "string") {
-                          try {
-                            const p = JSON.parse(ls.mod_nai_lexicon_v1);
-                            if (Array.isArray(p)) backupLexicon = mergeBookmarkListsById(backupLexicon, p);
-                          } catch (_) {}
-                        }
-                        if (typeof ls.mod_nai_lexicon_folders_v1 === "string") {
-                          try {
-                            const p = JSON.parse(ls.mod_nai_lexicon_folders_v1);
-                            if (Array.isArray(p)) backupFolders = mergeLexiconFoldersLists(backupFolders, p);
-                          } catch (_) {}
-                        }
-                      }
-                      if (typeof ls.mod_nai_presets_v1 === "string") {
-                        try {
-                          const p = JSON.parse(ls.mod_nai_presets_v1);
-                          if (p && typeof p === "object") backupPresets = p;
-                        } catch (_) {}
-                      }
-                      if (!hasEstablishedStore && typeof ls.mod_nai_panel_state_v1 === "string") {
-                        try {
-                          const p = JSON.parse(ls.mod_nai_panel_state_v1);
-                          if (p && typeof p === "object") backupPanelState = p;
-                        } catch (_) {}
-                      }
-                      if (bJson.naiCollectionStore && typeof bJson.naiCollectionStore === "object") {
-                        const ncs = bJson.naiCollectionStore;
-                        if (!hasEstablishedStore) {
-                          if (Array.isArray(ncs.bookmarks)) backupBookmarks = mergeBookmarkListsById(backupBookmarks, ncs.bookmarks);
-                          if (Array.isArray(ncs.lexicon)) backupLexicon = mergeBookmarkListsById(backupLexicon, ncs.lexicon);
-                          if (Array.isArray(ncs.lexiconFolders)) backupFolders = mergeLexiconFoldersLists(backupFolders, ncs.lexiconFolders);
-                          if (ncs.panelState) backupPanelState = mergePanelStatesSafely(ncs.panelState, backupPanelState);
-                        }
-                        if (ncs.presets) backupPresets = mergePresetsStoresSafely(ncs.presets, backupPresets);
-                      }
-                      const gsRows = bJson.tables && Array.isArray(bJson.tables.globalSettings) ? bJson.tables.globalSettings : [];
-                      const mainGs = gsRows.find((r) => r && r.id === "main") || gsRows[0];
-                      if (mainGs && typeof mainGs === "object") {
-                        if (!hasEstablishedStore) {
-                          if (Array.isArray(mainGs.naiBookmarksCollection)) {
-                            backupBookmarks = mergeBookmarkListsById(backupBookmarks, mainGs.naiBookmarksCollection);
+                (prelimBm.length === 0 ||
+                  prelimLex.length === 0 ||
+                  hasAnyEmptyBookmarkImage(prelimBm) ||
+                  hasAnyEmptyBookmarkImage(prelimLex) ||
+                  !hasEstablishedStore ||
+                  hasAnyEmptyPreset(remoteStore && remoteStore.presets) ||
+                  hasAnyEmptyPreset(idbData && idbData.presets));
+
+              if (needBackupRecovery) {
+                let loadedBackupJson = false;
+                const backupUrls = [
+                  baseUrl + "/backup.json",
+                  baseUrl + "/records/globalSettings_main.json"
+                ];
+                if (baseUrl.includes("127.0.0.1")) {
+                  backupUrls.push(baseUrl.replace("127.0.0.1", "localhost") + "/backup.json");
+                  backupUrls.push(baseUrl.replace("127.0.0.1", "localhost") + "/records/globalSettings_main.json");
+                }
+                for (const bUrl of backupUrls) {
+                  try {
+                    const bRes = await fetch(bUrl, { method: "GET", cache: "no-store" });
+                    if (bRes && bRes.ok) {
+                      let bJson = null;
+                      try {
+                        const bBlob = await bRes.blob();
+                        if (bBlob && bBlob.size > 2) {
+                          if (typeof window.parseBackupBlobOrFileLowMemory === "function") {
+                            bJson = await window.parseBackupBlobOrFileLowMemory(bBlob);
+                          } else {
+                            bJson = JSON.parse(await bBlob.text());
                           }
-                          if (Array.isArray(mainGs.naiLexiconCollection)) {
-                            backupLexicon = mergeBookmarkListsById(backupLexicon, mainGs.naiLexiconCollection);
-                          }
-                          if (Array.isArray(mainGs.naiLexiconFolders)) {
-                            backupFolders = mergeLexiconFoldersLists(backupFolders, mainGs.naiLexiconFolders);
-                          }
-                          if (mainGs.naiPanelState) backupPanelState = mergePanelStatesSafely(backupPanelState, mainGs.naiPanelState);
                         }
-                        if (mainGs.naiPresetsStore) backupPresets = mergePresetsStoresSafely(backupPresets, mainGs.naiPresetsStore);
+                      } catch (_) {}
+                      if (bJson && typeof bJson === "object") {
+                        parseBackupPayloadForNai(bJson);
+                        if (
+                          Array.isArray(bJson.naiBookmarksCollection) ||
+                          Array.isArray(bJson.naiLexiconCollection) ||
+                          Array.isArray(bJson.naiLexiconFolders)
+                        ) {
+                          parseBackupPayloadForNai({ globalSettings: bJson });
+                        }
+                        loadedBackupJson = true;
                       }
                     }
-                  }
-                } catch (_) {}
+                  } catch (_) {}
+                }
+                if (!loadedBackupJson && navigator.storage && typeof navigator.storage.getDirectory === "function") {
+                  try {
+                    const opfsRoot = await navigator.storage.getDirectory();
+                    const vaultDir = await opfsRoot.getDirectoryHandle("EPhoneVault", { create: false });
+                    const fh = await vaultDir.getFileHandle("EPhoneBackup.json", { create: false });
+                    const f = await fh.getFile();
+                    const txt = await f.text();
+                    if (txt && txt.trim().startsWith("{")) {
+                      parseBackupPayloadForNai(JSON.parse(txt));
+                    }
+                  } catch (_) {}
+                }
               }
 
-              // 只有当既没有 Termux 存储也没有独立 IDB 存储时，才从旧缓存迁移一次，绝不让旧缓存把已删除的条目复活
-              const legacyBm = (!hasEstablishedStore && !_termuxNaiStoreLoadedOnce) ? mergeBookmarkListsById(
-                legacyGs && Array.isArray(legacyGs.naiBookmarksCollection) ? legacyGs.naiBookmarksCollection : [],
-                mergeBookmarkListsById(readListFromStorageKey(BOOKMARKS_STORE_KEY), readListFromStorageKey(BOOKMARKS_TEXT_BACKUP_KEY))
-              ) : [];
-              const legacyLex = (!hasEstablishedStore && !_termuxNaiStoreLoadedOnce) ? mergeBookmarkListsById(
-                legacyGs && Array.isArray(legacyGs.naiLexiconCollection) ? legacyGs.naiLexiconCollection : [],
-                mergeBookmarkListsById(readListFromStorageKey(LEXICON_STORE_KEY), readListFromStorageKey(LEXICON_TEXT_BACKUP_KEY))
-              ) : [];
-              const legacyFolders = (!hasEstablishedStore && !_termuxNaiStoreLoadedOnce) ? mergeLexiconFoldersLists(
+              const legacyBm = filterOutDeletedItems(
+                mergeBookmarkListsById(
+                  legacyGs && Array.isArray(legacyGs.naiBookmarksCollection) ? legacyGs.naiBookmarksCollection : [],
+                  mergeBookmarkListsById(readListFromStorageKey(BOOKMARKS_STORE_KEY), readListFromStorageKey(BOOKMARKS_TEXT_BACKUP_KEY))
+                )
+              );
+              const legacyLex = filterOutDeletedItems(
+                mergeBookmarkListsById(
+                  legacyGs && Array.isArray(legacyGs.naiLexiconCollection) ? legacyGs.naiLexiconCollection : [],
+                  mergeBookmarkListsById(readListFromStorageKey(LEXICON_STORE_KEY), readListFromStorageKey(LEXICON_TEXT_BACKUP_KEY))
+                )
+              );
+              const legacyFolders = mergeLexiconFoldersLists(
                 legacyGs && Array.isArray(legacyGs.naiLexiconFolders) ? legacyGs.naiLexiconFolders : [],
                 readListFromStorageKey(LEXICON_FOLDERS_STORE_KEY) || []
-              ) : [];
-
-              const hasAnyEmptyBookmarkImage = (arr) =>
-                Array.isArray(arr) &&
-                arr.some((it) => it && it.id && !it._imageExplicitlyCleared && getBookmarkImagesArray(it).length === 0);
+              );
 
               const fillMissingBookmarkImagesFromFallbackList = (targetList, fallbackList) => {
                 if (!Array.isArray(targetList) || !Array.isArray(fallbackList) || fallbackList.length === 0) return;
@@ -54373,30 +54497,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 });
               };
 
-              let mergedBm = [];
-              if (Array.isArray(remoteStore && remoteStore.bookmarks) && Array.isArray(idbData && idbData.bookmarks)) {
-                mergedBm = mergeBookmarkListsById(idbData.bookmarks, remoteStore.bookmarks);
-              } else if (Array.isArray(remoteStore && remoteStore.bookmarks)) {
-                mergedBm = remoteStore.bookmarks.slice();
-              } else if (Array.isArray(idbData && idbData.bookmarks)) {
-                mergedBm = idbData.bookmarks.slice();
-              } else {
+              let mergedBm = prelimBm.slice();
+              if (mergedBm.length === 0) {
                 mergedBm = mergeBookmarkListsById(backupBookmarks, legacyBm);
+              } else if (legacyBm.length > 0 && !_termuxNaiStoreLoadedOnce) {
+                mergedBm = mergeBookmarkListsById(mergedBm, legacyBm);
               }
               if (Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0) {
                 mergedBm = mergeBookmarkListsById(memoryBookmarksList, mergedBm);
               }
               mergedBm = filterOutDeletedItems(mergedBm);
 
-              let mergedLex = [];
-              if (Array.isArray(remoteStore && remoteStore.lexicon) && Array.isArray(idbData && idbData.lexicon)) {
-                mergedLex = mergeBookmarkListsById(idbData.lexicon, remoteStore.lexicon);
-              } else if (Array.isArray(remoteStore && remoteStore.lexicon)) {
-                mergedLex = remoteStore.lexicon.slice();
-              } else if (Array.isArray(idbData && idbData.lexicon)) {
-                mergedLex = idbData.lexicon.slice();
-              } else {
+              let mergedLex = prelimLex.slice();
+              if (mergedLex.length === 0) {
                 mergedLex = mergeBookmarkListsById(backupLexicon, legacyLex);
+              } else if (legacyLex.length > 0 && !_termuxNaiStoreLoadedOnce) {
+                mergedLex = mergeBookmarkListsById(mergedLex, legacyLex);
               }
               if (Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0) {
                 mergedLex = mergeBookmarkListsById(memoryLexiconList, mergedLex);
@@ -54407,12 +54523,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 fillMissingBookmarkImagesFromFallbackList(mergedBm, remoteStore && remoteStore.bookmarks);
                 fillMissingBookmarkImagesFromFallbackList(mergedBm, idbData && idbData.bookmarks);
                 fillMissingBookmarkImagesFromFallbackList(mergedBm, legacyGs && legacyGs.naiBookmarksCollection);
+                fillMissingBookmarkImagesFromFallbackList(mergedBm, legacyBm);
                 fillMissingBookmarkImagesFromFallbackList(mergedBm, backupBookmarks);
               }
               if (hasAnyEmptyBookmarkImage(mergedLex)) {
                 fillMissingBookmarkImagesFromFallbackList(mergedLex, remoteStore && remoteStore.lexicon);
                 fillMissingBookmarkImagesFromFallbackList(mergedLex, idbData && idbData.lexicon);
                 fillMissingBookmarkImagesFromFallbackList(mergedLex, legacyGs && legacyGs.naiLexiconCollection);
+                fillMissingBookmarkImagesFromFallbackList(mergedLex, legacyLex);
                 fillMissingBookmarkImagesFromFallbackList(mergedLex, backupLexicon);
               }
 
@@ -54424,31 +54542,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 }
               } else if (Array.isArray(idbData && idbData.lexiconFolders)) {
                 mergedFolders = idbData.lexiconFolders.slice();
-              } else {
-                mergedFolders = mergeLexiconFoldersLists(backupFolders, legacyFolders);
+              }
+              if (mergedFolders.length <= 1 && (backupFolders.length > 0 || legacyFolders.length > 0)) {
+                mergedFolders = mergeLexiconFoldersLists(mergedFolders, mergeLexiconFoldersLists(backupFolders, legacyFolders));
               }
               if (Array.isArray(memoryLexiconFoldersList) && memoryLexiconFoldersList.length > 0) {
                 mergedFolders = mergeLexiconFoldersLists(memoryLexiconFoldersList, mergedFolders);
               }
 
-              const listFp = (arr) =>
-                Array.isArray(arr)
-                  ? arr.map((x) => (x ? `${x.id || ""}:${x.name || ""}:${x.folder || ""}:${x.image || ""}:${x.coverImage || ""}:${x.updatedAt || 0}` : "")).join("|")
-                  : "";
-              const prevBmFp = listFp(memoryBookmarksList);
-              const prevLexFp = listFp(memoryLexiconList);
-              const prevFolderFp = listFp(memoryLexiconFoldersList);
-
-              let gridNeedsRebuild = false;
               if (mergedBm.length > 0 || !Array.isArray(memoryBookmarksList)) {
                 await offloadBookmarkListImagesToTermux(mergedBm);
-                if (listFp(mergedBm) !== prevBmFp) gridNeedsRebuild = true;
                 memoryBookmarksList = mergedBm;
                 writeKeyToNaiIDB("bookmarks", mergedBm);
               }
               if (mergedLex.length > 0 || !Array.isArray(memoryLexiconList)) {
                 await offloadBookmarkListImagesToTermux(mergedLex);
-                if (listFp(mergedLex) !== prevLexFp) gridNeedsRebuild = true;
                 memoryLexiconList = mergedLex;
                 writeKeyToNaiIDB("lexicon", mergedLex);
               }
@@ -54456,8 +54564,16 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 await offloadFolderListCoversToTermux(mergedFolders);
                 memoryLexiconFoldersList = mergedFolders;
                 const cleanedFolders = loadLexiconFolders();
-                if (listFp(cleanedFolders) !== prevFolderFp) gridNeedsRebuild = true;
                 writeKeyToNaiIDB("lexiconFolders", cleanedFolders);
+              }
+
+              if (
+                colCategory === "lexicon" &&
+                (!Array.isArray(memoryLexiconList) || memoryLexiconList.length === 0) &&
+                Array.isArray(memoryBookmarksList) &&
+                memoryBookmarksList.length > 0
+              ) {
+                colCategory = "bookmark";
               }
 
               // 5. 选择最新的预设库作为唯一列表基准（绝不把旧备份里已删掉的预设或分组重新加回来），仅对现有同名空值预设补全提示词
@@ -54597,17 +54713,43 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 syncLightweightNaiMetadataBackup(false);
               }
 
+              colGridDataRevision++;
+              colLastGridContextKey = "";
+              renderCollectionGrid(true);
               preloadAllNaiCollectionVaultImages();
-
-              const colViewEl = document.getElementById("mod-nai-collection-view");
-              if (gridNeedsRebuild && (currentMode === "collection" || (colViewEl && colViewEl.style.display !== "none"))) {
-                renderCollectionGrid(true);
-              }
             })().finally(() => {
               _termuxNaiSyncInFlight = null;
             });
             return _termuxNaiSyncInFlight;
           }
+
+          window.retryNaiTermuxHydrationAndImages = function () {
+            try {
+              if (!_termuxNaiStoreLoadedOnce) {
+                loadNaiStoreFromTermux();
+              } else {
+                colGridDataRevision++;
+                colLastGridContextKey = "";
+                renderCollectionGrid(true);
+                preloadAllNaiCollectionVaultImages();
+              }
+              const naiVaultImgs = document.querySelectorAll("#module-nai-panel img[data-vault-ref]");
+              naiVaultImgs.forEach((imgEl) => {
+                const vRef = imgEl.getAttribute("data-vault-ref") || "";
+                const curSrc = imgEl.getAttribute("src") || "";
+                if (
+                  vRef &&
+                  vRef.startsWith("vault://") &&
+                  (imgEl.getAttribute("data-vault-fallback-shown") === "1" ||
+                    imgEl.getAttribute("data-vault-dead") === "1" ||
+                    curSrc === NAI_TRANSPARENT_PIXEL ||
+                    curSrc.includes("assets/trace/"))
+                ) {
+                  bindNaiVaultAwareImage(imgEl, vRef, imgEl._naiFallbackCoverIdx);
+                }
+              });
+            } catch (_) {}
+          };
 
           window.getNaiVaultMediaReferences = async function () {
             const refs = [];
@@ -55998,25 +56140,43 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
         window.copyTextToClipboard = async function (text) {
           if (!text) return false;
+          let copiedOk = false;
           try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              await navigator.clipboard.writeText(text);
-              return true;
+            if (
+              window.EPhoneNativeBridge &&
+              typeof window.EPhoneNativeBridge.copyToClipboard === "function"
+            ) {
+              if (window.EPhoneNativeBridge.copyToClipboard(String(text))) {
+                copiedOk = true;
+              }
             }
           } catch (_) {}
           try {
             const ta = document.createElement("textarea");
-            ta.value = text;
+            ta.value = String(text);
+            ta.setAttribute("readonly", "");
             ta.style.position = "fixed";
+            ta.style.top = "0";
+            ta.style.left = "-9999px";
             ta.style.opacity = "0";
             document.body.appendChild(ta);
+            ta.focus();
             ta.select();
-            document.execCommand("copy");
+            try {
+              ta.setSelectionRange(0, ta.value.length);
+            } catch (_) {}
+            if (document.execCommand("copy")) {
+              copiedOk = true;
+            }
             document.body.removeChild(ta);
-            return true;
-          } catch (_) {
-            return false;
-          }
+          } catch (_) {}
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(String(text));
+              copiedOk = true;
+            }
+          } catch (_) {}
+          return copiedOk;
         };
 
         window.copySiteUrlInModal = async function (url, statusId) {
@@ -127429,52 +127589,120 @@ ${specificRules}`;
       (function () {
         "use strict";
 
-        // 下载图片的核心函数
+        // 下载图片的核心函数（同时支持安卓APP原生直接落盘系统相册、Termux本地相册直存、以及浏览器标准下载）
+        async function resolveImageSrcToBlobAndDataUrl(imageSrc) {
+          let src = String(imageSrc || "").trim();
+          if (!src) return null;
+          if (src.startsWith("vault://") && typeof window.resolveVaultRefToUrl === "function") {
+            const resolved = await window.resolveVaultRefToUrl(src);
+            if (resolved) src = resolved;
+          }
+          if (src.startsWith("data:")) {
+            const resp = await fetch(src);
+            const blob = await resp.blob();
+            return { blob, dataUrl: src, mime: blob.type || "image/png" };
+          }
+          const resp = await fetch(src);
+          if (!resp.ok) throw new Error("图片读取失败");
+          const blob = await resp.blob();
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result || ""));
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          return { blob, dataUrl, mime: blob.type || "image/png" };
+        }
+
         async function downloadImage(imageSrc, filename) {
           try {
-            if (imageSrc.startsWith("data:") || imageSrc.startsWith("blob:")) {
+            const safeFilename = String(filename || `NAI_Image_${Date.now()}.png`).trim();
+            let resolvedData = null;
+            try {
+              resolvedData = await resolveImageSrcToBlobAndDataUrl(imageSrc);
+            } catch (_) {}
+
+            // 1. 安卓 APP 原生桥接：直接写入手机系统相册 DCIM/四半世紀 并通知系统媒体库刷新
+            if (
+              resolvedData &&
+              resolvedData.dataUrl &&
+              window.EPhoneNativeBridge &&
+              typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function"
+            ) {
+              try {
+                const savedNative = window.EPhoneNativeBridge.saveBase64ToDownloads(
+                  resolvedData.dataUrl,
+                  safeFilename,
+                  resolvedData.mime || "image/png",
+                  "四半世紀"
+                );
+                if (savedNative) {
+                  showDownloadToast("已保存至手机相册 四半世紀", "success");
+                  return;
+                }
+              } catch (_) {}
+            }
+
+            // 2. 若本地 Termux 服务在线（无论在软件 APP 还是浏览器中），直接写入手机相册 /sdcard/DCIM/水印 并触发安卓相册扫描
+            if (resolvedData && resolvedData.blob) {
+              try {
+                let termuxBase = "http://127.0.0.1:8765";
+                try {
+                  const rawCfg = localStorage.getItem("ephone_local_vault_config_v1");
+                  if (rawCfg) {
+                    const parsedCfg = JSON.parse(rawCfg);
+                    if (parsedCfg && parsedCfg.url) {
+                      termuxBase = String(parsedCfg.url).replace(/\/+$/, "");
+                    }
+                  }
+                } catch (_) {}
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 1800);
+                const putRes = await fetch(
+                  termuxBase + "/watermark-album/" + encodeURIComponent(safeFilename),
+                  {
+                    method: "PUT",
+                    headers: { "Content-Type": resolvedData.mime || "image/png" },
+                    body: resolvedData.blob,
+                    signal: controller.signal,
+                  }
+                ).finally(() => clearTimeout(timer));
+                if (putRes && putRes.ok) {
+                  showDownloadToast("已保存至手机系统相册", "success");
+                  return;
+                }
+              } catch (_) {}
+            }
+
+            // 3. 浏览器标准 <a download> 下载
+            if (resolvedData && resolvedData.blob) {
+              const blobUrl = URL.createObjectURL(resolvedData.blob);
               const link = document.createElement("a");
-              link.href = imageSrc;
-              link.download = filename;
+              link.href = blobUrl;
+              link.download = safeFilename;
               link.style.display = "none";
               document.body.appendChild(link);
               link.click();
               setTimeout(() => {
-                document.body.removeChild(link);
-              }, 100);
+                if (link.parentNode) link.parentNode.removeChild(link);
+                URL.revokeObjectURL(blobUrl);
+              }, 300);
             } else {
-              try {
-                const response = await fetch(imageSrc);
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = blobUrl;
-                link.download = filename;
-                link.style.display = "none";
-                document.body.appendChild(link);
-                link.click();
-                setTimeout(() => {
-                  document.body.removeChild(link);
-                  URL.revokeObjectURL(blobUrl);
-                }, 100);
-              } catch (e) {
-                const link = document.createElement("a");
-                link.href = imageSrc;
-                link.download = filename;
-                link.target = "_blank";
-                link.style.display = "none";
-                document.body.appendChild(link);
-                link.click();
-                setTimeout(() => {
-                  document.body.removeChild(link);
-                }, 100);
-              }
+              const link = document.createElement("a");
+              link.href = imageSrc;
+              link.download = safeFilename;
+              link.target = "_blank";
+              link.style.display = "none";
+              document.body.appendChild(link);
+              link.click();
+              setTimeout(() => {
+                if (link.parentNode) link.parentNode.removeChild(link);
+              }, 200);
             }
 
-            console.log("✅ [图片下载] 开始下载图片:", filename);
             showDownloadToast("开始下载", "success");
           } catch (error) {
-            console.error("❌ [图片下载] 下载失败:", error);
+            console.error("[图片下载] 下载失败:", error);
             showDownloadToast("下载失败，请重试", "error");
           }
         }
@@ -127587,10 +127815,17 @@ ${specificRules}`;
           function (e) {
             const target = e.target;
 
-            // 检查是否是聊天中的图片（NAI生图、用户图片、AI图片）
+            // 检查是否是支持三击下载的图片（聊天图片、生图台结果图、收藏夹详情图、检查器预览图、全屏预览图）
+            const isNaiPanelPreviewImg =
+              target.tagName === "IMG" &&
+              (target.id === "mod-nai-gen-result-img" ||
+                target.id === "mod-nai-inspect-preview-img" ||
+                target.id === "image-viewer-img" ||
+                target.classList.contains("mod-nai-specimen-img"));
             const isChatImage =
               target.tagName === "IMG" &&
-              (target.classList.contains("realimag-image") ||
+              (isNaiPanelPreviewImg ||
+                target.classList.contains("realimag-image") ||
                 target.classList.contains("naiimag-image") ||
                 target.classList.contains("chat-image") ||
                 (target.closest(".message-bubble") &&
@@ -127602,7 +127837,10 @@ ${specificRules}`;
               const rect = target.getBoundingClientRect();
               const cornerWidth = Math.min(48, Math.max(24, rect.width * 0.3));
               const cornerHeight = Math.min(48, Math.max(24, rect.height * 0.3));
-              const isCornerClick = (e.clientX >= rect.right - cornerWidth && e.clientY >= rect.bottom - cornerHeight);
+              const isCornerClick =
+                !isNaiPanelPreviewImg &&
+                e.clientX >= rect.right - cornerWidth &&
+                e.clientY >= rect.bottom - cornerHeight;
 
               // 如果点击的是右下角透明区域，立即展开预览
               if (isCornerClick) {
@@ -127713,15 +127951,7 @@ ${specificRules}`;
           downloadBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             if (!currentViewingImageSrc) return;
-            const a = document.createElement("a");
-            a.href = currentViewingImageSrc;
-            a.download = `preview_image_${Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            if (typeof showCustomAlert === "function") {
-              showCustomAlert("下载成功", "图片已保存至本地设备。");
-            }
+            downloadImage(currentViewingImageSrc, `preview_image_${Date.now()}.png`);
           });
         }
 
@@ -129337,9 +129567,30 @@ ${specificRules}`;
 
           seedHistoryGuardStack();
 
-          // 关键：移动端浏览器要求每个历史记录条目必须在独立的用户真实手势中调用 pushState 才会被标记为有效返回点，单次循环塞入多个或 popstate 内塞入都会被浏览器跳过并直接退回手机桌面
-          const replenishGuardOnGesture = () => {
+          // 关键：移动端浏览器要求每个历史记录条目必须在独立的用户真实手势中调用 pushState 才会被标记为有效返回点；但当用户点击或长按输入框准备复制粘贴时，绝对不能调用 pushState，否则安卓 WebView 会判定发生导航并立刻强行关闭原生粘贴气泡菜单
+          const isEditableOrSelectionActive = (evt) => {
+            try {
+              const checkNode = (n) => {
+                if (!n) return false;
+                const el = n.nodeType === 1 ? n : n.parentElement;
+                if (!el || typeof el.closest !== "function") return false;
+                return Boolean(
+                  el.closest(
+                    "input, textarea, select, [contenteditable='true'], [contenteditable=''], .moe-input, .mod-nai-textarea, .mod-nai-input"
+                  )
+                );
+              };
+              if (evt && checkNode(evt.target)) return true;
+              if (checkNode(document.activeElement)) return true;
+              const sel = window.getSelection ? window.getSelection() : null;
+              if (sel && !sel.isCollapsed && String(sel.toString() || "").length > 0) return true;
+            } catch (_) {}
+            return false;
+          };
+
+          const replenishGuardOnGesture = (evt) => {
             if (isHandlingPop) return;
+            if (isEditableOrSelectionActive(evt)) return;
             try {
               const now = Date.now();
               if (now - lastGesturePushTs < 120) return;
@@ -132814,8 +133065,8 @@ ${specificRules}`;
                 }
               }
 
-              // 4. 严禁在 server (Termux) 模式下往浏览器 OPFS 塞副本！仅在用户明确选择 folder 模式且授权外部目录不可用时才回退
-              if (!termuxSaved && !externalFolderSaved && !storedAny && mode !== "server") {
+              // 4. 当 Termux 与外部文件夹均未命中时，回退至本地 OPFS 存储，待 Termux 连接后自动迁移并清理
+              if (!termuxSaved && !externalFolderSaved && !storedAny) {
                 try {
                   const opfsRoot = await getAutoOpfsDirectoryHandle();
                   if (opfsRoot) {
@@ -133810,7 +134061,12 @@ ${specificRules}`;
             return modified;
           }
 
+          let _isVaultHeavyTaskRunning = false;
           async function runVaultImageOffload() {
+            if (_isVaultHeavyTaskRunning) {
+              setVaultInfoText("正在执行另一项存储整理任务，请稍候...");
+              return;
+            }
             const ok = await testVaultConnection(true);
             if (!ok) {
               if (typeof window.showCustomAlert === "function") {
@@ -133818,6 +134074,7 @@ ${specificRules}`;
               }
               return;
             }
+            _isVaultHeavyTaskRunning = true;
             const cfg = getCurrentFormVaultConfig();
             await ensureTermuxMediaListSynced(cfg.url, true);
             const counter = { count: 0, savedBytes: 0, uniqueFiles: new Set() };
@@ -133971,6 +134228,8 @@ ${specificRules}`;
               if (typeof window.showCustomAlert === "function") {
                 window.showCustomAlert("提示", "分离出现异常: " + (err && err.message ? err.message : "请重试"));
               }
+            } finally {
+              _isVaultHeavyTaskRunning = false;
             }
           }
 
@@ -135924,6 +136183,11 @@ ${specificRules}`;
           window.compactAndRewriteLocalDatabaseShell = compactAndRewriteLocalDatabaseShell;
 
           async function runVaultCleanupOrphanMedia() {
+            if (_isVaultHeavyTaskRunning) {
+              setVaultInfoText("正在执行另一项存储整理任务，请稍候...");
+              return;
+            }
+            _isVaultHeavyTaskRunning = true;
             setVaultInfoText("正在全表扫描被引用的图片与本地残留文件...");
             try {
               await runVaultHideGalleryImages(true);
@@ -136120,6 +136384,8 @@ ${specificRules}`;
               if (typeof window.showCustomAlert === "function") {
                 window.showCustomAlert("提示", "清理未成功: " + (err && err.message ? err.message : "请稍后重试"));
               }
+            } finally {
+              _isVaultHeavyTaskRunning = false;
             }
           }
           window.runVaultCleanupOrphanMedia = runVaultCleanupOrphanMedia;
@@ -136139,6 +136405,9 @@ ${specificRules}`;
                 el._vaultBgResolvingRef = null;
               });
               hydrateDomVaultImages();
+              if (typeof window.retryNaiTermuxHydrationAndImages === "function") {
+                window.retryNaiTermuxHydrationAndImages();
+              }
               if (typeof window.refreshCustomFontsFromVault === "function") {
                 window.refreshCustomFontsFromVault();
               }
@@ -137617,15 +137886,23 @@ ${specificRules}`;
       document.addEventListener(
         "contextmenu",
         (e) => {
+          const rawTarget = e.target;
+          const targetEl =
+            rawTarget && rawTarget.nodeType === 1
+              ? rawTarget
+              : rawTarget && rawTarget.parentElement
+                ? rawTarget.parentElement
+                : null;
+          if (!targetEl || typeof targetEl.closest !== "function") return;
           if (
-            e.target.closest(
-              "input, textarea, select, [contenteditable='true'], .modal-content, .modal",
+            targetEl.closest(
+              "input, textarea, select, [contenteditable='true'], [contenteditable=''], .modal-content, .modal, #module-nai-panel",
             )
           ) {
             return;
           }
           if (
-            e.target.closest(
+            targetEl.closest(
               ".message-bubble, .message-wrapper, .chat-message-wrapper, .module-map-node, .mod-map-avatar-container, .chat-map-strip-row, #chat-messages",
             )
           ) {

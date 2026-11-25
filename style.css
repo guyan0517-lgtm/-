@@ -33361,6 +33361,7 @@ select,
   -webkit-touch-callout: default !important;
   -webkit-user-select: text !important;
   user-select: text !important;
+  touch-action: auto !important;
 }
 
 /* === 人设设计器专属样式 === */
@@ -37791,13 +37792,15 @@ select,
 }
 
 #module-nai-panel .mod-nai-char-pos-textarea {
-  height: 64px !important;
+  height: 64px;
   min-height: 48px !important;
+  resize: vertical !important;
 }
 
 #module-nai-panel .mod-nai-char-neg-textarea {
-  height: 42px !important;
+  height: 42px;
   min-height: 36px !important;
+  resize: vertical !important;
 }
 
 /* ============================================================
