@@ -164,318 +164,318 @@ jobs:
           if [ -n "$MAIN_ACT" ] && [ -f "$MAIN_ACT" ]; then
             PKG_LINE=$(grep -E '^package ' "$MAIN_ACT" | head -n 1)
             cat << 'EOF' > "$MAIN_ACT"
-package com.ephone.app;
+          package com.ephone.companion.app;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.ContentResolver;
-import android.content.ContentValues;
-import android.content.Context;
-import android.content.Intent;
-import android.content.pm.PackageInfo;
-import android.content.res.AssetManager;
-import android.media.MediaScannerConnection;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Environment;
-import android.provider.MediaStore;
-import android.util.Base64;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import com.getcapacitor.BridgeActivity;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
+          import android.content.ClipData;
+          import android.content.ClipboardManager;
+          import android.content.ContentResolver;
+          import android.content.ContentValues;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.PackageInfo;
+          import android.content.res.AssetManager;
+          import android.media.MediaScannerConnection;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.MediaStore;
+          import android.util.Base64;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.nio.charset.StandardCharsets;
 
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        try {
-            if (this.bridge != null && this.bridge.getWebView() != null) {
-                WebView webView = this.bridge.getWebView();
-                WebSettings ws = webView.getSettings();
-                ws.setDomStorageEnabled(true);
-                ws.setDatabaseEnabled(true);
-                ws.setJavaScriptCanOpenWindowsAutomatically(true);
-                ws.setAllowFileAccess(true);
-                ws.setAllowContentAccess(true);
-                webView.setLongClickable(true);
-                webView.setHapticFeedbackEnabled(true);
-                webView.addJavascriptInterface(new EPhoneNativeBridge(this), "EPhoneNativeBridge");
-            }
-            checkAndApplyPersistedHotUpdate();
-        } catch (Exception ignored) {}
-    }
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  try {
+                      if (this.bridge != null && this.bridge.getWebView() != null) {
+                          WebView webView = this.bridge.getWebView();
+                          WebSettings ws = webView.getSettings();
+                          ws.setDomStorageEnabled(true);
+                          ws.setDatabaseEnabled(true);
+                          ws.setJavaScriptCanOpenWindowsAutomatically(true);
+                          ws.setAllowFileAccess(true);
+                          ws.setAllowContentAccess(true);
+                          webView.setLongClickable(true);
+                          webView.setHapticFeedbackEnabled(true);
+                          webView.addJavascriptInterface(new EPhoneNativeBridge(this), "EPhoneNativeBridge");
+                      }
+                      checkAndApplyPersistedHotUpdate();
+                  } catch (Exception ignored) {}
+              }
 
-    private long getCurrentApkUpdateTime() {
-        try {
-            PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
-            return pi != null ? pi.lastUpdateTime : 0L;
-        } catch (Exception e) {
-            return 0L;
-        }
-    }
+              private long getCurrentApkUpdateTime() {
+                  try {
+                      PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                      return pi != null ? pi.lastUpdateTime : 0L;
+                  } catch (Exception e) {
+                      return 0L;
+                  }
+              }
 
-    private void deleteDirRecursively(File f) {
-        if (f == null || !f.exists()) return;
-        if (f.isDirectory()) {
-            File[] children = f.listFiles();
-            if (children != null) {
-                for (File c : children) {
-                    deleteDirRecursively(c);
-                }
-            }
-        }
-        try { f.delete(); } catch (Exception ignored) {}
-    }
+              private void deleteDirRecursively(File f) {
+                  if (f == null || !f.exists()) return;
+                  if (f.isDirectory()) {
+                      File[] children = f.listFiles();
+                      if (children != null) {
+                          for (File c : children) {
+                              deleteDirRecursively(c);
+                          }
+                      }
+                  }
+                  try { f.delete(); } catch (Exception ignored) {}
+              }
 
-    private void copyAssetsRecursively(AssetManager am, String assetPath, File destDir) {
-        try {
-            String[] list = am.list(assetPath);
-            if (list != null && list.length > 0) {
-                if (!destDir.exists()) destDir.mkdirs();
-                for (String child : list) {
-                    String childAssetPath = assetPath.isEmpty() ? child : (assetPath + "/" + child);
-                    copyAssetsRecursively(am, childAssetPath, new File(destDir, child));
-                }
-            } else {
-                if (destDir.exists()) return;
-                File parent = destDir.getParentFile();
-                if (parent != null && !parent.exists()) parent.mkdirs();
-                try (InputStream is = am.open(assetPath);
-                     FileOutputStream fos = new FileOutputStream(destDir)) {
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = is.read(buf)) > 0) {
-                        fos.write(buf, 0, n);
-                    }
-                    fos.flush();
-                }
-            }
-        } catch (Exception ignored) {}
-    }
+              private void copyAssetsRecursively(AssetManager am, String assetPath, File destDir) {
+                  try {
+                      String[] list = am.list(assetPath);
+                      if (list != null && list.length > 0) {
+                          if (!destDir.exists()) destDir.mkdirs();
+                          for (String child : list) {
+                              String childAssetPath = assetPath.isEmpty() ? child : (assetPath + "/" + child);
+                              copyAssetsRecursively(am, childAssetPath, new File(destDir, child));
+                          }
+                      } else {
+                          if (destDir.exists()) return;
+                          File parent = destDir.getParentFile();
+                          if (parent != null && !parent.exists()) parent.mkdirs();
+                          try (InputStream is = am.open(assetPath);
+                               FileOutputStream fos = new FileOutputStream(destDir)) {
+                              byte[] buf = new byte[8192];
+                              int n;
+                              while ((n = is.read(buf)) > 0) {
+                                  fos.write(buf, 0, n);
+                              }
+                              fos.flush();
+                          }
+                      }
+                  } catch (Exception ignored) {}
+              }
 
-    private void checkAndApplyPersistedHotUpdate() {
-        try {
-            File hotDir = new File(getFilesDir(), "hot_update_www");
-            File markerFile = new File(hotDir, ".apk_update_time");
-            File indexFile = new File(hotDir, "index.html");
-            if (!hotDir.exists() || !indexFile.exists()) return;
-            long curApkTime = getCurrentApkUpdateTime();
-            long savedApkTime = 0L;
-            if (markerFile.exists()) {
-                try (FileInputStream fis = new FileInputStream(markerFile);
-                     ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-                    byte[] buf = new byte[128];
-                    int r;
-                    while ((r = fis.read(buf)) > 0) bos.write(buf, 0, r);
-                    savedApkTime = Long.parseLong(new String(bos.toByteArray(), StandardCharsets.UTF_8).trim());
-                } catch (Exception ignored) {}
-            }
-            if (curApkTime > 0 && savedApkTime > 0 && curApkTime != savedApkTime) {
-                deleteDirRecursively(hotDir);
-                return;
-            }
-            if (this.bridge != null) {
-                this.bridge.setServerBasePath(hotDir.getAbsolutePath());
-            }
-        } catch (Exception ignored) {}
-    }
+              private void checkAndApplyPersistedHotUpdate() {
+                  try {
+                      File hotDir = new File(getFilesDir(), "hot_update_www");
+                      File markerFile = new File(hotDir, ".apk_update_time");
+                      File indexFile = new File(hotDir, "index.html");
+                      if (!hotDir.exists() || !indexFile.exists()) return;
+                      long curApkTime = getCurrentApkUpdateTime();
+                      long savedApkTime = 0L;
+                      if (markerFile.exists()) {
+                          try (FileInputStream fis = new FileInputStream(markerFile);
+                               ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                              byte[] buf = new byte[128];
+                              int r;
+                              while ((r = fis.read(buf)) > 0) bos.write(buf, 0, r);
+                              savedApkTime = Long.parseLong(new String(bos.toByteArray(), StandardCharsets.UTF_8).trim());
+                          } catch (Exception ignored) {}
+                      }
+                      if (curApkTime > 0 && savedApkTime > 0 && curApkTime != savedApkTime) {
+                          deleteDirRecursively(hotDir);
+                          return;
+                      }
+                      if (this.bridge != null) {
+                          this.bridge.setServerBasePath(hotDir.getAbsolutePath());
+                      }
+                  } catch (Exception ignored) {}
+              }
 
-    public boolean prepareHotUpdateWorkspace() {
-        try {
-            File hotDir = new File(getFilesDir(), "hot_update_www");
-            if (!hotDir.exists()) hotDir.mkdirs();
-            copyAssetsRecursively(getAssets(), "public", hotDir);
-            long curApkTime = getCurrentApkUpdateTime();
-            File markerFile = new File(hotDir, ".apk_update_time");
-            try (FileOutputStream fos = new FileOutputStream(markerFile)) {
-                fos.write(String.valueOf(curApkTime).getBytes(StandardCharsets.UTF_8));
-                fos.flush();
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
+              public boolean prepareHotUpdateWorkspace() {
+                  try {
+                      File hotDir = new File(getFilesDir(), "hot_update_www");
+                      if (!hotDir.exists()) hotDir.mkdirs();
+                      copyAssetsRecursively(getAssets(), "public", hotDir);
+                      long curApkTime = getCurrentApkUpdateTime();
+                      File markerFile = new File(hotDir, ".apk_update_time");
+                      try (FileOutputStream fos = new FileOutputStream(markerFile)) {
+                          fos.write(String.valueOf(curApkTime).getBytes(StandardCharsets.UTF_8));
+                          fos.flush();
+                      }
+                      return true;
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
 
-    public boolean writeHotUpdateFile(String relativePath, String content) {
-        try {
-            if (relativePath == null || relativePath.trim().isEmpty() || content == null) return false;
-            String cleanRel = relativePath.trim().replaceAll("^/+", "");
-            if (cleanRel.contains("..")) return false;
-            File hotDir = new File(getFilesDir(), "hot_update_www");
-            if (!hotDir.exists()) {
-                prepareHotUpdateWorkspace();
-            }
-            File outFile = new File(hotDir, cleanRel);
-            File parent = outFile.getParentFile();
-            if (parent != null && !parent.exists()) parent.mkdirs();
-            try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                fos.write(content.getBytes(StandardCharsets.UTF_8));
-                fos.flush();
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
+              public boolean writeHotUpdateFile(String relativePath, String content) {
+                  try {
+                      if (relativePath == null || relativePath.trim().isEmpty() || content == null) return false;
+                      String cleanRel = relativePath.trim().replaceAll("^/+", "");
+                      if (cleanRel.contains("..")) return false;
+                      File hotDir = new File(getFilesDir(), "hot_update_www");
+                      if (!hotDir.exists()) {
+                          prepareHotUpdateWorkspace();
+                      }
+                      File outFile = new File(hotDir, cleanRel);
+                      File parent = outFile.getParentFile();
+                      if (parent != null && !parent.exists()) parent.mkdirs();
+                      try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                          fos.write(content.getBytes(StandardCharsets.UTF_8));
+                          fos.flush();
+                      }
+                      return true;
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
 
-    public boolean activateHotUpdateWorkspace() {
-        try {
-            final File hotDir = new File(getFilesDir(), "hot_update_www");
-            final File indexFile = new File(hotDir, "index.html");
-            if (!indexFile.exists() || this.bridge == null) return false;
-            runOnUiThread(() -> {
-                try {
-                    if (MainActivity.this.bridge.getWebView() != null) {
-                        MainActivity.this.bridge.getWebView().clearCache(true);
-                    }
-                    MainActivity.this.bridge.setServerBasePath(hotDir.getAbsolutePath());
-                } catch (Exception ignored) {}
-            });
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
+              public boolean activateHotUpdateWorkspace() {
+                  try {
+                      final File hotDir = new File(getFilesDir(), "hot_update_www");
+                      final File indexFile = new File(hotDir, "index.html");
+                      if (!indexFile.exists() || this.bridge == null) return false;
+                      runOnUiThread(() -> {
+                          try {
+                              if (MainActivity.this.bridge.getWebView() != null) {
+                                  MainActivity.this.bridge.getWebView().clearCache(true);
+                              }
+                              MainActivity.this.bridge.setServerBasePath(hotDir.getAbsolutePath());
+                          } catch (Exception ignored) {}
+                      });
+                      return true;
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
 
-    public static class EPhoneNativeBridge {
-        private final MainActivity activity;
-        private final Context ctx;
+              public static class EPhoneNativeBridge {
+                  private final MainActivity activity;
+                  private final Context ctx;
 
-        public EPhoneNativeBridge(MainActivity act) {
-            this.activity = act;
-            this.ctx = act;
-        }
+                  public EPhoneNativeBridge(MainActivity act) {
+                      this.activity = act;
+                      this.ctx = act;
+                  }
 
-        @JavascriptInterface
-        public boolean prepareHotUpdateDir() {
-            return activity != null && activity.prepareHotUpdateWorkspace();
-        }
+                  @JavascriptInterface
+                  public boolean prepareHotUpdateDir() {
+                      return activity != null && activity.prepareHotUpdateWorkspace();
+                  }
 
-        @JavascriptInterface
-        public boolean saveHotUpdateFile(String relativePath, String content) {
-            return activity != null && activity.writeHotUpdateFile(relativePath, content);
-        }
+                  @JavascriptInterface
+                  public boolean saveHotUpdateFile(String relativePath, String content) {
+                      return activity != null && activity.writeHotUpdateFile(relativePath, content);
+                  }
 
-        @JavascriptInterface
-        public boolean applyHotUpdate() {
-            return activity != null && activity.activateHotUpdateWorkspace();
-        }
+                  @JavascriptInterface
+                  public boolean applyHotUpdate() {
+                      return activity != null && activity.activateHotUpdateWorkspace();
+                  }
 
-        @JavascriptInterface
-        public boolean openExternalUrl(String url) {
-            try {
-                if (url == null || url.trim().isEmpty()) return false;
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                ctx.startActivity(intent);
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        }
+                  @JavascriptInterface
+                  public boolean openExternalUrl(String url) {
+                      try {
+                          if (url == null || url.trim().isEmpty()) return false;
+                          Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          ctx.startActivity(intent);
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
+                  }
 
-        @JavascriptInterface
-        public boolean copyToClipboard(String text) {
-            try {
-                ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (cm != null) {
-                    ClipData clip = ClipData.newPlainText("text", text != null ? text : "");
-                    cm.setPrimaryClip(clip);
-                    return true;
-                }
-            } catch (Exception ignored) {}
-            return false;
-        }
+                  @JavascriptInterface
+                  public boolean copyToClipboard(String text) {
+                      try {
+                          ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                          if (cm != null) {
+                              ClipData clip = ClipData.newPlainText("text", text != null ? text : "");
+                              cm.setPrimaryClip(clip);
+                              return true;
+                          }
+                      } catch (Exception ignored) {}
+                      return false;
+                  }
 
-        @JavascriptInterface
-        public String readFromClipboard() {
-            try {
-                ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (cm != null && cm.hasPrimaryClip()) {
-                    ClipData clip = cm.getPrimaryClip();
-                    if (clip != null && clip.getItemCount() > 0) {
-                        CharSequence cs = clip.getItemAt(0).coerceToText(ctx);
-                        if (cs != null) return cs.toString();
-                    }
-                }
-            } catch (Exception ignored) {}
-            return "";
-        }
+                  @JavascriptInterface
+                  public String readFromClipboard() {
+                      try {
+                          ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                          if (cm != null && cm.hasPrimaryClip()) {
+                              ClipData clip = cm.getPrimaryClip();
+                              if (clip != null && clip.getItemCount() > 0) {
+                                  CharSequence cs = clip.getItemAt(0).coerceToText(ctx);
+                                  if (cs != null) return cs.toString();
+                              }
+                          }
+                      } catch (Exception ignored) {}
+                      return "";
+                  }
 
-        @JavascriptInterface
-        public boolean saveBase64ToDownloads(String base64Data, String fileName, String mimeType, String subFolder) {
-            try {
-                if (base64Data == null || base64Data.isEmpty()) return false;
-                String pureB64 = base64Data;
-                int commaIdx = pureB64.indexOf(',');
-                if (commaIdx >= 0) {
-                    pureB64 = pureB64.substring(commaIdx + 1);
-                }
-                byte[] bytes = Base64.decode(pureB64, Base64.DEFAULT);
-                if (bytes == null || bytes.length == 0) return false;
-                String safeName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : ("NAI_" + System.currentTimeMillis() + ".png");
-                String safeMime = (mimeType != null && !mimeType.trim().isEmpty()) ? mimeType.trim() : (safeName.toLowerCase().endsWith(".jpg") || safeName.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png");
-                String folderName = (subFolder != null && !subFolder.trim().isEmpty()) ? subFolder.trim() : "徒花";
+                  @JavascriptInterface
+                  public boolean saveBase64ToDownloads(String base64Data, String fileName, String mimeType, String subFolder) {
+                      try {
+                          if (base64Data == null || base64Data.isEmpty()) return false;
+                          String pureB64 = base64Data;
+                          int commaIdx = pureB64.indexOf(',');
+                          if (commaIdx >= 0) {
+                              pureB64 = pureB64.substring(commaIdx + 1);
+                          }
+                          byte[] bytes = Base64.decode(pureB64, Base64.DEFAULT);
+                          if (bytes == null || bytes.length == 0) return false;
+                          String safeName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : ("NAI_" + System.currentTimeMillis() + ".png");
+                          String safeMime = (mimeType != null && !mimeType.trim().isEmpty()) ? mimeType.trim() : (safeName.toLowerCase().endsWith(".jpg") || safeName.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png");
+                          String folderName = (subFolder != null && !subFolder.trim().isEmpty()) ? subFolder.trim() : "徒花";
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ContentResolver resolver = ctx.getContentResolver();
-                    ContentValues values = new ContentValues();
-                    values.put(MediaStore.MediaColumns.DISPLAY_NAME, safeName);
-                    values.put(MediaStore.MediaColumns.MIME_TYPE, safeMime);
-                    values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/" + folderName);
-                    values.put(MediaStore.MediaColumns.IS_PENDING, 1);
-                    Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-                    if (uri == null) {
-                        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + folderName);
-                        uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-                    }
-                    if (uri != null) {
-                        try (OutputStream os = resolver.openOutputStream(uri)) {
-                            if (os != null) {
-                                os.write(bytes);
-                                os.flush();
-                            }
-                        }
-                        ContentValues doneValues = new ContentValues();
-                        doneValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                        resolver.update(uri, doneValues, null, null);
-                        try {
-                            File dcimFile = new File(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), folderName), safeName);
-                            MediaScannerConnection.scanFile(ctx, new String[]{dcimFile.getAbsolutePath()}, new String[]{safeMime}, null);
-                        } catch (Exception ignored) {}
-                        return true;
-                    }
-                }
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              ContentResolver resolver = ctx.getContentResolver();
+                              ContentValues values = new ContentValues();
+                              values.put(MediaStore.MediaColumns.DISPLAY_NAME, safeName);
+                              values.put(MediaStore.MediaColumns.MIME_TYPE, safeMime);
+                              values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/" + folderName);
+                              values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                              Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                              if (uri == null) {
+                                  values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + folderName);
+                                  uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                              }
+                              if (uri != null) {
+                                  try (OutputStream os = resolver.openOutputStream(uri)) {
+                                      if (os != null) {
+                                          os.write(bytes);
+                                          os.flush();
+                                      }
+                                  }
+                                  ContentValues doneValues = new ContentValues();
+                                  doneValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                                  resolver.update(uri, doneValues, null, null);
+                                  try {
+                                      File dcimFile = new File(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), folderName), safeName);
+                                      MediaScannerConnection.scanFile(ctx, new String[]{dcimFile.getAbsolutePath()}, new String[]{safeMime}, null);
+                                  } catch (Exception ignored) {}
+                                  return true;
+                              }
+                          }
 
-                File baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
-                File targetDir = new File(baseDir, folderName);
-                if (!targetDir.exists()) {
-                    targetDir.mkdirs();
-                }
-                File outFile = new File(targetDir, safeName);
-                try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                    fos.write(bytes);
-                    fos.flush();
-                }
-                MediaScannerConnection.scanFile(ctx, new String[]{outFile.getAbsolutePath()}, new String[]{safeMime}, null);
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        }
-    }
-}
-EOF
+                          File baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
+                          File targetDir = new File(baseDir, folderName);
+                          if (!targetDir.exists()) {
+                              targetDir.mkdirs();
+                          }
+                          File outFile = new File(targetDir, safeName);
+                          try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                              fos.write(bytes);
+                              fos.flush();
+                          }
+                          MediaScannerConnection.scanFile(ctx, new String[]{outFile.getAbsolutePath()}, new String[]{safeMime}, null);
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
+                  }
+              }
+          }
+          EOF
             if [ -n "$PKG_LINE" ]; then
               sed -i "1s|^package .*|$PKG_LINE|" "$MAIN_ACT" || true
             fi

@@ -87,7 +87,7 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
-  </head>
+  <script src="/_aistudio-iframe.js?v=29045eb3"></script></head>
   <body>
     <div id="phone-screen">
       <div id="status-bar">
@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -138740,9 +138740,27 @@ ${specificRules}`;
             const domUser = (document.getElementById("github-username")?.value || "").trim();
             const domRepo = (document.getElementById("github-repo")?.value || "").trim();
             const cfg = (typeof state !== "undefined" && state.apiConfig) ? state.apiConfig : {};
-            let token = domToken || (cfg.githubToken || "").trim() || (localStorage.getItem("github-token") || "").trim();
-            let user = domUser || (cfg.githubUsername || "").trim() || (localStorage.getItem("ephone_update_gh_user") || "").trim() || (localStorage.getItem("github-username") || "").trim();
-            let repoRaw = domRepo || (cfg.githubRepo || "").trim() || (localStorage.getItem("ephone_update_gh_repo") || "").trim() || (localStorage.getItem("github-repo") || "").trim();
+            const wsCfg = (typeof ModuleManager !== "undefined" && typeof ModuleManager.getWorkshopConfig === "function")
+              ? ModuleManager.getWorkshopConfig()
+              : {};
+            let token =
+              domToken ||
+              (cfg.githubToken || "").trim() ||
+              (localStorage.getItem("github-token") || "").trim() ||
+              (localStorage.getItem("ephone_workshop_gh_token") || "").trim() ||
+              (wsCfg.githubToken || "").trim();
+            let user =
+              domUser ||
+              (cfg.githubUsername || "").trim() ||
+              (localStorage.getItem("ephone_update_gh_user") || "").trim() ||
+              (localStorage.getItem("github-username") || "").trim() ||
+              "guyan0517-lgtm";
+            let repoRaw =
+              domRepo ||
+              (cfg.githubRepo || "").trim() ||
+              (localStorage.getItem("ephone_update_gh_repo") || "").trim() ||
+              (localStorage.getItem("github-repo") || "").trim() ||
+              "-";
 
             if (!user && window.location && window.location.hostname && window.location.hostname.toLowerCase().endsWith(".github.io")) {
               user = window.location.hostname.replace(/\.github\.io$/i, "").trim();
@@ -138915,7 +138933,7 @@ ${specificRules}`;
                 const baseTreeSha = commitData && commitData.tree && commitData.tree.sha;
                 if (!baseTreeSha) return false;
 
-                const filesToPush = ["index.html", "module-manager.js"];
+                const filesToPush = [".github/workflows/build-apk.yml", "index.html", "module-manager.js"];
                 const treeItems = [];
                 for (const relPath of filesToPush) {
                   const localRes = await fetch("/" + relPath, { method: "GET", cache: "no-store" });
