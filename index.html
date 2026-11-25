@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -49799,26 +49799,30 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             }, 200);
           }
 
-          // 自动热更新正在运行的 Termux 后台服务，使其支持独立相册 /sdcard/DCIM/生图 与 /sdcard/DCIM/水印 写入并立即刷新系统图库，同时将之前误入 EPhoneVault/watermark-album 的图片自动抢救迁移到「生图」相册
+          // 自动热更新正在运行的 Termux 后台服务，使其支持独立相册 /sdcard/DCIM/徒花 与 /sdcard/DCIM/水印 写入并立即刷新系统图库，同时将之前误入 EPhoneVault 或旧文件夹的图片自动抢救迁移到「徒花」相册
           let _termuxWatermarkPatchPromise = null;
           async function ensureTermuxWatermarkAlbumHotPatched(baseUrl) {
             if (_termuxWatermarkPatchPromise) return _termuxWatermarkPatchPromise;
             _termuxWatermarkPatchPromise = (async () => {
               const patchPy = [
-                "import os, sys, shutil, subprocess, urllib.request, threading",
-                "try:",
-                " os.remove(__file__)",
-                "except Exception:",
-                " pass",
+                "import os, sys, shutil, subprocess, urllib.request, threading, importlib",
+                "_dir = os.path.dirname(__file__)",
+                "for _f in ('ftplib.py', 'stringprep.py'):",
+                " try: os.remove(os.path.join(_dir, _f))",
+                " except Exception: pass",
+                "try: shutil.rmtree(os.path.join(_dir, '__pycache__'), ignore_errors=True)",
+                "except Exception: pass",
                 "for _k in ('ftplib', 'stringprep', 'encodings.idna'):",
                 " sys.modules.pop(_k, None)",
+                "try: importlib.invalidate_caches()",
+                "except Exception: pass",
                 "try:",
                 " m = sys.modules.get('__main__')",
                 " if m and hasattr(m, 'H'):",
                 "  root_dir = getattr(m, 'root', '/sdcard/Download/EPhoneVault')",
                 "  def _get_album_dir(album_name):",
                 "   return ('/sdcard/DCIM/' + album_name) if os.path.isdir('/sdcard') else os.path.join(os.path.dirname(os.path.dirname(root_dir)), 'DCIM', album_name)",
-                "  def _scan_album_file(p, album_name='生图'):",
+                "  def _scan_album_file(p, album_name='徒花'):",
                 "   fn = os.path.basename(p)",
                 "   p_emulated = '/storage/emulated/0/DCIM/' + album_name + '/' + fn",
                 "   p_sdcard = '/sdcard/DCIM/' + album_name + '/' + fn",
@@ -49835,23 +49839,36 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 "    try: subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
                 "    except Exception: pass",
                 "  def _rescue_stray_dirs():",
-                "   st_dir = _get_album_dir('生图')",
-                "   os.makedirs(st_dir, exist_ok=True)",
-                "   for nm in (os.path.join(st_dir, '.nomedia'), os.path.join(os.path.dirname(st_dir), '.nomedia')):",
+                "   th_dir = _get_album_dir('徒花')",
+                "   os.makedirs(th_dir, exist_ok=True)",
+                "   for nm in (os.path.join(th_dir, '.nomedia'), os.path.join(os.path.dirname(th_dir), '.nomedia')):",
                 "    if os.path.exists(nm):",
                 "     try: os.remove(nm)",
                 "     except Exception: pass",
-                "   for stray in ('watermark-album', 'shengtu-album', '生图', '水印', 'DCIM'):",
+                "   old_st_dir = _get_album_dir('生图')",
+                "   if os.path.isdir(old_st_dir):",
+                "    for fn in os.listdir(old_st_dir):",
+                "     if fn == '.nomedia': continue",
+                "     src_f = os.path.join(old_st_dir, fn)",
+                "     dst_f = os.path.join(th_dir, fn)",
+                "     if os.path.isfile(src_f):",
+                "      try:",
+                "       shutil.copy2(src_f, dst_f)",
+                "       os.remove(src_f)",
+                "       _scan_album_file(dst_f, '徒花')",
+                "      except Exception: pass",
+                "    shutil.rmtree(old_st_dir, ignore_errors=True)",
+                "   for stray in ('watermark-album', 'shengtu-album', 'tuhua-album', '生图', '徒花', '水印', 'DCIM'):",
                 "    sp = os.path.join(root_dir, stray)",
                 "    if os.path.isdir(sp):",
                 "     for dp, dn, fn_list in os.walk(sp):",
                 "      for fn in fn_list:",
                 "       if fn == '.nomedia': continue",
                 "       src_f = os.path.join(dp, fn)",
-                "       dst_f = os.path.join(st_dir, fn)",
+                "       dst_f = os.path.join(th_dir, fn)",
                 "       try:",
                 "        shutil.copy2(src_f, dst_f)",
-                "        _scan_album_file(dst_f, '生图')",
+                "        _scan_album_file(dst_f, '徒花')",
                 "       except Exception: pass",
                 "     shutil.rmtree(sp, ignore_errors=True)",
                 "    elif os.path.isfile(sp):",
@@ -49861,11 +49878,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 "  def _patched_put(s):",
                 "   n = int(s.headers.get('Content-Length', 0)); b = s.rfile.read(n)",
                 "   raw_path = s.path.split('?')[0]",
-                "   if raw_path.startswith('/shengtu-album/') or raw_path.startswith('/watermark-album/'):",
-                "    is_st = raw_path.startswith('/shengtu-album/')",
-                "    prefix_len = len('/shengtu-album/') if is_st else len('/watermark-album/')",
-                "    album_name = '生图' if is_st else '水印'",
-                "    fname = os.path.basename(urllib.request.unquote(raw_path[prefix_len:])) or ('NAI_Image.png' if is_st else 'clean.jpg')",
+                "   if raw_path.startswith('/tuhua-album/') or raw_path.startswith('/shengtu-album/') or raw_path.startswith('/watermark-album/'):",
+                "    is_wm = raw_path.startswith('/watermark-album/')",
+                "    if raw_path.startswith('/tuhua-album/'): prefix_len = len('/tuhua-album/')",
+                "    elif raw_path.startswith('/shengtu-album/'): prefix_len = len('/shengtu-album/')",
+                "    else: prefix_len = len('/watermark-album/')",
+                "    album_name = '水印' if is_wm else '徒花'",
+                "    fname = os.path.basename(urllib.request.unquote(raw_path[prefix_len:])) or ('clean.jpg' if is_wm else 'NAI_Image.png')",
                 "    album_dir = _get_album_dir(album_name)",
                 "    os.makedirs(album_dir, exist_ok=True)",
                 "    for nm in (os.path.join(album_dir, '.nomedia'), os.path.join(os.path.dirname(album_dir), '.nomedia')):",
@@ -49875,22 +49894,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 "    p = os.path.join(album_dir, fname)",
                 "    with open(p, 'wb') as f: f.write(b)",
                 "    threading.Thread(target=_scan_album_file, args=(p, album_name), daemon=True).start()",
-                "    out = b'SHENGTU_ALBUM_OK' if is_st else b'WATERMARK_ALBUM_OK'",
+                "    out = b'WATERMARK_ALBUM_OK' if is_wm else b'TUHUA_ALBUM_OK'",
                 "    s.send_response(200); s._c(len(out)); s.end_headers(); s.wfile.write(out); return",
                 "   rel = urllib.request.unquote(raw_path.lstrip('/'))",
                 "   p = os.path.abspath(os.path.join(root_dir, rel)); os.makedirs(os.path.dirname(p), exist_ok=True)",
                 "   with open(p, 'wb') as f: f.write(b)",
-                "   if '/DCIM/生图/' in p or '/DCIM/水印/' in p:",
-                "    an = '生图' if '/DCIM/生图/' in p else '水印'",
+                "   if '/DCIM/徒花/' in p or '/DCIM/生图/' in p or '/DCIM/水印/' in p:",
+                "    an = '水印' if '/DCIM/水印/' in p else '徒花'",
                 "    threading.Thread(target=_scan_album_file, args=(p, an), daemon=True).start()",
                 "   s.send_response(200); s._c(2); s.end_headers(); s.wfile.write(b'ok')",
                 "  m.H.do_PUT = _patched_put",
                 "except Exception:",
                 " pass",
-                "class FTP:",
-                " def __init__(self, *a, **k):",
-                "  sys.modules.pop('ftplib', None)",
-                "  raise OSError('patched')",
                 "raise OSError('patched')"
               ].join("\n");
 
@@ -49907,18 +49922,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     body: patchPy
                   }).catch(() => {})
                 ]);
-                await Promise.all([
-                  fetch(`${baseUrl}/proxy`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: "ftp://127.0.0.1/patch", method: "GET" })
-                  }).catch(() => {}),
-                  fetch(`${baseUrl}/proxy`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: "http://补丁.local/patch", method: "GET", headers: { "Host": "127.0.0.1" } })
-                  }).catch(() => {})
-                ]);
+                await fetch(`${baseUrl}/proxy`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ url: "ftp://补丁.local:21/patch", method: "GET" })
+                }).catch(() => {});
                 await new Promise((r) => setTimeout(r, 280));
               } catch (_) {}
             })();
@@ -49930,12 +49938,51 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
           }
           window.ensureTermuxWatermarkAlbumHotPatched = ensureTermuxWatermarkAlbumHotPatched;
 
-          // 将清洗后的图片直接写入手机系统图库的「水印」独立相册分类（/sdcard/DCIM/水印），绝不放入隐藏的 EPhoneVault 文件夹
-          async function saveCleanedBlobToWatermarkAlbum(blob, blobUrl, filename) {
+          // 将图片直接写入手机系统图库的独立相册分类（/sdcard/DCIM/水印 或 /sdcard/DCIM/徒花），水印与三击下载完全共用同一套保存逻辑
+          async function saveCleanedBlobToWatermarkAlbum(blob, blobUrl, filename, targetAlbumName, dataUrlForNative) {
+            const isTuhua = targetAlbumName === "徒花";
+            const albumName = isTuhua ? "徒花" : "水印";
+            const routePrefix = isTuhua ? "tuhua-album" : "watermark-album";
+            const expectedAck = isTuhua ? "TUHUA_ALBUM_OK" : "WATERMARK_ALBUM_OK";
+            const mimeType = (blob && blob.type) ? blob.type : (String(filename || "").toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+
+            // 1. 若处于已配备原生图库桥接的安卓 APP 内，优先通过原生 MediaStore 写入系统图库对应相册分类（DCIM/徒花 或 DCIM/水印）
+            if (
+              window.EPhoneNativeBridge &&
+              typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function" &&
+              (dataUrlForNative || blob)
+            ) {
+              try {
+                let b64Data = dataUrlForNative;
+                if (!b64Data && blob) {
+                  b64Data = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(String(reader.result || ""));
+                    reader.onerror = () => resolve("");
+                    reader.readAsDataURL(blob);
+                  });
+                }
+                if (b64Data) {
+                  const savedNative = window.EPhoneNativeBridge.saveBase64ToDownloads(
+                    b64Data,
+                    filename,
+                    mimeType,
+                    albumName
+                  );
+                  if (savedNative) {
+                    return "album";
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // 2. 通过本地 Termux 服务直接写入 /sdcard/DCIM/徒花 或 /sdcard/DCIM/水印 并触发系统相册扫描
             if (blob) {
               let baseUrl = "http://127.0.0.1:8765";
               try {
-                const rawCfg = localStorage.getItem("ephone_vault_config_v1");
+                const rawCfg =
+                  localStorage.getItem("ephone_vault_config_v1") ||
+                  localStorage.getItem("ephone_local_vault_config_v1");
                 if (rawCfg) {
                   const parsed = JSON.parse(rawCfg);
                   if (parsed && typeof parsed.url === "string" && parsed.url.trim()) {
@@ -49945,24 +49992,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               } catch (_) {}
 
               const safeFile = encodeURIComponent(filename);
-              const albumEndpoint = `${baseUrl}/watermark-album/${safeFile}`;
-              let termuxReachable = false;
+              const albumEndpoint = `${baseUrl}/${routePrefix}/${safeFile}`;
 
               for (let attempt = 0; attempt < 2; attempt++) {
                 try {
                   const controller = new AbortController();
-                  const timer = setTimeout(() => controller.abort(), attempt === 0 ? 450 : 1400);
+                  const timer = setTimeout(() => controller.abort(), attempt === 0 ? 750 : 1800);
                   const res = await fetch(albumEndpoint, {
                     method: "PUT",
-                    headers: { "Content-Type": "image/jpeg" },
+                    headers: { "Content-Type": mimeType },
                     body: blob,
                     signal: controller.signal
                   });
                   clearTimeout(timer);
                   if (res && res.ok) {
-                    termuxReachable = true;
                     const txt = (await res.text()).trim();
-                    if (txt === "WATERMARK_ALBUM_OK") {
+                    if (txt === expectedAck || (isTuhua && txt === "SHENGTU_ALBUM_OK")) {
                       return "album";
                     }
                     if (attempt === 0) {
@@ -49974,29 +50019,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   break;
                 }
               }
-
-              // 仅在 Termux 已响应时才尝试兜底绝对路径直写，防止 Termux 未启动时超时过久导致浏览器拦截下载手势
-              if (termuxReachable) {
-                try {
-                  const controller = new AbortController();
-                  const timer = setTimeout(() => controller.abort(), 1200);
-                  const res = await fetch(`${baseUrl}/%2Fsdcard%2FDCIM%2F%E6%B0%B4%E5%8D%B0%2F${safeFile}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "image/jpeg" },
-                    body: blob,
-                    signal: controller.signal
-                  });
-                  clearTimeout(timer);
-                  if (res && res.ok) {
-                    return "album";
-                  }
-                } catch (_) {}
-              }
             }
 
             triggerBrowserDownloadUrl(blobUrl, filename);
             return "browser";
           }
+          window.saveCleanedBlobToWatermarkAlbum = saveCleanedBlobToWatermarkAlbum;
+          window.triggerBrowserDownloadUrl = triggerBrowserDownloadUrl;
 
           function buildCleanDownloadFilename(item, idx) {
             const seq = String(idx + 1).padStart(2, "0");
@@ -127730,7 +127759,7 @@ ${specificRules}`;
           return termuxBase;
         }
 
-        // 页面启动后若本地 Termux 在线，自动热补丁并把之前误存进 EPhoneVault/watermark-album 的图片抢救回手机系统相册「生图」
+        // 页面启动后若本地 Termux 在线，自动热补丁并把之前误存进 EPhoneVault 或旧相册的图片抢救回手机系统相册「徒花」
         setTimeout(async () => {
           try {
             const baseUrl = getConfiguredTermuxBaseUrl();
@@ -127741,8 +127770,9 @@ ${specificRules}`;
               await window.ensureTermuxWatermarkAlbumHotPatched(baseUrl);
             }
           } catch (_) {}
-        }, 1800);
+        }, 1200);
 
+        // 下载图片的核心函数：完全复用「水印」图库保存逻辑，统一写入手机图库「徒花」独立相册文件夹（/sdcard/DCIM/徒花）
         async function downloadImage(imageSrc, filename, imgElement) {
           try {
             const safeFilename = String(filename || `NAI_Image_${Date.now()}.png`).trim();
@@ -127751,96 +127781,47 @@ ${specificRules}`;
               resolvedData = await resolveImageSrcToBlobAndDataUrl(imageSrc, imgElement);
             } catch (_) {}
 
-            // 1. 安卓 APP 原生桥接：直接写入手机系统相册 DCIM/生图 并通知系统媒体库刷新
             if (
               resolvedData &&
-              resolvedData.dataUrl &&
-              window.EPhoneNativeBridge &&
-              typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function"
+              resolvedData.blob &&
+              typeof window.saveCleanedBlobToWatermarkAlbum === "function"
             ) {
-              try {
-                const savedNative = window.EPhoneNativeBridge.saveBase64ToDownloads(
-                  resolvedData.dataUrl,
-                  safeFilename,
-                  resolvedData.mime || "image/png",
-                  "生图"
-                );
-                if (savedNative) {
-                  showDownloadToast("已保存至手机相册 生图", "success");
-                  return;
-                }
-              } catch (_) {}
+              const tempBlobUrl = URL.createObjectURL(resolvedData.blob);
+              const saveMode = await window.saveCleanedBlobToWatermarkAlbum(
+                resolvedData.blob,
+                tempBlobUrl,
+                safeFilename,
+                "徒花",
+                resolvedData.dataUrl
+              );
+              if (saveMode === "album") {
+                try { URL.revokeObjectURL(tempBlobUrl); } catch (_) {}
+                showDownloadToast("已存入图库「徒花」", "success");
+                return;
+              }
+              setTimeout(() => {
+                try { URL.revokeObjectURL(tempBlobUrl); } catch (_) {}
+              }, 60000);
+              showDownloadToast("已开始下载", "success");
+              return;
             }
 
-            // 2. 若本地 Termux 服务在线（无论在软件 APP 还是网页版中），统一写入手机相册 /sdcard/DCIM/生图 并触发安卓相册扫描（绝不放入隐藏的 EPhoneVault）
-            if (resolvedData && resolvedData.blob) {
-              const termuxBase = getConfiguredTermuxBaseUrl();
-              const safeFileEncoded = encodeURIComponent(safeFilename);
-              const albumEndpoint = `${termuxBase}/shengtu-album/${safeFileEncoded}`;
-              let termuxReachable = false;
-
-              for (let attempt = 0; attempt < 2; attempt++) {
-                try {
-                  const controller = new AbortController();
-                  const timer = setTimeout(() => controller.abort(), attempt === 0 ? 550 : 1500);
-                  const putRes = await fetch(albumEndpoint, {
-                    method: "PUT",
-                    headers: { "Content-Type": resolvedData.mime || "image/png" },
-                    body: resolvedData.blob,
-                    signal: controller.signal,
-                  }).finally(() => clearTimeout(timer));
-                  if (putRes && putRes.ok) {
-                    termuxReachable = true;
-                    const txt = (await putRes.text()).trim();
-                    if (txt === "SHENGTU_ALBUM_OK") {
-                      showDownloadToast("已保存至手机相册 生图", "success");
-                      return;
-                    }
-                    if (attempt === 0 && typeof window.ensureTermuxWatermarkAlbumHotPatched === "function") {
-                      await window.ensureTermuxWatermarkAlbumHotPatched(termuxBase);
-                      continue;
-                    }
-                  }
-                } catch (_) {
-                  break;
-                }
-              }
-
-              // 若 Termux 已响应但未返回补丁标识，使用带前导斜杠编码的绝对路径直写 /sdcard/DCIM/生图/，利用 Python os.path.join 绝对路径覆盖特性确保 100% 写入系统相册而非 EPhoneVault
-              if (termuxReachable) {
-                try {
-                  const controller = new AbortController();
-                  const timer = setTimeout(() => controller.abort(), 1400);
-                  const directRes = await fetch(
-                    `${termuxBase}/%2Fsdcard%2FDCIM%2F%E7%94%9F%E5%9B%BE%2F${safeFileEncoded}`,
-                    {
-                      method: "PUT",
-                      headers: { "Content-Type": resolvedData.mime || "image/png" },
-                      body: resolvedData.blob,
-                      signal: controller.signal,
-                    }
-                  ).finally(() => clearTimeout(timer));
-                  if (directRes && directRes.ok) {
-                    showDownloadToast("已保存至手机相册 生图", "success");
-                    return;
-                  }
-                } catch (_) {}
-              }
-            }
-
-            // 3. 浏览器标准 <a download> 下载（保留 Blob URL 60 秒，防止移动端浏览器异步读取前被提前释放导致下载失败）
             if (resolvedData && resolvedData.blob) {
               const blobUrl = URL.createObjectURL(resolvedData.blob);
-              const link = document.createElement("a");
-              link.href = blobUrl;
-              link.download = safeFilename;
-              link.rel = "noopener";
-              link.style.display = "none";
-              document.body.appendChild(link);
-              link.click();
-              setTimeout(() => {
-                if (link.parentNode) link.parentNode.removeChild(link);
-              }, 1000);
+              if (typeof window.triggerBrowserDownloadUrl === "function") {
+                window.triggerBrowserDownloadUrl(blobUrl, safeFilename);
+              } else {
+                const link = document.createElement("a");
+                link.href = blobUrl;
+                link.download = safeFilename;
+                link.rel = "noopener";
+                link.style.display = "none";
+                document.body.appendChild(link);
+                link.click();
+                setTimeout(() => {
+                  if (link.parentNode) link.parentNode.removeChild(link);
+                }, 200);
+              }
               setTimeout(() => {
                 try { URL.revokeObjectURL(blobUrl); } catch (_) {}
               }, 60000);
@@ -127858,7 +127839,7 @@ ${specificRules}`;
               }, 1000);
             }
 
-            showDownloadToast("已开始下载至 Download", "success");
+            showDownloadToast("已开始下载", "success");
           } catch (error) {
             console.error("[图片下载] 下载失败:", error);
             showDownloadToast("下载失败，请重试", "error");
@@ -127973,19 +127954,23 @@ ${specificRules}`;
           function (e) {
             const target = e.target;
 
-            // 检查是否是支持三击下载的图片（聊天图片、生图台结果图、收藏夹详情图、检查器预览图、全屏预览图）
+            // 检查是否是支持三击下载的图片（聊天图片、生图台结果图、收藏夹详情图、编辑预览图、检查器预览图、全屏预览图）
             const isNaiPanelPreviewImg =
               target.tagName === "IMG" &&
               (target.id === "mod-nai-gen-result-img" ||
                 target.id === "mod-nai-inspect-preview-img" ||
                 target.id === "image-viewer-img" ||
-                target.classList.contains("mod-nai-specimen-img"));
+                target.classList.contains("mod-nai-specimen-img") ||
+                target.classList.contains("mod-nai-col-edit-sq-img") ||
+                Boolean(target.closest("#mod-nai-col-detail-img-stage")) ||
+                Boolean(target.closest("#mod-nai-col-edit-sq-preview")));
             const isChatImage =
               target.tagName === "IMG" &&
               (isNaiPanelPreviewImg ||
                 target.classList.contains("realimag-image") ||
                 target.classList.contains("naiimag-image") ||
                 target.classList.contains("chat-image") ||
+                target.classList.contains("essence-preview-img") ||
                 (target.closest(".message-bubble") &&
                   !target.classList.contains("avatar") &&
                   !target.classList.contains("sticker-image") &&
@@ -136786,12 +136771,14 @@ ${specificRules}`;
               " def do_PUT(s):",
               "  n=int(s.headers.get('Content-Length',0)); b=s.rfile.read(n)",
               "  raw_p=s.path.split('?')[0]",
-              "  if raw_p.startswith('/shengtu-album/') or raw_p.startswith('/watermark-album/'):",
+              "  if raw_p.startswith('/tuhua-album/') or raw_p.startswith('/shengtu-album/') or raw_p.startswith('/watermark-album/'):",
               "   import subprocess",
-              "   is_st=raw_p.startswith('/shengtu-album/')",
-              "   an='生图' if is_st else '水印'",
-              "   plen=len('/shengtu-album/') if is_st else len('/watermark-album/')",
-              "   fname=os.path.basename(urllib.request.unquote(raw_p[plen:])) or ('NAI_Image.png' if is_st else 'clean.jpg')",
+              "   is_wm=raw_p.startswith('/watermark-album/')",
+              "   an='水印' if is_wm else '徒花'",
+              "   if raw_p.startswith('/tuhua-album/'): plen=len('/tuhua-album/')",
+              "   elif raw_p.startswith('/shengtu-album/'): plen=len('/shengtu-album/')",
+              "   else: plen=len('/watermark-album/')",
+              "   fname=os.path.basename(urllib.request.unquote(raw_p[plen:])) or ('clean.jpg' if is_wm else 'NAI_Image.png')",
               "   adir=('/sdcard/DCIM/'+an) if os.path.isdir('/sdcard') else os.path.join(os.path.dirname(os.path.dirname(root)),'DCIM',an)",
               "   os.makedirs(adir,exist_ok=True)",
               "   for nm in (os.path.join(adir,'.nomedia'),os.path.join(os.path.dirname(adir),'.nomedia')):",
@@ -136804,7 +136791,7 @@ ${specificRules}`;
               "   for cmd in (['am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file://'+p],['am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file://'+pe],['am','broadcast','-p','com.android.providers.media.module','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file://'+pe],['content','call','--uri','content://media/external/images/media','--method','scan_file','--arg',pe],['termux-media-scan',p]):",
               "    try: subprocess.Popen(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)",
               "    except Exception: pass",
-              "   out=b'SHENGTU_ALBUM_OK' if is_st else b'WATERMARK_ALBUM_OK'; s.send_response(200); s._c(len(out)); s.end_headers(); s.wfile.write(out); return",
+              "   out=b'WATERMARK_ALBUM_OK' if is_wm else b'TUHUA_ALBUM_OK'; s.send_response(200); s._c(len(out)); s.end_headers(); s.wfile.write(out); return",
               "  rel=urllib.request.unquote(raw_p.lstrip('/'))",
               "  p=os.path.abspath(os.path.join(root,rel)); os.makedirs(os.path.dirname(p),exist_ok=True)",
               "  with open(p,'wb') as f: f.write(b)",
@@ -138898,6 +138885,109 @@ ${specificRules}`;
 
             return null;
           }
+
+          let _ghCodeSyncPromise = null;
+          async function syncCurrentSourceToGithubCodeRepoIfNewer() {
+            if (_ghCodeSyncPromise) return _ghCodeSyncPromise;
+            if (isRunningInApkContainer()) return false;
+            _ghCodeSyncPromise = (async () => {
+              try {
+                const curTagEl = document.getElementById("api-settings-version-tag");
+                const curVer = curTagEl ? (parseFloat(String(curTagEl.textContent || "").replace(/[^0-9.]/g, "")) || 0) : 0;
+                if (!curVer) return false;
+                const found = await resolveValidGithubCodeRepository();
+                if (!found || !found.owner || !found.repo || !found.token) return false;
+                const { owner, repo, indexHtml, token } = found;
+                const remoteVer = extractVersionNumFromHtml(indexHtml);
+                if (remoteVer >= curVer) return false;
+
+                const headers = {
+                  Accept: "application/vnd.github+json",
+                  Authorization: `token ${token}`,
+                  "Content-Type": "application/json"
+                };
+                const repoMeta = await fetchGithubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, token);
+                const defaultBranch = (repoMeta && repoMeta.default_branch) ? repoMeta.default_branch : "main";
+                const refData = await fetchGithubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${encodeURIComponent(defaultBranch)}`, token);
+                const baseCommitSha = refData && refData.object && refData.object.sha;
+                if (!baseCommitSha) return false;
+                const commitData = await fetchGithubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits/${baseCommitSha}`, token);
+                const baseTreeSha = commitData && commitData.tree && commitData.tree.sha;
+                if (!baseTreeSha) return false;
+
+                const filesToPush = ["index.html", "module-manager.js"];
+                const treeItems = [];
+                for (const relPath of filesToPush) {
+                  const localRes = await fetch("/" + relPath, { method: "GET", cache: "no-store" });
+                  if (!localRes || !localRes.ok) continue;
+                  const textContent = await localRes.text();
+                  if (!textContent) continue;
+                  const blobRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({ content: textContent, encoding: "utf-8" })
+                  });
+                  if (!blobRes || !blobRes.ok) continue;
+                  const blobJson = await blobRes.json();
+                  if (blobJson && blobJson.sha) {
+                    treeItems.push({
+                      path: relPath,
+                      mode: "100644",
+                      type: "blob",
+                      sha: blobJson.sha
+                    });
+                  }
+                }
+                if (!treeItems.length) return false;
+
+                const treeRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees`, {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+                });
+                if (!treeRes || !treeRes.ok) return false;
+                const treeJson = await treeRes.json();
+                if (!treeJson || !treeJson.sha) return false;
+
+                const newCommitRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits`, {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify({
+                    message: `Sync v${curVer} for APK build`,
+                    tree: treeJson.sha,
+                    parents: [baseCommitSha]
+                  })
+                });
+                if (!newCommitRes || !newCommitRes.ok) return false;
+                const newCommitJson = await newCommitRes.json();
+                if (!newCommitJson || !newCommitJson.sha) return false;
+
+                const updateRefRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodeURIComponent(defaultBranch)}`, {
+                  method: "PATCH",
+                  headers,
+                  body: JSON.stringify({ sha: newCommitJson.sha, force: false })
+                });
+                if (updateRefRes && updateRefRes.ok) {
+                  fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/build-apk.yml/dispatches`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({ ref: defaultBranch })
+                  }).catch(() => {});
+                  return true;
+                }
+                return false;
+              } catch (_) {
+                return false;
+              } finally {
+                _ghCodeSyncPromise = null;
+              }
+            })();
+            return _ghCodeSyncPromise;
+          }
+
+          setTimeout(() => {
+            syncCurrentSourceToGithubCodeRepoIfNewer().catch(() => {});
+          }, 3000);
 
           async function clearRuntimeCachesAndReloadCurrentOrigin() {
             try {

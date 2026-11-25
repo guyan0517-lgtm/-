@@ -425,7 +425,7 @@ public class MainActivity extends BridgeActivity {
                 if (bytes == null || bytes.length == 0) return false;
                 String safeName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : ("NAI_" + System.currentTimeMillis() + ".png");
                 String safeMime = (mimeType != null && !mimeType.trim().isEmpty()) ? mimeType.trim() : (safeName.toLowerCase().endsWith(".jpg") || safeName.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png");
-                String folderName = (subFolder != null && !subFolder.trim().isEmpty()) ? subFolder.trim() : "生图";
+                String folderName = (subFolder != null && !subFolder.trim().isEmpty()) ? subFolder.trim() : "徒花";
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ContentResolver resolver = ctx.getContentResolver();

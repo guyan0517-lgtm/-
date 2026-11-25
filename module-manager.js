@@ -3145,10 +3145,15 @@
 
     downloadImage(dataUrl, fileName) {
       if (!dataUrl) return;
+      const ext = dataUrl.startsWith('data:image/png') ? '.png' : (dataUrl.startsWith('data:image/webp') ? '.webp' : '.jpg');
+      const fullName = String(fileName || '模组插图').replace(/\.(png|jpe?g|webp)$/i, '') + ext;
+      if (typeof window.downloadImage === 'function') {
+        window.downloadImage(dataUrl, fullName);
+        return;
+      }
       const a = document.createElement('a');
       a.href = dataUrl;
-      const ext = dataUrl.startsWith('data:image/png') ? '.png' : (dataUrl.startsWith('data:image/webp') ? '.webp' : '.jpg');
-      a.download = (fileName || '模组插图') + ext;
+      a.download = fullName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -7751,10 +7756,14 @@ ${chap.content}
               clickTimer = setTimeout(() => {
                 if (clickCount >= 3) {
                   if (loc.imageUrl) {
-                    const a = document.createElement('a');
-                    a.href = loc.imageUrl;
-                    a.download = `${loc.name}.png`;
-                    a.click();
+                    if (typeof window.downloadImage === 'function') {
+                      window.downloadImage(loc.imageUrl, `${loc.name || '地图'}.png`);
+                    } else {
+                      const a = document.createElement('a');
+                      a.href = loc.imageUrl;
+                      a.download = `${loc.name}.png`;
+                      a.click();
+                    }
                   }
                 } else if (clickCount === 1 && loc.imageUrl) {
                   this.openModuleMapExpandModal(loc.name, loc.imageUrl);
