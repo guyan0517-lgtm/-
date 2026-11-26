@@ -160,6 +160,65 @@ jobs:
               fi
             done
           fi
+          CAP_WV=$(find node_modules/@capacitor/android -name "CapacitorWebView.java" | head -n 1)
+          if [ -n "$CAP_WV" ] && [ -f "$CAP_WV" ]; then
+            cat << 'CAP_EOF' > "$CAP_WV"
+          package com.getcapacitor;
+
+          import android.content.Context;
+          import android.util.AttributeSet;
+          import android.util.Base64;
+          import android.view.KeyEvent;
+          import android.view.inputmethod.BaseInputConnection;
+          import android.view.inputmethod.EditorInfo;
+          import android.view.inputmethod.InputConnection;
+          import android.webkit.WebView;
+          import java.nio.charset.StandardCharsets;
+
+          public class CapacitorWebView extends WebView {
+              private BaseInputConnection capInputConnection;
+              private Bridge bridge;
+
+              public CapacitorWebView(Context context, AttributeSet attrs) {
+                  super(context, attrs);
+              }
+
+              public void setBridge(Bridge bridge) {
+                  this.bridge = bridge;
+              }
+
+              @Override
+              public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+                  CapConfig config;
+                  if (bridge != null) {
+                      config = bridge.getConfig();
+                  } else {
+                      config = CapConfig.loadDefault(getContext());
+                  }
+
+                  boolean captureInput = config.isInputCaptured();
+                  if (captureInput) {
+                      if (capInputConnection == null) {
+                          capInputConnection = new BaseInputConnection(this, false);
+                      }
+                      return capInputConnection;
+                  }
+                  return super.onCreateInputConnection(outAttrs);
+              }
+
+              @Override
+              public boolean dispatchKeyEvent(KeyEvent event) {
+                  if (event.getAction() == KeyEvent.ACTION_MULTIPLE && event.getCharacters() != null) {
+                      String chars = event.getCharacters();
+                      String b64 = Base64.encodeToString(chars.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                      evaluateJavascript("window.__ephoneInsertNativeInputTextFromB64 && window.__ephoneInsertNativeInputTextFromB64('" + b64 + "');", null);
+                      return true;
+                  }
+                  return super.dispatchKeyEvent(event);
+              }
+          }
+          CAP_EOF
+          fi
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           if [ -n "$MAIN_ACT" ] && [ -f "$MAIN_ACT" ]; then
             PKG_LINE=$(grep -E '^package ' "$MAIN_ACT" | head -n 1)
@@ -181,9 +240,12 @@ jobs:
           import android.os.Environment;
           import android.provider.MediaStore;
           import android.util.Base64;
+          import android.view.KeyEvent;
+          import android.view.View;
           import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
+          import androidx.activity.OnBackPressedCallback;
           import com.getcapacitor.BridgeActivity;
           import java.io.ByteArrayOutputStream;
           import java.io.File;
@@ -194,9 +256,29 @@ jobs:
           import java.nio.charset.StandardCharsets;
 
           public class MainActivity extends BridgeActivity {
+              private void triggerWebViewStepBack() {
+                  try {
+                      if (this.bridge != null && this.bridge.getWebView() != null) {
+                          final WebView wv = this.bridge.getWebView();
+                          wv.post(() -> wv.evaluateJavascript(
+                              "if (typeof window.__handleEPhoneBackAction === 'function') { window.__handleEPhoneBackAction(); } else { window.history.back(); }",
+                              null
+                          ));
+                      }
+                  } catch (Exception ignored) {}
+              }
+
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  try {
+                      getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+                          @Override
+                          public void handleOnBackPressed() {
+                              triggerWebViewStepBack();
+                          }
+                      });
+                  } catch (Exception ignored) {}
                   try {
                       if (this.bridge != null && this.bridge.getWebView() != null) {
                           WebView webView = this.bridge.getWebView();
@@ -208,10 +290,29 @@ jobs:
                           ws.setAllowContentAccess(true);
                           webView.setLongClickable(true);
                           webView.setHapticFeedbackEnabled(true);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+                          }
                           webView.addJavascriptInterface(new EPhoneNativeBridge(this), "EPhoneNativeBridge");
                       }
                       checkAndApplyPersistedHotUpdate();
                   } catch (Exception ignored) {}
+              }
+
+              @Override
+              public void onBackPressed() {
+                  triggerWebViewStepBack();
+              }
+
+              @Override
+              public boolean dispatchKeyEvent(KeyEvent event) {
+                  if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                      if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                          triggerWebViewStepBack();
+                      }
+                      return true;
+                  }
+                  return super.dispatchKeyEvent(event);
               }
 
               private long getCurrentApkUpdateTime() {
@@ -354,6 +455,18 @@ jobs:
                   public EPhoneNativeBridge(MainActivity act) {
                       this.activity = act;
                       this.ctx = act;
+                  }
+
+                  @JavascriptInterface
+                  public void exitApp() {
+                      if (activity != null) {
+                          activity.runOnUiThread(() -> {
+                              try {
+                                  activity.moveTaskToBack(true);
+                                  activity.finish();
+                              } catch (Exception ignored) {}
+                          });
+                      }
                   }
 
                   @JavascriptInterface

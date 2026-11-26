@@ -87,7 +87,7 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
-  </head>
+  <script src="/_aistudio-iframe.js?v=29045eb3"></script></head>
   <body>
     <div id="phone-screen">
       <div id="status-bar">
@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -28191,6 +28191,23 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 });
                 previewEl.addEventListener("beforeinput", (ev) => {
                   ev.stopPropagation();
+                  const inputType = ev.inputType || "";
+                  if (inputType === "insertFromPaste" || inputType === "insertFromDrop") {
+                    const dtText = (ev.dataTransfer && ev.dataTransfer.getData("text/plain")) || ev.data || "";
+                    if (dtText) {
+                      ev.preventDefault();
+                      insertPlainTextIntoRichEditor(dtText);
+                    }
+                  }
+                });
+                previewEl.addEventListener("paste", (ev) => {
+                  ev.stopPropagation();
+                  const rawClip = ((ev.clipboardData || window.clipboardData) && (ev.clipboardData || window.clipboardData).getData("text/plain")) ||
+                    (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.readFromClipboard === "function" ? window.EPhoneNativeBridge.readFromClipboard() : "") || "";
+                  if (rawClip) {
+                    ev.preventDefault();
+                    insertPlainTextIntoRichEditor(rawClip);
+                  }
                 });
                 previewEl.addEventListener("keydown", (ev) => {
                   if (ev.key !== "Enter") {
@@ -28568,11 +28585,16 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             }, 150);
           });
 
+          richEl._insertPlainTextAtCursor = insertPlainTextIntoRichEditor;
+
           richEl.addEventListener("paste", (e) => {
-            lastPasteHandledAt = Date.now();
-            e.preventDefault();
-            const rawClip = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
-            insertPlainTextIntoRichEditor(rawClip);
+            const rawClip = ((e.clipboardData || window.clipboardData) && (e.clipboardData || window.clipboardData).getData("text/plain")) ||
+              (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.readFromClipboard === "function" ? window.EPhoneNativeBridge.readFromClipboard() : "") || "";
+            if (rawClip) {
+              lastPasteHandledAt = Date.now();
+              e.preventDefault();
+              insertPlainTextIntoRichEditor(rawClip);
+            }
           });
 
           richEl.addEventListener("keydown", (e) => {
@@ -112832,7 +112854,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=30.1", { updateViaCache: "none" })
+              .register("sw.js?v=30.2", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -112850,10 +112872,35 @@ ${specificRules}`;
             if (!el || !el.tagName || el._autofillSuppressed) return;
             const tag = el.tagName.toUpperCase();
             if (tag !== "INPUT" && tag !== "TEXTAREA") return;
-            el._autofillSuppressed = true;
-            if (el.getAttribute("autocomplete") !== "off") {
-              el.setAttribute("autocomplete", "off");
+            if (tag === "INPUT") {
+              const rawType = (el.getAttribute("type") || "text").toLowerCase();
+              const nonTextTypes = [
+                "checkbox", "radio", "range", "file", "color", "button",
+                "submit", "reset", "hidden", "number", "date", "time",
+                "datetime-local", "month", "week", "password"
+              ];
+              if (nonTextTypes.includes(rawType)) return;
+              if (document.activeElement !== el) {
+                if (rawType === "text" && el.getAttribute("type") !== "search") {
+                  el.setAttribute("type", "search");
+                }
+                if (!el.hasAttribute("enterkeyhint")) {
+                  el.setAttribute("enterkeyhint", "done");
+                }
+              }
             }
+            el._autofillSuppressed = true;
+            if (el.hasAttribute("name")) {
+              el.removeAttribute("name");
+            }
+            el.setAttribute("autocomplete", "off");
+            el.setAttribute("autocorrect", "off");
+            el.setAttribute("autocapitalize", "off");
+            el.setAttribute("spellcheck", "false");
+            el.setAttribute("data-form-type", "other");
+            el.setAttribute("data-lpignore", "true");
+            el.setAttribute("data-1p-ignore", "true");
+            el.setAttribute("aria-autocomplete", "none");
           };
 
           const suppressAllAutofillInputsInRoot = (rootNode) => {
@@ -112867,6 +112914,236 @@ ${specificRules}`;
           };
 
           suppressAllAutofillInputsInRoot(document.body);
+          if (typeof MutationObserver === "function" && document.body) {
+            const autofillObs = new MutationObserver((mutations) => {
+              for (let i = 0; i < mutations.length; i++) {
+                const added = mutations[i].addedNodes;
+                for (let j = 0; j < added.length; j++) {
+                  if (added[j] && added[j].nodeType === 1) {
+                    suppressAllAutofillInputsInRoot(added[j]);
+                  }
+                }
+              }
+            });
+            autofillObs.observe(document.body, { childList: true, subtree: true });
+          }
+
+          // ================= 修复安卓版 CapacitorWebView 搜狗输入法剪贴板粘贴失效与光标被跳到末尾的问题 =================
+          (function setupCapacitorImeAndClipboardFix() {
+            if (window.__ephoneCapacitorImeFixed) return;
+            window.__ephoneCapacitorImeFixed = true;
+
+            const insertTextIntoActiveElementAtCursor = (rawText) => {
+              if (typeof rawText !== "string" || rawText.length === 0) return false;
+              const active = document.activeElement;
+              if (!active) return false;
+              const tag = (active.tagName || "").toUpperCase();
+              if (tag === "INPUT" || tag === "TEXTAREA") {
+                const proto = tag === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const desc = Object.getOwnPropertyDescriptor(proto, "value");
+                const curVal = desc && desc.get ? desc.get.call(active) : (active.value || "");
+                const start = typeof active.selectionStart === "number" ? active.selectionStart : curVal.length;
+                const end = typeof active.selectionEnd === "number" ? active.selectionEnd : start;
+                const nextVal = curVal.slice(0, start) + rawText + curVal.slice(end);
+                active.__bypassCapHook = true;
+                if (desc && desc.set) {
+                  desc.set.call(active, nextVal);
+                } else {
+                  active.value = nextVal;
+                }
+                active.__bypassCapHook = false;
+                const nextPos = start + rawText.length;
+                try {
+                  active.setSelectionRange(nextPos, nextPos);
+                } catch (_) {}
+                try {
+                  active.dispatchEvent(new InputEvent("input", { bubbles: true, data: rawText, inputType: "insertText" }));
+                } catch (_) {
+                  active.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                return true;
+              }
+              const richHost = active.closest ? active.closest(".tc-rich-textarea") : null;
+              if (richHost && typeof richHost._insertPlainTextAtCursor === "function") {
+                richHost._insertPlainTextAtCursor(rawText);
+                return true;
+              }
+              if (active.isContentEditable) {
+                const sel = window.getSelection ? window.getSelection() : null;
+                if (sel && sel.rangeCount > 0) {
+                  const range = sel.getRangeAt(0);
+                  if (active.contains(range.startContainer)) {
+                    range.deleteContents();
+                    const tn = document.createTextNode(rawText);
+                    range.insertNode(tn);
+                    const newRange = document.createRange();
+                    newRange.setStartAfter(tn);
+                    newRange.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(newRange);
+                    try {
+                      active.dispatchEvent(new InputEvent("input", { bubbles: true, data: rawText, inputType: "insertText" }));
+                    } catch (_) {
+                      active.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                    return true;
+                  }
+                }
+              }
+              return false;
+            };
+
+            window.__ephoneInsertTextAtActiveCursor = insertTextIntoActiveElementAtCursor;
+            window.__ephoneInsertNativeInputTextFromB64 = function (b64Str) {
+              try {
+                if (!b64Str) return false;
+                const binary = atob(b64Str);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                  bytes[i] = binary.charCodeAt(i);
+                }
+                const decoded = new TextDecoder("utf-8").decode(bytes);
+                return insertTextIntoActiveElementAtCursor(decoded);
+              } catch (_) {
+                return false;
+              }
+            };
+
+            const isTopLevelEvaluateJavascriptCall = () => {
+              try {
+                const stack = String(new Error().stack || "");
+                const lines = stack.split("\n").map((l) => l.trim()).filter(Boolean);
+                let frameCount = 0;
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  if (line === "Error" || line.includes("isTopLevelEvaluateJavascriptCall") || line.includes("set value")) continue;
+                  frameCount++;
+                  if (/at\s+[a-zA-Z0-9_$]+\s*\(/.test(line) && !line.includes("<anonymous>")) {
+                    return false;
+                  }
+                }
+                return frameCount <= 2;
+              } catch (_) {
+                return false;
+              }
+            };
+
+            const patchInputPrototypeValue = (Proto) => {
+              if (!Proto) return;
+              const origDesc = Object.getOwnPropertyDescriptor(Proto, "value");
+              if (!origDesc || !origDesc.get || !origDesc.set || origDesc.get.__ephonePatched) return;
+              const nativeGet = origDesc.get;
+              const nativeSet = origDesc.set;
+
+              const wrappedGet = function () {
+                const val = nativeGet.call(this);
+                if (this === document.activeElement && !this.__bypassCapHook) {
+                  this.__capGetTs = Date.now();
+                  this.__capGetVal = val;
+                  this.__capSelStart = typeof this.selectionStart === "number" ? this.selectionStart : val.length;
+                  this.__capSelEnd = typeof this.selectionEnd === "number" ? this.selectionEnd : this.__capSelStart;
+                }
+                return val;
+              };
+              wrappedGet.__ephonePatched = true;
+
+              const wrappedSet = function (newVal) {
+                if (
+                  !this.__bypassCapHook &&
+                  this === document.activeElement &&
+                  typeof newVal === "string" &&
+                  this.__capGetTs &&
+                  Date.now() - this.__capGetTs < 50 &&
+                  typeof this.__capGetVal === "string" &&
+                  newVal.length > this.__capGetVal.length &&
+                  newVal.startsWith(this.__capGetVal) &&
+                  isTopLevelEvaluateJavascriptCall()
+                ) {
+                  const inserted = newVal.slice(this.__capGetVal.length);
+                  const start = typeof this.__capSelStart === "number" ? this.__capSelStart : this.__capGetVal.length;
+                  const end = typeof this.__capSelEnd === "number" ? this.__capSelEnd : start;
+                  const spliced = this.__capGetVal.slice(0, start) + inserted + this.__capGetVal.slice(end);
+                  this.__capGetTs = 0;
+                  nativeSet.call(this, spliced);
+                  const nextPos = start + inserted.length;
+                  try {
+                    this.setSelectionRange(nextPos, nextPos);
+                  } catch (_) {}
+                  try {
+                    this.dispatchEvent(new InputEvent("input", { bubbles: true, data: inserted, inputType: "insertText" }));
+                  } catch (_) {
+                    this.dispatchEvent(new Event("input", { bubbles: true }));
+                  }
+                  return;
+                }
+                nativeSet.call(this, newVal);
+              };
+
+              Object.defineProperty(Proto, "value", {
+                configurable: true,
+                enumerable: origDesc.enumerable,
+                get: wrappedGet,
+                set: wrappedSet
+              });
+            };
+
+            patchInputPrototypeValue(window.HTMLInputElement && HTMLInputElement.prototype);
+            patchInputPrototypeValue(window.HTMLTextAreaElement && HTMLTextAreaElement.prototype);
+
+            if (window.HTMLElement && HTMLElement.prototype && !Object.getOwnPropertyDescriptor(HTMLElement.prototype, "value")) {
+              Object.defineProperty(HTMLElement.prototype, "value", {
+                configurable: true,
+                enumerable: false,
+                get: function () {
+                  if (this && this.isContentEditable) {
+                    this.__capCeGetTs = Date.now();
+                    return "";
+                  }
+                  return undefined;
+                },
+                set: function (v) {
+                  if (this && this.isContentEditable && typeof v === "string" && v.length > 0 && this.__capCeGetTs && Date.now() - this.__capCeGetTs < 80) {
+                    this.__capCeGetTs = 0;
+                    insertTextIntoActiveElementAtCursor(v);
+                  }
+                }
+              });
+            }
+
+            let lastSyntaxFallbackTs = 0;
+            window.addEventListener("error", (errEvt) => {
+              try {
+                const msg = String((errEvt && errEvt.message) || "");
+                if (!msg.includes("SyntaxError")) return;
+                const active = document.activeElement;
+                if (!active) return;
+                const tag = (active.tagName || "").toUpperCase();
+                const isEditable = tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable;
+                if (!isEditable) return;
+                if (errEvt.lineno && errEvt.lineno > 2) return;
+                const now = Date.now();
+                if (now - lastSyntaxFallbackTs < 120) {
+                  errEvt.preventDefault();
+                  return;
+                }
+                lastSyntaxFallbackTs = now;
+                errEvt.preventDefault();
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.readFromClipboard === "function") {
+                  const clipText = window.EPhoneNativeBridge.readFromClipboard();
+                  if (clipText) {
+                    insertTextIntoActiveElementAtCursor(clipText);
+                    return;
+                  }
+                }
+                if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
+                  navigator.clipboard.readText().then((clipText) => {
+                    if (clipText) insertTextIntoActiveElementAtCursor(clipText);
+                  }).catch(() => {});
+                }
+              } catch (_) {}
+            }, true);
+          })();
+
           const savedTheme = localStorage.getItem("ephone-theme") || "light"; // 默认为日间模式
           applyTheme(savedTheme);
 
@@ -127935,18 +128212,26 @@ ${specificRules}`;
 
             if (isChatImage && target.src && !target.src.includes("KYr2qRCK")) {
               const rect = target.getBoundingClientRect();
-              const cornerWidth = Math.min(48, Math.max(24, rect.width * 0.3));
-              const cornerHeight = Math.min(48, Math.max(24, rect.height * 0.3));
+              const cornerWidth = Math.min(54, Math.max(28, rect.width * 0.3));
+              const cornerHeight = Math.min(54, Math.max(28, rect.height * 0.3));
+              const isEditCropImage =
+                target.id === "image-viewer-img" ||
+                target.classList.contains("mod-nai-col-edit-sq-img") ||
+                Boolean(target.closest("#mod-nai-col-edit-img-stage")) ||
+                Boolean(target.closest("#mod-nai-folder-edit-img-stage")) ||
+                Boolean(target.closest("#mod-nai-col-edit-sq-preview"));
               const isCornerClick =
-                !isNaiPanelPreviewImg &&
+                !isEditCropImage &&
                 e.clientX >= rect.right - cornerWidth &&
                 e.clientY >= rect.bottom - cornerHeight;
 
-              // 如果点击的是右下角透明区域，立即展开预览
+              // 如果点击的是右下角透明区域，立即展开全屏预览
               if (isCornerClick) {
                 clickCount = 0;
                 lastClickedElement = null;
                 if (clickTimer) clearTimeout(clickTimer);
+                e.preventDefault();
+                e.stopPropagation();
                 openImageViewer(target.src);
                 return;
               }
@@ -129630,13 +129915,75 @@ ${specificRules}`;
           }, { passive: true });
         })();
 
-        // ================= 手机滑动返回拦截：滑动返回等于应用内返回上一层，QQ列表返回主屏幕，主页面返回绝不退出软件 =================
+        // ================= 手机滑动返回拦截：子页面逐级返回主屏幕，主屏幕再次滑动弹出明日方舟式退出确认弹窗 =================
         (function setupMobileBackNavigation() {
           let isHandlingPop = false;
-          let userActivatedGuardCount = 0;
-          let lastGesturePushTs = 0;
-          let lastPopHandledTs = 0;
-          const MAX_USER_GUARD_DEPTH = 6;
+          let hasActiveUserGuard = false;
+          let lastBackActionTs = 0;
+
+          const ensureExitConfirmModal = () => {
+            let modal = document.getElementById("app-exit-confirm-modal");
+            if (modal) return modal;
+            modal = document.createElement("div");
+            modal.id = "app-exit-confirm-modal";
+            modal.className = "modal";
+            modal.style.zIndex = "99999";
+            modal.innerHTML = `
+              <div class="modal-content" style="max-width: 310px; width: 84%; border-radius: 22px; padding: 22px 20px 18px; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14); text-align: center;">
+                <div style="width: 42px; height: 42px; border-radius: 14px; background: var(--secondary-bg); color: var(--accent-color); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                </div>
+                <div style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">退出确认</div>
+                <div style="font-size: 13px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 18px;">当前已回到小手机主屏幕，是否确认退出软件返回手机桌面？</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                  <button type="button" id="app-exit-cancel-btn" class="moe-btn moe-btn-secondary" style="flex: 1; height: 40px; border-radius: 12px; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center;">取消</button>
+                  <button type="button" id="app-exit-confirm-btn" class="moe-btn" style="flex: 1; height: 40px; border-radius: 12px; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center;">确认</button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(modal);
+
+            const cancelBtn = modal.querySelector("#app-exit-cancel-btn");
+            const confirmBtn = modal.querySelector("#app-exit-confirm-btn");
+
+            if (cancelBtn) {
+              cancelBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                modal.classList.remove("visible");
+              });
+            }
+            modal.addEventListener("click", (e) => {
+              if (e.target === modal) {
+                modal.classList.remove("visible");
+              }
+            });
+            if (confirmBtn) {
+              confirmBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                modal.classList.remove("visible");
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.exitApp === "function") {
+                  window.EPhoneNativeBridge.exitApp();
+                  return;
+                }
+                if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App && typeof window.Capacitor.Plugins.App.exitApp === "function") {
+                  window.Capacitor.Plugins.App.exitApp();
+                  return;
+                }
+                if (navigator.app && typeof navigator.app.exitApp === "function") {
+                  navigator.app.exitApp();
+                  return;
+                }
+                try {
+                  window.close();
+                } catch (_) {}
+              });
+            }
+            return modal;
+          };
 
           window.pushMobileBackGuard = function (tag) {
             if (isHandlingPop) return;
@@ -129645,15 +129992,9 @@ ${specificRules}`;
               if (!st || !st.tukeyGuard) {
                 window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
               }
-              const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
-              if (isUserActive) {
-                if (userActivatedGuardCount < MAX_USER_GUARD_DEPTH) {
-                  userActivatedGuardCount++;
-                  lastGesturePushTs = Date.now();
-                  window.history.pushState({ tukeyGuard: true, tag: tag || "screen", userActivated: true }, "");
-                }
-              } else if (userActivatedGuardCount <= 0) {
-                window.history.pushState({ tukeyGuard: true, tag: tag || "screen" }, "");
+              if (!hasActiveUserGuard) {
+                window.history.pushState({ tukeyGuard: true, tag: tag || "screen", userActivated: true }, "");
+                hasActiveUserGuard = true;
               }
             } catch (_) {}
           };
@@ -129667,51 +130008,15 @@ ${specificRules}`;
 
           seedHistoryGuardStack();
 
-          // 关键：移动端浏览器要求每个历史记录条目必须在独立的用户真实手势中调用 pushState 才会被标记为有效返回点；但当用户点击、移动光标或长按输入框准备复制粘贴时，绝对不能调用 pushState，否则安卓 WebView 会判定发生导航并立刻打断光标定位或关闭粘贴菜单
-          let lastEditableInteractionTs = 0;
-          const checkIsEditableNode = (n) => {
-            if (!n) return false;
-            const el = n.nodeType === 1 ? n : n.parentElement;
-            if (!el || typeof el.closest !== "function") return false;
-            if (el.isContentEditable) return true;
-            return Boolean(
-              el.closest(
-                "input, textarea, select, [contenteditable='true'], [contenteditable=''], .moe-input, .mod-nai-textarea, .mod-nai-input, .tc-rich-textarea, .tc-inline-entry-preview-block"
-              )
-            );
-          };
-
-          const markEditableInteraction = (evt) => {
-            if ((evt && checkIsEditableNode(evt.target)) || checkIsEditableNode(document.activeElement)) {
-              lastEditableInteractionTs = Date.now();
-            }
-          };
-          document.addEventListener("focusin", markEditableInteraction, { passive: true, capture: true });
-          document.addEventListener("touchstart", markEditableInteraction, { passive: true, capture: true });
-          document.addEventListener("pointerdown", markEditableInteraction, { passive: true, capture: true });
-          document.addEventListener("input", markEditableInteraction, { passive: true, capture: true });
-          document.addEventListener("selectionchange", () => {
-            if (checkIsEditableNode(document.activeElement)) {
-              lastEditableInteractionTs = Date.now();
-            }
-          }, { passive: true });
-
-          const isEditableOrSelectionActive = (evt) => {
+          const hasNonCollapsedSelection = () => {
             try {
-              if (Date.now() - lastEditableInteractionTs < 1200) return true;
-              if (evt && checkIsEditableNode(evt.target)) {
-                lastEditableInteractionTs = Date.now();
-                return true;
-              }
-              if (checkIsEditableNode(document.activeElement)) {
-                lastEditableInteractionTs = Date.now();
-                return true;
-              }
               const sel = window.getSelection ? window.getSelection() : null;
-              if (sel && sel.rangeCount > 0) {
-                if (!sel.isCollapsed && String(sel.toString() || "").length > 0) return true;
-                if (checkIsEditableNode(sel.anchorNode) || checkIsEditableNode(sel.focusNode)) {
-                  lastEditableInteractionTs = Date.now();
+              if (sel && sel.rangeCount > 0 && !sel.isCollapsed && String(sel.toString() || "").length > 0) {
+                return true;
+              }
+              const active = document.activeElement;
+              if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
+                if (typeof active.selectionStart === "number" && typeof active.selectionEnd === "number" && active.selectionEnd > active.selectionStart) {
                   return true;
                 }
               }
@@ -129719,35 +130024,32 @@ ${specificRules}`;
             return false;
           };
 
-          const replenishGuardOnGesture = (evt) => {
-            if (isHandlingPop) return;
-            if (isEditableOrSelectionActive(evt)) return;
+          const replenishGuardOnGesture = () => {
+            if (isHandlingPop || hasActiveUserGuard) return;
+            if (hasNonCollapsedSelection()) return;
             try {
-              const now = Date.now();
-              if (now - lastGesturePushTs < 120) return;
               const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
               if (!isUserActive) return;
               const st = window.history.state;
               if (!st || !st.tukeyGuard) {
                 window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
               }
-              if (userActivatedGuardCount < MAX_USER_GUARD_DEPTH) {
-                userActivatedGuardCount++;
-                lastGesturePushTs = now;
-                window.history.pushState({ tukeyGuard: true, tag: "user_guard_" + userActivatedGuardCount, userActivated: true }, "");
-              }
+              window.history.pushState({ tukeyGuard: true, tag: "user_guard_active", userActivated: true }, "");
+              hasActiveUserGuard = true;
             } catch (_) {}
           };
           window.replenishMobileBackGuard = replenishGuardOnGesture;
 
-          document.addEventListener("touchend", replenishGuardOnGesture, { passive: true, capture: true });
-          document.addEventListener("pointerup", replenishGuardOnGesture, { passive: true, capture: true });
           document.addEventListener("click", replenishGuardOnGesture, { passive: true, capture: true });
-          document.addEventListener("mousedown", replenishGuardOnGesture, { passive: true, capture: true });
+          document.addEventListener("touchend", replenishGuardOnGesture, { passive: true, capture: true });
 
           const origShowScreen = window.showScreen;
           if (typeof origShowScreen === "function" && !origShowScreen._wrappedWithBackGuard) {
             const wrappedShowScreen = function (screenId) {
+              const exitModal = document.getElementById("app-exit-confirm-modal");
+              if (exitModal && exitModal.classList.contains("visible")) {
+                exitModal.classList.remove("visible");
+              }
               const res = origShowScreen.apply(this, arguments);
               if (!isHandlingPop && screenId) {
                 window.pushMobileBackGuard(screenId);
@@ -129759,48 +130061,36 @@ ${specificRules}`;
             showScreen = wrappedShowScreen;
           }
 
-          window.addEventListener("popstate", () => {
-            if (isHandlingPop) return;
+          const executeEPhoneStepBack = () => {
             const now = Date.now();
-            isHandlingPop = true;
-            if (userActivatedGuardCount > 0) {
-              userActivatedGuardCount--;
-            }
+            if (now - lastBackActionTs < 240) return true;
+            lastBackActionTs = now;
+
             try {
-              // 每次触发返回时先实时保存当前聊天输入框草稿，防止手势返回丢失文字
               const inp = document.getElementById("chat-input");
               if (inp && typeof window.saveChatDraftRealtime === "function" && window.state?.activeChatId) {
                 window.saveChatDraftRealtime(window.state.activeChatId, inp.value);
               }
 
-              // 仅当真实用户手势历史栈耗尽时才做兜底补位，平时绝不在 popstate 内覆盖已激活的手势历史栈，防止移动端浏览器触发防诱导干预直接退出到手机系统桌面
-              if (userActivatedGuardCount <= 0) {
-                try {
-                  window.history.pushState({ tukeyGuard: true, tag: "keep_fallback" }, "");
-                } catch (_) {}
+              // 0. 若退出确认弹窗已打开，再次返回则取消关闭该弹窗并留在桌面
+              const exitModal = document.getElementById("app-exit-confirm-modal");
+              if (exitModal && exitModal.classList.contains("visible")) {
+                exitModal.classList.remove("visible");
+                return true;
               }
-
-              // 防连发穿透保护：180ms内重复触发的popstate直接拦截原地保留
-              if (now - lastPopHandledTs < 180) {
-                isHandlingPop = false;
-                return;
-              }
-              lastPopHandledTs = now;
 
               // 1. 若大图预览打开，优先关闭大图预览
               const imgViewer = document.getElementById("image-viewer-modal");
               if (imgViewer && imgViewer.style.display !== "none" && imgViewer.style.display !== "") {
                 imgViewer.style.display = "none";
-                isHandlingPop = false;
-                return;
+                return true;
               }
 
               // 2. 若群精华渐入覆盖面板打开，优先退出群精华回到聊天中
               const essenceOverlay = document.getElementById("group-essence-overlay");
               if (essenceOverlay && essenceOverlay.classList.contains("visible")) {
                 window.closeGroupEssencePanel();
-                isHandlingPop = false;
-                return;
+                return true;
               }
 
               // 3. 若有打开的弹窗 modal.visible，优先关闭顶层弹窗
@@ -129811,20 +130101,16 @@ ${specificRules}`;
                 if (topModal.id === "solo-line-modal") {
                   topModal.style.display = "none";
                 }
-                isHandlingPop = false;
-                return;
+                return true;
               }
 
-              // 4. 检查当前所在的 screen：
-              // - 在聊天窗口返回 -> 回到QQ聊天列表页 chat-list-screen
-              // - 在QQ聊天列表页 chat-list-screen 返回 -> 回到手机桌面 home-screen
-              // - 在酒馆 game-hall-screen 返回 -> 逐层关闭弹窗/控制台/抽屉，最后回到手机桌面 home-screen
-              // - 在其他子页面返回 -> 触发顶部返回按钮或回到手机桌面 home-screen
-              // - 已在手机桌面 home-screen 返回 -> 保持在 home-screen 绝不退出网页
+              // 4. 若生图模块内部子弹窗或词典收藏夹二级视图打开，按层级回退
               const activeScreen = document.querySelector(".screen.active");
               if (activeScreen) {
                 if (activeScreen.id === "home-screen") {
-                  // 已在桌面，保持原地绝不退出
+                  const confirmModal = ensureExitConfirmModal();
+                  confirmModal.classList.add("visible");
+                  return true;
                 } else if (activeScreen.id === "chat-interface-screen") {
                   const chatBackBtn = document.getElementById("back-to-list-btn") || activeScreen.querySelector(".back-btn");
                   if (chatBackBtn) {
@@ -129832,16 +130118,19 @@ ${specificRules}`;
                   } else if (typeof window.showScreen === "function") {
                     window.showScreen("chat-list-screen");
                   }
+                  return true;
                 } else if (activeScreen.id === "chat-list-screen") {
                   if (typeof window.showScreen === "function") {
                     window.showScreen("home-screen");
                   }
+                  return true;
                 } else if (activeScreen.id === "game-hall-screen") {
                   if (typeof window.handleTavernMobileBack === "function") {
                     window.handleTavernMobileBack();
                   } else if (typeof window.showScreen === "function") {
                     window.showScreen("home-screen");
                   }
+                  return true;
                 } else {
                   const backBtn = activeScreen.querySelector(".header .back-btn, .back-btn");
                   if (backBtn) {
@@ -129849,11 +130138,61 @@ ${specificRules}`;
                   } else if (typeof window.showScreen === "function") {
                     window.showScreen("home-screen");
                   }
+                  return true;
                 }
               }
             } catch (_) {}
+            return true;
+          };
+
+          window.__handleEPhoneBackAction = executeEPhoneStepBack;
+
+          window.addEventListener("popstate", () => {
+            if (isHandlingPop) return;
+            isHandlingPop = true;
+            hasActiveUserGuard = false;
+            try {
+              window.history.pushState({ tukeyGuard: true, tag: "keep_fallback" }, "");
+            } catch (_) {}
+            executeEPhoneStepBack();
             isHandlingPop = false;
           });
+
+          document.addEventListener("backbutton", (e) => {
+            if (e && typeof e.preventDefault === "function") e.preventDefault();
+            executeEPhoneStepBack();
+          }, false);
+
+          // 屏幕下方边缘往上滑动手势识别：从底部边缘向上滑动时直接触发小手机返回上一级
+          let bottomSwipeStartX = 0;
+          let bottomSwipeStartY = 0;
+          let bottomSwipeValid = false;
+          document.addEventListener("touchstart", (e) => {
+            if (!e.touches || e.touches.length !== 1) {
+              bottomSwipeValid = false;
+              return;
+            }
+            const t = e.touches[0];
+            const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+            if (vh > 0 && t.clientY >= vh - 32) {
+              bottomSwipeStartX = t.clientX;
+              bottomSwipeStartY = t.clientY;
+              bottomSwipeValid = true;
+            } else {
+              bottomSwipeValid = false;
+            }
+          }, { passive: true });
+
+          document.addEventListener("touchend", (e) => {
+            if (!bottomSwipeValid || !e.changedTouches || e.changedTouches.length === 0) return;
+            bottomSwipeValid = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - bottomSwipeStartX;
+            const dy = t.clientY - bottomSwipeStartY;
+            if (dy < -42 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+              executeEPhoneStepBack();
+            }
+          }, { passive: true });
         })();
 
         // ================= 密友群聊：小手机系统、联系人申请、无信号拦截、状态栏时间同步投递与外观美化 =================
