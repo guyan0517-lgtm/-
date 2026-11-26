@@ -87,7 +87,7 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
-  </head>
+  <script src="/_aistudio-iframe.js?v=29045eb3"></script></head>
   <body>
     <div id="phone-screen">
       <div id="status-bar">
@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.9</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.0</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -23816,13 +23816,21 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           };
         };
 
-        function tryRequestNotificationPermissionOnGesture() {
+        let hasRequestedNotificationPermissionOnce = false;
+        function tryRequestNotificationPermissionOnGesture(evt) {
           try {
+            if (hasRequestedNotificationPermissionOnce) return;
+            if (window.Capacitor || window.EPhoneNativeBridge || window.androidBridge || window.cordova) return;
+            const t = evt && evt.target && evt.target.nodeType === 1 ? evt.target : null;
+            if (t && typeof t.closest === "function" && t.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) {
+              return;
+            }
             if (
               "Notification" in window &&
               Notification.permission === "default" &&
               (!window.state || !window.state.globalSettings || window.state.globalSettings.enableSystemNotifications !== false)
             ) {
+              hasRequestedNotificationPermissionOnce = true;
               Notification.requestPermission().catch(() => {});
             }
           } catch (_) {}
@@ -23830,9 +23838,9 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         ["pointerdown", "touchend", "click"].forEach((evtName) => {
           document.addEventListener(
             evtName,
-            () => {
+            (evt) => {
               ensureBackgroundKeepAlive(null, false);
-              tryRequestNotificationPermissionOnGesture();
+              tryRequestNotificationPermissionOnGesture(evt);
             },
             { passive: true }
           );
@@ -27991,11 +27999,14 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const defaultHeight = isEntryBox ? "62px" : (rowsAttr >= 6 ? "168px" : "78px");
 
           if (textareaEl._mashuRichAttached && typeof textareaEl._syncFromTextarea === "function") {
-            if (textareaEl._richEl) {
+            const isFocusedInside =
+              textareaEl._richEl &&
+              (document.activeElement === textareaEl._richEl || textareaEl._richEl.contains(document.activeElement));
+            if (textareaEl._richEl && !isFocusedInside) {
               textareaEl._richEl.style.height = defaultHeight;
               textareaEl._richEl.scrollTop = 0;
             }
-            if (!textareaEl._deferInitialHydrate) {
+            if (!textareaEl._deferInitialHydrate && !isFocusedInside) {
               textareaEl._syncFromTextarea();
             }
             return;
@@ -28010,11 +28021,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const richEl = document.createElement("div");
           richEl.className = "moe-input tc-rich-textarea" + (isEntryBox ? " tc-entry-rich-textarea" : "");
           richEl.contentEditable = "true";
-          richEl.spellcheck = false;
-          richEl.setAttribute("spellcheck", "false");
-          richEl.setAttribute("autocorrect", "off");
-          richEl.setAttribute("autocapitalize", "off");
-          richEl.setAttribute("autocomplete", "off");
           richEl.setAttribute("data-placeholder", textareaEl.getAttribute("placeholder") || "");
           richEl.style.minHeight = defaultHeight;
           richEl.style.height = defaultHeight;
@@ -28114,10 +28120,6 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                 const previewEl = document.createElement("div");
                 previewEl.className = "tc-inline-entry-preview-block";
                 previewEl.contentEditable = "true";
-                previewEl.spellcheck = false;
-                previewEl.setAttribute("spellcheck", "false");
-                previewEl.setAttribute("autocorrect", "off");
-                previewEl.setAttribute("autocapitalize", "off");
                 previewEl._boundEntry = ent;
                 if (ent.groupId) {
                   const grpColor = getTcGroupColorById(ent.groupId);
@@ -28138,10 +28140,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (entryTa) {
                     entryTa.value = newText;
                     if (entryTa._richEl) {
+                      const entryRichFocused =
+                        document.activeElement === entryTa._richEl ||
+                        entryTa._richEl.contains(document.activeElement);
                       if (ent.collapsed) {
                         entryTa._richEl._isRichHydrated = false;
                         entryTa._richEl._isDirty = false;
-                      } else if (typeof entryTa._syncFromTextarea === "function") {
+                      } else if (!entryRichFocused && typeof entryTa._syncFromTextarea === "function") {
                         entryTa._syncFromTextarea();
                       }
                     }
@@ -28151,7 +28156,12 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                     const sta = document.getElementById(sid);
                     if (!sta || !sta._richEl || !sta._richEl._isPreviewMode) return;
                     sta._richEl.querySelectorAll(".tc-inline-entry-preview-block").forEach((otherBlock) => {
-                      if (otherBlock !== previewEl && otherBlock._boundEntry === ent) {
+                      if (
+                        otherBlock !== previewEl &&
+                        otherBlock._boundEntry === ent &&
+                        document.activeElement !== otherBlock &&
+                        !otherBlock.contains(document.activeElement)
+                      ) {
                         otherBlock.textContent = newText;
                       }
                     });
@@ -28162,17 +28172,42 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
                   if (previewEl._syncTimer) clearTimeout(previewEl._syncTimer);
                   previewEl._syncTimer = setTimeout(() => {
                     previewEl._syncTimer = null;
-                    syncPreviewToEntry();
+                    if (!previewEl._isComposing) {
+                      syncPreviewToEntry();
+                    }
                   }, 200);
                 };
 
                 previewEl._syncEntryContent = syncPreviewToEntry;
                 previewEl._scheduleSyncEntryContent = scheduleSyncPreviewToEntry;
-                previewEl.addEventListener("input", (ev) => {
+                previewEl.addEventListener("compositionstart", (ev) => {
+                  previewEl._isComposing = true;
+                  ev.stopPropagation();
+                });
+                previewEl.addEventListener("compositionend", (ev) => {
+                  previewEl._isComposing = false;
                   ev.stopPropagation();
                   scheduleSyncPreviewToEntry();
                 });
+                previewEl.addEventListener("beforeinput", (ev) => {
+                  ev.stopPropagation();
+                });
+                previewEl.addEventListener("keydown", (ev) => {
+                  if (ev.key !== "Enter") {
+                    ev.stopPropagation();
+                  }
+                });
+                previewEl.addEventListener("keyup", (ev) => {
+                  ev.stopPropagation();
+                });
+                previewEl.addEventListener("input", (ev) => {
+                  ev.stopPropagation();
+                  if (!previewEl._isComposing) {
+                    scheduleSyncPreviewToEntry();
+                  }
+                });
                 previewEl.addEventListener("blur", () => {
+                  previewEl._isComposing = false;
                   if (previewEl._syncTimer) {
                     syncPreviewToEntry();
                   }
@@ -28684,10 +28719,13 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             ids.forEach((id) => {
               const ta = document.getElementById(id);
               if (ta) {
+                const isFocusedInside =
+                  ta._richEl &&
+                  (document.activeElement === ta._richEl || ta._richEl.contains(document.activeElement));
                 if (ta._richEl && ta._richEl._isDirty && typeof ta._syncToTextarea === "function") {
                   ta._syncToTextarea();
                 }
-                if (typeof ta._syncFromTextarea === "function") {
+                if (!isFocusedInside && typeof ta._syncFromTextarea === "function") {
                   ta._syncFromTextarea();
                 }
               }
@@ -112786,7 +112824,9 @@ ${specificRules}`;
           if ("caches" in window && typeof window.caches.keys === "function") {
             window.caches.keys().then((names) => {
               names.forEach((n) => {
-                window.caches.delete(n).catch(() => {});
+                if (n !== "ephone-hot-update-bundle-v1") {
+                  window.caches.delete(n).catch(() => {});
+                }
               });
             }).catch(() => {});
           }
@@ -112811,72 +112851,8 @@ ${specificRules}`;
             const tag = el.tagName.toUpperCase();
             if (tag !== "INPUT" && tag !== "TEXTAREA") return;
             el._autofillSuppressed = true;
-            if (tag === "INPUT") {
-              const rawType = String(el.getAttribute("type") || "text").toLowerCase();
-              const nonTextTypes = [
-                "checkbox",
-                "radio",
-                "file",
-                "range",
-                "color",
-                "number",
-                "date",
-                "time",
-                "datetime-local",
-                "month",
-                "week",
-                "hidden",
-                "button",
-                "submit",
-                "reset"
-              ];
-              if (!nonTextTypes.includes(rawType)) {
-                if (rawType !== "search") {
-                  try {
-                    el.setAttribute("type", "search");
-                  } catch (_) {}
-                }
-                if (!el.getAttribute("enterkeyhint")) {
-                  el.setAttribute("enterkeyhint", "done");
-                }
-                if (el.hasAttribute("name")) {
-                  el.removeAttribute("name");
-                }
-              } else if (rawType === "number") {
-                if (el.hasAttribute("name")) {
-                  el.removeAttribute("name");
-                }
-              } else {
-                return;
-              }
-            } else if (tag === "TEXTAREA") {
-              if (el.hasAttribute("name")) {
-                el.removeAttribute("name");
-              }
-            }
             if (el.getAttribute("autocomplete") !== "off") {
               el.setAttribute("autocomplete", "off");
-            }
-            if (el.getAttribute("autocorrect") !== "off") {
-              el.setAttribute("autocorrect", "off");
-            }
-            if (el.getAttribute("autocapitalize") !== "off") {
-              el.setAttribute("autocapitalize", "off");
-            }
-            if (el.getAttribute("spellcheck") !== "false") {
-              el.setAttribute("spellcheck", "false");
-            }
-            if (el.getAttribute("data-form-type") !== "other") {
-              el.setAttribute("data-form-type", "other");
-            }
-            if (el.getAttribute("data-lpignore") !== "true") {
-              el.setAttribute("data-lpignore", "true");
-            }
-            if (el.getAttribute("data-1p-ignore") !== "true") {
-              el.setAttribute("data-1p-ignore", "true");
-            }
-            if (el.getAttribute("aria-autocomplete") !== "none") {
-              el.setAttribute("aria-autocomplete", "none");
             }
           };
 
@@ -112891,30 +112867,6 @@ ${specificRules}`;
           };
 
           suppressAllAutofillInputsInRoot(document.body);
-
-          document.addEventListener(
-            "focusin",
-            (e) => {
-              const t = e.target;
-              if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) {
-                suppressBrowserAutofillBarOnField(t);
-              }
-            },
-            true
-          );
-
-          document.addEventListener(
-            "keydown",
-            (e) => {
-              if (e.key === "Escape") {
-                const t = e.target;
-                if (t && t.tagName === "INPUT" && String(t.getAttribute("type") || "").toLowerCase() === "search") {
-                  e.preventDefault();
-                }
-              }
-            },
-            true
-          );
           const savedTheme = localStorage.getItem("ephone-theme") || "light"; // 默认为日间模式
           applyTheme(savedTheme);
 
@@ -129715,23 +129667,54 @@ ${specificRules}`;
 
           seedHistoryGuardStack();
 
-          // 关键：移动端浏览器要求每个历史记录条目必须在独立的用户真实手势中调用 pushState 才会被标记为有效返回点；但当用户点击或长按输入框准备复制粘贴时，绝对不能调用 pushState，否则安卓 WebView 会判定发生导航并立刻强行关闭原生粘贴气泡菜单
+          // 关键：移动端浏览器要求每个历史记录条目必须在独立的用户真实手势中调用 pushState 才会被标记为有效返回点；但当用户点击、移动光标或长按输入框准备复制粘贴时，绝对不能调用 pushState，否则安卓 WebView 会判定发生导航并立刻打断光标定位或关闭粘贴菜单
+          let lastEditableInteractionTs = 0;
+          const checkIsEditableNode = (n) => {
+            if (!n) return false;
+            const el = n.nodeType === 1 ? n : n.parentElement;
+            if (!el || typeof el.closest !== "function") return false;
+            if (el.isContentEditable) return true;
+            return Boolean(
+              el.closest(
+                "input, textarea, select, [contenteditable='true'], [contenteditable=''], .moe-input, .mod-nai-textarea, .mod-nai-input, .tc-rich-textarea, .tc-inline-entry-preview-block"
+              )
+            );
+          };
+
+          const markEditableInteraction = (evt) => {
+            if ((evt && checkIsEditableNode(evt.target)) || checkIsEditableNode(document.activeElement)) {
+              lastEditableInteractionTs = Date.now();
+            }
+          };
+          document.addEventListener("focusin", markEditableInteraction, { passive: true, capture: true });
+          document.addEventListener("touchstart", markEditableInteraction, { passive: true, capture: true });
+          document.addEventListener("pointerdown", markEditableInteraction, { passive: true, capture: true });
+          document.addEventListener("input", markEditableInteraction, { passive: true, capture: true });
+          document.addEventListener("selectionchange", () => {
+            if (checkIsEditableNode(document.activeElement)) {
+              lastEditableInteractionTs = Date.now();
+            }
+          }, { passive: true });
+
           const isEditableOrSelectionActive = (evt) => {
             try {
-              const checkNode = (n) => {
-                if (!n) return false;
-                const el = n.nodeType === 1 ? n : n.parentElement;
-                if (!el || typeof el.closest !== "function") return false;
-                return Boolean(
-                  el.closest(
-                    "input, textarea, select, [contenteditable='true'], [contenteditable=''], .moe-input, .mod-nai-textarea, .mod-nai-input"
-                  )
-                );
-              };
-              if (evt && checkNode(evt.target)) return true;
-              if (checkNode(document.activeElement)) return true;
+              if (Date.now() - lastEditableInteractionTs < 1200) return true;
+              if (evt && checkIsEditableNode(evt.target)) {
+                lastEditableInteractionTs = Date.now();
+                return true;
+              }
+              if (checkIsEditableNode(document.activeElement)) {
+                lastEditableInteractionTs = Date.now();
+                return true;
+              }
               const sel = window.getSelection ? window.getSelection() : null;
-              if (sel && !sel.isCollapsed && String(sel.toString() || "").length > 0) return true;
+              if (sel && sel.rangeCount > 0) {
+                if (!sel.isCollapsed && String(sel.toString() || "").length > 0) return true;
+                if (checkIsEditableNode(sel.anchorNode) || checkIsEditableNode(sel.focusNode)) {
+                  lastEditableInteractionTs = Date.now();
+                  return true;
+                }
+              }
             } catch (_) {}
             return false;
           };
@@ -129761,7 +129744,6 @@ ${specificRules}`;
           document.addEventListener("pointerup", replenishGuardOnGesture, { passive: true, capture: true });
           document.addEventListener("click", replenishGuardOnGesture, { passive: true, capture: true });
           document.addEventListener("mousedown", replenishGuardOnGesture, { passive: true, capture: true });
-          document.addEventListener("keydown", replenishGuardOnGesture, { passive: true, capture: true });
 
           const origShowScreen = window.showScreen;
           if (typeof origShowScreen === "function" && !origShowScreen._wrappedWithBackGuard) {
@@ -138716,12 +138698,12 @@ ${specificRules}`;
             return false;
           }
 
-          // 若当前处于未配备原生目录切换的旧版APK内，且同源热更新缓存中已有更高版本的 index.html，则在同源下自动加载热更新界面，绝不改变域名且不丢本地数据
+          // 若当前处于未配备原生目录切换的旧版APK内，且同源热更新缓存中已有更高版本的 index.html，则交由 Service Worker 标准导航接管，禁止使用 document.write 原地覆写以免导致全局监听重复绑定与安卓输入法光标错乱
           (async function checkAndBootCachedHotUpdateOnApk() {
             try {
               if (!isRunningInApkContainer()) return;
               if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.applyHotUpdate === "function") return;
-              if (window.__ephoneHotBootstrapped) return;
+              if (sessionStorage.getItem("__ephone_hot_sw_reloaded") === "1") return;
               if (!window.caches || typeof window.caches.open !== "function") return;
               const cache = await window.caches.open(HOT_UPDATE_CACHE_NAME);
               const cachedRes = await cache.match("/index.html");
@@ -138731,11 +138713,9 @@ ${specificRules}`;
               const curTagEl = document.getElementById("api-settings-version-tag");
               const curVer = curTagEl ? (parseFloat(String(curTagEl.textContent || "").replace(/[^0-9.]/g, "")) || 0) : 0;
               const cachedVer = extractVersionNumFromHtml(cachedHtml);
-              if (cachedVer > curVer) {
-                window.__ephoneHotBootstrapped = true;
-                document.open();
-                document.write(cachedHtml);
-                document.close();
+              if (cachedVer > curVer && navigator.serviceWorker && navigator.serviceWorker.controller) {
+                sessionStorage.setItem("__ephone_hot_sw_reloaded", "1");
+                window.location.reload();
               }
             } catch (_) {}
           })();
