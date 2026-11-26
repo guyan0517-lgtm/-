@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -112855,7 +112855,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=30.5", { updateViaCache: "none" })
+              .register("sw.js?v=30.6", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -112934,11 +112934,24 @@ ${specificRules}`;
             if (window.__ephoneCapacitorImeFixed) return;
             window.__ephoneCapacitorImeFixed = true;
 
+            const PAIRED_SYMS = new Set([
+              "\x28\x29", "\uff08\uff09", "[]", "\u3010\u3011", "{}", "\uff5b\uff5d",
+              "<>", "\u300a\u300b", "\u3008\u3009", "\u300c\u300d", "\u300e\u300f",
+              "\"\"", "\u201c\u201d", "''", "\u2018\u2019", "\u3014\u3015", "\u3016\u3017"
+            ]);
+            const computeInsertedCursorOffset = (str) => {
+              if (!str) return 0;
+              if (str.length === 2 && PAIRED_SYMS.has(str)) return 1;
+              if (str.length === 4 && (str === "{{}}" || str === "[[]]")) return 2;
+              return str.length;
+            };
+
             const insertTextIntoActiveElementAtCursor = (rawText) => {
               if (typeof rawText !== "string" || rawText.length === 0) return false;
               const active = document.activeElement;
               if (!active) return false;
               const tag = (active.tagName || "").toUpperCase();
+              const caretAdvance = computeInsertedCursorOffset(rawText);
               if (tag === "INPUT" || tag === "TEXTAREA") {
                 const proto = tag === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
                 const desc = Object.getOwnPropertyDescriptor(proto, "value");
@@ -112953,7 +112966,7 @@ ${specificRules}`;
                   active.value = nextVal;
                 }
                 active.__bypassCapHook = false;
-                const nextPos = start + rawText.length;
+                const nextPos = start + caretAdvance;
                 try {
                   active.setSelectionRange(nextPos, nextPos);
                 } catch (_) {}
@@ -112967,6 +112980,21 @@ ${specificRules}`;
               const richHost = active.closest ? active.closest(".tc-rich-textarea") : null;
               if (richHost && typeof richHost._insertPlainTextAtCursor === "function") {
                 richHost._insertPlainTextAtCursor(rawText);
+                if (caretAdvance < rawText.length) {
+                  try {
+                    const sel = window.getSelection ? window.getSelection() : null;
+                    if (sel && sel.rangeCount > 0) {
+                      const r = sel.getRangeAt(0);
+                      if (r.startContainer && r.startContainer.nodeType === Node.TEXT_NODE && r.startOffset >= (rawText.length - caretAdvance)) {
+                        const nr = document.createRange();
+                        nr.setStart(r.startContainer, r.startOffset - (rawText.length - caretAdvance));
+                        nr.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(nr);
+                      }
+                    }
+                  } catch (_) {}
+                }
                 return true;
               }
               if (active.isContentEditable) {
@@ -112978,7 +113006,11 @@ ${specificRules}`;
                     const tn = document.createTextNode(rawText);
                     range.insertNode(tn);
                     const newRange = document.createRange();
-                    newRange.setStartAfter(tn);
+                    if (caretAdvance < rawText.length) {
+                      newRange.setStart(tn, caretAdvance);
+                    } else {
+                      newRange.setStartAfter(tn);
+                    }
                     newRange.collapse(true);
                     sel.removeAllRanges();
                     sel.addRange(newRange);
@@ -113152,7 +113184,7 @@ ${specificRules}`;
                   const spliced = this.__capGetVal.slice(0, start) + inserted + this.__capGetVal.slice(end);
                   this.__capGetTs = 0;
                   nativeSet.call(this, spliced);
-                  const nextPos = start + inserted.length;
+                  const nextPos = start + computeInsertedCursorOffset(inserted);
                   try {
                     this.setSelectionRange(nextPos, nextPos);
                   } catch (_) {}
