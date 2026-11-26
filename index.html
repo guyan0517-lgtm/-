@@ -87,7 +87,7 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
-  <script src="/_aistudio-iframe.js?v=29045eb3"></script></head>
+  </head>
   <body>
     <div id="phone-screen">
       <div id="status-bar">
@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.0</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.1</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -112832,7 +112832,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=25.6", { updateViaCache: "none" })
+              .register("sw.js?v=30.1", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -138918,7 +138918,7 @@ ${specificRules}`;
                 const baseTreeSha = commitData && commitData.tree && commitData.tree.sha;
                 if (!baseTreeSha) return false;
 
-                const filesToPush = [".github/workflows/build-apk.yml", "index.html", "module-manager.js"];
+                const filesToPush = [".github/workflows/build-apk.yml", "index.html", "style.css", "sw.js", "module-manager.js"];
                 const treeItems = [];
                 for (const relPath of filesToPush) {
                   const localRes = await fetch("/" + relPath, { method: "GET", cache: "no-store" });
@@ -138990,7 +138990,7 @@ ${specificRules}`;
 
           setTimeout(() => {
             syncCurrentSourceToGithubCodeRepoIfNewer().catch(() => {});
-          }, 3000);
+          }, 600);
 
           async function clearRuntimeCachesAndReloadCurrentOrigin() {
             try {
@@ -139151,10 +139151,16 @@ ${specificRules}`;
               if (btnEl) btnEl.textContent = txt;
             };
             try {
-              setBtnStatus("查找安装包...");
+              setBtnStatus("同步检查中...");
               if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
                 try { await window.offloadNaiDedicatedStoreToTermuxSilently(); } catch (_) {}
               }
+              if (!isRunningInApkContainer()) {
+                try {
+                  await syncCurrentSourceToGithubCodeRepoIfNewer();
+                } catch (_) {}
+              }
+              setBtnStatus("查找安装包...");
               const found = await resolveValidGithubCodeRepository();
               const creds = getConfiguredGithubCreds();
               const owner = (found && found.owner) || creds.user;

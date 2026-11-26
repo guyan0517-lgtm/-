@@ -279,7 +279,7 @@ jobs:
                               savedApkTime = Long.parseLong(new String(bos.toByteArray(), StandardCharsets.UTF_8).trim());
                           } catch (Exception ignored) {}
                       }
-                      if (curApkTime > 0 && savedApkTime > 0 && curApkTime != savedApkTime) {
+                      if (curApkTime > 0 && savedApkTime != curApkTime) {
                           deleteDirRecursively(hotDir);
                           return;
                       }

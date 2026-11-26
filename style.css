@@ -30712,7 +30712,6 @@ select:focus-visible {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  contain: layout style;
 }
 
 .tc-rich-textarea.tc-entry-rich-textarea {
@@ -30808,8 +30807,6 @@ select:focus-visible {
   box-sizing: border-box;
   outline: none;
   cursor: text;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 48px;
 }
 
 .tc-inline-entry-preview-block:focus {

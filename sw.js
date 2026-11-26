@@ -1,6 +1,12 @@
-// Service Worker v29.6 - Push Notifications & In-Place Hot Update Cache
-const CACHE_NAME = "ephone-tuk-cache-v29.6";
+// Service Worker v30.1 - Push Notifications & Version-Safe Hot Update Cache
+const CACHE_NAME = "ephone-tuk-cache-v30.1";
 const HOT_UPDATE_CACHE = "ephone-hot-update-bundle-v1";
+
+function extractHtmlVersion(htmlText) {
+  if (!htmlText || typeof htmlText !== "string") return 0;
+  const m = /id=["']api-settings-version-tag["'][^>]*>\s*v?([0-9]+(?:\.[0-9]+)?)\s*</i.exec(htmlText);
+  return m && m[1] ? parseFloat(m[1]) || 0 : 0;
+}
 
 if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.skipWaiting === "function") {
   self.addEventListener("install", event => {
@@ -33,11 +39,31 @@ if (typeof window === "undefined" && typeof self !== "undefined" && typeof self.
     if (urlObj.pathname.startsWith("/api/")) return;
     const normPath = (urlObj.pathname === "/" || urlObj.pathname === "") ? "/index.html" : urlObj.pathname;
     event.respondWith(
-      caches.open(HOT_UPDATE_CACHE).then(cache => {
-        return cache.match(normPath).then(cachedRes => {
-          if (cachedRes) return cachedRes;
+      caches.open(HOT_UPDATE_CACHE).then(async cache => {
+        const cachedRes = await cache.match(normPath);
+        if (!cachedRes) {
           return fetch(req);
-        });
+        }
+        if (normPath === "/index.html") {
+          try {
+            const freshRes = await fetch(req, { cache: "no-store" });
+            if (freshRes && freshRes.ok) {
+              const freshClone = freshRes.clone();
+              const cachedClone = cachedRes.clone();
+              const [freshHtml, cachedHtml] = await Promise.all([
+                freshClone.text(),
+                cachedClone.text()
+              ]);
+              const freshVer = extractHtmlVersion(freshHtml);
+              const cachedVer = extractHtmlVersion(cachedHtml);
+              if (freshVer > 0 && freshVer >= cachedVer) {
+                await caches.delete(HOT_UPDATE_CACHE);
+                return freshRes;
+              }
+            }
+          } catch (_) {}
+        }
+        return cachedRes;
       }).catch(() => fetch(req))
     );
   });
