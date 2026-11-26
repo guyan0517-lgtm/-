@@ -87,7 +87,7 @@
 
     <style id="custom-theme-style"></style>
     <style id="mini-phone-custom-style"></style>
-  </head>
+  <script src="/_aistudio-iframe.js?v=29045eb3"></script></head>
   <body>
     <div id="phone-screen">
       <div id="status-bar">
@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.8</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v29.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -53095,21 +53095,19 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               openBtn.addEventListener("click", () => {
                 if (!_naiCollectionFirstOpenDone) {
                   _naiCollectionFirstOpenDone = true;
-                  const hasLexItems = Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0;
-                  const hasBmItems = Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0;
-                  colCategory = (!hasLexItems && hasBmItems) ? "bookmark" : "lexicon";
+                  colCategory = "lexicon";
                   colLexiconViewMode = "folder";
                   colLexiconActiveFolder = "";
+                  colScope = "local";
+                  colLocalPage = 1;
+                  colSharedPage = 1;
+                  colLexiconLocalPage = 1;
+                  colLexiconSharedPage = 1;
+                  colLexiconFolderRootPage = 1;
+                  switchCollectionSubView("grid");
                 }
-                colScope = "local";
-                colLocalPage = 1;
-                colSharedPage = 1;
-                colLexiconLocalPage = 1;
-                colLexiconSharedPage = 1;
-                colLexiconFolderRootPage = 1;
                 colSortSourceIndex = -1;
                 setColStatus("");
-                switchCollectionSubView("grid");
                 applyModeView("collection");
                 renderCollectionGrid(true);
                 preloadAllNaiCollectionVaultImages();
@@ -53923,15 +53921,21 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             } else {
               if (!_naiCollectionFirstOpenDone) {
                 _naiCollectionFirstOpenDone = true;
-                const hasLexItems = Array.isArray(memoryLexiconList) && memoryLexiconList.length > 0;
-                const hasBmItems = Array.isArray(memoryBookmarksList) && memoryBookmarksList.length > 0;
-                colCategory = (!hasLexItems && hasBmItems) ? "bookmark" : "lexicon";
+                colCategory = "lexicon";
                 colLexiconViewMode = "folder";
                 colLexiconActiveFolder = "";
+                colScope = "local";
+                colLocalPage = 1;
+                colSharedPage = 1;
+                colLexiconLocalPage = 1;
+                colLexiconSharedPage = 1;
+                colLexiconFolderRootPage = 1;
+                switchCollectionSubView("grid");
               }
+              colSortSourceIndex = -1;
+              setColStatus("");
               st.mode = "collection";
               savePanelState(st);
-              switchCollectionSubView("grid");
               applyModeView("collection");
               renderCollectionGrid(true);
               preloadAllNaiCollectionVaultImages();
@@ -54079,7 +54083,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             const st = loadPanelState();
             const store = loadPresetsStore();
             if (forceGenerateMode === true) {
-              _naiCollectionFirstOpenDone = false;
               st.mode = "generate";
               if (_naiHydrationCompleted) {
                 savePanelState(st);
@@ -54094,8 +54097,14 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 colCategory = "lexicon";
                 colLexiconViewMode = "folder";
                 colLexiconActiveFolder = "";
+                colScope = "local";
+                colLocalPage = 1;
+                colSharedPage = 1;
+                colLexiconLocalPage = 1;
+                colLexiconSharedPage = 1;
+                colLexiconFolderRootPage = 1;
+                switchCollectionSubView("grid");
               }
-              switchCollectionSubView("grid");
             }
             applyModeView(st.mode || "generate");
             renderCollectionGrid();
@@ -54646,15 +54655,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 writeKeyToNaiIDB("lexiconFolders", cleanedFolders);
               }
 
-              if (
-                colCategory === "lexicon" &&
-                (!Array.isArray(memoryLexiconList) || memoryLexiconList.length === 0) &&
-                Array.isArray(memoryBookmarksList) &&
-                memoryBookmarksList.length > 0
-              ) {
-                colCategory = "bookmark";
-              }
-
               // 5. 选择最新的预设库作为唯一列表基准（绝不把旧备份里已删掉的预设或分组重新加回来），仅对现有同名空值预设补全提示词
               const countPresetsInStore = (ps) => {
                 if (!ps || typeof ps !== "object") return 0;
@@ -54729,6 +54729,11 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               }
 
               // 若用户已经在当前会话中操作过面板，严格保留当前正在使用的预设选择、提示词文本、勾选状态、模式与主题，绝不被后台同步强行切回旧预设
+              if (liveStateBefore) {
+                if (liveStateBefore.mode !== undefined) {
+                  mergedState.mode = liveStateBefore.mode;
+                }
+              }
               if (wasHydratedBefore && liveStateBefore) {
                 const livePreserveKeys = [
                   "mode",
