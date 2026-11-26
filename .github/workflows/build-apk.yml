@@ -168,7 +168,11 @@ jobs:
           import android.content.Context;
           import android.util.AttributeSet;
           import android.util.Base64;
+          import android.view.ActionMode;
           import android.view.KeyEvent;
+          import android.view.Menu;
+          import android.view.MenuItem;
+          import android.view.View;
           import android.view.inputmethod.BaseInputConnection;
           import android.view.inputmethod.EditorInfo;
           import android.view.inputmethod.InputConnection;
@@ -179,8 +183,15 @@ jobs:
               private BaseInputConnection capInputConnection;
               private Bridge bridge;
 
+              private static final int MENU_ID_SELECT_ALL = 0x7011;
+              private static final int MENU_ID_COPY = 0x7012;
+              private static final int MENU_ID_CUT = 0x7013;
+
               public CapacitorWebView(Context context, AttributeSet attrs) {
                   super(context, attrs);
+                  if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                      setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+                  }
               }
 
               public void setBridge(Bridge bridge) {
@@ -188,8 +199,141 @@ jobs:
               }
 
               @Override
+              public int getAutofillType() {
+                  return View.AUTOFILL_TYPE_NONE;
+              }
+
+              @Override
               public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
                   return super.onCreateInputConnection(outAttrs);
+              }
+
+              private ActionMode.Callback wrapActionModeCallback(final ActionMode.Callback orig) {
+                  if (orig == null) return null;
+                  if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && orig instanceof ActionMode.Callback2) {
+                      final ActionMode.Callback2 orig2 = (ActionMode.Callback2) orig;
+                      return new ActionMode.Callback2() {
+                          @Override
+                          public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                              boolean res = orig2.onCreateActionMode(mode, menu);
+                              enrichCursorMenu(menu);
+                              return res;
+                          }
+
+                          @Override
+                          public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                              boolean res = orig2.onPrepareActionMode(mode, menu);
+                              enrichCursorMenu(menu);
+                              return res;
+                          }
+
+                          @Override
+                          public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                              if (handleEnrichedMenuClick(mode, item)) return true;
+                              return orig2.onActionItemClicked(mode, item);
+                          }
+
+                          @Override
+                          public void onDestroyActionMode(ActionMode mode) {
+                              orig2.onDestroyActionMode(mode);
+                          }
+
+                          @Override
+                          public void onGetContentRect(ActionMode mode, View view, android.graphics.Rect outRect) {
+                              orig2.onGetContentRect(mode, view, outRect);
+                          }
+                      };
+                  }
+                  return new ActionMode.Callback() {
+                      @Override
+                      public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                          boolean res = orig.onCreateActionMode(mode, menu);
+                          enrichCursorMenu(menu);
+                          return res;
+                      }
+
+                      @Override
+                      public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                          boolean res = orig.onPrepareActionMode(mode, menu);
+                          enrichCursorMenu(menu);
+                          return res;
+                      }
+
+                      @Override
+                      public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                          if (handleEnrichedMenuClick(mode, item)) return true;
+                          return orig.onActionItemClicked(mode, item);
+                      }
+
+                      @Override
+                      public void onDestroyActionMode(ActionMode mode) {
+                          orig.onDestroyActionMode(mode);
+                      }
+                  };
+              }
+
+              private void enrichCursorMenu(Menu menu) {
+                  if (menu == null) return;
+                  boolean hasSelectAll = false;
+                  boolean hasCopy = false;
+                  boolean hasCut = false;
+                  for (int i = menu.size() - 1; i >= 0; i--) {
+                      MenuItem item = menu.getItem(i);
+                      if (item == null || item.getTitle() == null) continue;
+                      String t = item.getTitle().toString().trim();
+                      String tl = t.toLowerCase();
+                      if (t.contains("自动填充") || tl.contains("autofill")) {
+                          menu.removeItem(item.getItemId());
+                      } else if (t.contains("全选") || tl.contains("select all")) {
+                          hasSelectAll = true;
+                      } else if (t.contains("复制") || tl.contains("copy")) {
+                          hasCopy = true;
+                      } else if (t.contains("剪切") || tl.contains("cut")) {
+                          hasCut = true;
+                      }
+                  }
+                  if (!hasSelectAll && menu.findItem(MENU_ID_SELECT_ALL) == null) {
+                      MenuItem sa = menu.add(0, MENU_ID_SELECT_ALL, 1, "全选");
+                      sa.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                  }
+                  if (!hasCopy && menu.findItem(MENU_ID_COPY) == null) {
+                      MenuItem cp = menu.add(0, MENU_ID_COPY, 2, "复制");
+                      cp.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                  }
+                  if (!hasCut && menu.findItem(MENU_ID_CUT) == null) {
+                      MenuItem ct = menu.add(0, MENU_ID_CUT, 3, "剪切");
+                      ct.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+                  }
+              }
+
+              private boolean handleEnrichedMenuClick(ActionMode mode, MenuItem item) {
+                  if (item == null) return false;
+                  int id = item.getItemId();
+                  if (id == MENU_ID_SELECT_ALL) {
+                      evaluateJavascript("window.__ephoneSelectAllActiveInput && window.__ephoneSelectAllActiveInput();", null);
+                      return true;
+                  }
+                  if (id == MENU_ID_COPY) {
+                      evaluateJavascript("window.__ephoneCopyActiveInput && window.__ephoneCopyActiveInput();", null);
+                      if (mode != null) mode.finish();
+                      return true;
+                  }
+                  if (id == MENU_ID_CUT) {
+                      evaluateJavascript("window.__ephoneCutActiveInput && window.__ephoneCutActiveInput();", null);
+                      if (mode != null) mode.finish();
+                      return true;
+                  }
+                  return false;
+              }
+
+              @Override
+              public ActionMode startActionMode(ActionMode.Callback callback) {
+                  return super.startActionMode(wrapActionModeCallback(callback));
+              }
+
+              @Override
+              public ActionMode startActionMode(ActionMode.Callback callback, int type) {
+                  return super.startActionMode(wrapActionModeCallback(callback), type);
               }
 
               @Override
@@ -228,6 +372,7 @@ jobs:
           import android.util.Base64;
           import android.view.KeyEvent;
           import android.view.View;
+          import android.view.autofill.AutofillManager;
           import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
@@ -266,6 +411,15 @@ jobs:
                       });
                   } catch (Exception ignored) {}
                   try {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          if (getWindow() != null && getWindow().getDecorView() != null) {
+                              getWindow().getDecorView().setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+                          }
+                          AutofillManager afm = getSystemService(AutofillManager.class);
+                          if (afm != null) {
+                              afm.cancel();
+                          }
+                      }
                       if (this.bridge != null && this.bridge.getWebView() != null) {
                           WebView webView = this.bridge.getWebView();
                           WebSettings ws = webView.getSettings();
@@ -274,6 +428,7 @@ jobs:
                           ws.setJavaScriptCanOpenWindowsAutomatically(true);
                           ws.setAllowFileAccess(true);
                           ws.setAllowContentAccess(true);
+                          ws.setSaveFormData(false);
                           webView.setLongClickable(true);
                           webView.setHapticFeedbackEnabled(true);
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

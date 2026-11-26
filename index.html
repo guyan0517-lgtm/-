@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.3</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -112855,7 +112855,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=30.3", { updateViaCache: "none" })
+              .register("sw.js?v=30.5", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -112995,6 +112995,92 @@ ${specificRules}`;
             };
 
             window.__ephoneInsertTextAtActiveCursor = insertTextIntoActiveElementAtCursor;
+            window.__ephoneSelectAllActiveInput = function () {
+              try {
+                const active = document.activeElement;
+                if (!active) return false;
+                const tag = (active.tagName || "").toUpperCase();
+                if (tag === "INPUT" || tag === "TEXTAREA") {
+                  active.focus();
+                  active.setSelectionRange(0, (active.value || "").length);
+                  return true;
+                }
+                if (active.isContentEditable) {
+                  const sel = window.getSelection ? window.getSelection() : null;
+                  if (sel) {
+                    const range = document.createRange();
+                    range.selectNodeContents(active);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    return true;
+                  }
+                }
+              } catch (_) {}
+              return false;
+            };
+            window.__ephoneCopyActiveInput = function () {
+              try {
+                const active = document.activeElement;
+                if (!active) return false;
+                const tag = (active.tagName || "").toUpperCase();
+                let text = "";
+                if (tag === "INPUT" || tag === "TEXTAREA") {
+                  const s = typeof active.selectionStart === "number" ? active.selectionStart : 0;
+                  const e = typeof active.selectionEnd === "number" ? active.selectionEnd : 0;
+                  text = e > s ? (active.value || "").slice(s, e) : (active.value || "");
+                } else if (active.isContentEditable) {
+                  const sel = window.getSelection ? window.getSelection() : null;
+                  const selStr = sel ? String(sel.toString() || "") : "";
+                  text = selStr.length > 0 ? selStr : String(active.innerText || active.textContent || "");
+                }
+                if (text && window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.copyToClipboard === "function") {
+                  window.EPhoneNativeBridge.copyToClipboard(text);
+                  if (typeof window.showDownloadToast === "function") {
+                    window.showDownloadToast("已复制", "success");
+                  }
+                  return true;
+                }
+              } catch (_) {}
+              return false;
+            };
+            window.__ephoneCutActiveInput = function () {
+              try {
+                const active = document.activeElement;
+                if (!active) return false;
+                const tag = (active.tagName || "").toUpperCase();
+                if (tag === "INPUT" || tag === "TEXTAREA") {
+                  const proto = tag === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                  const desc = Object.getOwnPropertyDescriptor(proto, "value");
+                  const curVal = desc && desc.get ? desc.get.call(active) : (active.value || "");
+                  const s = typeof active.selectionStart === "number" ? active.selectionStart : 0;
+                  const e = typeof active.selectionEnd === "number" ? active.selectionEnd : 0;
+                  const cutText = e > s ? curVal.slice(s, e) : curVal;
+                  if (!cutText) return false;
+                  if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.copyToClipboard === "function") {
+                    window.EPhoneNativeBridge.copyToClipboard(cutText);
+                  }
+                  const nextVal = e > s ? (curVal.slice(0, s) + curVal.slice(e)) : "";
+                  const nextPos = e > s ? s : 0;
+                  active.__bypassCapHook = true;
+                  if (desc && desc.set) desc.set.call(active, nextVal);
+                  else active.value = nextVal;
+                  active.__bypassCapHook = false;
+                  try { active.setSelectionRange(nextPos, nextPos); } catch (_) {}
+                  try {
+                    active.dispatchEvent(new InputEvent("input", { bubbles: true, data: "", inputType: "deleteByCut" }));
+                  } catch (_) {
+                    active.dispatchEvent(new Event("input", { bubbles: true }));
+                  }
+                  return true;
+                }
+                if (active.isContentEditable) {
+                  window.__ephoneCopyActiveInput();
+                  document.execCommand("delete");
+                  return true;
+                }
+              } catch (_) {}
+              return false;
+            };
             window.__ephoneInsertNativeInputTextFromB64 = function (b64Str) {
               try {
                 if (!b64Str) return false;
@@ -129986,6 +130072,10 @@ ${specificRules}`;
             return modal;
           };
 
+          let userGuardDepth = 0;
+          let lastGesturePushTs = 0;
+          const MAX_GUARD_STACK = 12;
+
           window.pushMobileBackGuard = function (tag) {
             if (isHandlingPop) return;
             try {
@@ -129993,9 +130083,10 @@ ${specificRules}`;
               if (!st || !st.tukeyGuard) {
                 window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
               }
-              if (!hasActiveUserGuard) {
-                window.history.pushState({ tukeyGuard: true, tag: tag || "screen", userActivated: true }, "");
+              if (userGuardDepth < MAX_GUARD_STACK) {
+                userGuardDepth++;
                 hasActiveUserGuard = true;
+                window.history.pushState({ tukeyGuard: true, tag: (tag || "screen") + "_" + userGuardDepth, userActivated: true }, "");
               }
             } catch (_) {}
           };
@@ -130003,7 +130094,9 @@ ${specificRules}`;
           const seedHistoryGuardStack = () => {
             try {
               window.history.replaceState({ tukeyGuard: true, tag: "root" }, "");
-              window.history.pushState({ tukeyGuard: true, tag: "guard_1" }, "");
+              for (let i = 1; i <= 4; i++) {
+                window.history.pushState({ tukeyGuard: true, tag: "guard_" + i }, "");
+              }
             } catch (_) {}
           };
 
@@ -130026,17 +130119,23 @@ ${specificRules}`;
           };
 
           const replenishGuardOnGesture = () => {
-            if (isHandlingPop || hasActiveUserGuard) return;
+            if (isHandlingPop) return;
             if (hasNonCollapsedSelection()) return;
             try {
+              const now = Date.now();
+              if (now - lastGesturePushTs < 90) return;
               const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
               if (!isUserActive) return;
               const st = window.history.state;
               if (!st || !st.tukeyGuard) {
                 window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
               }
-              window.history.pushState({ tukeyGuard: true, tag: "user_guard_active", userActivated: true }, "");
-              hasActiveUserGuard = true;
+              if (userGuardDepth < MAX_GUARD_STACK) {
+                userGuardDepth++;
+                lastGesturePushTs = now;
+                hasActiveUserGuard = true;
+                window.history.pushState({ tukeyGuard: true, tag: "user_guard_" + userGuardDepth, userActivated: true }, "");
+              }
             } catch (_) {}
           };
           window.replenishMobileBackGuard = replenishGuardOnGesture;
@@ -130151,10 +130250,16 @@ ${specificRules}`;
           window.addEventListener("popstate", () => {
             if (isHandlingPop) return;
             isHandlingPop = true;
-            hasActiveUserGuard = false;
-            try {
-              window.history.pushState({ tukeyGuard: true, tag: "keep_fallback" }, "");
-            } catch (_) {}
+            if (userGuardDepth > 0) {
+              userGuardDepth--;
+            }
+            if (userGuardDepth <= 1) {
+              try {
+                window.history.pushState({ tukeyGuard: true, tag: "keep_fallback_1" }, "");
+                window.history.pushState({ tukeyGuard: true, tag: "keep_fallback_2" }, "");
+                userGuardDepth = 2;
+              } catch (_) {}
+            }
             executeEPhoneStepBack();
             isHandlingPop = false;
           });
@@ -130163,6 +130268,32 @@ ${specificRules}`;
             if (e && typeof e.preventDefault === "function") e.preventDefault();
             executeEPhoneStepBack();
           }, false);
+
+          const bindCapacitorBackPlugin = () => {
+            try {
+              const cap = window.Capacitor;
+              if (cap && cap.Plugins && cap.Plugins.App && typeof cap.Plugins.App.addListener === "function" && !cap.__ephoneBackBound) {
+                cap.__ephoneBackBound = true;
+                cap.Plugins.App.addListener("backButton", () => {
+                  executeEPhoneStepBack();
+                });
+              }
+              if (cap && typeof cap.registerPlugin === "function" && !cap.__ephoneRegAppBound) {
+                cap.__ephoneRegAppBound = true;
+                try {
+                  const AppPlugin = cap.registerPlugin("App");
+                  if (AppPlugin && typeof AppPlugin.addListener === "function") {
+                    AppPlugin.addListener("backButton", () => {
+                      executeEPhoneStepBack();
+                    });
+                  }
+                } catch (_) {}
+              }
+            } catch (_) {}
+          };
+          bindCapacitorBackPlugin();
+          document.addEventListener("DOMContentLoaded", bindCapacitorBackPlugin);
+          setTimeout(bindCapacitorBackPlugin, 800);
 
           // 屏幕下方边缘往上滑动手势识别：从底部边缘向上滑动时直接触发小手机返回上一级
           let bottomSwipeStartX = 0;
@@ -130175,7 +130306,7 @@ ${specificRules}`;
             }
             const t = e.touches[0];
             const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-            if (vh > 0 && t.clientY >= vh - 32) {
+            if (vh > 0 && t.clientY >= vh - 36) {
               bottomSwipeStartX = t.clientX;
               bottomSwipeStartY = t.clientY;
               bottomSwipeValid = true;
@@ -130190,7 +130321,7 @@ ${specificRules}`;
             const t = e.changedTouches[0];
             const dx = t.clientX - bottomSwipeStartX;
             const dy = t.clientY - bottomSwipeStartY;
-            if (dy < -42 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+            if (dy < -38 && Math.abs(dy) > Math.abs(dx) * 1.2) {
               executeEPhoneStepBack();
             }
           }, { passive: true });
@@ -139328,9 +139459,7 @@ ${specificRules}`;
             return _ghCodeSyncPromise;
           }
 
-          setTimeout(() => {
-            syncCurrentSourceToGithubCodeRepoIfNewer().catch(() => {});
-          }, 600);
+          // 禁止在用户打开页面游玩时后台自动向 GitHub 仓库上传任何代码文件，避免污染用户的 GitHub 仓库提交历史并导致 git 提示远端已更新需要拉取
 
           async function clearRuntimeCachesAndReloadCurrentOrigin() {
             try {
@@ -139495,11 +139624,7 @@ ${specificRules}`;
               if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
                 try { await window.offloadNaiDedicatedStoreToTermuxSilently(); } catch (_) {}
               }
-              if (!isRunningInApkContainer()) {
-                try {
-                  await syncCurrentSourceToGithubCodeRepoIfNewer();
-                } catch (_) {}
-              }
+              // 仅读取仓库已有 Release 安装包，绝不自动向用户仓库提交代码
               setBtnStatus("查找安装包...");
               const found = await resolveValidGithubCodeRepository();
               const creds = getConfiguredGithubCreds();
