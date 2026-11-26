@@ -189,20 +189,6 @@ jobs:
 
               @Override
               public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-                  CapConfig config;
-                  if (bridge != null) {
-                      config = bridge.getConfig();
-                  } else {
-                      config = CapConfig.loadDefault(getContext());
-                  }
-
-                  boolean captureInput = config.isInputCaptured();
-                  if (captureInput) {
-                      if (capInputConnection == null) {
-                          capInputConnection = new BaseInputConnection(this, false);
-                      }
-                      return capInputConnection;
-                  }
                   return super.onCreateInputConnection(outAttrs);
               }
 
