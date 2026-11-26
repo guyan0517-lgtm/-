@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.7</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -23820,15 +23820,20 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
         function tryRequestNotificationPermissionOnGesture(evt) {
           try {
             if (hasRequestedNotificationPermissionOnce) return;
-            if (window.Capacitor || window.EPhoneNativeBridge || window.androidBridge || window.cordova) return;
             const t = evt && evt.target && evt.target.nodeType === 1 ? evt.target : null;
             if (t && typeof t.closest === "function" && t.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) {
               return;
             }
+            const isNotifyEnabled = !window.state || !window.state.globalSettings || window.state.globalSettings.enableSystemNotifications !== false;
+            if (!isNotifyEnabled) return;
+            if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.requestNotificationPermission === "function") {
+              hasRequestedNotificationPermissionOnce = true;
+              try { window.EPhoneNativeBridge.requestNotificationPermission(); } catch (_) {}
+              return;
+            }
             if (
               "Notification" in window &&
-              Notification.permission === "default" &&
-              (!window.state || !window.state.globalSettings || window.state.globalSettings.enableSystemNotifications !== false)
+              Notification.permission === "default"
             ) {
               hasRequestedNotificationPermissionOnce = true;
               Notification.requestPermission().catch(() => {});
@@ -42155,6 +42160,24 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               (async () => {
                 let delivered = false;
                 if (
+                  window.EPhoneNativeBridge &&
+                  typeof window.EPhoneNativeBridge.showNativeNotification === "function"
+                ) {
+                  try {
+                    delivered = Boolean(
+                      window.EPhoneNativeBridge.showNativeNotification(
+                        notifName,
+                        safeBody,
+                        targetChatIdStr,
+                        uniqueTag
+                      )
+                    );
+                  } catch (_) {
+                    delivered = false;
+                  }
+                }
+                if (
+                  !delivered &&
                   window.PeerManager &&
                   typeof window.PeerManager.triggerMobileSystemNotification ===
                     "function"
@@ -56039,8 +56062,13 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // 2. 读取保存的状态
             const savedNotifState =
               state.globalSettings.enableSystemNotifications;
+            const hasNativeNotifBridge = Boolean(
+              window.EPhoneNativeBridge &&
+              typeof window.EPhoneNativeBridge.showNativeNotification === "function"
+            );
             const hasPerm =
-              "Notification" in window && Notification.permission === "granted";
+              (hasNativeNotifBridge && (typeof window.EPhoneNativeBridge.hasNotificationPermission !== "function" || window.EPhoneNativeBridge.hasNotificationPermission())) ||
+              ("Notification" in window && Notification.permission === "granted");
 
             // 3. 智能判断开关状态：
             // - 如果有保存的记录，就严格听记录的（是true就是true，是false就是false）
@@ -56054,28 +56082,43 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             // 4. 绑定新的、唯一的点击事件
             newSysSwitch.addEventListener("change", async (e) => {
               if (e.target.checked) {
-                // --- 用户想开启 ---
-                if (!("Notification" in window)) {
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.showNativeNotification === "function") {
+                  try {
+                    if (typeof window.EPhoneNativeBridge.requestNotificationPermission === "function") {
+                      window.EPhoneNativeBridge.requestNotificationPermission();
+                    }
+                    window.EPhoneNativeBridge.showNativeNotification("四半世紀", "系统弹窗通知已开启！", "", "sys_enable");
+                  } catch (_) {}
+                } else if (!("Notification" in window)) {
                   alert("抱歉，设备不支持系统通知。");
                   e.target.checked = false;
                 } else if (Notification.permission === "granted") {
-                  // 已有权限，直接开启成功
-                  new Notification("EPhone", {
-                    body: "系统通知已开启！",
-                  });
+                  try {
+                    if ("serviceWorker" in navigator) {
+                      const reg = await navigator.serviceWorker.getRegistration();
+                      if (reg) await reg.showNotification("EPhone", { body: "系统通知已开启！" });
+                      else new Notification("EPhone", { body: "系统通知已开启！" });
+                    } else {
+                      new Notification("EPhone", { body: "系统通知已开启！" });
+                    }
+                  } catch (_) {}
                 } else if (Notification.permission !== "denied") {
-                  // 请求权限
                   const permission = await Notification.requestPermission();
                   if (permission === "granted") {
-                    new Notification("EPhone", {
-                      body: "权限获取成功！系统通知已开启。",
-                    });
+                    try {
+                      if ("serviceWorker" in navigator) {
+                        const reg = await navigator.serviceWorker.getRegistration();
+                        if (reg) await reg.showNotification("EPhone", { body: "权限获取成功！系统通知已开启。" });
+                        else new Notification("EPhone", { body: "权限获取成功！系统通知已开启。" });
+                      } else {
+                        new Notification("EPhone", { body: "权限获取成功！系统通知已开启。" });
+                      }
+                    } catch (_) {}
                   } else {
                     e.target.checked = false;
                     alert("权限被拒绝，无法开启。");
                   }
                 } else {
-                  // 之前被永久拒绝
                   e.target.checked = false;
                   alert(
                     "权限已被拒绝。请去手机/浏览器设置中手动开启通知权限。",
@@ -56096,6 +56139,22 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             checkPermBtn.parentNode.replaceChild(newBtn, checkPermBtn);
 
             newBtn.addEventListener("click", async () => {
+              if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.showNativeNotification === "function") {
+                try {
+                  if (typeof window.EPhoneNativeBridge.requestNotificationPermission === "function") {
+                    window.EPhoneNativeBridge.requestNotificationPermission();
+                  }
+                  const ok = window.EPhoneNativeBridge.showNativeNotification("权限测试", "恭喜！APP系统弹窗通知功能正常工作。", "", "perm_test");
+                  if (ok) {
+                    alert("已通过APP原生通道发送测试弹窗通知，请查看手机顶部通知栏。");
+                  } else {
+                    alert("通知未弹出，请在手机系统设置的通知管理中允许本应用显示悬浮弹窗通知。");
+                  }
+                } catch (e) {
+                  alert("发送失败: " + e.message);
+                }
+                return;
+              }
               if (!("Notification" in window)) {
                 alert(
                   '❌ 你的浏览器/环境完全不支持系统通知 API。\n(如果是iOS，必须点击"添加到主屏幕"作为PWA运行才支持)',
@@ -56117,9 +56176,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                       // 安卓 Chrome 必须走这里
                       await reg.showNotification(title, options);
                     } else {
-                      // 如果没有获取到 SW，尝试注册一个空的并发送
                       try {
-                        // 尝试现场注册一个临时的
                         const emptyWorkerContent =
                           "self.addEventListener('install', () => self.skipWaiting());";
                         const blob = new Blob([emptyWorkerContent], {
@@ -56130,12 +56187,10 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                           await navigator.serviceWorker.register(workerUrl);
                         await newReg.showNotification(title, options);
                       } catch (e) {
-                        // 实在不行，降级尝试旧方法（在安卓上这步会抛错，但被外层catch捕获）
                         new Notification(title, options);
                       }
                     }
                   } else {
-                    // iOS 或 PC 浏览器
                     new Notification(title, options);
                   }
 
@@ -56169,13 +56224,28 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             testNotifBtn.parentNode.replaceChild(newBtn, testNotifBtn);
 
             newBtn.addEventListener("click", async () => {
+              const title = "测试消息";
+              const bodyText = "如果你看到这条消息，说明安卓弹窗修复成功！";
+              if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.showNativeNotification === "function") {
+                try {
+                  if (typeof window.EPhoneNativeBridge.requestNotificationPermission === "function") {
+                    window.EPhoneNativeBridge.requestNotificationPermission();
+                  }
+                  const ok = window.EPhoneNativeBridge.showNativeNotification(title, bodyText, "", "test_msg_" + Date.now());
+                  if (!ok) {
+                    alert("请在手机系统设置的通知管理中开启本应用的通知权限。");
+                  }
+                } catch (e) {
+                  alert("测试发送失败: " + e.message);
+                }
+                return;
+              }
               if (!("Notification" in window)) return alert("设备不支持通知");
               if (Notification.permission !== "granted")
                 return alert("请先点击左侧按钮授权通知！");
 
-              const title = "测试消息";
               const options = {
-                body: "如果你看到这条消息，说明安卓弹窗修复成功！",
+                body: bodyText,
                 icon: "https://i.postimg.cc/Kj8JnRcp/267611-CC01-F8-A3-B4910-A2-C2-FFDE479-DC.jpg",
               };
 
@@ -56189,8 +56259,6 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                     alert(
                       "错误：ServiceWorker 未注册，无法在安卓发送通知。请刷新页面重试。",
                     );
-                    // 仅作为调试，尝试直接发送看看报错
-                    // new Notification(title, options);
                   }
                 } else {
                   new Notification(title, options);
@@ -112855,7 +112923,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=30.6", { updateViaCache: "none" })
+              .register("sw.js?v=30.7", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -127238,22 +127306,32 @@ ${specificRules}`;
           if (sysNotifSwitch) {
             sysNotifSwitch.addEventListener("change", (e) => {
               if (e.target.checked) {
-                // 用户尝试开启
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.showNativeNotification === "function") {
+                  try {
+                    if (typeof window.EPhoneNativeBridge.requestNotificationPermission === "function") {
+                      window.EPhoneNativeBridge.requestNotificationPermission();
+                    }
+                    window.EPhoneNativeBridge.showNativeNotification("四半世紀", "系统弹窗通知功能正常！", "", "sys_test");
+                  } catch (_) {}
+                  return;
+                }
                 if (!("Notification" in window)) {
                   alert("抱歉，你的设备或浏览器不支持系统通知。");
                   e.target.checked = false;
                 } else if (Notification.permission === "granted") {
-                  // 已经是授权状态，无需操作
-                  new Notification("EPhone", {
-                    body: "测试通知：系统通知功能正常！",
-                  });
+                  try {
+                    new Notification("EPhone", {
+                      body: "测试通知：系统通知功能正常！",
+                    });
+                  } catch (_) {}
                 } else if (Notification.permission !== "denied") {
-                  // 请求权限
                   Notification.requestPermission().then((permission) => {
                     if (permission === "granted") {
-                      new Notification("EPhone", {
-                        body: "成功开启！以后收到消息会有弹窗哦。",
-                      });
+                      try {
+                        new Notification("EPhone", {
+                          body: "成功开启！以后收到消息会有弹窗哦。",
+                        });
+                      } catch (_) {}
                     } else {
                       e.target.checked = false;
                       alert(
@@ -127262,7 +127340,6 @@ ${specificRules}`;
                     }
                   });
                 } else {
-                  // 之前被拒绝过
                   alert(
                     "权限已被拒绝。请前往手机【设置 -> 通知】中找到本应用，手动开启通知权限。",
                   );

@@ -2308,6 +2308,22 @@
 
     triggerMobileSystemNotification: async function (title, body, avatarUrl, meta) {
       try {
+        const tag = (meta && meta.tag) || "peer_msg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+        const chatIdStr = (meta && meta.chatId) || "";
+        if (
+          window.EPhoneNativeBridge &&
+          typeof window.EPhoneNativeBridge.showNativeNotification === "function"
+        ) {
+          try {
+            const ok = window.EPhoneNativeBridge.showNativeNotification(
+              String(title || "新消息"),
+              String(body || "收到一条新消息"),
+              String(chatIdStr),
+              String(tag)
+            );
+            if (ok) return true;
+          } catch (_) {}
+        }
         if (!("Notification" in window)) return false;
         if (Notification.permission === "default") {
           try { await Notification.requestPermission(); } catch (_) {}
@@ -2315,7 +2331,6 @@
         if (Notification.permission !== "granted") return false;
 
         const safeIcon = "./icon-192.png";
-        const tag = (meta && meta.tag) || "peer_msg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
         const notifData = {
           chatId: (meta && meta.chatId) || "",
           openRequests: Boolean(meta && meta.openRequests)

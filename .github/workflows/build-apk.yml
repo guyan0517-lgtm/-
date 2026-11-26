@@ -139,7 +139,7 @@ jobs:
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            sed -i 's/<application/<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <application android:usesCleartextTraffic="true" android:largeHeap="true" android:requestLegacyExternalStorage="true"/g' "$MANIFEST" || true
+            sed -i 's/<application/<uses-permission android:name="android.permission.POST_NOTIFICATIONS" \/>\n    <uses-permission android:name="android.permission.VIBRATE" \/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <application android:usesCleartextTraffic="true" android:largeHeap="true" android:requestLegacyExternalStorage="true"/g' "$MANIFEST" || true
           fi
           STRINGS="android/app/src/main/res/values/strings.xml"
           if [ -f "$STRINGS" ]; then
@@ -355,6 +355,11 @@ jobs:
             cat << 'EOF' > "$MAIN_ACT"
           package com.ephone.companion.app;
 
+          import android.Manifest;
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
           import android.content.ClipData;
           import android.content.ClipboardManager;
           import android.content.ContentResolver;
@@ -362,6 +367,7 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.content.pm.PackageInfo;
+          import android.content.pm.PackageManager;
           import android.content.res.AssetManager;
           import android.media.MediaScannerConnection;
           import android.net.Uri;
@@ -377,6 +383,9 @@ jobs:
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import androidx.activity.OnBackPressedCallback;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.content.ContextCompat;
           import com.getcapacitor.BridgeActivity;
           import java.io.ByteArrayOutputStream;
           import java.io.File;
@@ -387,6 +396,100 @@ jobs:
           import java.nio.charset.StandardCharsets;
 
           public class MainActivity extends BridgeActivity {
+              private static final String NOTIF_CHANNEL_ID = "ephone_high_priority_msg_v1";
+              private static final int REQ_POST_NOTIF = 1091;
+
+              private void ensureNotificationChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      try {
+                          NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (nm != null) {
+                              NotificationChannel ch = new NotificationChannel(
+                                  NOTIF_CHANNEL_ID,
+                                  "消息弹窗提醒",
+                                  NotificationManager.IMPORTANCE_HIGH
+                              );
+                              ch.setDescription("收到AI回复与密友消息时的顶部悬浮弹窗提醒");
+                              ch.enableVibration(true);
+                              ch.setVibrationPattern(new long[]{0, 200, 100, 200});
+                              ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                              nm.createNotificationChannel(ch);
+                          }
+                      } catch (Exception ignored) {}
+                  }
+              }
+
+              public void checkAndRequestNotificationPermission() {
+                  ensureNotificationChannel();
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      try {
+                          if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                              ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_POST_NOTIF);
+                          }
+                      } catch (Exception ignored) {}
+                  }
+              }
+
+              public boolean postHeadsUpNotification(String title, String body, String chatId, String tag) {
+                  try {
+                      ensureNotificationChannel();
+                      NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm == null) return false;
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !nm.areNotificationsEnabled()) {
+                          checkAndRequestNotificationPermission();
+                          return false;
+                      }
+                      Intent tapIntent = new Intent(this, MainActivity.class);
+                      tapIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      if (chatId != null && !chatId.isEmpty()) {
+                          tapIntent.putExtra("ephone_chat_id", chatId);
+                      }
+                      int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                          piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                      }
+                      int notifId = (tag != null && !tag.isEmpty()) ? Math.abs(tag.hashCode()) : (int) (System.currentTimeMillis() & 0xfffffff);
+                      PendingIntent pi = PendingIntent.getActivity(this, notifId, tapIntent, piFlags);
+
+                      int iconId = getApplicationInfo().icon;
+                      if (iconId == 0) iconId = android.R.drawable.sym_def_app_icon;
+
+                      NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
+                          .setSmallIcon(iconId)
+                          .setContentTitle((title != null && !title.isEmpty()) ? title : "四半世紀")
+                          .setContentText((body != null && !body.isEmpty()) ? body : "收到一条新消息")
+                          .setStyle(new NotificationCompat.BigTextStyle().bigText((body != null && !body.isEmpty()) ? body : "收到一条新消息"))
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setDefaults(NotificationCompat.DEFAULT_ALL)
+                          .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                          .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                          .setAutoCancel(true)
+                          .setContentIntent(pi);
+
+                      nm.notify(notifId, builder.build());
+                      return true;
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  try {
+                      if (intent != null && intent.hasExtra("ephone_chat_id")) {
+                          final String cid = intent.getStringExtra("ephone_chat_id");
+                          if (cid != null && !cid.isEmpty() && this.bridge != null && this.bridge.getWebView() != null) {
+                              final String safeCid = cid.replace("'", "\\'");
+                              this.bridge.getWebView().post(() -> this.bridge.getWebView().evaluateJavascript(
+                                  "if (typeof window.openChat === 'function') { window.openChat('" + safeCid + "'); }",
+                                  null
+                              ));
+                          }
+                      }
+                  } catch (Exception ignored) {}
+              }
+
               private void triggerWebViewStepBack() {
                   try {
                       if (this.bridge != null && this.bridge.getWebView() != null) {
@@ -402,6 +505,8 @@ jobs:
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  ensureNotificationChannel();
+                  checkAndRequestNotificationPermission();
                   try {
                       getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
                           @Override
@@ -623,6 +728,35 @@ jobs:
                   @JavascriptInterface
                   public boolean applyHotUpdate() {
                       return activity != null && activity.activateHotUpdateWorkspace();
+                  }
+
+                  @JavascriptInterface
+                  public boolean showNativeNotification(String title, String body, String chatId, String tag) {
+                      return activity != null && activity.postHeadsUpNotification(title, body, chatId, tag);
+                  }
+
+                  @JavascriptInterface
+                  public void requestNotificationPermission() {
+                      if (activity != null) {
+                          activity.runOnUiThread(() -> {
+                              try {
+                                  activity.checkAndRequestNotificationPermission();
+                              } catch (Exception ignored) {}
+                          });
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public boolean hasNotificationPermission() {
+                      try {
+                          NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (nm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                              return nm.areNotificationsEnabled();
+                          }
+                          return true;
+                      } catch (Exception e) {
+                          return true;
+                      }
                   }
 
                   @JavascriptInterface
