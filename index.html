@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.1</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.2</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -2572,7 +2572,7 @@
         <input
           id="import-data-input"
           type="file"
-          accept=".json,application/json,text/plain,application/octet-stream,*/*"
+          accept=".json,.png,application/json,image/png,text/plain,application/octet-stream,*/*"
           hidden
         />
       </div>
@@ -113674,12 +113674,17 @@ ${specificRules}`;
                   }
                   if (typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function") {
                     try {
-                      const ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, fileName, mime, "四半世紀");
+                      const isImg = /^image\//i.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(fileName);
+                      let savedName = fileName;
+                      let ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, fileName, mime, "四半世紀");
+                      if (!ok && !isImg) {
+                        savedName = fileName.endsWith(".png") ? fileName : (fileName + ".png");
+                        ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, savedName, "image/png", "四半世紀");
+                      }
                       if (ok) {
                         if (typeof window.showDownloadToast === "function") {
-                          const isImg = /^image\//i.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(fileName);
                           window.showDownloadToast(
-                            isImg ? ("已保存至手机相册 四半世紀/" + fileName) : ("已导出至手机 四半世紀/" + fileName),
+                            isImg ? ("已保存至手机相册 四半世紀/" + savedName) : ("已导出至手机相册 DCIM/四半世紀/" + savedName),
                             "success"
                           );
                         }

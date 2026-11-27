@@ -147,6 +147,13 @@ jobs:
             -noprompt || cp -f /tmp/ephone_raw.p12 ~/.android/debug.keystore
           cp -f ~/.android/debug.keystore android/app/debug.keystore || true
           if [ -f "android/app/build.gradle" ]; then
+            NEXT_VER_CODE=$((1000 + ${GITHUB_RUN_NUMBER:-1}))
+            HTML_VER=$(grep -oE 'id="api-settings-version-tag"[^>]*>v?[0-9]+(\.[0-9]+)?<' index.html | grep -oE '[0-9]+(\.[0-9]+)?' | head -n 1)
+            if [ -z "$HTML_VER" ]; then
+              HTML_VER="31.2"
+            fi
+            sed -i "s/versionCode 1/versionCode ${NEXT_VER_CODE}/g" android/app/build.gradle || true
+            sed -i "s/versionName \"1.0\"/versionName \"${HTML_VER}\"/g" android/app/build.gradle || true
             cat << 'GRADLE_SIGN_EOF' >> android/app/build.gradle
 
           android {
