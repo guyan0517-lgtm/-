@@ -2291,6 +2291,7 @@
                 <div class="moe-btn-group" style="margin-top: 2px;">
                   <button type="button" class="moe-btn-secondary" id="local-vault-connect-btn" style="font-size: 12px; padding: 6px 0;">连接</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-offload-btn" style="font-size: 12px; padding: 6px 0;">分离</button>
+                  <button type="button" class="moe-btn-secondary" id="local-vault-transfer-btn" style="font-size: 12px; padding: 6px 0;">转存</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-hide-btn" style="font-size: 12px; padding: 6px 0;">清理</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-backup-btn" style="font-size: 12px; padding: 6px 0;">备份</button>
                   <button type="button" class="moe-btn-secondary" id="local-vault-restore-btn" style="font-size: 12px; padding: 6px 0;">恢复</button>
@@ -2560,7 +2561,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.2</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.4</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -2572,7 +2573,7 @@
         <input
           id="import-data-input"
           type="file"
-          accept=".json,.png,application/json,image/png,text/plain,application/octet-stream,*/*"
+          accept=".json,application/json,text/plain,application/octet-stream,*/*"
           hidden
         />
       </div>
@@ -112923,7 +112924,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=31.1", { updateViaCache: "none" })
+              .register("sw.js?v=31.4", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -113640,7 +113641,7 @@ ${specificRules}`;
                 reader.readAsDataURL(blob);
               });
               const saveExportViaNativeBridge = async (href, downloadName, syncBlob, fallbackClickFn) => {
-                const fileName = String(downloadName || ("export_" + Date.now() + ".json")).trim();
+                const rawName = String(downloadName || ("export_" + Date.now() + ".json")).trim();
                 let blob = syncBlob || (href.startsWith("blob:") ? (blobUrlMap.get(href) || null) : null);
                 let dataUrl = "";
                 let mime = (blob && blob.type) ? blob.type : "application/octet-stream";
@@ -113660,48 +113661,82 @@ ${specificRules}`;
                     dataUrl = await blobToBase64(blob);
                   }
                 }
+                const isImg = /^image\//i.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(rawName);
+                const fileName = (!isImg && !/\.[a-z0-9]{2,6}$/i.test(rawName)) ? (rawName + ".json") : rawName;
+
                 if (dataUrl && window.EPhoneNativeBridge) {
-                  if (typeof window.EPhoneNativeBridge.saveFileToDownloads === "function") {
+                  // 1. 如果是生图或照片下载，才存入手机相册
+                  if (isImg && typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function") {
                     try {
-                      const ok = window.EPhoneNativeBridge.saveFileToDownloads(dataUrl, fileName, mime);
+                      const ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, fileName, mime, "徒花");
                       if (ok) {
                         if (typeof window.showDownloadToast === "function") {
-                          window.showDownloadToast("已导出至手机 Download/四半世紀/" + fileName, "success");
+                          window.showDownloadToast("已保存至手机相册 徒花/" + fileName, "success");
                         }
                         return true;
                       }
                     } catch (_) {}
                   }
-                  if (typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function") {
+                  // 2. 如果是全量导出或单项导出等 JSON 数据文件，一律导出为标准 .json 文件到 Download 目录，绝不存入手机相册
+                  if (!isImg && typeof window.EPhoneNativeBridge.saveFileToDownloads === "function") {
                     try {
-                      const isImg = /^image\//i.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(fileName);
-                      let savedName = fileName;
-                      let ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, fileName, mime, "四半世紀");
-                      if (!ok && !isImg) {
-                        savedName = fileName.endsWith(".png") ? fileName : (fileName + ".png");
-                        ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, savedName, "image/png", "四半世紀");
-                      }
+                      const ok = window.EPhoneNativeBridge.saveFileToDownloads(dataUrl, fileName, "application/json");
                       if (ok) {
                         if (typeof window.showDownloadToast === "function") {
-                          window.showDownloadToast(
-                            isImg ? ("已保存至手机相册 四半世紀/" + savedName) : ("已导出至手机相册 DCIM/四半世紀/" + savedName),
-                            "success"
-                          );
+                          window.showDownloadToast("已导出 JSON 文件至手机 Download/四半世紀/" + fileName, "success");
                         }
                         return true;
                       }
                     } catch (_) {}
                   }
                 }
-                if (blob && navigator.share && typeof navigator.canShare === "function") {
+
+                // 3. 兼容旧版安装包外壳：如果当前旧版安装包没有 saveFileToDownloads，直接写出真实 .json 文件到手机 Download 目录与本地隐藏目录
+                if (!isImg && (blob || dataUrl)) {
                   try {
-                    const shareFile = new File([blob], fileName, { type: /^image\//i.test(mime) ? mime : "text/plain" });
-                    if (navigator.canShare({ files: [shareFile] })) {
-                      await navigator.share({ files: [shareFile], title: fileName });
-                      return true;
+                    let jsonBytes = null;
+                    if (blob) {
+                      jsonBytes = new Uint8Array(await blob.arrayBuffer());
+                    } else if (dataUrl.includes(",")) {
+                      const b64 = dataUrl.split(",").pop() || "";
+                      const bin = atob(b64);
+                      jsonBytes = new Uint8Array(bin.length);
+                      for (let i = 0; i < bin.length; i++) jsonBytes[i] = bin.charCodeAt(i);
+                    }
+                    if (jsonBytes && jsonBytes.byteLength > 0) {
+                      let savedToPhoneDownload = false;
+                      const rawFetch = window.__ephoneOrigWindowFetch || window.fetch.bind(window);
+                      try {
+                        const r1 = await rawFetch("http://127.0.0.1:8765/..%2F" + encodeURIComponent(fileName), {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json; charset=utf-8" },
+                          body: jsonBytes
+                        });
+                        if (r1 && r1.ok) savedToPhoneDownload = true;
+                      } catch (_) {}
+                      try {
+                        const r2 = await rawFetch("http://127.0.0.1:8765/" + encodeURIComponent(fileName), {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json; charset=utf-8" },
+                          body: jsonBytes
+                        });
+                        if (r2 && r2.ok) savedToPhoneDownload = true;
+                      } catch (_) {}
+                      if (typeof window.__ephoneAppLocalWriteBytes === "function") {
+                        try {
+                          await window.__ephoneAppLocalWriteBytes("exports/" + fileName, jsonBytes);
+                        } catch (_) {}
+                      }
+                      if (savedToPhoneDownload) {
+                        if (typeof window.showDownloadToast === "function") {
+                          window.showDownloadToast("已导出 JSON 文件至手机 Download/" + fileName, "success");
+                        }
+                        return true;
+                      }
                     }
                   } catch (_) {}
                 }
+
                 if (typeof fallbackClickFn === "function") {
                   try { fallbackClickFn(); } catch (_) {}
                 }
@@ -113721,9 +113756,18 @@ ${specificRules}`;
                       (href.startsWith("blob:") || href.startsWith("data:"))
                     ) {
                       const syncBlob = href.startsWith("blob:") ? (blobUrlMap.get(href) || null) : null;
+                      const fileName = String(dlAttr || "export.json").trim();
+                      const mime = (syncBlob && syncBlob.type) ? syncBlob.type : "";
+                      const isImg = /^image\//i.test(mime) || /\.(png|jpe?g|webp|gif)$/i.test(fileName);
+                      const hasNativeFileExport = typeof window.EPhoneNativeBridge.saveFileToDownloads === "function";
                       const selfAnchor = this;
                       const selfArgs = arguments;
-                      saveExportViaNativeBridge(href, dlAttr || "export.json", syncBlob, () => {
+                      if (!isImg && !hasNativeFileExport) {
+                        // 旧版APK外壳中先同步触发原生下载，同时后台双写 .json 到手机 Download 目录
+                        saveExportViaNativeBridge(href, fileName, syncBlob, null);
+                        return origAnchorClick.apply(selfAnchor, selfArgs);
+                      }
+                      saveExportViaNativeBridge(href, fileName, syncBlob, () => {
                         origAnchorClick.apply(selfAnchor, selfArgs);
                       });
                       return;
@@ -113753,6 +113797,7 @@ ${specificRules}`;
             // 4. APP内置手机本地直存引擎（无需安装Termux即可自动把图片、收藏夹、画师串、词典、聊天记录、酒馆数据存进手机本地磁盘并释放运行内存）与APP端语音合成直连引擎
             try {
               const origWindowFetch = window.fetch.bind(window);
+              window.__ephoneOrigWindowFetch = origWindowFetch;
               let externalTermuxCheckedTs = 0;
               let externalTermuxAlive = false;
               let appOpfsRootDirPromise = null;
@@ -113764,6 +113809,18 @@ ${specificRules}`;
                 const host = (window.location && window.location.hostname ? window.location.hostname : "").toLowerCase();
                 const port = (window.location && window.location.port) || "";
                 if (host === "localhost" && (!port || port === "80" || port === "443")) return true;
+                return false;
+              };
+
+              const isAppDirectLocalVaultEnabled = () => {
+                try {
+                  if (localStorage.getItem("ephone_app_use_direct_local_vault") === "1") return true;
+                  const raw = localStorage.getItem("ephone_local_vault_config_v1");
+                  if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.mode === "apk") return true;
+                  }
+                } catch (_) {}
                 return false;
               };
 
@@ -113877,6 +113934,8 @@ ${specificRules}`;
                 }
                 return false;
               };
+              window.__ephoneAppLocalWriteBytes = appLocalWriteBytes;
+              window.__ephoneAppLocalWriteText = appLocalWriteText;
 
               const appLocalReadBytes = async (relPath) => {
                 if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultReadBase64 === "function") {
@@ -113969,6 +114028,164 @@ ${specificRules}`;
                 return new TextDecoder("utf-8").decode(bytes);
               };
 
+              // 一键把 Termux 中的所有图片、画师串、词典、收藏夹、酒馆数据与当前 APP 数据完整复制到 APP 本地隐藏目录 EPhoneVault，不删除 Termux 原文件以保留给网页版使用
+              window.__ephoneCopyTermuxToAppLocalVault = async (onProgress) => {
+                const termuxBase = "http://127.0.0.1:8765";
+                let copiedMedia = 0;
+                let copiedJson = 0;
+                let termuxReachable = false;
+
+                try {
+                  const pingRes = await origWindowFetch(termuxBase + "/ping", { method: "GET" });
+                  if (pingRes && pingRes.ok) termuxReachable = true;
+                } catch (_) {}
+
+                // 1. 复制 Termux 中的 JSON 数据文件（包含画师串 nai_collection_store.json、酒馆数据 tavern_store.json、全量备份 backup.json 等）
+                const jsonStoreFiles = [
+                  "nai_collection_store.json",
+                  "tavern_store.json",
+                  "backup.json",
+                  "load"
+                ];
+                if (termuxReachable) {
+                  for (const jf of jsonStoreFiles) {
+                    try {
+                      if (typeof onProgress === "function") onProgress("正在复制数据 " + jf);
+                      const r = await origWindowFetch(termuxBase + "/" + jf, { method: "GET" });
+                      if (r && r.ok) {
+                        const txt = await r.text();
+                        if (txt && txt.trim().length > 2) {
+                          const targetName = jf === "load" ? "backup.json" : jf;
+                          await appLocalWriteText(targetName, txt);
+                          copiedJson++;
+                        }
+                      }
+                    } catch (_) {}
+                  }
+
+                  // 2. 复制徒花画册与水印相册元数据
+                  const albumFolders = ["tuhua-album", "watermark-album"];
+                  for (const folder of albumFolders) {
+                    try {
+                      const lr = await origWindowFetch(termuxBase + "/" + folder + "/list", { method: "GET" });
+                      if (lr && lr.ok) {
+                        const lj = await lr.json();
+                        const items = Array.isArray(lj && lj.items) ? lj.items : [];
+                        for (const item of items) {
+                          if (item && item.id) {
+                            await appLocalWriteText(folder + "/" + item.id + ".json", JSON.stringify(item));
+                            copiedJson++;
+                          }
+                        }
+                      }
+                    } catch (_) {}
+                  }
+
+                  // 3. 复制分离存储的数据库表记录
+                  const recordTables = [
+                    "chats", "apiConfigs", "globalSettings", "userStickers", "charStickers",
+                    "worldBooks", "musicLibrary", "personaPresets", "qzoneSettings",
+                    "qzonePosts", "qzoneAlbums", "qzonePhotos", "qzoneFavorites",
+                    "qzoneGroups", "favorites", "memories", "callRecords",
+                    " C2C_Stickers", "customAvatarFrames", "thoughtChainPresets", "readingBooks"
+                  ];
+                  for (const tb of recordTables) {
+                    const cleanTb = tb.trim();
+                    try {
+                      const lr = await origWindowFetch(termuxBase + "/records/" + cleanTb + "/list", { method: "GET" });
+                      if (lr && lr.ok) {
+                        const lj = await lr.json();
+                        const files = Array.isArray(lj && lj.files) ? lj.files : [];
+                        for (const fn of files) {
+                          try {
+                            const fr = await origWindowFetch(termuxBase + "/records/" + cleanTb + "/" + encodeURIComponent(fn), { method: "GET" });
+                            if (fr && fr.ok) {
+                              const ftxt = await fr.text();
+                              if (ftxt) {
+                                await appLocalWriteText("records/" + cleanTb + "/" + fn, ftxt);
+                                copiedJson++;
+                              }
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                    } catch (_) {}
+                  }
+
+                  // 4. 复制 Termux 中的所有本地图片与媒体文件（/media-list）到 APP 本地隐藏目录 EPhoneVault/media，且绝不删除 Termux 中的原文件
+                  try {
+                    const mr = await origWindowFetch(termuxBase + "/media-list", { method: "GET" });
+                    if (mr && mr.ok) {
+                      const mj = await mr.json();
+                      const files = Array.isArray(mj && mj.files) ? mj.files : [];
+                      const total = files.length;
+                      const existingLocal = await appLocalListFiles("media");
+                      const existingSet = new Set(existingLocal.files || []);
+                      const BATCH = 4;
+                      for (let i = 0; i < files.length; i += BATCH) {
+                        const slice = files.slice(i, i + BATCH);
+                        await Promise.all(
+                          slice.map(async (fn) => {
+                            if (!fn) return;
+                            if (existingSet.has(fn)) {
+                              copiedMedia++;
+                              return;
+                            }
+                            try {
+                              const fr = await origWindowFetch(termuxBase + "/files/" + encodeURIComponent(fn), { method: "GET" });
+                              if (fr && fr.ok) {
+                                const ab = await fr.arrayBuffer();
+                                if (ab && ab.byteLength > 0) {
+                                  await appLocalWriteBytes("media/" + fn, new Uint8Array(ab));
+                                  copiedMedia++;
+                                }
+                              }
+                            } catch (_) {}
+                          })
+                        );
+                        if (typeof onProgress === "function") {
+                          onProgress("正在复制文件 " + Math.min(i + BATCH, total) + " / " + total);
+                        }
+                      }
+                    }
+                  } catch (_) {}
+                }
+
+                // 5. 同时将当前 APP 内存与本地中的画师串、词典、收藏夹与数据库写入 APP 本地隐藏目录，确保两边数据合并无遗漏
+                try {
+                  const localNaiTxt = await appLocalReadText("nai_collection_store.json");
+                  const memNaiRaw = localStorage.getItem("nai_collection_v1");
+                  if (!localNaiTxt && memNaiRaw && memNaiRaw.length > 2) {
+                    await appLocalWriteText("nai_collection_store.json", memNaiRaw);
+                    copiedJson++;
+                  } else if (localNaiTxt) {
+                    try {
+                      const parsed = JSON.parse(localNaiTxt);
+                      if (parsed && typeof parsed === "object") {
+                        localStorage.setItem("nai_collection_v1", JSON.stringify(parsed));
+                      }
+                    } catch (_) {}
+                  }
+                } catch (_) {}
+
+                // 6. 标记 APP 永久切换为直接从本机隐藏目录 EPhoneVault 读取，下次启动不再从 Termux 读取
+                try {
+                  localStorage.setItem("ephone_app_use_direct_local_vault", "1");
+                  const rawCfg = localStorage.getItem("ephone_local_vault_config_v1");
+                  const parsedCfg = rawCfg ? JSON.parse(rawCfg) : {};
+                  parsedCfg.mode = "apk";
+                  parsedCfg.auto = true;
+                  parsedCfg.folderName = "EPhoneVault";
+                  localStorage.setItem("ephone_local_vault_config_v1", JSON.stringify(parsedCfg));
+                } catch (_) {}
+
+                return {
+                  termuxReachable,
+                  copiedMedia,
+                  copiedJson
+                };
+              };
+
               const handleAppBuiltInLocalVaultFetch = async (urlObj, init) => {
                 const method = String((init && init.method) || "GET").toUpperCase();
                 const pathname = decodeURIComponent(urlObj.pathname || "/");
@@ -114029,11 +114246,11 @@ ${specificRules}`;
                   );
                 }
 
-                // 统一映射文件路径到 APP 本地 EPhoneVault 目录
+                // 统一映射文件路径到 APP 本地隐藏目录 EPhoneVault
                 let relPath = pathname.replace(/^\/+/, "");
                 if (relPath.startsWith("files/")) {
                   relPath = "media/" + relPath.slice("files/".length);
-                } else if (relPath === "full-backup") {
+                } else if (relPath === "full-backup" || relPath === "load" || relPath === "save") {
                   relPath = "backup.json";
                 }
 
@@ -114046,7 +114263,7 @@ ${specificRules}`;
                 }
 
                 if (method === "PUT" || method === "POST") {
-                  const isJsonPath = relPath.endsWith(".json") || pathname === "/full-backup";
+                  const isJsonPath = relPath.endsWith(".json") || pathname === "/full-backup" || pathname === "/save";
                   if (isJsonPath) {
                     const txt = await extractRequestBodyText(init);
                     await appLocalWriteText(relPath, txt);
@@ -114063,7 +114280,16 @@ ${specificRules}`;
                 if (method === "GET" || method === "HEAD") {
                   const isJsonPath = relPath.endsWith(".json");
                   if (isJsonPath) {
-                    const txt = await appLocalReadText(relPath);
+                    let txt = await appLocalReadText(relPath);
+                    if (txt === null) {
+                      try {
+                        const tr = await origWindowFetch(urlObj.toString(), { method: "GET" });
+                        if (tr && tr.ok) {
+                          txt = await tr.text();
+                          if (txt) await appLocalWriteText(relPath, txt);
+                        }
+                      } catch (_) {}
+                    }
                     if (txt === null) {
                       return new Response("Not Found", { status: 404 });
                     }
@@ -114082,6 +114308,18 @@ ${specificRules}`;
                       }
                     }
                     if (!bytes) {
+                      try {
+                        const tr = await origWindowFetch(urlObj.toString(), { method: "GET" });
+                        if (tr && tr.ok) {
+                          const ab = await tr.arrayBuffer();
+                          if (ab && ab.byteLength > 0) {
+                            bytes = new Uint8Array(ab);
+                            await appLocalWriteBytes(relPath, bytes);
+                          }
+                        }
+                      } catch (_) {}
+                    }
+                    if (!bytes) {
                       return new Response("Not Found", { status: 404 });
                     }
                     return new Response(bytes, {
@@ -114097,7 +114335,7 @@ ${specificRules}`;
                 });
               };
 
-              // APP端本地直连语音翻译与二次元TTS合成（无需Node后端）
+              // APP端本地直连语音翻译与二次元TTS合成
               const handleAppClientSideApiFetch = async (pathname, init) => {
                 if (pathname === "/api/glm-models") {
                   return new Response(
@@ -114179,24 +114417,15 @@ ${specificRules}`;
                     isRunningInsideApp() &&
                     (rawUrl.startsWith("http://127.0.0.1:8765") || rawUrl.startsWith("http://localhost:8765"))
                   ) {
-                    const now = Date.now();
-                    if (now - externalTermuxCheckedTs > 30000) {
-                      externalTermuxCheckedTs = now;
-                      try {
-                        const ctrl = new AbortController();
-                        const tid = setTimeout(() => ctrl.abort(), 350);
-                        const extRes = await origWindowFetch("http://127.0.0.1:8765/ping", {
-                          method: "GET",
-                          cache: "no-store",
-                          signal: ctrl.signal
-                        });
-                        clearTimeout(tid);
-                        externalTermuxAlive = Boolean(extRes && extRes.ok);
-                      } catch (_) {
-                        externalTermuxAlive = false;
-                      }
+                    // 如果用户已经点击过 转存 或切换到了 本机存储 模式，APP直接从内置隐藏目录读取，不再请求 Termux
+                    if (isAppDirectLocalVaultEnabled()) {
+                      return await handleAppBuiltInLocalVaultFetch(new URL(rawUrl), init);
                     }
-                    if (!externalTermuxAlive) {
+                    // 在点击 转存 之前，如果 Termux 正在运行则先读取 Termux 以免原有画师串和图片丢失；若 Termux 未开启则自动走本机隐藏目录
+                    try {
+                      const r = await origWindowFetch(input, init);
+                      if (r) return r;
+                    } catch (_) {
                       return await handleAppBuiltInLocalVaultFetch(new URL(rawUrl), init);
                     }
                   }
@@ -133392,6 +133621,7 @@ ${specificRules}`;
           window.restoreVaultRefsInObjectDeep = restoreVaultRefsInObjectDeep;
 
           function normalizeVaultMode(m) {
+            if (m === "apk") return "apk";
             if (!m || m === "termux" || m === "server") return "server";
             if (m === "webdav") return "webdav";
             if (m === "folder") return "folder";
@@ -133676,7 +133906,12 @@ ${specificRules}`;
             const folderDisp = document.getElementById("local-vault-folder-display");
             if (!modeSel) return;
             const mode = normalizeVaultMode(modeSel.value);
-            if (mode === "server") {
+            if (mode === "apk") {
+              if (urlRow) urlRow.style.display = "none";
+              if (authRows) authRows.style.display = "none";
+              if (folderRow) folderRow.style.display = "flex";
+              if (folderDisp) folderDisp.value = "EPhoneVault";
+            } else if (mode === "server") {
               if (urlRow) urlRow.style.display = "flex";
               if (authRows) authRows.style.display = "none";
               if (folderRow) folderRow.style.display = "none";
@@ -139191,6 +139426,7 @@ ${specificRules}`;
             const pickBtn = document.getElementById("local-vault-pick-folder-btn");
             const connBtn = document.getElementById("local-vault-connect-btn");
             const offloadBtn = document.getElementById("local-vault-offload-btn");
+            const transferBtn = document.getElementById("local-vault-transfer-btn");
             const hideBtn = document.getElementById("local-vault-hide-btn");
             const backupBtn = document.getElementById("local-vault-backup-btn");
             const restoreBtn = document.getElementById("local-vault-restore-btn");
@@ -139198,6 +139434,11 @@ ${specificRules}`;
             if (modeSel) {
               modeSel.value = normalizeVaultMode(cfg.mode);
               modeSel.addEventListener("change", () => {
+                if (modeSel.value === "apk") {
+                  localStorage.setItem("ephone_app_use_direct_local_vault", "1");
+                } else {
+                  localStorage.removeItem("ephone_app_use_direct_local_vault");
+                }
                 syncVaultModeRows();
                 getCurrentFormVaultConfig();
                 testVaultConnection(true);
@@ -139251,6 +139492,38 @@ ${specificRules}`;
               await testVaultConnection(false);
             });
             if (offloadBtn) offloadBtn.addEventListener("click", () => runVaultImageOffload());
+            if (transferBtn) {
+              transferBtn.addEventListener("click", async () => {
+                if (typeof window.__ephoneCopyTermuxToAppLocalVault !== "function") return;
+                transferBtn.disabled = true;
+                const origTxt = transferBtn.textContent;
+                transferBtn.textContent = "转存中";
+                updateVaultStatusBadge("转存中", false);
+                try {
+                  const res = await window.__ephoneCopyTermuxToAppLocalVault((msg) => {
+                    setVaultInfoText(msg);
+                  });
+                  await runVaultImageOffload(true);
+                  await runVaultBackup(true);
+                  if (modeSel) {
+                    modeSel.value = "apk";
+                    syncVaultModeRows();
+                  }
+                  refreshAllVaultImagesAfterTermuxConnected();
+                  await testVaultConnection(true);
+                  const summaryMsg = "已将 " + (res.copiedMedia || 0) + " 个图片与媒体文件、" + (res.copiedJson || 0) + " 份画师串及数据文件复制到 APP 本地隐藏目录 EPhoneVault，Termux 原有文件已完整保留供网页版使用，下次启动 APP 将直接从本机隐藏目录读取";
+                  setVaultInfoText(summaryMsg);
+                  if (typeof window.showCustomAlert === "function") {
+                    window.showCustomAlert("转存完成", summaryMsg);
+                  }
+                } catch (e) {
+                  setVaultInfoText("转存失败: " + (e && e.message ? e.message : "请重试"));
+                } finally {
+                  transferBtn.disabled = false;
+                  transferBtn.textContent = origTxt;
+                }
+              });
+            }
             if (hideBtn) hideBtn.addEventListener("click", () => runVaultCleanupOrphanMedia());
             if (backupBtn) backupBtn.addEventListener("click", () => runVaultBackup());
             if (restoreBtn) restoreBtn.addEventListener("click", () => runVaultRestore());
