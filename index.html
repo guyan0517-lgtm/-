@@ -2560,7 +2560,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.7</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v30.9</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -113198,22 +113198,74 @@ ${specificRules}`;
 
             const isTopLevelEvaluateJavascriptCall = () => {
               try {
-                const stack = String(new Error().stack || "");
+                const stack = String(new OrigErrorCtor().stack || "");
                 const lines = stack.split("\n").map((l) => l.trim()).filter(Boolean);
                 let frameCount = 0;
                 for (let i = 0; i < lines.length; i++) {
                   const line = lines[i];
-                  if (line === "Error" || line.includes("isTopLevelEvaluateJavascriptCall") || line.includes("set value")) continue;
+                  if (line === "Error" || line.includes("isTopLevelEvaluateJavascriptCall") || line.includes("set value") || line.includes("wrappedSet")) continue;
                   frameCount++;
-                  if (/at\s+[a-zA-Z0-9_$]+\s*\(/.test(line) && !line.includes("<anonymous>")) {
+                  if (/at\s+[a-zA-Z0-9_$]+\s*\(/.test(line) && !line.includes("<anonymous>") && !line.includes("eval")) {
                     return false;
                   }
                 }
-                return frameCount <= 2;
+                return frameCount <= 3;
               } catch (_) {
                 return false;
               }
             };
+
+            const OrigErrorCtor = window.Error;
+            let lastSyntaxFallbackTs = 0;
+            const triggerClipboardFallbackInsert = () => {
+              try {
+                const active = document.activeElement;
+                if (!active) return false;
+                const tag = (active.tagName || "").toUpperCase();
+                const isEditable = tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable;
+                if (!isEditable) return false;
+                const now = Date.now();
+                if (now - lastSyntaxFallbackTs < 90) return true;
+                lastSyntaxFallbackTs = now;
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.readFromClipboard === "function") {
+                  const clipText = window.EPhoneNativeBridge.readFromClipboard();
+                  if (clipText) {
+                    insertTextIntoActiveElementAtCursor(clipText);
+                    return true;
+                  }
+                }
+                if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
+                  navigator.clipboard.readText().then((clipText) => {
+                    if (clipText) insertTextIntoActiveElementAtCursor(clipText);
+                  }).catch(() => {});
+                  return true;
+                }
+              } catch (_) {}
+              return false;
+            };
+
+            // 拦截旧版 CapacitorWebView 在执行 document.activeElement.value = document.activeElement.value + '...' 时因剪贴板条目含有单引号、换行符或反斜杠触发的 SyntaxError（Capacitor 外壳包裹了 try{...}catch(e){console.error(e)}，因此通过 SyntaxError 构造与 console.error 双通道精准捕获并自动补齐粘贴）
+            const origConsoleError = console.error ? console.error.bind(console) : null;
+            if (origConsoleError && !origConsoleError.__ephonePasteHooked) {
+              const wrappedConsoleError = function (...args) {
+                try {
+                  const first = args[0];
+                  const errStr = first && (first.stack || first.message) ? String(first.stack || first.message) : String(first || "");
+                  if (
+                    (first instanceof SyntaxError || errStr.includes("SyntaxError") || errStr.includes("Unexpected") || errStr.includes("Invalid or unexpected token") || errStr.includes("unterminated")) &&
+                    document.activeElement &&
+                    (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.activeElement.isContentEditable)
+                  ) {
+                    if (triggerClipboardFallbackInsert()) {
+                      return;
+                    }
+                  }
+                } catch (_) {}
+                return origConsoleError.apply(console, args);
+              };
+              wrappedConsoleError.__ephonePasteHooked = true;
+              console.error = wrappedConsoleError;
+            }
 
             const patchInputPrototypeValue = (Proto) => {
               if (!Proto) return;
@@ -113240,7 +113292,7 @@ ${specificRules}`;
                   this === document.activeElement &&
                   typeof newVal === "string" &&
                   this.__capGetTs &&
-                  Date.now() - this.__capGetTs < 80 &&
+                  Date.now() - this.__capGetTs < 400 &&
                   typeof this.__capGetVal === "string" &&
                   newVal.length > this.__capGetVal.length &&
                   newVal.startsWith(this.__capGetVal) &&
@@ -113289,7 +113341,7 @@ ${specificRules}`;
                   return undefined;
                 },
                 set: function (v) {
-                  if (this && this.isContentEditable && typeof v === "string" && v.length > 0 && this.__capCeGetTs && Date.now() - this.__capCeGetTs < 80) {
+                  if (this && this.isContentEditable && typeof v === "string" && v.length > 0 && this.__capCeGetTs && Date.now() - this.__capCeGetTs < 400) {
                     this.__capCeGetTs = 0;
                     insertTextIntoActiveElementAtCursor(v);
                   }
@@ -113297,38 +113349,647 @@ ${specificRules}`;
               });
             }
 
-            let lastSyntaxFallbackTs = 0;
             window.addEventListener("error", (errEvt) => {
               try {
                 const msg = String((errEvt && errEvt.message) || "");
-                if (!msg.includes("SyntaxError") && !msg.includes("ReferenceError")) return;
-                const active = document.activeElement;
-                if (!active) return;
-                const tag = (active.tagName || "").toUpperCase();
-                const isEditable = tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable;
-                if (!isEditable) return;
-                if (errEvt.lineno && errEvt.lineno > 2) return;
-                const now = Date.now();
-                if (now - lastSyntaxFallbackTs < 120) {
+                if (!msg.includes("SyntaxError") && !msg.includes("ReferenceError") && !msg.includes("Unexpected") && !msg.includes("unterminated")) return;
+                if (errEvt.lineno && errEvt.lineno > 3) return;
+                if (triggerClipboardFallbackInsert()) {
                   errEvt.preventDefault();
-                  return;
-                }
-                lastSyntaxFallbackTs = now;
-                errEvt.preventDefault();
-                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.readFromClipboard === "function") {
-                  const clipText = window.EPhoneNativeBridge.readFromClipboard();
-                  if (clipText) {
-                    insertTextIntoActiveElementAtCursor(clipText);
-                    return;
-                  }
-                }
-                if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
-                  navigator.clipboard.readText().then((clipText) => {
-                    if (clipText) insertTextIntoActiveElementAtCursor(clipText);
-                  }).catch(() => {});
                 }
               } catch (_) {}
             }, true);
+
+            // 1. APP剪贴板复制与粘贴桥接增强
+            try {
+              if (navigator.clipboard) {
+                const origWriteText = typeof navigator.clipboard.writeText === "function"
+                  ? navigator.clipboard.writeText.bind(navigator.clipboard)
+                  : null;
+                const origReadText = typeof navigator.clipboard.readText === "function"
+                  ? navigator.clipboard.readText.bind(navigator.clipboard)
+                  : null;
+                navigator.clipboard.writeText = async function (text) {
+                  const str = text !== undefined && text !== null ? String(text) : "";
+                  if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.copyToClipboard === "function") {
+                    try {
+                      if (window.EPhoneNativeBridge.copyToClipboard(str)) return;
+                    } catch (_) {}
+                  }
+                  if (origWriteText) return origWriteText(str);
+                };
+                navigator.clipboard.readText = async function () {
+                  if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.readFromClipboard === "function") {
+                    try {
+                      const nativeTxt = window.EPhoneNativeBridge.readFromClipboard();
+                      if (typeof nativeTxt === "string" && nativeTxt.length > 0) return nativeTxt;
+                    } catch (_) {}
+                  }
+                  if (origReadText) return origReadText();
+                  return "";
+                };
+              }
+              const origExecCommand = document.execCommand ? document.execCommand.bind(document) : null;
+              if (origExecCommand) {
+                document.execCommand = function (cmd, showUI, val) {
+                  if (String(cmd || "").toLowerCase() === "copy" && window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.copyToClipboard === "function") {
+                    try {
+                      let selected = "";
+                      const active = document.activeElement;
+                      const tag = active && active.tagName ? active.tagName.toUpperCase() : "";
+                      if (tag === "INPUT" || tag === "TEXTAREA") {
+                        const s = typeof active.selectionStart === "number" ? active.selectionStart : 0;
+                        const e = typeof active.selectionEnd === "number" ? active.selectionEnd : 0;
+                        selected = e > s ? String(active.value || "").slice(s, e) : String(active.value || "");
+                      } else {
+                        const sel = window.getSelection ? window.getSelection() : null;
+                        selected = sel ? String(sel.toString() || "") : "";
+                      }
+                      if (selected) {
+                        window.EPhoneNativeBridge.copyToClipboard(selected);
+                        return true;
+                      }
+                    } catch (_) {}
+                  }
+                  return origExecCommand(cmd, showUI, val);
+                };
+              }
+            } catch (_) {}
+
+            // 2. APP文件导出桥接：拦截 blob: 与 data: 下载链接并直接保存到手机系统 Download/四半世紀 目录
+            try {
+              const blobUrlMap = new Map();
+              window.__ephoneBlobUrlMap = blobUrlMap;
+              if (window.URL && typeof window.URL.createObjectURL === "function") {
+                const origCreateObjUrl = window.URL.createObjectURL.bind(window.URL);
+                window.URL.createObjectURL = function (obj) {
+                  const u = origCreateObjUrl(obj);
+                  if (obj instanceof Blob) {
+                    blobUrlMap.set(u, obj);
+                    setTimeout(() => blobUrlMap.delete(u), 120000);
+                  }
+                  return u;
+                };
+              }
+              const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(String(reader.result || ""));
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              const saveExportViaNativeBridge = async (href, downloadName) => {
+                if (!window.EPhoneNativeBridge) return false;
+                const fileName = String(downloadName || ("export_" + Date.now() + ".json")).trim();
+                let dataUrl = "";
+                let mime = "application/octet-stream";
+                if (href.startsWith("data:")) {
+                  dataUrl = href;
+                  const m = /^data:([^;,]+)/i.exec(href);
+                  if (m && m[1]) mime = m[1];
+                } else if (href.startsWith("blob:")) {
+                  let blob = blobUrlMap.get(href) || null;
+                  if (!blob) {
+                    try {
+                      const r = await fetch(href);
+                      if (r && r.ok) blob = await r.blob();
+                    } catch (_) {}
+                  }
+                  if (!blob) return false;
+                  mime = blob.type || mime;
+                  dataUrl = await blobToBase64(blob);
+                } else {
+                  return false;
+                }
+                if (!dataUrl) return false;
+                if (typeof window.EPhoneNativeBridge.saveFileToDownloads === "function") {
+                  const ok = window.EPhoneNativeBridge.saveFileToDownloads(dataUrl, fileName, mime);
+                  if (ok) {
+                    if (typeof window.showDownloadToast === "function") {
+                      window.showDownloadToast("已导出至手机 Download/四半世紀/" + fileName, "success");
+                    }
+                    return true;
+                  }
+                }
+                if (typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function" && /^image\//i.test(mime)) {
+                  const ok = window.EPhoneNativeBridge.saveBase64ToDownloads(dataUrl, fileName, mime, "四半世紀");
+                  if (ok) {
+                    if (typeof window.showDownloadToast === "function") {
+                      window.showDownloadToast("已保存至手机相册 四半世紀/" + fileName, "success");
+                    }
+                    return true;
+                  }
+                }
+                return false;
+              };
+              if (window.HTMLAnchorElement && HTMLAnchorElement.prototype) {
+                const origAnchorClick = HTMLAnchorElement.prototype.click;
+                HTMLAnchorElement.prototype.click = function () {
+                  try {
+                    const dlAttr = this.getAttribute("download");
+                    const href = String(this.href || this.getAttribute("href") || "");
+                    if (
+                      dlAttr !== null &&
+                      window.EPhoneNativeBridge &&
+                      (typeof window.EPhoneNativeBridge.saveFileToDownloads === "function" ||
+                        typeof window.EPhoneNativeBridge.saveBase64ToDownloads === "function") &&
+                      (href.startsWith("blob:") || href.startsWith("data:"))
+                    ) {
+                      saveExportViaNativeBridge(href, dlAttr || "export.json");
+                      return;
+                    }
+                  } catch (_) {}
+                  return origAnchorClick.apply(this, arguments);
+                };
+              }
+            } catch (_) {}
+
+            // 3. APP文件选择器全格式兼容：确保安卓文件选择器不会置灰 .json / .jsonl / .txt / .docx 等文件
+            document.addEventListener("click", (e) => {
+              try {
+                const t = e.target;
+                if (!t || t.tagName !== "INPUT" || t.type !== "file") return;
+                const isApk = Boolean(window.Capacitor || window.EPhoneNativeBridge || (window.location && (window.location.protocol === "capacitor:" || window.location.protocol === "file:" || window.location.hostname === "localhost")));
+                if (!isApk) return;
+                const acc = String(t.getAttribute("accept") || "").trim();
+                if (!acc) return;
+                if (/^(image|audio|video)\/\*$/i.test(acc)) return;
+                if (!acc.includes("*/*")) {
+                  t.setAttribute("accept", acc + ",application/octet-stream,text/plain,*/*");
+                }
+              } catch (_) {}
+            }, true);
+
+            // 4. APP内置手机本地直存引擎（无需安装Termux即可自动把图片、收藏夹、画师串、词典、聊天记录、酒馆数据存进手机本地磁盘并释放运行内存）与APP端语音合成直连引擎
+            try {
+              const origWindowFetch = window.fetch.bind(window);
+              let externalTermuxCheckedTs = 0;
+              let externalTermuxAlive = false;
+              let appOpfsRootDirPromise = null;
+
+              const isRunningInsideApp = () => {
+                if (window.Capacitor || window.EPhoneNativeBridge || window.androidBridge || window.cordova) return true;
+                const proto = (window.location && window.location.protocol) || "";
+                if (proto === "capacitor:" || proto === "file:") return true;
+                const host = (window.location && window.location.hostname ? window.location.hostname : "").toLowerCase();
+                const port = (window.location && window.location.port) || "";
+                if (host === "localhost" && (!port || port === "80" || port === "443")) return true;
+                return false;
+              };
+
+              const getAppLocalVaultOpfsDir = async () => {
+                if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") return null;
+                if (!appOpfsRootDirPromise) {
+                  appOpfsRootDirPromise = navigator.storage.getDirectory()
+                    .then((root) => root.getDirectoryHandle("EPhoneVault", { create: true }))
+                    .catch(() => null);
+                }
+                return appOpfsRootDirPromise;
+              };
+
+              const getOpfsSubDirHandle = async (relDir, create = true) => {
+                const root = await getAppLocalVaultOpfsDir();
+                if (!root) return null;
+                const clean = String(relDir || "").replace(/^\/+|\/+$/g, "");
+                if (!clean) return root;
+                const parts = clean.split("/").filter(Boolean);
+                let cur = root;
+                for (const p of parts) {
+                  cur = await cur.getDirectoryHandle(p, { create });
+                  if (!cur) return null;
+                }
+                return cur;
+              };
+
+              const splitRelPath = (relPath) => {
+                const clean = String(relPath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+                const idx = clean.lastIndexOf("/");
+                if (idx === -1) return { dir: "", name: clean };
+                return { dir: clean.slice(0, idx), name: clean.slice(idx + 1) };
+              };
+
+              const uint8ToB64 = (bytes) => {
+                let bin = "";
+                const chunk = 0x8000;
+                for (let i = 0; i < bytes.length; i += chunk) {
+                  bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+                }
+                return btoa(bin);
+              };
+
+              const b64ToUint8 = (b64) => {
+                const pure = String(b64 || "").includes(",") ? String(b64).split(",").pop() : String(b64 || "");
+                if (!pure) return new Uint8Array(0);
+                const bin = atob(pure);
+                const out = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+                return out;
+              };
+
+              const appLocalWriteText = async (relPath, textContent) => {
+                const str = typeof textContent === "string" ? textContent : JSON.stringify(textContent);
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultWriteText === "function") {
+                  try {
+                    if (window.EPhoneNativeBridge.vaultWriteText(relPath, str)) return true;
+                  } catch (_) {}
+                }
+                const { dir, name } = splitRelPath(relPath);
+                if (!name) return false;
+                const dHandle = await getOpfsSubDirHandle(dir, true);
+                if (!dHandle) return false;
+                const fHandle = await dHandle.getFileHandle(name, { create: true });
+                if (typeof fHandle.createWritable === "function") {
+                  const w = await fHandle.createWritable();
+                  await w.write(str);
+                  await w.close();
+                  return true;
+                }
+                return false;
+              };
+
+              const appLocalReadText = async (relPath) => {
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultReadText === "function") {
+                  try {
+                    const txt = window.EPhoneNativeBridge.vaultReadText(relPath);
+                    if (typeof txt === "string" && txt.length > 0) return txt;
+                  } catch (_) {}
+                }
+                try {
+                  const { dir, name } = splitRelPath(relPath);
+                  if (!name) return null;
+                  const dHandle = await getOpfsSubDirHandle(dir, false);
+                  if (!dHandle) return null;
+                  const fHandle = await dHandle.getFileHandle(name, { create: false });
+                  const file = await fHandle.getFile();
+                  return await file.text();
+                } catch (_) {
+                  return null;
+                }
+              };
+
+              const appLocalWriteBytes = async (relPath, uint8Bytes) => {
+                const bytes = uint8Bytes instanceof Uint8Array ? uint8Bytes : new Uint8Array(uint8Bytes || 0);
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultWriteBase64 === "function") {
+                  try {
+                    if (window.EPhoneNativeBridge.vaultWriteBase64(relPath, uint8ToB64(bytes))) return true;
+                  } catch (_) {}
+                }
+                const { dir, name } = splitRelPath(relPath);
+                if (!name) return false;
+                const dHandle = await getOpfsSubDirHandle(dir, true);
+                if (!dHandle) return false;
+                const fHandle = await dHandle.getFileHandle(name, { create: true });
+                if (typeof fHandle.createWritable === "function") {
+                  const w = await fHandle.createWritable();
+                  await w.write(bytes);
+                  await w.close();
+                  return true;
+                }
+                return false;
+              };
+
+              const appLocalReadBytes = async (relPath) => {
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultReadBase64 === "function") {
+                  try {
+                    const b64 = window.EPhoneNativeBridge.vaultReadBase64(relPath);
+                    if (typeof b64 === "string" && b64.length > 0) return b64ToUint8(b64);
+                  } catch (_) {}
+                }
+                try {
+                  const { dir, name } = splitRelPath(relPath);
+                  if (!name) return null;
+                  const dHandle = await getOpfsSubDirHandle(dir, false);
+                  if (!dHandle) return null;
+                  const fHandle = await dHandle.getFileHandle(name, { create: false });
+                  const file = await fHandle.getFile();
+                  const ab = await file.arrayBuffer();
+                  return new Uint8Array(ab);
+                } catch (_) {
+                  return null;
+                }
+              };
+
+              const appLocalDeleteFile = async (relPath) => {
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultDeleteFile === "function") {
+                  try { window.EPhoneNativeBridge.vaultDeleteFile(relPath); } catch (_) {}
+                }
+                try {
+                  const { dir, name } = splitRelPath(relPath);
+                  if (!name) return true;
+                  const dHandle = await getOpfsSubDirHandle(dir, false);
+                  if (dHandle) await dHandle.removeEntry(name);
+                } catch (_) {}
+                return true;
+              };
+
+              const appLocalListFiles = async (subDir) => {
+                const fileMap = new Map();
+                if (window.EPhoneNativeBridge && typeof window.EPhoneNativeBridge.vaultListFiles === "function") {
+                  try {
+                    const raw = window.EPhoneNativeBridge.vaultListFiles(subDir || "");
+                    const parsed = JSON.parse(raw || "[]");
+                    if (Array.isArray(parsed)) {
+                      for (const item of parsed) {
+                        if (item && item.name) fileMap.set(item.name, Number(item.size) || 0);
+                      }
+                    }
+                  } catch (_) {}
+                }
+                try {
+                  const dHandle = await getOpfsSubDirHandle(subDir || "", false);
+                  if (dHandle && typeof dHandle.entries === "function") {
+                    for await (const [name, handle] of dHandle.entries()) {
+                      if (handle && handle.kind === "file" && !fileMap.has(name)) {
+                        let sz = 1024;
+                        try {
+                          const f = await handle.getFile();
+                          sz = f.size;
+                        } catch (_) {}
+                        fileMap.set(name, sz);
+                      }
+                    }
+                  }
+                } catch (_) {}
+                const fileDetails = [];
+                const files = [];
+                for (const [name, size] of fileMap.entries()) {
+                  files.push(name);
+                  fileDetails.push({ name, size });
+                }
+                return { files, fileDetails };
+              };
+
+              const extractRequestBodyBytes = async (init) => {
+                const body = init && init.body;
+                if (!body) return new Uint8Array(0);
+                if (body instanceof Uint8Array) return body;
+                if (body instanceof ArrayBuffer) return new Uint8Array(body);
+                if (ArrayBuffer.isView(body)) return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+                if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
+                if (typeof body === "string") return new TextEncoder().encode(body);
+                return new Uint8Array(0);
+              };
+
+              const extractRequestBodyText = async (init) => {
+                const body = init && init.body;
+                if (body === undefined || body === null) return "";
+                if (typeof body === "string") return body;
+                if (body instanceof Blob) return await body.text();
+                const bytes = await extractRequestBodyBytes(init);
+                return new TextDecoder("utf-8").decode(bytes);
+              };
+
+              const handleAppBuiltInLocalVaultFetch = async (urlObj, init) => {
+                const method = String((init && init.method) || "GET").toUpperCase();
+                const pathname = decodeURIComponent(urlObj.pathname || "/");
+
+                if (method === "OPTIONS") {
+                  return new Response(null, { status: 204 });
+                }
+                if (pathname === "/ping") {
+                  return new Response("ok", { status: 200, headers: { "Content-Type": "text/plain" } });
+                }
+                if (pathname === "/status") {
+                  const mediaInfo = await appLocalListFiles("media");
+                  return new Response(
+                    JSON.stringify({
+                      ok: true,
+                      appNativeVault: true,
+                      mediaCount: mediaInfo.files.length,
+                    }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                if (pathname === "/hide-gallery") {
+                  return new Response(
+                    JSON.stringify({ ok: true, convertedCount: 0, nomediaCreated: 1 }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                if (pathname === "/media-list") {
+                  const mediaInfo = await appLocalListFiles("media");
+                  return new Response(
+                    JSON.stringify({ ok: true, files: mediaInfo.files, fileDetails: mediaInfo.fileDetails }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                if (pathname.startsWith("/records/") && pathname.endsWith("/list")) {
+                  const parts = pathname.split("/").filter(Boolean);
+                  const tableName = parts[1] || "default";
+                  const info = await appLocalListFiles("records/" + tableName);
+                  return new Response(
+                    JSON.stringify({ ok: true, files: info.files }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                if (pathname === "/tuhua-album/list" || pathname === "/watermark-album/list") {
+                  const folder = pathname.startsWith("/tuhua-album") ? "tuhua-album" : "watermark-album";
+                  const info = await appLocalListFiles(folder);
+                  const items = [];
+                  for (const fn of info.files) {
+                    if (!fn.endsWith(".json")) continue;
+                    const txt = await appLocalReadText(folder + "/" + fn);
+                    if (txt) {
+                      try { items.push(JSON.parse(txt)); } catch (_) {}
+                    }
+                  }
+                  return new Response(
+                    JSON.stringify({ ok: true, items }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+
+                // 统一映射文件路径到 APP 本地 EPhoneVault 目录
+                let relPath = pathname.replace(/^\/+/, "");
+                if (relPath.startsWith("files/")) {
+                  relPath = "media/" + relPath.slice("files/".length);
+                } else if (relPath === "full-backup") {
+                  relPath = "backup.json";
+                }
+
+                if (method === "DELETE") {
+                  await appLocalDeleteFile(relPath);
+                  return new Response(JSON.stringify({ ok: true }), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" }
+                  });
+                }
+
+                if (method === "PUT" || method === "POST") {
+                  const isJsonPath = relPath.endsWith(".json") || pathname === "/full-backup";
+                  if (isJsonPath) {
+                    const txt = await extractRequestBodyText(init);
+                    await appLocalWriteText(relPath, txt);
+                  } else {
+                    const bytes = await extractRequestBodyBytes(init);
+                    await appLocalWriteBytes(relPath, bytes);
+                  }
+                  return new Response(JSON.stringify({ ok: true }), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" }
+                  });
+                }
+
+                if (method === "GET" || method === "HEAD") {
+                  const isJsonPath = relPath.endsWith(".json");
+                  if (isJsonPath) {
+                    const txt = await appLocalReadText(relPath);
+                    if (txt === null) {
+                      return new Response("Not Found", { status: 404 });
+                    }
+                    return new Response(txt, {
+                      status: 200,
+                      headers: { "Content-Type": "application/json; charset=utf-8" }
+                    });
+                  } else {
+                    let bytes = await appLocalReadBytes(relPath);
+                    if (!bytes && relPath.startsWith("media/")) {
+                      const stem = relPath.replace(/\.[a-zA-Z0-9]+$/, "");
+                      const tryExts = [".epdat", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp3", ".wav", ".ogg", ".ttf"];
+                      for (const ext of tryExts) {
+                        bytes = await appLocalReadBytes(stem + ext);
+                        if (bytes) break;
+                      }
+                    }
+                    if (!bytes) {
+                      return new Response("Not Found", { status: 404 });
+                    }
+                    return new Response(bytes, {
+                      status: 200,
+                      headers: { "Content-Type": "application/octet-stream" }
+                    });
+                  }
+                }
+
+                return new Response(JSON.stringify({ ok: true }), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" }
+                });
+              };
+
+              // APP端本地直连语音翻译与二次元TTS合成（无需Node后端）
+              const handleAppClientSideApiFetch = async (pathname, init) => {
+                if (pathname === "/api/glm-models") {
+                  return new Response(
+                    JSON.stringify({ models: ["glm-4-flash", "glm-4-air", "glm-4-plus", "glm-4"] }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                if (pathname === "/api/translate-ja") {
+                  const bodyTxt = await extractRequestBodyText(init);
+                  const body = JSON.parse(bodyTxt || "{}");
+                  const rawText = String(body.text || "").trim();
+                  if (!rawText) {
+                    return new Response(JSON.stringify({ jaText: "" }), { status: 200, headers: { "Content-Type": "application/json" } });
+                  }
+                  const glmCfg = body.glmConfig || {};
+                  const apiKey = String(glmCfg.apiKey || "").trim();
+                  const baseUrl = String(glmCfg.baseUrl || "https://open.bigmodel.cn/api/paas/v4").replace(/\/+$/, "");
+                  const model = String(glmCfg.model || "glm-4-flash").trim();
+                  if (apiKey) {
+                    try {
+                      const r = await origWindowFetch(baseUrl + "/chat/completions", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: "Bearer " + apiKey
+                        },
+                        body: JSON.stringify({
+                          model,
+                          messages: [
+                            { role: "system", content: "将用户输入的内容自然地翻译为二次元动漫口语风格的日语，只输出翻译后的纯日语文本，不要任何解释。" },
+                            { role: "user", content: rawText }
+                          ],
+                          temperature: 0.3
+                        })
+                      });
+                      if (r && r.ok) {
+                        const j = await r.json();
+                        const ja = String(j?.choices?.[0]?.message?.content || "").trim();
+                        if (ja) {
+                          return new Response(JSON.stringify({ jaText: ja }), { status: 200, headers: { "Content-Type": "application/json" } });
+                        }
+                      }
+                    } catch (_) {}
+                  }
+                  try {
+                    const gUrl = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=" + encodeURIComponent(rawText);
+                    const gr = await origWindowFetch(gUrl);
+                    if (gr && gr.ok) {
+                      const gj = await gr.json();
+                      const jaText = Array.isArray(gj?.[0]) ? gj[0].map((seg) => seg?.[0] || "").join("") : rawText;
+                      return new Response(JSON.stringify({ jaText: jaText || rawText }), { status: 200, headers: { "Content-Type": "application/json" } });
+                    }
+                  } catch (_) {}
+                  return new Response(JSON.stringify({ jaText: rawText }), { status: 200, headers: { "Content-Type": "application/json" } });
+                }
+                if (pathname === "/api/anime-tts") {
+                  const bodyTxt = await extractRequestBodyText(init);
+                  const body = JSON.parse(bodyTxt || "{}");
+                  const synthText = String(body.text || "").trim();
+                  const lang = String(body.lang || "ja").toLowerCase().startsWith("zh") ? "zh-CN" : "ja";
+                  const gtUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(synthText.slice(0, 180))}&tl=${lang}&client=tw-ob`;
+                  const audioRes = await origWindowFetch(gtUrl);
+                  if (audioRes && audioRes.ok) {
+                    const ab = await audioRes.arrayBuffer();
+                    const b64 = uint8ToB64(new Uint8Array(ab));
+                    return new Response(
+                      JSON.stringify({ audioBase64: b64, mimeType: "audio/mpeg" }),
+                      { status: 200, headers: { "Content-Type": "application/json" } }
+                    );
+                  }
+                }
+                return null;
+              };
+
+              window.fetch = async function (input, init) {
+                try {
+                  const rawUrl = typeof input === "string" ? input : (input && input.url ? input.url : String(input || ""));
+                  if (
+                    isRunningInsideApp() &&
+                    (rawUrl.startsWith("http://127.0.0.1:8765") || rawUrl.startsWith("http://localhost:8765"))
+                  ) {
+                    const now = Date.now();
+                    if (now - externalTermuxCheckedTs > 30000) {
+                      externalTermuxCheckedTs = now;
+                      try {
+                        const ctrl = new AbortController();
+                        const tid = setTimeout(() => ctrl.abort(), 350);
+                        const extRes = await origWindowFetch("http://127.0.0.1:8765/ping", {
+                          method: "GET",
+                          cache: "no-store",
+                          signal: ctrl.signal
+                        });
+                        clearTimeout(tid);
+                        externalTermuxAlive = Boolean(extRes && extRes.ok);
+                      } catch (_) {
+                        externalTermuxAlive = false;
+                      }
+                    }
+                    if (!externalTermuxAlive) {
+                      return await handleAppBuiltInLocalVaultFetch(new URL(rawUrl), init);
+                    }
+                  }
+                  if (isRunningInsideApp()) {
+                    let pathname = "";
+                    if (rawUrl.startsWith("/api/")) {
+                      pathname = rawUrl.split("?")[0];
+                    } else if (rawUrl.startsWith("http")) {
+                      try {
+                        const u = new URL(rawUrl);
+                        if (u.hostname === "localhost" && u.pathname.startsWith("/api/")) {
+                          pathname = u.pathname;
+                        }
+                      } catch (_) {}
+                    }
+                    if (pathname === "/api/translate-ja" || pathname === "/api/anime-tts" || pathname === "/api/glm-models") {
+                      const handled = await handleAppClientSideApiFetch(pathname, init);
+                      if (handled) return handled;
+                    }
+                  }
+                } catch (_) {}
+                return origWindowFetch(input, init);
+              };
+            } catch (_) {}
           })();
 
           const savedTheme = localStorage.getItem("ephone-theme") || "light"; // 默认为日间模式
@@ -130183,17 +130844,22 @@ ${specificRules}`;
 
           let userGuardDepth = 0;
           let lastGesturePushTs = 0;
-          const MAX_GUARD_STACK = 12;
+          const MAX_GUARD_STACK = 15;
 
           window.pushMobileBackGuard = function (tag) {
             if (isHandlingPop) return;
             try {
+              const now = Date.now();
+              if (now - lastGesturePushTs < 320) return;
+              const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
+              if (!isUserActive) return;
               const st = window.history.state;
               if (!st || !st.tukeyGuard) {
                 window.history.replaceState({ tukeyGuard: true, tag: "user_root", userActivated: true }, "");
               }
               if (userGuardDepth < MAX_GUARD_STACK) {
                 userGuardDepth++;
+                lastGesturePushTs = now;
                 hasActiveUserGuard = true;
                 window.history.pushState({ tukeyGuard: true, tag: (tag || "screen") + "_" + userGuardDepth, userActivated: true }, "");
               }
@@ -130202,10 +130868,8 @@ ${specificRules}`;
 
           const seedHistoryGuardStack = () => {
             try {
-              window.history.replaceState({ tukeyGuard: true, tag: "root" }, "");
-              for (let i = 1; i <= 4; i++) {
-                window.history.pushState({ tukeyGuard: true, tag: "guard_" + i }, "");
-              }
+              // 仅使用 replaceState 初始化根状态，严禁在无用户点击手势的启动阶段调用 pushState，防止触发安卓 Chromium WebView 的 History Manipulation Intervention 导致后续手势返回一次性跳过所有历史记录直接退出 APP
+              window.history.replaceState({ tukeyGuard: true, tag: "root", userActivated: true }, "");
             } catch (_) {}
           };
 
@@ -130232,7 +130896,7 @@ ${specificRules}`;
             if (hasNonCollapsedSelection()) return;
             try {
               const now = Date.now();
-              if (now - lastGesturePushTs < 90) return;
+              if (now - lastGesturePushTs < 350) return;
               const isUserActive = !navigator.userActivation || navigator.userActivation.isActive;
               if (!isUserActive) return;
               const st = window.history.state;
@@ -130362,13 +131026,7 @@ ${specificRules}`;
             if (userGuardDepth > 0) {
               userGuardDepth--;
             }
-            if (userGuardDepth <= 1) {
-              try {
-                window.history.pushState({ tukeyGuard: true, tag: "keep_fallback_1" }, "");
-                window.history.pushState({ tukeyGuard: true, tag: "keep_fallback_2" }, "");
-                userGuardDepth = 2;
-              } catch (_) {}
-            }
+            // 严禁在 popstate 回调内部调用 history.pushState，因为 popstate 没有用户手势令牌，在 popstate 中 pushState 会将当前历史记录污染为跳过状态，导致第二次手势返回直接退出 APP
             executeEPhoneStepBack();
             isHandlingPop = false;
           });
@@ -130381,13 +131039,23 @@ ${specificRules}`;
           const bindCapacitorBackPlugin = () => {
             try {
               const cap = window.Capacitor;
-              if (cap && cap.Plugins && cap.Plugins.App && typeof cap.Plugins.App.addListener === "function" && !cap.__ephoneBackBound) {
+              if (!cap) return;
+              // 1. 直接向 Capacitor Native Bridge 发送 App.addListener("backButton")，确保 Java 侧 AppPlugin.hasListeners("backButton") 变成 true，从而阻止旧版 APK 中 Capacitor AppPlugin 的默认 OnBackPressedCallback 调用 getActivity().finish() 直接退回手机桌面
+              if (typeof cap.nativeCallback === "function" && !cap.__ephoneRawNativeBackRegistered) {
+                cap.__ephoneRawNativeBackRegistered = true;
+                try {
+                  cap.nativeCallback("App", "addListener", { eventName: "backButton" }, () => {
+                    executeEPhoneStepBack();
+                  });
+                } catch (_) {}
+              }
+              if (cap.Plugins && cap.Plugins.App && typeof cap.Plugins.App.addListener === "function" && !cap.__ephoneBackBound) {
                 cap.__ephoneBackBound = true;
                 cap.Plugins.App.addListener("backButton", () => {
                   executeEPhoneStepBack();
                 });
               }
-              if (cap && typeof cap.registerPlugin === "function" && !cap.__ephoneRegAppBound) {
+              if (typeof cap.registerPlugin === "function" && !cap.__ephoneRegAppBound) {
                 cap.__ephoneRegAppBound = true;
                 try {
                   const AppPlugin = cap.registerPlugin("App");
@@ -130402,7 +131070,8 @@ ${specificRules}`;
           };
           bindCapacitorBackPlugin();
           document.addEventListener("DOMContentLoaded", bindCapacitorBackPlugin);
-          setTimeout(bindCapacitorBackPlugin, 800);
+          setTimeout(bindCapacitorBackPlugin, 300);
+          setTimeout(bindCapacitorBackPlugin, 1200);
 
           // 屏幕下方边缘往上滑动手势识别：从底部边缘向上滑动时直接触发小手机返回上一级
           let bottomSwipeStartX = 0;
@@ -133166,7 +133835,10 @@ ${specificRules}`;
                   const folderDisp = document.getElementById("local-vault-folder-display");
                   if (folderDisp && !folderDisp.value.trim()) folderDisp.value = folderName;
                   updateVaultStatusBadge("已连接", true);
-                  const prefixText = termuxOk
+                  const isAppEnv = isCapacitorApkEnvironment();
+                  const prefixText = isAppEnv
+                    ? "APP内置本地直存已启用 · 自动释放内存无需Termux"
+                    : termuxOk
                     ? "本地服务已连接 " + baseUrl
                     : serverVault && serverVault.ok
                     ? "本地服务已连接 · 目录 EPhoneVault"
@@ -138889,12 +139561,7 @@ ${specificRules}`;
 
           if (remote.updatedAt > localTs && (remote.stickers.length > 0 || localList.length === 0)) {
             saveLocalMashuStickers(remote.stickers, remote.updatedAt);
-            const healedRemote = await migrateLocalVaultMashuStickersIfNeeded();
-            if (healedRemote) {
-              await pushMashuStickersToServer(window.mashuCloudStickers);
-            }
-          } else if (localList.length > 0 && (remote.stickers.length === 0 || migrated || localTs > remote.updatedAt)) {
-            await pushMashuStickersToServer(localList);
+            await migrateLocalVaultMashuStickersIfNeeded();
           } else if (remote.stickers.length > 0 && localList.length === 0) {
             saveLocalMashuStickers(remote.stickers, remote.updatedAt || Date.now());
             await migrateLocalVaultMashuStickersIfNeeded();
@@ -139498,7 +140165,7 @@ ${specificRules}`;
                 const baseTreeSha = commitData && commitData.tree && commitData.tree.sha;
                 if (!baseTreeSha) return false;
 
-                const filesToPush = [".github/workflows/build-apk.yml", "capacitor.config.json", "index.html", "style.css", "sw.js", "module-manager.js"];
+                const filesToPush = [".github/workflows/build-apk.yml", "capacitor.config.json", "index.html", "style.css", "sw.js", "module-manager.js", "game-hall.js", "peer-manager.js"];
                 const treeItems = [];
                 for (const relPath of filesToPush) {
                   const localRes = await fetch("/" + relPath, { method: "GET", cache: "no-store" });
@@ -139627,8 +140294,25 @@ ${specificRules}`;
                 } catch (_) {}
               }
 
+              const CLOUD_PREVIEW_ORIGIN = "https://ais-pre-jncx7f2rmkbdifintcphgk-643613065540.asia-southeast1.run.app";
+              let liveCloudIndexHtml = "";
+              let liveCloudVer = 0;
+              try {
+                const cRes = await fetch(CLOUD_PREVIEW_ORIGIN + "/index.html?t=" + Date.now(), { method: "GET", cache: "no-store" });
+                if (cRes && cRes.ok) {
+                  const cTxt = await cRes.text();
+                  if (cTxt && cTxt.includes("api-settings-version-tag")) {
+                    liveCloudIndexHtml = cTxt;
+                    liveCloudVer = extractVersionNumFromHtml(cTxt);
+                  }
+                }
+              } catch (_) {}
+
               const found = await resolveValidGithubCodeRepository();
-              if (!found || !found.indexHtml) {
+              const ghVer = (found && found.indexHtml) ? extractVersionNumFromHtml(found.indexHtml) : 0;
+              const useLiveCloud = liveCloudVer > 0 && liveCloudVer >= ghVer;
+
+              if (!useLiveCloud && (!found || !found.indexHtml)) {
                 setBtnStatus(origText);
                 if (typeof window.showCustomAlert === "function") {
                   await window.showCustomAlert(
@@ -139639,11 +140323,19 @@ ${specificRules}`;
                 return;
               }
 
-              const { owner, repo, indexHtml, token } = found;
-              const newVer = extractVersionNumFromHtml(indexHtml);
+              const owner = found ? found.owner : "";
+              const repo = found ? found.repo : "";
+              const token = found ? found.token : "";
+              const indexHtml = useLiveCloud ? liveCloudIndexHtml : found.indexHtml;
+              const newVer = useLiveCloud ? liveCloudVer : ghVer;
               setBtnStatus("拉取中...");
               if (typeof window.showDownloadToast === "function") {
-                window.showDownloadToast(`正在从 ${owner}/${repo} 拉取最新热更新文件...`, "info");
+                window.showDownloadToast(
+                  useLiveCloud
+                    ? `正在拉取最新热更新文件 v${newVer}...`
+                    : `正在从 ${owner}/${repo} 拉取最新热更新文件...`,
+                  "info"
+                );
               }
 
               const hasNativeHotDir = Boolean(
@@ -139687,7 +140379,16 @@ ${specificRules}`;
                 const slice = otherFiles.slice(i, i + BATCH_SIZE);
                 await Promise.all(
                   slice.map(async (fileMeta) => {
-                    const txt = await fetchSingleFileFromGithubRepo(owner, repo, "", fileMeta.path, token);
+                    let txt = null;
+                    if (useLiveCloud) {
+                      try {
+                        const lr = await fetch(CLOUD_PREVIEW_ORIGIN + "/" + fileMeta.path + "?t=" + Date.now(), { method: "GET", cache: "no-store" });
+                        if (lr && lr.ok) txt = await lr.text();
+                      } catch (_) {}
+                    }
+                    if ((!txt || !txt.length) && owner && repo) {
+                      txt = await fetchSingleFileFromGithubRepo(owner, repo, "", fileMeta.path, token);
+                    }
                     if (txt && txt.length > 0) {
                       await saveOneHotFile(fileMeta.path, txt, fileMeta.mime);
                     }
@@ -139733,7 +140434,9 @@ ${specificRules}`;
               if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
                 try { await window.offloadNaiDedicatedStoreToTermuxSilently(); } catch (_) {}
               }
-              // 仅读取仓库已有 Release 安装包，绝不自动向用户仓库提交代码
+              try {
+                await syncCurrentSourceToGithubCodeRepoIfNewer();
+              } catch (_) {}
               setBtnStatus("查找安装包...");
               const found = await resolveValidGithubCodeRepository();
               const creds = getConfiguredGithubCreds();
@@ -139847,14 +140550,14 @@ ${specificRules}`;
     <input
       type="file"
       id="character-card-input"
-      accept=".png, .json"
+      accept=".png,.json,image/png,application/json,application/octet-stream,text/plain,*/*"
       style="display: none"
     />
 
     <input
       type="file"
       id="world-book-import-input"
-      accept=".json, .jsonl, .txt, .docx, .doc"
+      accept=".json,.jsonl,.txt,.docx,.doc,application/json,text/plain,application/octet-stream,*/*"
       multiple
       style="display: none"
     />

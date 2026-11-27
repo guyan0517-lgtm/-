@@ -43,6 +43,7 @@ jobs:
           fi
           if [ -d "public" ]; then
             cp -r public/* dist/ 2>/dev/null || true
+            cp -r public dist/ 2>/dev/null || true
           fi
           touch dist/.nojekyll
 
@@ -139,7 +140,7 @@ jobs:
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            sed -i 's/<application/<uses-permission android:name="android.permission.POST_NOTIFICATIONS" \/>\n    <uses-permission android:name="android.permission.VIBRATE" \/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <application android:usesCleartextTraffic="true" android:largeHeap="true" android:requestLegacyExternalStorage="true"/g' "$MANIFEST" || true
+            sed -i 's/<application/<uses-permission android:name="android.permission.POST_NOTIFICATIONS" \/>\n    <uses-permission android:name="android.permission.VIBRATE" \/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n    <uses-permission android:name="android.permission.CAMERA" \/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" \/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" \/>\n    <application android:usesCleartextTraffic="true" android:largeHeap="true" android:requestLegacyExternalStorage="true" android:enableOnBackInvokedCallback="false"/g' "$MANIFEST" || true
           fi
           STRINGS="android/app/src/main/res/values/strings.xml"
           if [ -f "$STRINGS" ]; then
@@ -205,7 +206,45 @@ jobs:
 
               @Override
               public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-                  return super.onCreateInputConnection(outAttrs);
+                  final InputConnection origIc = super.onCreateInputConnection(outAttrs);
+                  if (origIc != null) {
+                      return new android.view.inputmethod.InputConnectionWrapper(origIc, true) {
+                          @Override
+                          public boolean commitText(CharSequence text, int newCursorPosition) {
+                              if (text != null && text.length() > 0) {
+                                  String s = text.toString();
+                                  if (s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0 || s.length() > 1) {
+                                      boolean ok = super.commitText(text, newCursorPosition);
+                                      if (!ok) {
+                                          String b64 = Base64.encodeToString(s.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                                          evaluateJavascript("window.__ephoneInsertNativeInputTextFromB64 && window.__ephoneInsertNativeInputTextFromB64('" + b64 + "');", null);
+                                          return true;
+                                      }
+                                      return ok;
+                                  }
+                              }
+                              return super.commitText(text, newCursorPosition);
+                          }
+
+                          @Override
+                          public boolean sendKeyEvent(KeyEvent event) {
+                              if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                                  if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                                      evaluateJavascript("if (typeof window.__handleEPhoneBackAction === 'function') { window.__handleEPhoneBackAction(); }", null);
+                                  }
+                                  return true;
+                              }
+                              if (event != null && event.getAction() == KeyEvent.ACTION_MULTIPLE && event.getCharacters() != null) {
+                                  String chars = event.getCharacters();
+                                  String b64 = Base64.encodeToString(chars.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                                  evaluateJavascript("window.__ephoneInsertNativeInputTextFromB64 && window.__ephoneInsertNativeInputTextFromB64('" + b64 + "');", null);
+                                  return true;
+                              }
+                              return super.sendKeyEvent(event);
+                          }
+                      };
+                  }
+                  return null;
               }
 
               private ActionMode.Callback wrapActionModeCallback(final ActionMode.Callback orig) {
@@ -338,7 +377,13 @@ jobs:
 
               @Override
               public boolean dispatchKeyEvent(KeyEvent event) {
-                  if (event.getAction() == KeyEvent.ACTION_MULTIPLE && event.getCharacters() != null) {
+                  if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                      if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                          evaluateJavascript("if (typeof window.__handleEPhoneBackAction === 'function') { window.__handleEPhoneBackAction(); }", null);
+                      }
+                      return true;
+                  }
+                  if (event != null && event.getAction() == KeyEvent.ACTION_MULTIPLE && event.getCharacters() != null) {
                       String chars = event.getCharacters();
                       String b64 = Base64.encodeToString(chars.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
                       evaluateJavascript("window.__ephoneInsertNativeInputTextFromB64 && window.__ephoneInsertNativeInputTextFromB64('" + b64 + "');", null);
@@ -348,6 +393,11 @@ jobs:
               }
           }
           CAP_EOF
+          fi
+          APP_PLG=$(find node_modules/@capacitor -name "AppPlugin.java" | head -n 1)
+          if [ -n "$APP_PLG" ] && [ -f "$APP_PLG" ]; then
+            sed -i 's/getActivity().finish()/\/\/ disabled finish on back/g' "$APP_PLG" || true
+            sed -i 's/getBridge().getActivity().finish()/\/\/ disabled finish on back/g' "$APP_PLG" || true
           fi
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           if [ -n "$MAIN_ACT" ] && [ -f "$MAIN_ACT" ]; then
@@ -380,6 +430,8 @@ jobs:
           import android.view.View;
           import android.view.autofill.AutofillManager;
           import android.webkit.JavascriptInterface;
+          import android.webkit.PermissionRequest;
+          import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import androidx.activity.OnBackPressedCallback;
@@ -394,10 +446,49 @@ jobs:
           import java.io.InputStream;
           import java.io.OutputStream;
           import java.nio.charset.StandardCharsets;
+          import java.util.ArrayList;
+          import java.util.List;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
 
           public class MainActivity extends BridgeActivity {
               private static final String NOTIF_CHANNEL_ID = "ephone_high_priority_msg_v1";
               private static final int REQ_POST_NOTIF = 1091;
+              private static final int REQ_RECORD_AUDIO = 1092;
+              private boolean allowExplicitExit = false;
+
+              private final OnBackPressedCallback ephoneBackCallback = new OnBackPressedCallback(true) {
+                  @Override
+                  public void handleOnBackPressed() {
+                      triggerWebViewStepBack();
+                  }
+              };
+
+              private void ensureTopBackCallback() {
+                  try {
+                      ephoneBackCallback.remove();
+                      ephoneBackCallback.setEnabled(true);
+                      getOnBackPressedDispatcher().addCallback(this, ephoneBackCallback);
+                  } catch (Exception ignored) {}
+              }
+
+              @Override
+              public void finish() {
+                  if (!allowExplicitExit) {
+                      triggerWebViewStepBack();
+                      return;
+                  }
+                  super.finish();
+              }
+
+              @Override
+              public boolean moveTaskToBack(boolean nonRoot) {
+                  if (!allowExplicitExit) {
+                      triggerWebViewStepBack();
+                      return false;
+                  }
+                  return super.moveTaskToBack(nonRoot);
+              }
 
               private void ensureNotificationChannel() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -495,7 +586,7 @@ jobs:
                       if (this.bridge != null && this.bridge.getWebView() != null) {
                           final WebView wv = this.bridge.getWebView();
                           wv.post(() -> wv.evaluateJavascript(
-                              "if (typeof window.__handleEPhoneBackAction === 'function') { window.__handleEPhoneBackAction(); } else { window.history.back(); }",
+                              "if (typeof window.__handleEPhoneBackAction === 'function') { window.__handleEPhoneBackAction(); }",
                               null
                           ));
                       }
@@ -507,14 +598,7 @@ jobs:
                   super.onCreate(savedInstanceState);
                   ensureNotificationChannel();
                   checkAndRequestNotificationPermission();
-                  try {
-                      getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-                          @Override
-                          public void handleOnBackPressed() {
-                              triggerWebViewStepBack();
-                          }
-                      });
-                  } catch (Exception ignored) {}
+                  ensureTopBackCallback();
                   try {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                           if (getWindow() != null && getWindow().getDecorView() != null) {
@@ -534,20 +618,79 @@ jobs:
                           ws.setAllowFileAccess(true);
                           ws.setAllowContentAccess(true);
                           ws.setSaveFormData(false);
+                          ws.setMediaPlaybackRequiresUserGesture(false);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                              ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                          }
                           webView.setLongClickable(true);
                           webView.setHapticFeedbackEnabled(true);
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                               webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
                           }
                           webView.addJavascriptInterface(new EPhoneNativeBridge(this), "EPhoneNativeBridge");
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              final WebChromeClient origChrome = webView.getWebChromeClient();
+                              if (origChrome != null) {
+                                  webView.setWebChromeClient(new WebChromeClient() {
+                                      @Override
+                                      public void onPermissionRequest(final PermissionRequest request) {
+                                          try {
+                                              if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                                  ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, REQ_RECORD_AUDIO);
+                                              }
+                                              runOnUiThread(() -> {
+                                                  try {
+                                                      request.grant(request.getResources());
+                                                  } catch (Exception ignored) {}
+                                              });
+                                          } catch (Exception e) {
+                                              origChrome.onPermissionRequest(request);
+                                          }
+                                      }
+                                      @Override
+                                      public boolean onShowFileChooser(WebView wv, android.webkit.ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                                          return origChrome.onShowFileChooser(wv, filePathCallback, fileChooserParams);
+                                      }
+                                  });
+                              }
+                          }
                       }
                       checkAndApplyPersistedHotUpdate();
                   } catch (Exception ignored) {}
               }
 
               @Override
+              public void onStart() {
+                  super.onStart();
+                  ensureTopBackCallback();
+              }
+
+              @Override
+              public void onResume() {
+                  super.onResume();
+                  ensureTopBackCallback();
+              }
+
+              @Override
               public void onBackPressed() {
                   triggerWebViewStepBack();
+              }
+
+              @Override
+              public boolean onKeyDown(int keyCode, KeyEvent event) {
+                  if (keyCode == KeyEvent.KEYCODE_BACK) {
+                      return true;
+                  }
+                  return super.onKeyDown(keyCode, event);
+              }
+
+              @Override
+              public boolean onKeyUp(int keyCode, KeyEvent event) {
+                  if (keyCode == KeyEvent.KEYCODE_BACK) {
+                      triggerWebViewStepBack();
+                      return true;
+                  }
+                  return super.onKeyUp(keyCode, event);
               }
 
               @Override
@@ -559,6 +702,20 @@ jobs:
                       return true;
                   }
                   return super.dispatchKeyEvent(event);
+              }
+
+              public File getLocalVaultRootDir() {
+                  File base = getExternalFilesDir(null);
+                  if (base == null) base = getFilesDir();
+                  File vaultDir = new File(base, "EPhoneVault");
+                  if (!vaultDir.exists()) {
+                      vaultDir.mkdirs();
+                  }
+                  File nomedia = new File(vaultDir, ".nomedia");
+                  if (!nomedia.exists()) {
+                      try { nomedia.createNewFile(); } catch (Exception ignored) {}
+                  }
+                  return vaultDir;
               }
 
               private long getCurrentApkUpdateTime() {
@@ -708,6 +865,7 @@ jobs:
                       if (activity != null) {
                           activity.runOnUiThread(() -> {
                               try {
+                                  activity.allowExplicitExit = true;
                                   activity.moveTaskToBack(true);
                                   activity.finish();
                               } catch (Exception ignored) {}
@@ -775,10 +933,21 @@ jobs:
                   @JavascriptInterface
                   public boolean copyToClipboard(String text) {
                       try {
+                          final String safeText = text != null ? text : "";
+                          if (activity != null) {
+                              activity.runOnUiThread(() -> {
+                                  try {
+                                      ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                                      if (cm != null) {
+                                          cm.setPrimaryClip(ClipData.newPlainText("text", safeText));
+                                      }
+                                  } catch (Exception ignored) {}
+                              });
+                              return true;
+                          }
                           ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
                           if (cm != null) {
-                              ClipData clip = ClipData.newPlainText("text", text != null ? text : "");
-                              cm.setPrimaryClip(clip);
+                              cm.setPrimaryClip(ClipData.newPlainText("text", safeText));
                               return true;
                           }
                       } catch (Exception ignored) {}
@@ -798,6 +967,187 @@ jobs:
                           }
                       } catch (Exception ignored) {}
                       return "";
+                  }
+
+                  private File resolveSafeVaultFile(String relativePath) {
+                      if (activity == null || relativePath == null) return null;
+                      String clean = relativePath.trim().replace('\\', '/').replaceAll("^/+", "");
+                      if (clean.isEmpty() || clean.contains("..")) return null;
+                      return new File(activity.getLocalVaultRootDir(), clean);
+                  }
+
+                  @JavascriptInterface
+                  public String vaultGetDirPath() {
+                      try {
+                          return activity != null ? activity.getLocalVaultRootDir().getAbsolutePath() : "";
+                      } catch (Exception e) {
+                          return "";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public boolean vaultWriteBase64(String relativePath, String base64Data) {
+                      try {
+                          File f = resolveSafeVaultFile(relativePath);
+                          if (f == null || base64Data == null) return false;
+                          File parent = f.getParentFile();
+                          if (parent != null && !parent.exists()) parent.mkdirs();
+                          String pure = base64Data;
+                          int comma = pure.indexOf(',');
+                          if (comma >= 0) pure = pure.substring(comma + 1);
+                          byte[] bytes = pure.isEmpty() ? new byte[0] : Base64.decode(pure, Base64.DEFAULT);
+                          try (FileOutputStream fos = new FileOutputStream(f)) {
+                              fos.write(bytes);
+                              fos.flush();
+                          }
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public String vaultReadBase64(String relativePath) {
+                      try {
+                          File f = resolveSafeVaultFile(relativePath);
+                          if (f == null || !f.exists() || !f.isFile()) return "";
+                          try (FileInputStream fis = new FileInputStream(f);
+                               ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                              byte[] buf = new byte[16384];
+                              int n;
+                              while ((n = fis.read(buf)) > 0) {
+                                  bos.write(buf, 0, n);
+                              }
+                              return Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
+                          }
+                      } catch (Exception e) {
+                          return "";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public boolean vaultWriteText(String relativePath, String content) {
+                      try {
+                          File f = resolveSafeVaultFile(relativePath);
+                          if (f == null || content == null) return false;
+                          File parent = f.getParentFile();
+                          if (parent != null && !parent.exists()) parent.mkdirs();
+                          try (FileOutputStream fos = new FileOutputStream(f)) {
+                              fos.write(content.getBytes(StandardCharsets.UTF_8));
+                              fos.flush();
+                          }
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public String vaultReadText(String relativePath) {
+                      try {
+                          File f = resolveSafeVaultFile(relativePath);
+                          if (f == null || !f.exists() || !f.isFile()) return "";
+                          try (FileInputStream fis = new FileInputStream(f);
+                               ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                              byte[] buf = new byte[16384];
+                              int n;
+                              while ((n = fis.read(buf)) > 0) {
+                                  bos.write(buf, 0, n);
+                              }
+                              return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                          }
+                      } catch (Exception e) {
+                          return "";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public boolean vaultDeleteFile(String relativePath) {
+                      try {
+                          File f = resolveSafeVaultFile(relativePath);
+                          if (f != null && f.exists()) {
+                              return f.delete();
+                          }
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public String vaultListFiles(String subDir) {
+                      try {
+                          if (activity == null) return "[]";
+                          File base = activity.getLocalVaultRootDir();
+                          File target = (subDir == null || subDir.trim().isEmpty())
+                              ? base
+                              : resolveSafeVaultFile(subDir);
+                          if (target == null || !target.exists() || !target.isDirectory()) return "[]";
+                          File[] files = target.listFiles();
+                          if (files == null) return "[]";
+                          JSONArray arr = new JSONArray();
+                          for (File f : files) {
+                              if (f != null && f.isFile()) {
+                                  JSONObject obj = new JSONObject();
+                                  obj.put("name", f.getName());
+                                  obj.put("size", f.length());
+                                  arr.put(obj);
+                              }
+                          }
+                          return arr.toString();
+                      } catch (Exception e) {
+                          return "[]";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public boolean saveFileToDownloads(String base64Data, String fileName, String mimeType) {
+                      try {
+                          if (base64Data == null || base64Data.isEmpty()) return false;
+                          String pureB64 = base64Data;
+                          int commaIdx = pureB64.indexOf(',');
+                          if (commaIdx >= 0) {
+                              pureB64 = pureB64.substring(commaIdx + 1);
+                          }
+                          byte[] bytes = Base64.decode(pureB64, Base64.DEFAULT);
+                          if (bytes == null) return false;
+                          String safeName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : ("export_" + System.currentTimeMillis() + ".json");
+                          String safeMime = (mimeType != null && !mimeType.trim().isEmpty()) ? mimeType.trim() : "application/octet-stream";
+
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              ContentResolver resolver = ctx.getContentResolver();
+                              ContentValues values = new ContentValues();
+                              values.put(MediaStore.MediaColumns.DISPLAY_NAME, safeName);
+                              values.put(MediaStore.MediaColumns.MIME_TYPE, safeMime);
+                              values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/四半世紀");
+                              values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                              Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                              if (uri != null) {
+                                  try (OutputStream os = resolver.openOutputStream(uri)) {
+                                      if (os != null) {
+                                          os.write(bytes);
+                                          os.flush();
+                                      }
+                                  }
+                                  ContentValues doneValues = new ContentValues();
+                                  doneValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                                  resolver.update(uri, doneValues, null, null);
+                                  return true;
+                              }
+                          }
+
+                          File dlDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "四半世紀");
+                          if (!dlDir.exists()) dlDir.mkdirs();
+                          File outFile = new File(dlDir, safeName);
+                          try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                              fos.write(bytes);
+                              fos.flush();
+                          }
+                          MediaScannerConnection.scanFile(ctx, new String[]{outFile.getAbsolutePath()}, new String[]{safeMime}, null);
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
                   }
 
                   @JavascriptInterface

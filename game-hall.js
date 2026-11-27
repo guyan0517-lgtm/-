@@ -2785,8 +2785,18 @@ code, pre {
             const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
               ? window.location.origin
               : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
+            const isApkOrStatic = Boolean(
+              window.Capacitor ||
+              window.EPhoneNativeBridge ||
+              (window.parent && (window.parent.Capacitor || window.parent.EPhoneNativeBridge)) ||
+              (window.location && window.location.hostname && window.location.hostname.toLowerCase().endsWith('.github.io'))
+            );
+            const rawGhPrefix = isApkOrStatic ? 'https://cdn.jsdelivr.net/gh/' : ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/');
+            const formatRawGhUrl = (owner, repo, branch, filePath) => isApkOrStatic
+              ? `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${filePath}`
+              : `${hostOrigin ? hostOrigin : ''}/api/raw-gh/${owner}/${repo}/${branch}/${filePath}`;
             const primaryFetchUrl = /^https?:\/\/trrtty\.github\.io\/milktea\/?$/i.test(fetchUrl)
-              ? ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/trrtty/milktea/main/index.html')
+              ? formatRawGhUrl('trrtty', 'milktea', 'main', 'index.html')
               : fetchUrl;
             fetch(primaryFetchUrl).then(r => r.ok ? r.text() : '').catch(() => '').then(async firstHtml => {
               let rawHtml = firstHtml;
@@ -2796,7 +2806,12 @@ code, pre {
               if (!rawHtml || isHostAppHtmlFallback(rawHtml)) return;
               const activeTheme = (tavernState.themes || []).find(t => t.id === tavernState.activeThemeId) || tavernState.themes?.[0];
               const shouldDark = Boolean((tavernState.uiSettings || {}).enableHtmlDarkAdapt !== false && isTavernThemeDark(activeTheme));
-              const rawProxiedHtml = String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, (hostOrigin ? hostOrigin : '') + '/api/raw-gh/');
+              const rawProxiedHtml = isApkOrStatic
+                ? String(rawHtml).replace(
+                    /https?:\/\/raw\.githubusercontent\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/(?:refs\/heads\/)?([a-zA-Z0-9_.-]+)\//gi,
+                    'https://cdn.jsdelivr.net/gh/$1/$2@$3/'
+                  )
+                : String(rawHtml).replace(/https?:\/\/raw\.githubusercontent\.com\//gi, rawGhPrefix);
               const finalHtml = shouldDark ? convertHtmlDocToSoftDark(rawProxiedHtml) : rawProxiedHtml;
               for (const el of arr) {
                 if (!el) continue;
@@ -11014,8 +11029,19 @@ function buildFallbackCodeFromItem(drinkObj) {
   }
 
   let localMilkteaHtmlCache = '';
+  function isTavernApkOrStaticEnv() {
+    return Boolean(
+      window.Capacitor ||
+      window.EPhoneNativeBridge ||
+      (window.parent && (window.parent.Capacitor || window.parent.EPhoneNativeBridge)) ||
+      (window.location && window.location.hostname && window.location.hostname.toLowerCase().endsWith('.github.io'))
+    );
+  }
   function preloadLocalMilkteaHtml() {
-    fetch('/api/raw-gh/trrtty/milktea/main/index.html')
+    const milkteaUrl = isTavernApkOrStaticEnv()
+      ? 'https://cdn.jsdelivr.net/gh/trrtty/milktea@main/index.html'
+      : '/api/raw-gh/trrtty/milktea/main/index.html';
+    fetch(milkteaUrl)
       .then(r => (r && r.ok) ? r.text() : '')
       .then(txt => {
         if (txt && txt.includes('unlockedIngredients') && !isHostAppHtmlFallback(txt)) {
@@ -11048,6 +11074,7 @@ function buildFallbackCodeFromItem(drinkObj) {
     const hostOrigin = (window.location && window.location.origin && window.location.origin !== 'null')
       ? window.location.origin
       : (window.parent && window.parent.location && window.parent.location.origin !== 'null' ? window.parent.location.origin : '');
+    const isApkOrStatic = isTavernApkOrStaticEnv();
     let sourceDoc = String(rawHtmlDoc || '');
     if (/trrtty\.github\.io\/milktea/i.test(sourceDoc) && /\.load\s*\(/i.test(sourceDoc)) {
       const preloaded = resolveMilkteaFullHtmlFromCardOrCache();
@@ -11057,7 +11084,7 @@ function buildFallbackCodeFromItem(drinkObj) {
     }
     let useTermuxDirect = false;
     try {
-      useTermuxDirect = localStorage.getItem('ephone_termux_card_assets_ready') === '1';
+      useTermuxDirect = localStorage.getItem('ephone_termux_card_assets_ready') === '1' && !isApkOrStatic;
     } catch (_) {}
     let cleaned = sourceDoc
       .replace(/<link[^>]+fonts\.(?:googleapis|gstatic)\.com[^>]*>/gi, '')
@@ -11067,9 +11094,14 @@ function buildFallbackCodeFromItem(drinkObj) {
         /https?:\/\/raw\.githubusercontent\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/(?:refs\/heads\/)?([a-zA-Z0-9_.-]+)\//gi,
         (_, owner, repo, branch) => useTermuxDirect
           ? ('http://127.0.0.1:8765/card-assets/' + owner + '/' + repo + '/')
-          : ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/')
+          : (isApkOrStatic
+              ? ('https://cdn.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/')
+              : ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/'))
       )
-      .replace(/https?:\/\/raw\.githubusercontent\.com\//gi, (hostOrigin ? hostOrigin : '') + '/api/raw-gh/');
+      .replace(
+        /https?:\/\/raw\.githubusercontent\.com\//gi,
+        isApkOrStatic ? 'https://raw.githubusercontent.com/' : ((hostOrigin ? hostOrigin : '') + '/api/raw-gh/')
+      );
     cleaned = patchMilkteaCardHtml(cleaned);
 
     if (!allowAudioInFrame) {
@@ -11289,6 +11321,7 @@ function buildFallbackCodeFromItem(drinkObj) {
       if (fbStage === '3') return;
       var s = t.getAttribute('src') || '';
       var pOrig = (window.parent && window.parent.location && window.parent.location.origin && window.parent.location.origin !== 'null') ? window.parent.location.origin : '';
+      var isApkEnv = Boolean(window.parent && (window.parent.Capacitor || window.parent.EPhoneNativeBridge || (window.parent.location && window.parent.location.hostname && window.parent.location.hostname.toLowerCase().indexOf('.github.io') !== -1)));
       if (s.indexOf('http://127.0.0.1:8765/card-assets/') === 0) {
         var termuxRel = s.slice('http://127.0.0.1:8765/card-assets/'.length).split('?')[0];
         var tParts = termuxRel.split('/');
@@ -11302,7 +11335,9 @@ function buildFallbackCodeFromItem(drinkObj) {
             return;
           }
           t.setAttribute('data-gh-cdn-fallback', '2');
-          t.src = pOrig + '/api/raw-gh/' + tOwner + '/' + tRepo + '/main/' + tPath;
+          t.src = isApkEnv
+            ? ('https://cdn.jsdelivr.net/gh/' + tOwner + '/' + tRepo + '@main/' + tPath)
+            : (pOrig + '/api/raw-gh/' + tOwner + '/' + tRepo + '/main/' + tPath);
           return;
         }
       }
@@ -11310,6 +11345,9 @@ function buildFallbackCodeFromItem(drinkObj) {
       if (!sub) {
         if (s.indexOf('/api/raw-gh/') !== -1) {
           sub = s.split('/api/raw-gh/')[1] || '';
+        } else if (s.indexOf('cdn.jsdelivr.net/gh/') !== -1) {
+          var jsdPart = s.split('cdn.jsdelivr.net/gh/')[1] || '';
+          sub = jsdPart.replace('@', '/');
         } else if (s.indexOf('raw.githubusercontent.com/') !== -1) {
           sub = s.split('raw.githubusercontent.com/')[1] || '';
         }
@@ -11325,14 +11363,16 @@ function buildFallbackCodeFromItem(drinkObj) {
             var branch = parts[branchIdx];
             var filePath = parts.slice(branchIdx + 1).join('/');
             var hasTermuxAssets = false;
-            try { hasTermuxAssets = localStorage.getItem('ephone_termux_card_assets_ready') === '1'; } catch (_) {}
+            try { hasTermuxAssets = localStorage.getItem('ephone_termux_card_assets_ready') === '1' && !isApkEnv; } catch (_) {}
             if (fbStage === '0' && hasTermuxAssets) {
               t.setAttribute('data-gh-cdn-fallback', '1');
               t.src = 'http://127.0.0.1:8765/card-assets/' + owner + '/' + repo + '/' + filePath;
             } else if (fbStage === '0' || fbStage === '1') {
               t.setAttribute('data-gh-cdn-fallback', '2');
               var webpOrOrig = (filePath.toLowerCase().indexOf('ingredient/') === 0 && filePath.toLowerCase().slice(-4) === '.png') ? (filePath.slice(0, -4) + '.webp') : filePath;
-              t.src = pOrig + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/' + webpOrOrig + '?retry=1';
+              t.src = isApkEnv
+                ? ('https://cdn.jsdelivr.net/gh/' + owner + '/' + repo + '@' + branch + '/' + webpOrOrig)
+                : (pOrig + '/api/raw-gh/' + owner + '/' + repo + '/' + branch + '/' + webpOrOrig + '?retry=1');
             } else {
               t.setAttribute('data-gh-cdn-fallback', '3');
             }
@@ -11352,6 +11392,7 @@ function buildFallbackCodeFromItem(drinkObj) {
       if (cUrl) {
         document.documentElement.style.setProperty('--tavern-char-avatar-bg', 'url("' + cUrl.replace(/"/g, '%22') + '")');
       }
+      var isApkEnv = Boolean(window.parent && (window.parent.Capacitor || window.parent.EPhoneNativeBridge || (window.parent.location && window.parent.location.hostname && window.parent.location.hostname.toLowerCase().indexOf('.github.io') !== -1)));
       var imgs = document.querySelectorAll('img');
       for (var i = 0; i < imgs.length; i++) {
         var im = imgs[i];
@@ -11360,7 +11401,15 @@ function buildFallbackCodeFromItem(drinkObj) {
         if (lowSrc.indexOf('https://raw.githubusercontent.com/') === 0 || lowSrc.indexOf('http://raw.githubusercontent.com/') === 0) {
           var pOrig = (window.parent && window.parent.location && window.parent.location.origin && window.parent.location.origin !== 'null') ? window.parent.location.origin : '';
           var subPath = rawSrc.slice(rawSrc.indexOf('raw.githubusercontent.com/') + 26);
-          im.src = pOrig + '/api/raw-gh/' + subPath;
+          if (isApkEnv) {
+            var spParts = subPath.split('/');
+            var bIdx = (spParts[2] === 'refs' && spParts[3] === 'heads') ? 4 : 2;
+            if (spParts.length > bIdx + 1) {
+              im.src = 'https://cdn.jsdelivr.net/gh/' + spParts[0] + '/' + spParts[1] + '@' + spParts[bIdx] + '/' + spParts.slice(bIdx + 1).join('/');
+            }
+          } else {
+            im.src = pOrig + '/api/raw-gh/' + subPath;
+          }
         } else if (uUrl && (lowSrc.indexOf('user%20avatars') !== -1 || lowSrc.indexOf('user avatars') !== -1 || lowSrc.indexOf('user-avatar') !== -1 || lowSrc.indexOf('{{user}}') !== -1 || lowSrc.indexOf('%7b%7buser%7d%7d') !== -1)) {
           im.src = uUrl;
         } else if (rawSrc.indexOf('vault://') === 0 && typeof window.parent.resolveVaultRefToUrl === 'function') {
@@ -16501,14 +16550,14 @@ function buildFallbackCodeFromItem(drinkObj) {
         </div>
 
         <!-- Hidden Multi-File Inputs -->
-        <input type="file" id="tavern-file-cards" accept=".png,.json,image/png,application/json" multiple style="display:none" />
-        <input type="file" id="tavern-file-worldbooks" accept=".json,application/json" multiple style="display:none" />
-        <input type="file" id="tavern-file-regexes" accept=".json,application/json" multiple style="display:none" />
-        <input type="file" id="tavern-file-presets" accept=".json,application/json" multiple style="display:none" />
-        <input type="file" id="tavern-file-selective-prompts" accept=".json,application/json" style="display:none" />
-        <input type="file" id="tavern-file-themes" accept=".json,.css,application/json,text/css" multiple style="display:none" />
-        <input type="file" id="tavern-file-plugins" accept=".js,.json,.html,.css,application/javascript,text/javascript,application/json,text/html,text/css" multiple style="display:none" />
-        <input type="file" id="tavern-file-chats" accept=".json,.jsonl,application/json" multiple style="display:none" />
+        <input type="file" id="tavern-file-cards" accept=".png,.json,image/png,application/json,application/octet-stream,text/plain,*/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-worldbooks" accept=".json,application/json,application/octet-stream,text/plain,*/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-regexes" accept=".json,application/json,application/octet-stream,text/plain,*/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-presets" accept=".json,application/json,application/octet-stream,text/plain,*/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-selective-prompts" accept=".json,application/json,application/octet-stream,text/plain,*/*" style="display:none" />
+        <input type="file" id="tavern-file-themes" accept=".json,.css,application/json,text/css,application/octet-stream,text/plain,*/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-plugins" accept=".js,.json,.html,.css,application/javascript,text/javascript,application/json,text/html,text/css,application/octet-stream,text/plain,*/*" multiple style="display:none" />
+        <input type="file" id="tavern-file-chats" accept=".json,.jsonl,application/json,application/octet-stream,text/plain,*/*" multiple style="display:none" />
         <input type="file" id="tavern-file-bg" accept="image/*" multiple style="display:none" />
         <input type="file" id="tavern-file-chat-attach" accept="image/*" multiple style="display:none" />
         <input type="file" id="tavern-file-char-sprite" accept="image/*" style="display:none" />
@@ -23351,12 +23400,43 @@ function buildFallbackCodeFromItem(drinkObj) {
               reposMap.set(m[1] + '/' + m[2], { owner: m[1], repo: m[2], branch: m[3] || 'main' });
             }
           }
-          const resp = await fetch('/api/pull-card-assets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repos: Array.from(reposMap.values()) })
-          });
-          const data = await resp.json().catch(() => ({}));
+          let data = null;
+          const isApkOrStatic = isTavernApkOrStaticEnv();
+          if (!isApkOrStatic) {
+            const resp = await fetch('/api/pull-card-assets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ repos: Array.from(reposMap.values()) })
+            }).catch(() => null);
+            if (resp && resp.ok) {
+              data = await resp.json().catch(() => null);
+            }
+          }
+          if (!data || !Array.isArray(data.files)) {
+            const discoveredFiles = [];
+            for (const rMeta of Array.from(reposMap.values())) {
+              try {
+                const treeRes = await fetch(`https://data.jsdelivr.com/v1/package/gh/${rMeta.owner}/${rMeta.repo}@${rMeta.branch}/flat`).catch(() => null);
+                if (treeRes && treeRes.ok) {
+                  const treeJson = await treeRes.json().catch(() => null);
+                  if (treeJson && Array.isArray(treeJson.files)) {
+                    for (const fObj of treeJson.files) {
+                      const fPath = String((fObj && fObj.name) || '').replace(/^\/+/, '');
+                      if (fPath && /\.(png|jpe?g|webp|gif|svg|mp3|wav|ogg|html|json|css|js)$/i.test(fPath)) {
+                        discoveredFiles.push({
+                          owner: rMeta.owner,
+                          repo: rMeta.repo,
+                          branch: rMeta.branch,
+                          path: fPath
+                        });
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+            }
+            data = { ok: true, files: discoveredFiles, totalLocal: discoveredFiles.length };
+          }
 
           let termuxSavedCount = 0;
           let termuxOnline = false;
@@ -23391,7 +23471,10 @@ function buildFallbackCodeFromItem(drinkObj) {
                     continue;
                   }
                   const encPath = item.path.split('/').map(encodeURIComponent).join('/');
-                  const rawRes = await fetch(`/api/raw-gh/${item.owner}/${item.repo}/${item.branch}/${encPath}`).catch(() => null);
+                  const rawFetchUrl = isApkOrStatic
+                    ? `https://cdn.jsdelivr.net/gh/${item.owner}/${item.repo}@${item.branch}/${encPath}`
+                    : `/api/raw-gh/${item.owner}/${item.repo}/${item.branch}/${encPath}`;
+                  const rawRes = await fetch(rawFetchUrl).catch(() => null);
                   if (rawRes && rawRes.ok) {
                     const buf = await rawRes.arrayBuffer();
                     if (buf && buf.byteLength > 0) {
