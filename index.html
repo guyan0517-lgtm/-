@@ -2561,7 +2561,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.5</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.6</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -34154,6 +34154,24 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
           const screenToShow = document.getElementById(screenId);
           if (screenToShow) {
             screenToShow.classList.add("active");
+          }
+
+          if (
+            screenId === "chat-list-screen" ||
+            screenId === "home-screen" ||
+            screenId === "contacts-screen" ||
+            screenId === "game-hall-screen" ||
+            screenId === "qzone-screen"
+          ) {
+            if (state && state.activeChatId !== null && state.activeChatId !== undefined) {
+              const exitInput = document.getElementById("chat-input");
+              if (exitInput && typeof window.saveChatDraftRealtime === "function") {
+                try {
+                  window.saveChatDraftRealtime(state.activeChatId, exitInput.value, true);
+                } catch (_) {}
+              }
+              state.activeChatId = null;
+            }
           }
 
           if (screenId === "chat-list-screen") {
@@ -112924,7 +112942,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=31.5", { updateViaCache: "none" })
+              .register("sw.js?v=31.6", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(

@@ -3081,6 +3081,14 @@
       this.saveIncomingRequests(list);
       this.renderFriendRequestsUI();
 
+      const existingChat = await this.findPeerChatByCodeAsync(fromCode);
+      if (existingChat) {
+        const cleaned = this.getIncomingRequests().filter((r) => r.fromCode !== fromCode);
+        this.saveIncomingRequests(cleaned);
+        this.renderFriendRequestsUI();
+        return;
+      }
+
       this.showPeerNotice(
         "请求添加你为密友，点击处理",
         () => {
@@ -3095,8 +3103,9 @@
         }
       );
 
+      const isFreshReq = !data.timestamp || Math.abs(Date.now() - Number(data.timestamp)) < 60000;
       const modal = document.getElementById("contact-peer-modal");
-      if (!modal || !modal.classList.contains("visible")) {
+      if (isFreshReq && (!modal || !modal.classList.contains("visible"))) {
         await this.openPeerModal();
       }
     },
@@ -4555,12 +4564,22 @@
         if (miniMapModal && miniMapModal.classList.contains("visible") && typeof window.renderChatMiniMap === "function") {
           window.renderChatMiniMap();
         }
+        const chatScreenEl = document.getElementById("chat-interface-screen");
+        const isViewingGroupNow = Boolean(chatScreenEl && chatScreenEl.classList.contains("active"));
         const isActivelyRenderingTurn = Boolean(
           (window.activeGeneratingChats && (window.activeGeneratingChats[groupChat.id] || window.activeGeneratingChats[String(groupChat.id)])) ||
           (window.chatTurnRenderPromise && window.chatTurnRenderPromise[String(groupChat.id)])
         );
-        if (!isActivelyRenderingTurn && typeof window.renderChatInterfaceProxy === "function") {
-          window.renderChatInterfaceProxy(groupChat.id);
+        if (isViewingGroupNow && !isActivelyRenderingTurn) {
+          const msgBox = document.getElementById("chat-messages");
+          const lastHist = Array.isArray(groupChat.history) && groupChat.history.length > 0
+            ? groupChat.history[groupChat.history.length - 1]
+            : null;
+          if (msgBox && lastHist && lastHist.timestamp && !msgBox.querySelector(`[data-timestamp="${lastHist.timestamp}"]`)) {
+            if (typeof window.renderChatInterfaceProxy === "function") {
+              window.renderChatInterfaceProxy(groupChat.id);
+            }
+          }
         }
       }
       await this.refreshAppChatAndContactsUI();
@@ -4942,7 +4961,7 @@
         groupChat.unreadCount = (groupChat.unreadCount || 0) + 1;
       }
 
-      if (window.state && String(window.state.activeChatId) === String(groupChat.id) && groupChat.activeLineMode !== "solo") {
+      if (isCurrentActive && groupChat.activeLineMode !== "solo") {
         if (typeof window.appendMessage === "function") {
           window.appendMessage(msgToInsert, groupChat);
         } else if (typeof window.renderChatInterfaceProxy === "function") {
@@ -5719,7 +5738,7 @@
         window.state.chats[String(peerChat.id)] = peerChat;
       }
 
-      if (window.state && String(window.state.activeChatId) === String(peerChat.id)) {
+      if (isCurrentActive) {
         const titleEl = document.getElementById("chat-header-title");
         const showName = (peerChat.settings && peerChat.settings.remarkName) || peerChat.name;
         if (titleEl && showName) titleEl.textContent = showName;
@@ -5846,14 +5865,32 @@
       }
       this.saveFriendToBackup(chat);
 
-      if (window.state && String(window.state.activeChatId) === String(chat.id)) {
+      const chatScreenEl = document.getElementById("chat-interface-screen");
+      const isViewingThisChatNow = Boolean(
+        chatScreenEl &&
+        chatScreenEl.classList.contains("active") &&
+        window.state &&
+        String(window.state.activeChatId) === String(chat.id)
+      );
+      if (isViewingThisChatNow) {
         const titleEl = document.getElementById("chat-header-title");
         const showName = (chat.settings && chat.settings.hasCustomRemark && chat.settings.remarkName) || chat.name;
-        if (titleEl && showName) titleEl.textContent = showName;
+        if (titleEl && showName && !titleEl.classList.contains("typing-status")) {
+          titleEl.textContent = showName;
+        }
         const chatAvatarEl = document.getElementById("chat-header-avatar");
-        if (chatAvatarEl && chat.settings.aiAvatar) chatAvatarEl.src = chat.settings.aiAvatar;
-        if (typeof window.renderChatInterfaceProxy === "function") {
-          window.renderChatInterfaceProxy(chat.id);
+        if (chatAvatarEl && chat.settings.aiAvatar) {
+          chatAvatarEl.src = chat.settings.aiAvatar;
+        }
+        if (chat.settings.aiAvatar) {
+          const msgBox = document.getElementById("chat-messages");
+          if (msgBox) {
+            msgBox.querySelectorAll(".message-wrapper.ai .message-avatar").forEach((imgEl) => {
+              if (imgEl && imgEl.src !== chat.settings.aiAvatar) {
+                imgEl.src = chat.settings.aiAvatar;
+              }
+            });
+          }
         }
       }
 
