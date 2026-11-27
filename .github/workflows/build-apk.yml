@@ -85,7 +85,7 @@ jobs:
       - name: Configure Fixed Deterministic Signing Keystore
         run: |
           mkdir -p ~/.android
-          cat << 'KEYSTORE_EOF' | tr -d '\n\r ' | base64 -d > ~/.android/debug.keystore
+          cat << 'KEYSTORE_EOF' | tr -d '\n\r ' | base64 -d > /tmp/ephone_raw.p12
           MIIKXgIBAzCCChQGCSqGSIb3DQEHAaCCCgUEggoBMIIJ/TCCBFIGCSqGSIb3DQEHBqCCBEMwggQ/
           AgEAMIIEOAYJKoZIhvcNAQcBMFcGCSqGSIb3DQEFDTBKMCkGCSqGSIb3DQEFDDAcBAi6klEdxBRZ
           EwICCAAwDAYIKoZIhvcNAgkFADAdBglghkgBZQMEASoEEGgUY5FzYEss47eFzLeDD1KAggPQ8OBl
@@ -134,7 +134,39 @@ jobs:
           AGQAcgBvAGkAZABkAGUAYgB1AGcAawBlAHkwQTAxMA0GCWCGSAFlAwQCAQUABCBYP3VG7Svop9MS
           EKPKk1GI+SSZShbDeghU2rVUL08suAQIyI/WlxKQh90CAggA
           KEYSTORE_EOF
+          rm -f ~/.android/debug.keystore android/app/debug.keystore
+          keytool -importkeystore \
+            -srckeystore /tmp/ephone_raw.p12 \
+            -srcstoretype PKCS12 \
+            -srcstorepass android \
+            -destkeystore ~/.android/debug.keystore \
+            -deststoretype JKS \
+            -deststorepass android \
+            -destkeypass android \
+            -alias androiddebugkey \
+            -noprompt || cp -f /tmp/ephone_raw.p12 ~/.android/debug.keystore
           cp -f ~/.android/debug.keystore android/app/debug.keystore || true
+          if [ -f "android/app/build.gradle" ]; then
+            cat << 'GRADLE_SIGN_EOF' >> android/app/build.gradle
+
+          android {
+              signingConfigs {
+                  debug {
+                      storeFile file('debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+              buildTypes {
+                  debug {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          GRADLE_SIGN_EOF
+          fi
+
 
       - name: Configure Android App Name, Custom Icons, Native Bridge & Permissions
         run: |
