@@ -148,9 +148,9 @@ jobs:
           cp -f ~/.android/debug.keystore android/app/debug.keystore || true
           if [ -f "android/app/build.gradle" ]; then
             NEXT_VER_CODE=$((1000 + ${GITHUB_RUN_NUMBER:-1}))
-            HTML_VER=$(grep -oE 'id="api-settings-version-tag"[^>]*>v?[0-9]+(\.[0-9]+)?<' index.html | grep -oE '[0-9]+(\.[0-9]+)?' | head -n 1)
+            HTML_VER=$(grep -oE 'id="api-settings-version-tag"[^>]*>v?[0-9]+(\.[0-9]+)?<' index.html | grep -oE '>v?[0-9]+(\.[0-9]+)?<' | grep -oE '[0-9]+(\.[0-9]+)?' | head -n 1)
             if [ -z "$HTML_VER" ]; then
-              HTML_VER="31.2"
+              HTML_VER="31.5"
             fi
             sed -i "s/versionCode 1/versionCode ${NEXT_VER_CODE}/g" android/app/build.gradle || true
             sed -i "s/versionName \"1.0\"/versionName \"${HTML_VER}\"/g" android/app/build.gradle || true
@@ -442,7 +442,7 @@ jobs:
           if [ -n "$MAIN_ACT" ] && [ -f "$MAIN_ACT" ]; then
             PKG_LINE=$(grep -E '^package ' "$MAIN_ACT" | head -n 1)
             cat << 'EOF' > "$MAIN_ACT"
-          package com.ephone.companion.app;
+          package com.ephone.companion.pro;
 
           import android.Manifest;
           import android.app.Notification;
@@ -1254,7 +1254,7 @@ jobs:
           }
           EOF
             if [ -n "$PKG_LINE" ]; then
-              sed -i "1s|^package .*|$PKG_LINE|" "$MAIN_ACT" || true
+              sed -i "1s|^[[:space:]]*package .*|$PKG_LINE|" "$MAIN_ACT" || true
             fi
           fi
 

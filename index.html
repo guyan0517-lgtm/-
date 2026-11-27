@@ -2561,7 +2561,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.4</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.5</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -112924,7 +112924,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=31.4", { updateViaCache: "none" })
+              .register("sw.js?v=31.5", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -139500,6 +139500,23 @@ ${specificRules}`;
                 transferBtn.textContent = "转存中";
                 updateVaultStatusBadge("转存中", false);
                 try {
+                  // 先从 Termux 合并恢复所有聊天、人设、世界书与全量备份到当前 APP 数据库，再把所有图片、画师串与文件复制到 APP 本地隐藏目录
+                  try {
+                    const rawFetch = window.__ephoneOrigWindowFetch || window.fetch.bind(window);
+                    const bRes = await rawFetch("http://127.0.0.1:8765/backup.json", { method: "GET", cache: "no-store" });
+                    if (bRes && bRes.ok) {
+                      const bBlob = await bRes.blob();
+                      if (bBlob && bBlob.size > 2) {
+                        const parsedSnap = await parseBackupBlobOrFileLowMemory(bBlob);
+                        if (parsedSnap && typeof parsedSnap === "object") {
+                          await applyFullDatabaseSnapshot(parsedSnap);
+                        }
+                      }
+                    }
+                  } catch (_) {}
+                  try {
+                    await mergeNewerSnapshotAndTermuxIntoDb(null);
+                  } catch (_) {}
                   const res = await window.__ephoneCopyTermuxToAppLocalVault((msg) => {
                     setVaultInfoText(msg);
                   });

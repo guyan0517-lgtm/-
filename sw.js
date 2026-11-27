@@ -1,5 +1,5 @@
-// Service Worker v31.4 - Push Notifications & Version-Safe Hot Update Cache
-const CACHE_NAME = "ephone-tuk-cache-v31.4";
+// Service Worker v31.5 - Push Notifications & Version-Safe Hot Update Cache
+const CACHE_NAME = "ephone-tuk-cache-v31.5";
 const HOT_UPDATE_CACHE = "ephone-hot-update-bundle-v1";
 
 function extractHtmlVersion(htmlText) {
