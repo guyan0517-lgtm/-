@@ -2561,7 +2561,7 @@
         </div>
 
         <!-- 左下角版本号 -->
-        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.6</div>
+        <div id="api-settings-version-tag" style="position: absolute; left: 20px; bottom: 28px; z-index: 99; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 12px; font-weight: 600; pointer-events: none;">v31.8</div>
 
         <!-- 悬浮保存按钮 -->
         <button id="save-api-settings-btn" class="moe-fab-save">
@@ -23357,7 +23357,7 @@ lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer
             if (urlInput && urlInput.value && urlInput.value.trim()) {
               return urlInput.value.trim().replace(/\/+$/, "");
             }
-            const rawSaved = localStorage.getItem("ephone_local_vault_config_v1");
+            const rawSaved = localStorage.getItem("ephone_local_vault_config") || localStorage.getItem("ephone_local_vault_config_v1");
             if (rawSaved) {
               const parsed = JSON.parse(rawSaved);
               if (parsed && typeof parsed.url === "string" && parsed.url.trim()) {
@@ -45559,10 +45559,18 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
               toggleText.textContent = currentMode === "generate" ? "提取" : "生图";
             }
             if (prevMode === "collection" && currentMode !== "collection") {
+              if (colActiveSubView !== "grid") {
+                switchCollectionSubView("grid");
+              }
               destroyNaiCollectionGalleryMemory();
             }
-            if (currentMode === "collection" && colActiveSubView === "grid") {
-              renderCollectionGrid(true);
+            if (currentMode === "collection") {
+              if (prevMode !== "collection" && colActiveSubView !== "grid") {
+                switchCollectionSubView("grid");
+              }
+              if (colActiveSubView === "grid") {
+                renderCollectionGrid(true);
+              }
             }
             const scrollContainer = document.querySelector("#module-nai-panel .mod-nai-scroll");
             if (scrollContainer && currentMode !== "collection") {
@@ -53185,6 +53193,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
 
             if (closeBtn) {
               closeBtn.addEventListener("click", () => {
+                switchCollectionSubView("grid");
                 applyModeView("generate");
                 const st = loadPanelState();
                 st.mode = "generate";
@@ -53206,8 +53215,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                   colLexiconLocalPage = 1;
                   colLexiconSharedPage = 1;
                   colLexiconFolderRootPage = 1;
-                  switchCollectionSubView("grid");
                 }
+                switchCollectionSubView("grid");
                 colSortSourceIndex = -1;
                 setColStatus("");
                 applyModeView("collection");
@@ -53501,7 +53510,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (c1El) c1El.checked = true;
                 if (pos1Sel) {
                   pos1Sel.value = "";
-                  syncPresetCustomDropdown(pos1Sel, "positive");
+                  try { syncPresetCustomDropdown(pos1Sel, "positive"); } catch (_) {}
                 }
               } else {
                 if (artistEl) artistEl.value = artistVal;
@@ -53511,19 +53520,20 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 if (negEl) negEl.value = negVal;
                 if (artistSel) {
                   artistSel.value = "";
-                  syncPresetCustomDropdown(artistSel, "artist");
+                  try { syncPresetCustomDropdown(artistSel, "artist"); } catch (_) {}
                 }
                 if (pos1Sel) {
                   pos1Sel.value = "";
-                  syncPresetCustomDropdown(pos1Sel, "positive");
+                  try { syncPresetCustomDropdown(pos1Sel, "positive"); } catch (_) {}
                 }
                 if (negSel) {
                   negSel.value = "";
-                  syncPresetCustomDropdown(negSel, "negative");
+                  try { syncPresetCustomDropdown(negSel, "negative"); } catch (_) {}
                 }
               }
 
               switchCollectionSubView("grid");
+              renderCollectionGrid();
               applyModeView("generate");
               const st = loadPanelState();
               st.mode = "generate";
@@ -54018,6 +54028,7 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
             bindModuleNaiPanelEvents();
             const st = loadPanelState();
             if (st.mode === "collection") {
+              switchCollectionSubView("grid");
               st.mode = "generate";
               savePanelState(st);
               applyModeView("generate");
@@ -54033,8 +54044,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 colLexiconLocalPage = 1;
                 colLexiconSharedPage = 1;
                 colLexiconFolderRootPage = 1;
-                switchCollectionSubView("grid");
               }
+              switchCollectionSubView("grid");
               colSortSourceIndex = -1;
               setColStatus("");
               st.mode = "collection";
@@ -54206,8 +54217,8 @@ NPC可以通过执行某项任务、带来意外消息、改变站位、隐瞒�
                 colLexiconLocalPage = 1;
                 colLexiconSharedPage = 1;
                 colLexiconFolderRootPage = 1;
-                switchCollectionSubView("grid");
               }
+              switchCollectionSubView("grid");
             }
             applyModeView(st.mode || "generate");
             renderCollectionGrid();
@@ -112942,7 +112953,7 @@ ${specificRules}`;
           }
           if ("serviceWorker" in navigator) {
             navigator.serviceWorker
-              .register("sw.js?v=31.6", { updateViaCache: "none" })
+              .register("sw.js?v=31.8", { updateViaCache: "none" })
               .then((registration) => {
                 registration.update().catch(() => {});
                 console.log(
@@ -113112,9 +113123,16 @@ ${specificRules}`;
               return false;
             };
 
+            const isElementVisibleOnScreen = (el) => {
+              if (!el || !el.isConnected) return false;
+              if (el.offsetParent !== null) return true;
+              if (typeof el.getClientRects === "function" && el.getClientRects().length > 0) return true;
+              return false;
+            };
+
             const resolveEditableTarget = () => {
               const active = document.activeElement;
-              if (active && isElementEditableField(active)) {
+              if (active && isElementEditableField(active) && isElementVisibleOnScreen(active)) {
                 lastFocusedEditableEl = active;
                 lastFocusedEditableTs = Date.now();
                 return active;
@@ -113122,8 +113140,9 @@ ${specificRules}`;
               if (
                 lastFocusedEditableEl &&
                 lastFocusedEditableEl.isConnected &&
-                Date.now() - lastFocusedEditableTs < 15000 &&
-                isElementEditableField(lastFocusedEditableEl)
+                Date.now() - lastFocusedEditableTs < 1500 &&
+                isElementEditableField(lastFocusedEditableEl) &&
+                isElementVisibleOnScreen(lastFocusedEditableEl)
               ) {
                 return lastFocusedEditableEl;
               }
@@ -113157,6 +113176,9 @@ ${specificRules}`;
               if (t && isElementEditableField(t)) {
                 lastFocusedEditableEl = t;
                 lastFocusedEditableTs = Date.now();
+              } else if (t && (!t.closest || !t.closest("input, textarea, [contenteditable='true'], .tc-rich-textarea"))) {
+                lastFocusedEditableEl = null;
+                lastFocusedEditableTs = 0;
               }
             }, true);
 
@@ -113393,52 +113415,7 @@ ${specificRules}`;
               }
             };
 
-            let lastSyntaxFallbackTs = 0;
-            const triggerClipboardFallbackInsert = () => {
-              try {
-                const active = resolveEditableTarget();
-                if (!active) return false;
-                const now = Date.now();
-                if (now - lastSyntaxFallbackTs < 80) return true;
-                lastSyntaxFallbackTs = now;
-                const clipText = refreshCachedNativeClipboard();
-                if (clipText) {
-                  insertTextIntoActiveElementAtCursor(clipText, active);
-                  return true;
-                }
-                if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
-                  navigator.clipboard.readText().then((asyncClip) => {
-                    if (asyncClip) {
-                      lastKnownNativeClipboardText = asyncClip;
-                      insertTextIntoActiveElementAtCursor(asyncClip, active);
-                    }
-                  }).catch(() => {});
-                  return true;
-                }
-              } catch (_) {}
-              return false;
-            };
-
-            const origConsoleError = console.error ? console.error.bind(console) : null;
-            if (origConsoleError && !origConsoleError.__ephonePasteHooked) {
-              const wrappedConsoleError = function (...args) {
-                try {
-                  const first = args[0];
-                  const errStr = first && (first.stack || first.message) ? String(first.stack || first.message) : String(first || "");
-                  if (
-                    (first instanceof SyntaxError || /SyntaxError|ReferenceError|unexpected|unterminated|Script error/i.test(errStr)) &&
-                    resolveEditableTarget()
-                  ) {
-                    if (triggerClipboardFallbackInsert()) {
-                      return;
-                    }
-                  }
-                } catch (_) {}
-                return origConsoleError.apply(console, args);
-              };
-              wrappedConsoleError.__ephonePasteHooked = true;
-              console.error = wrappedConsoleError;
-            }
+            // 彻底移除对 console.error 的剪贴板自动写入拦截，防止任何后台报错误把剪贴板内容自动粘贴进当前对话框
 
             const patchInputPrototypeValue = (Proto) => {
               if (!Proto) return;
@@ -113509,40 +113486,30 @@ ${specificRules}`;
                 configurable: true,
                 enumerable: false,
                 get: function () {
-                  if ((this && this.isContentEditable) || resolveEditableTarget()) {
+                  if (this && this.isContentEditable && (this === document.activeElement || this === lastFocusedEditableEl)) {
                     this.__capCeGetTs = Date.now();
                     return "";
                   }
                   return undefined;
                 },
                 set: function (v) {
-                  if (typeof v === "string" && v.length > 0 && this.__capCeGetTs && Date.now() - this.__capCeGetTs < 400) {
+                  if (
+                    this &&
+                    this.isContentEditable &&
+                    (this === document.activeElement || this === lastFocusedEditableEl) &&
+                    typeof v === "string" &&
+                    v.length > 0 &&
+                    this.__capCeGetTs &&
+                    Date.now() - this.__capCeGetTs < 400
+                  ) {
                     this.__capCeGetTs = 0;
-                    const target = (this && this.isContentEditable) ? this : resolveEditableTarget();
-                    if (target) {
-                      insertTextIntoActiveElementAtCursor(v, target);
-                    }
+                    insertTextIntoActiveElementAtCursor(v, this);
                   }
                 }
               });
             }
 
-            window.addEventListener("error", (errEvt) => {
-              try {
-                if (!resolveEditableTarget()) return;
-                const msg = String((errEvt && errEvt.message) || "");
-                const fname = String((errEvt && errEvt.filename) || "");
-                const isAnonEval = !fname || fname === window.location.href || fname === window.location.origin + "/" || fname.endsWith("/index.html");
-                if (
-                  /SyntaxError|ReferenceError|unexpected|unterminated|Script error/i.test(msg) ||
-                  isAnonEval
-                ) {
-                  if (triggerClipboardFallbackInsert()) {
-                    errEvt.preventDefault();
-                  }
-                }
-              } catch (_) {}
-            }, true);
+            // 彻底移除 window error 自动粘贴回退，仅在用户真实执行粘贴动作时插入文本
 
             document.addEventListener("paste", (e) => {
               try {
@@ -113832,12 +113799,13 @@ ${specificRules}`;
 
               const isAppDirectLocalVaultEnabled = () => {
                 try {
-                  if (localStorage.getItem("ephone_app_use_direct_local_vault") === "1") return true;
-                  const raw = localStorage.getItem("ephone_local_vault_config_v1");
-                  if (raw) {
-                    const parsed = JSON.parse(raw);
+                  const rawMain = localStorage.getItem("ephone_local_vault_config") || localStorage.getItem("ephone_local_vault_config_v1");
+                  if (rawMain) {
+                    const parsed = JSON.parse(rawMain);
                     if (parsed && parsed.mode === "apk") return true;
+                    if (parsed && parsed.mode === "server") return false;
                   }
+                  if (localStorage.getItem("ephone_app_use_direct_local_vault") === "1") return true;
                 } catch (_) {}
                 return false;
               };
@@ -114062,6 +114030,7 @@ ${specificRules}`;
                 const jsonStoreFiles = [
                   "nai_collection_store.json",
                   "tavern_store.json",
+                  "qqbot_store.json",
                   "backup.json",
                   "load"
                 ];
@@ -114099,7 +114068,61 @@ ${specificRules}`;
                     } catch (_) {}
                   }
 
-                  // 3. 复制分离存储的数据库表记录
+                  // 3. 复制分离存储的数据库表记录与 _index.json 增量聊天分片
+                  try {
+                    const idxRes = await origWindowFetch(termuxBase + "/records/_index.json", { method: "GET" });
+                    if (idxRes && idxRes.ok) {
+                      const idxTxt = await idxRes.text();
+                      if (idxTxt && idxTxt.trim().length > 2) {
+                        await appLocalWriteText("records/_index.json", idxTxt);
+                        copiedJson++;
+                        const idxData = JSON.parse(idxTxt);
+                        const idxFiles = (idxData && typeof idxData === "object" && idxData.files && typeof idxData.files === "object")
+                          ? Object.entries(idxData.files)
+                          : [];
+                        for (const [recPath, meta] of idxFiles) {
+                          try {
+                            if (meta && meta.chatFolder) {
+                              const folderPath = String(meta.chatFolder).replace(/^\/+/, "");
+                              const metaRes = await origWindowFetch(termuxBase + "/" + folderPath + "/meta.json", { method: "GET" });
+                              if (metaRes && metaRes.ok) {
+                                const metaTxt = await metaRes.text();
+                                if (metaTxt) {
+                                  await appLocalWriteText(folderPath + "/meta.json", metaTxt);
+                                  copiedJson++;
+                                  const metaObj = JSON.parse(metaTxt);
+                                  const msgKeys = Array.isArray(metaObj && metaObj.messageOrder) ? metaObj.messageOrder : [];
+                                  for (const mKey of msgKeys) {
+                                    try {
+                                      const mRes = await origWindowFetch(termuxBase + "/" + folderPath + "/msg_" + mKey + ".json", { method: "GET" });
+                                      if (mRes && mRes.ok) {
+                                        const mTxt = await mRes.text();
+                                        if (mTxt) {
+                                          await appLocalWriteText(folderPath + "/msg_" + mKey + ".json", mTxt);
+                                          copiedJson++;
+                                        }
+                                      }
+                                    } catch (_) {}
+                                  }
+                                }
+                              }
+                            } else if (recPath) {
+                              const cleanRecPath = String(recPath).replace(/^\/+/, "");
+                              const recRes = await origWindowFetch(termuxBase + "/records/" + cleanRecPath, { method: "GET" });
+                              if (recRes && recRes.ok) {
+                                const recTxt = await recRes.text();
+                                if (recTxt) {
+                                  await appLocalWriteText("records/" + cleanRecPath, recTxt);
+                                  copiedJson++;
+                                }
+                              }
+                            }
+                          } catch (_) {}
+                        }
+                      }
+                    }
+                  } catch (_) {}
+
                   const recordTables = [
                     "chats", "apiConfigs", "globalSettings", "userStickers", "charStickers",
                     "worldBooks", "musicLibrary", "personaPresets", "qzoneSettings",
@@ -114130,7 +114153,7 @@ ${specificRules}`;
                     } catch (_) {}
                   }
 
-                  // 4. 复制 Termux 中的所有本地图片与媒体文件（/media-list）到 APP 本地隐藏目录 EPhoneVault/media，且绝不删除 Termux 中的原文件
+                  // 4. 复制 Termux 中的所有本地图片与媒体文件到 APP 本地隐藏目录 EPhoneVault/media，且绝不删除 Termux 中的原文件
                   try {
                     const mr = await origWindowFetch(termuxBase + "/media-list", { method: "GET" });
                     if (mr && mr.ok) {
@@ -114149,16 +114172,24 @@ ${specificRules}`;
                               copiedMedia++;
                               return;
                             }
-                            try {
-                              const fr = await origWindowFetch(termuxBase + "/files/" + encodeURIComponent(fn), { method: "GET" });
-                              if (fr && fr.ok) {
-                                const ab = await fr.arrayBuffer();
-                                if (ab && ab.byteLength > 0) {
-                                  await appLocalWriteBytes("media/" + fn, new Uint8Array(ab));
-                                  copiedMedia++;
+                            const candidateUrls = [
+                              termuxBase + "/media/" + encodeURIComponent(fn),
+                              termuxBase + "/" + encodeURIComponent(fn),
+                              termuxBase + "/files/" + encodeURIComponent(fn)
+                            ];
+                            for (const cUrl of candidateUrls) {
+                              try {
+                                const fr = await origWindowFetch(cUrl, { method: "GET" });
+                                if (fr && fr.ok) {
+                                  const ab = await fr.arrayBuffer();
+                                  if (ab && ab.byteLength > 0) {
+                                    await appLocalWriteBytes("media/" + fn, new Uint8Array(ab));
+                                    copiedMedia++;
+                                    break;
+                                  }
                                 }
-                              }
-                            } catch (_) {}
+                              } catch (_) {}
+                            }
                           })
                         );
                         if (typeof onProgress === "function") {
@@ -114166,6 +114197,14 @@ ${specificRules}`;
                         }
                       }
                     }
+                  } catch (_) {}
+                }
+
+                // 4b. 将当前会话内存中已加载的所有图片缓存同步写入 APP 本地隐藏目录 EPhoneVault/media，即使未开启 Termux 也能保存已加载图片
+                if (typeof window.__ephoneDumpActiveBlobCacheToAppLocalVault === "function") {
+                  try {
+                    const dumped = await window.__ephoneDumpActiveBlobCacheToAppLocalVault(appLocalWriteBytes, appLocalListFiles);
+                    copiedMedia += dumped;
                   } catch (_) {}
                 }
 
@@ -114186,21 +114225,29 @@ ${specificRules}`;
                   }
                 } catch (_) {}
 
-                // 6. 标记 APP 永久切换为直接从本机隐藏目录 EPhoneVault 读取，下次启动不再从 Termux 读取
-                try {
-                  localStorage.setItem("ephone_app_use_direct_local_vault", "1");
-                  const rawCfg = localStorage.getItem("ephone_local_vault_config_v1");
-                  const parsedCfg = rawCfg ? JSON.parse(rawCfg) : {};
-                  parsedCfg.mode = "apk";
-                  parsedCfg.auto = true;
-                  parsedCfg.folderName = "EPhoneVault";
-                  localStorage.setItem("ephone_local_vault_config_v1", JSON.stringify(parsedCfg));
-                } catch (_) {}
+                const finalLocalMedia = await appLocalListFiles("media");
+                const totalLocalMediaCount = Array.isArray(finalLocalMedia && finalLocalMedia.files) ? finalLocalMedia.files.length : 0;
+
+                // 6. 仅当 Termux 在线完成复制、或本机隐藏目录已有媒体文件时才永久切换为本机存储模式
+                if (termuxReachable || totalLocalMediaCount > 0 || copiedMedia > 0) {
+                  try {
+                    localStorage.setItem("ephone_app_use_direct_local_vault", "1");
+                    const rawCfg = localStorage.getItem("ephone_local_vault_config") || localStorage.getItem("ephone_local_vault_config_v1");
+                    const parsedCfg = rawCfg ? JSON.parse(rawCfg) : {};
+                    parsedCfg.mode = "apk";
+                    parsedCfg.auto = true;
+                    parsedCfg.folderName = "EPhoneVault";
+                    const cfgStr = JSON.stringify(parsedCfg);
+                    localStorage.setItem("ephone_local_vault_config", cfgStr);
+                    localStorage.setItem("ephone_local_vault_config_v1", cfgStr);
+                  } catch (_) {}
+                }
 
                 return {
                   termuxReachable,
                   copiedMedia,
-                  copiedJson
+                  copiedJson,
+                  totalLocalMediaCount
                 };
               };
 
@@ -114235,6 +114282,30 @@ ${specificRules}`;
                   const mediaInfo = await appLocalListFiles("media");
                   return new Response(
                     JSON.stringify({ ok: true, files: mediaInfo.files, fileDetails: mediaInfo.fileDetails }),
+                    { status: 200, headers: { "Content-Type": "application/json" } }
+                  );
+                }
+                if (pathname === "/media-delete" && method === "POST") {
+                  const bodyTxt = await extractRequestBodyText(init);
+                  let filesToDelete = [];
+                  try {
+                    const parsed = JSON.parse(bodyTxt || "{}");
+                    if (Array.isArray(parsed && parsed.files)) filesToDelete = parsed.files;
+                  } catch (_) {}
+                  let deleted = 0;
+                  for (const rawFn of filesToDelete) {
+                    const fn = String(rawFn || "").trim().replace(/^\/+/, "");
+                    if (!fn) continue;
+                    const rel = fn.startsWith("media/") ? fn : "media/" + fn;
+                    await appLocalDeleteFile(rel);
+                    const stem = rel.replace(/\.[a-zA-Z0-9]+$/, "");
+                    if (stem && stem !== rel) {
+                      await appLocalDeleteFile(stem + ".epdat");
+                    }
+                    deleted++;
+                  }
+                  return new Response(
+                    JSON.stringify({ ok: true, deleted }),
                     { status: 200, headers: { "Content-Type": "application/json" } }
                   );
                 }
@@ -114433,7 +114504,8 @@ ${specificRules}`;
                   const rawUrl = typeof input === "string" ? input : (input && input.url ? input.url : String(input || ""));
                   if (
                     isRunningInsideApp() &&
-                    (rawUrl.startsWith("http://127.0.0.1:8765") || rawUrl.startsWith("http://localhost:8765"))
+                    (rawUrl.startsWith("http://127.0.0.1:8765") || rawUrl.startsWith("http://localhost:8765")) &&
+                    !rawUrl.includes("/proxy")
                   ) {
                     // 如果用户已经点击过 转存 或切换到了 本机存储 模式，APP直接从内置隐藏目录读取，不再请求 Termux
                     if (isAppDirectLocalVaultEnabled()) {
@@ -133307,6 +133379,36 @@ ${specificRules}`;
             return false;
           }
 
+          window.__ephoneDumpActiveBlobCacheToAppLocalVault = async function (writeBytesFn, listFilesFn) {
+            if (typeof writeBytesFn !== "function") return 0;
+            let saved = 0;
+            try {
+              const existingInfo = typeof listFilesFn === "function" ? await listFilesFn("media") : { files: [] };
+              const existingSet = new Set((existingInfo && existingInfo.files) || []);
+              const rawFetch = window.__ephoneOrigWindowFetch || window.fetch.bind(window);
+              for (const [fn, bUrl] of Array.from(blobUrlMemoryCache.entries())) {
+                if (!fn || !bUrl || typeof bUrl !== "string" || !bUrl.startsWith("blob:")) continue;
+                const stealthFn = toStealthVaultFileName(fn);
+                if (existingSet.has(fn) || existingSet.has(stealthFn)) continue;
+                try {
+                  const res = await rawFetch(bUrl);
+                  if (res && res.ok) {
+                    const ab = await res.arrayBuffer();
+                    if (ab && ab.byteLength > 0) {
+                      const wrapped = wrapVaultBinary(unwrapVaultBinary(new Uint8Array(ab)));
+                      const ok = await writeBytesFn("media/" + stealthFn, wrapped);
+                      if (ok) {
+                        existingSet.add(stealthFn);
+                        saved++;
+                      }
+                    }
+                  }
+                } catch (_) {}
+              }
+            } catch (_) {}
+            return saved;
+          };
+
           function releaseUnusedBrowserBlobCache() {
             let released = 0;
             try {
@@ -133770,6 +133872,12 @@ ${specificRules}`;
           let _isPurgingOpfs = false;
           async function purgeBrowserOpfsMediaCacheIfExternalActive() {
             if (_isPurgingOpfs || !cachedTermuxOk) return 0;
+            if (isCapacitorApkEnvironment()) return 0;
+            try {
+              const curCfg = loadVaultConfig();
+              if (curCfg && curCfg.mode === "apk") return 0;
+              if (localStorage.getItem("ephone_app_use_direct_local_vault") === "1") return 0;
+            } catch (_) {}
             if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") return 0;
             _isPurgingOpfs = true;
             let purgedCount = 0;
@@ -133929,7 +134037,9 @@ ${specificRules}`;
               if (authRows) authRows.style.display = "none";
               if (folderRow) folderRow.style.display = "flex";
               if (folderDisp) folderDisp.value = "EPhoneVault";
+              try { localStorage.setItem("ephone_app_use_direct_local_vault", "1"); } catch (_) {}
             } else if (mode === "server") {
+              try { localStorage.removeItem("ephone_app_use_direct_local_vault"); } catch (_) {}
               if (urlRow) urlRow.style.display = "flex";
               if (authRows) authRows.style.display = "none";
               if (folderRow) folderRow.style.display = "none";
@@ -134195,7 +134305,7 @@ ${specificRules}`;
           async function testVaultConnection(silent = false) {
             const cfg = getCurrentFormVaultConfig();
             try {
-              if (cfg.mode === "server" || cfg.mode === "folder") {
+              if (cfg.mode === "server" || cfg.mode === "folder" || cfg.mode === "apk") {
                 const urlInput = document.getElementById("local-vault-url-input");
                 if (urlInput && !urlInput.value.trim()) {
                   urlInput.value = "http://127.0.0.1:8765";
@@ -134756,7 +134866,7 @@ ${specificRules}`;
               return "vault://" + fileName;
             }
             const mode = normalizeVaultMode(cfg.mode);
-            if (mode === "server" || mode === "folder") {
+            if (mode === "server" || mode === "folder" || mode === "apk") {
               const bytes = base64ToUint8Array(parts.b64);
               const wrappedBytes = wrapVaultBinary(bytes);
               let storedAny = false;
@@ -134898,7 +135008,7 @@ ${specificRules}`;
               const mode = normalizeVaultMode(cfg.mode);
               const candidates = stealthName !== fileName ? [stealthName, fileName] : [fileName];
               try {
-                if (mode === "server" || mode === "folder") {
+                if (mode === "server" || mode === "folder" || mode === "apk") {
                   const baseUrl = String(cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
 
                   // 1. 优先从 Termux 本地服务按并发队列稳健读取，防止并发过高打满 Python 监听队列，且绝不复制写入浏览器 OPFS
@@ -136153,7 +136263,7 @@ ${specificRules}`;
             setVaultInfoText("正在分块打包全量数据并写入本地存储...");
             try {
               const snapBlob = await buildFullDatabaseSnapshotBlobLowMemory();
-              if (mode === "server" || mode === "folder") {
+              if (mode === "server" || mode === "folder" || mode === "apk") {
                 let savedAny = false;
                 const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
                 if (await checkTermuxEndpointReachable(baseUrl)) {
@@ -137034,7 +137144,7 @@ ${specificRules}`;
             try {
               let parsedSnap = null;
               const baseUrl = (cfg.url || "http://127.0.0.1:8765").replace(/\/+$/, "");
-              if (mode === "server" || mode === "folder") {
+              if (mode === "server" || mode === "folder" || mode === "apk") {
                 if (await checkTermuxEndpointReachable(baseUrl)) {
                   try {
                     const res = await fetch(baseUrl + "/backup.json", { method: "GET", cache: "no-store" });
@@ -139538,18 +139648,42 @@ ${specificRules}`;
                   const res = await window.__ephoneCopyTermuxToAppLocalVault((msg) => {
                     setVaultInfoText(msg);
                   });
+                  try {
+                    if (typeof window.retryNaiTermuxHydrationAndImages === "function") {
+                      await window.retryNaiTermuxHydrationAndImages();
+                    }
+                    if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
+                      await window.offloadNaiDedicatedStoreToTermuxSilently();
+                    }
+                  } catch (_) {}
                   await runVaultImageOffload(true);
                   await runVaultBackup(true);
-                  if (modeSel) {
-                    modeSel.value = "apk";
-                    syncVaultModeRows();
-                  }
-                  refreshAllVaultImagesAfterTermuxConnected();
-                  await testVaultConnection(true);
-                  const summaryMsg = "已将 " + (res.copiedMedia || 0) + " 个图片与媒体文件、" + (res.copiedJson || 0) + " 份画师串及数据文件复制到 APP 本地隐藏目录 EPhoneVault，Termux 原有文件已完整保留供网页版使用，下次启动 APP 将直接从本机隐藏目录读取";
-                  setVaultInfoText(summaryMsg);
-                  if (typeof window.showCustomAlert === "function") {
-                    window.showCustomAlert("转存完成", summaryMsg);
+                  if (!res.termuxReachable && (res.totalLocalMediaCount || 0) === 0 && (res.copiedMedia || 0) === 0) {
+                    const warnMsg = "当前未检测到开启的 Termux 服务，如果你之前的图片存在 Termux 中，请先打开一次 Termux 再点击转存，把图片完整搬到 APP 本地目录后以后就无需再开 Termux 了";
+                    setVaultInfoText(warnMsg);
+                    if (typeof window.showCustomAlert === "function") {
+                      window.showCustomAlert("提示", warnMsg);
+                    }
+                  } else {
+                    if (modeSel) {
+                      modeSel.value = "apk";
+                      syncVaultModeRows();
+                    }
+                    try {
+                      if (typeof window.offloadNaiDedicatedStoreToTermuxSilently === "function") {
+                        await window.offloadNaiDedicatedStoreToTermuxSilently();
+                      }
+                      if (typeof window.retryNaiTermuxHydrationAndImages === "function") {
+                        await window.retryNaiTermuxHydrationAndImages();
+                      }
+                    } catch (_) {}
+                    refreshAllVaultImagesAfterTermuxConnected();
+                    await testVaultConnection(true);
+                    const summaryMsg = "已将 " + (res.copiedMedia || 0) + " 个图片与媒体文件、" + (res.copiedJson || 0) + " 份画师串及数据文件复制到 APP 本地隐藏目录 EPhoneVault，Termux 原有文件已完整保留供网页版使用，下次启动 APP 将直接从本机隐藏目录读取";
+                    setVaultInfoText(summaryMsg);
+                    if (typeof window.showCustomAlert === "function") {
+                      window.showCustomAlert("转存完成", summaryMsg);
+                    }
                   }
                 } catch (e) {
                   setVaultInfoText("转存失败: " + (e && e.message ? e.message : "请重试"));
